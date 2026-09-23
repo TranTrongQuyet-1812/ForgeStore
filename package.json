@@ -22,7 +22,7 @@
     "typecheck": "pnpm --recursive run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "test": "pnpm --recursive run test"
+    "test": "pnpm --recursive --if-present run test"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
