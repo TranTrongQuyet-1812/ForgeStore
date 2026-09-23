@@ -27,8 +27,8 @@ import { CacheService } from './cache.service';
           },
         });
 
-        redis.on('connect', async () => {
-          logger.log(`✅ Kết nối thành công Redis Swarm!`);
+        redis.on('ready', async () => {
+          logger.log(`✅ Kết nối thành công Redis Swarm và sẵn sàng nhận lệnh!`);
 
           // P2-05.5: Cấu hình giới hạn bộ nhớ 256MB và chính sách dọn dẹp LRU
           try {

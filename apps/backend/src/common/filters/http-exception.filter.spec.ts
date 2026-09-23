@@ -92,22 +92,32 @@ describe('GlobalExceptionFilter', () => {
     );
   });
 
-  it('che giấu thông tin mật khẩu kết nối database trong chiTiet khi ở dev mode', () => {
+  it('che giấu toàn bộ mật khẩu kết nối database trong chiTiet khi có nhiều chuỗi kết nối (/g flag)', () => {
     const { host, mockJson } = createMockHost('/api/v1/db-crash');
     const leakError = new Error(
-      'connect failed postgresql://postgres:super_secret_pw@aws.supabase.com:5432/db',
+      'connect failed postgresql://postgres:pw1@primary.db:5432/db and replica postgresql://readonly:pw2@replica.db:5432/db',
     );
 
     filter.catch(leakError, host);
 
     expect(mockJson).toHaveBeenCalledWith(
       expect.objectContaining({
-        chiTiet: expect.not.stringContaining('super_secret_pw'),
+        chiTiet: expect.not.stringContaining('pw1'),
       }),
     );
     expect(mockJson).toHaveBeenCalledWith(
       expect.objectContaining({
-        chiTiet: expect.stringContaining('postgresql://***:***@aws.supabase.com:5432/db'),
+        chiTiet: expect.not.stringContaining('pw2'),
+      }),
+    );
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chiTiet: expect.stringContaining('postgresql://***:***@primary.db:5432/db'),
+      }),
+    );
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chiTiet: expect.stringContaining('postgresql://***:***@replica.db:5432/db'),
       }),
     );
   });

@@ -57,7 +57,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
       if (!isProduction) {
         // Sanitize credentials out of error message (e.g. database connection strings)
-        chiTiet = exception.message.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@');
+        chiTiet = exception.message.replace(/:\/\/[^:]+:[^@]+@/g, '://***:***@');
       }
     } else {
       this.logger.error(`[${requestId}] Lỗi không xác định: ${String(exception)}`);

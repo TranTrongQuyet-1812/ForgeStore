@@ -21,22 +21,12 @@ export class LoggingInterceptor implements NestInterceptor {
     const startTime = Date.now();
 
     return next.handle().pipe(
-      tap({
-        next: () => {
-          const duration = Date.now() - startTime;
-          const statusCode = res.statusCode;
-          this.logger.log(
-            `[${requestId}] ${method} ${originalUrl} ${statusCode} - ${duration}ms - IP: ${ip}`,
-          );
-        },
-        error: (err: unknown) => {
-          const duration = Date.now() - startTime;
-          const statusCode = res.statusCode || 500;
-          const message = err instanceof Error ? err.message : 'Unknown error';
-          this.logger.warn(
-            `[${requestId}] ${method} ${originalUrl} ${statusCode} FAILED (${message}) - ${duration}ms - IP: ${ip}`,
-          );
-        },
+      tap(() => {
+        const duration = Date.now() - startTime;
+        const statusCode = res.statusCode;
+        this.logger.log(
+          `[${requestId}] ${method} ${originalUrl} ${statusCode} - ${duration}ms - IP: ${ip}`,
+        );
       }),
     );
   }
