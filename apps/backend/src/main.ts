@@ -6,6 +6,11 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
+// Polyfill BigInt để hỗ trợ tuần tự hóa JSON an toàn (tránh lỗi TypeError: Do not know how to serialize a BigInt)
+(BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
+  return this.toString();
+};
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
@@ -35,9 +40,14 @@ async function bootstrap() {
   // P2-04.6: Logging Interceptor gắn X-Request-Id
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // P2-04.4: CORS cho phép Desktop (Tauri) và Landing page
-  app.enableCors({
-    origin: [
+  // P2-04.4: CORS cho phép Desktop (Tauri) và Landing page (kết hợp tĩnh và cấu hình động)
+  const desktopOrigin = configService.get<string>('DESKTOP_ORIGIN', 'tauri://localhost');
+  const landingOrigin = configService.get<string>('LANDING_ORIGIN', 'http://localhost:3000');
+
+  const allowedOrigins = Array.from(
+    new Set([
+      desktopOrigin,
+      landingOrigin,
       'tauri://localhost',
       'http://localhost:1420',
       'http://localhost:3000',
@@ -45,7 +55,11 @@ async function bootstrap() {
       'http://127.0.0.1:1420',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
-    ],
+    ]),
+  );
+
+  app.enableCors({
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Hardware-Id'],

@@ -12,8 +12,11 @@ export const envSchema = z.object({
   REDIS_URL: z.string().min(1, 'REDIS_URL là bắt buộc (kết nối Redis cache)'),
 
   // JWT & Phiên làm việc
-  JWT_ACCESS_SECRET: z.string().min(8, 'JWT_ACCESS_SECRET phải có ít nhất 8 ký tự'),
+  JWT_ACCESS_SECRET: z
+    .string()
+    .min(32, 'JWT_ACCESS_SECRET phải có ít nhất 32 ký tự (256-bit entropy)'),
   JWT_ACCESS_TTL: z.string().default('15m'),
+
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
 
   // GitHub Integration
