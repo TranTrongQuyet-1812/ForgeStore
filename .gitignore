@@ -5,24 +5,34 @@ docs/
 node_modules/
 .pnpm-store/
 
-# Build outputs
+# Build outputs & Android/Windows artifacts
 dist/
 build/
 target/
 *.apk
 *.exe
 *.msi
+*.tsbuildinfo
+coverage/
+.turbo/
+
+# Android Keystore & Secrets
+*.keystore
+*.jks
+local.properties
+.gradle/
 
 # Environment & Local Secrets
 .env
 .env.*
 !.env.example
 
-# IDE & OS
+# IDE & OS & Agent metadata
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+.antigravity/
 
 # Logs
 *.log
