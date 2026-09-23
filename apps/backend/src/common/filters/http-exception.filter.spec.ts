@@ -91,4 +91,39 @@ describe('GlobalExceptionFilter', () => {
       }),
     );
   });
+
+  it('che giấu thông tin mật khẩu kết nối database trong chiTiet khi ở dev mode', () => {
+    const { host, mockJson } = createMockHost('/api/v1/db-crash');
+    const leakError = new Error(
+      'connect failed postgresql://postgres:super_secret_pw@aws.supabase.com:5432/db',
+    );
+
+    filter.catch(leakError, host);
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chiTiet: expect.not.stringContaining('super_secret_pw'),
+      }),
+    );
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chiTiet: expect.stringContaining('postgresql://***:***@aws.supabase.com:5432/db'),
+      }),
+    );
+  });
+
+  it('xử lý và log an toàn khi ngoại lệ ném ra không phải instance của Error', () => {
+    const { host, mockStatus, mockJson } = createMockHost('/api/v1/raw-throw');
+    const rawThrow = 'Lỗi dạng chuỗi không bọc trong Error';
+
+    filter.catch(rawThrow, host);
+
+    expect(mockStatus).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maLoi: 'LOI_HE_THONG',
+        chiTiet: 'Lỗi dạng chuỗi không bọc trong Error',
+      }),
+    );
+  });
 });

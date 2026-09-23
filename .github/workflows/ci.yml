@@ -43,6 +43,9 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Build backend
+        run: pnpm build:backend
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -51,7 +54,7 @@ jobs:
 
       - name: Verify migrations do not drop HNSW index
         run: |
-          if grep -rn "DROP INDEX.*idx_phan_tich_ai_vector" apps/backend/prisma/migrations/; then
+          if grep -rni "DROP INDEX.*idx_phan_tich_ai_vector" apps/backend/prisma/migrations/; then
             echo "❌ Error: Migration contains DROP INDEX idx_phan_tich_ai_vector!"
             exit 1
           else

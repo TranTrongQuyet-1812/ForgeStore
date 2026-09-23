@@ -56,7 +56,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         isProduction ? undefined : exception.stack,
       );
       if (!isProduction) {
-        chiTiet = exception.message;
+        // Sanitize credentials out of error message (e.g. database connection strings)
+        chiTiet = exception.message.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@');
+      }
+    } else {
+      this.logger.error(`[${requestId}] Lỗi không xác định: ${String(exception)}`);
+      if (!isProduction) {
+        chiTiet = String(exception);
       }
     }
 

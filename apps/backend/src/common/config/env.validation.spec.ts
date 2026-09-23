@@ -39,8 +39,23 @@ describe('EnvValidation', () => {
       expect(config.JEV_ENABLED).toBe(false);
     });
 
+    it('chuyển đổi "FALSE" hoa thành boolean false (case-insensitive)', () => {
+      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'FALSE' });
+      expect(config.JEV_ENABLED).toBe(false);
+    });
+
     it('chuyển đổi "true" thành boolean true', () => {
       const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'true' });
+      expect(config.JEV_ENABLED).toBe(true);
+    });
+
+    it('chuyển đổi "TRUE" hoa thành boolean true (case-insensitive)', () => {
+      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'TRUE' });
+      expect(config.JEV_ENABLED).toBe(true);
+    });
+
+    it('chuyển đổi boolean true thành boolean true', () => {
+      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: true });
       expect(config.JEV_ENABLED).toBe(true);
     });
 

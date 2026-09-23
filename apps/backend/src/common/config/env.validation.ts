@@ -43,7 +43,10 @@ export const envSchema = z.object({
     .min(1, 'GEMINI_API_KEY không được để trống'),
   TYPESAFE_API_KEY: z.string().optional(),
   JEV_ENABLED: z
-    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .preprocess(
+      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+      z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]),
+    )
     .default(true)
     .transform((v) => v === true || v === 'true' || v === '1'),
   NVIDIA_API_KEY: z.string().optional(),
