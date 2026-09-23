@@ -25,7 +25,6 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "echo \"@forgestore/types: test ok\""
+    "lint": "eslint ."
   }
 }

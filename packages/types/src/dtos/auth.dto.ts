@@ -23,7 +23,7 @@ export interface NguoiDungDto {
  */
 export interface AuthExchangeRequest {
   code: string; // 1-time authorization code nhận qua forgestore://auth?code=...
-  verifier?: string; // PKCE code verifier (P2-13.2)
+  verifier: string; // PKCE code verifier (Bắt buộc theo D-09, P2-13.2)
   thietBi: {
     dinhDanhPhanCung: string;
     tenThietBi: string;

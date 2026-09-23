@@ -35,8 +35,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "test": "echo \"@forgestore/ui-tokens: test ok\""
+    "lint": "eslint ."
   },
   "dependencies": {
     "@forgestore/types": "workspace:*"

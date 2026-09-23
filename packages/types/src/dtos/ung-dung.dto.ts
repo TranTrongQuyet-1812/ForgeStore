@@ -108,7 +108,7 @@ export interface UngDungChiTietDto extends UngDungTomTatDto {
  */
 export interface ResolveAssetRequest {
   maUngDung: string;
-  nenTang: NenTangHoTro;
+  nenTang: 'ANDROID' | 'WINDOWS'; // Thiết bị gọi chỉ có thể là ANDROID hoặc WINDOWS
   abis: string[]; // Bắt buộc, theo thứ tự ưu tiên của máy (VD: ['arm64-v8a', 'armeabi-v7a'])
   choPhepBanThuNghiem?: boolean;
   phienBan?: string;
