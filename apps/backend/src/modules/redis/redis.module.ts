@@ -16,7 +16,10 @@ import { CacheService } from './cache.service';
 
         const redis = new Redis(redisUrl, {
           lazyConnect: false,
-          maxRetriesPerRequest: 3,
+          enableOfflineQueue: false,
+          commandTimeout: 300,
+          connectTimeout: 1000,
+          maxRetriesPerRequest: 1,
           retryStrategy: (times) => {
             const delay = Math.min(times * 200, 3000);
             logger.warn(`Đang thử kết nối lại Redis lần ${times} sau ${delay}ms...`);

@@ -42,8 +42,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         maLoi = this.mapStatusToErrorCode(status);
       } else if (typeof res === 'object' && res !== null) {
         const resObj = res as Record<string, unknown>;
-        thongBao = (resObj.message as string) || exception.message;
-        maLoi = (resObj.error as string) || this.mapStatusToErrorCode(status);
+        // Luôn chuẩn hóa maLoi sang tiếng Việt, chỉ dùng mã riêng khi code chủ động truyền resObj.maLoi
+        maLoi = (resObj.maLoi as string) || this.mapStatusToErrorCode(status);
+        thongBao =
+          (resObj.thongBao as string) ||
+          (resObj.message as string) ||
+          this.mapStatusToDefaultMessage(status);
         chiTiet = resObj.message instanceof Array ? resObj.message : resObj.details || undefined;
       }
     } else if (exception instanceof Error) {
@@ -55,6 +59,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         chiTiet = exception.message;
       }
     }
+
+    // Log request lỗi kèm theo requestId
+    this.logger.warn(
+      `[${requestId}] ${request.method} ${request.url} ${status} - Lỗi: ${maLoi} - ${Array.isArray(thongBao) ? thongBao.join('; ') : thongBao}`,
+    );
 
     const errorPayload: StandardErrorResponse = {
       maLoi,
@@ -83,6 +92,25 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return 'VUOT_QUA_HAN_NGACH_TRUY_CAP';
       default:
         return 'LOI_MAY_CHU';
+    }
+  }
+
+  private mapStatusToDefaultMessage(status: number): string {
+    switch (status) {
+      case HttpStatus.BAD_REQUEST:
+        return 'Dữ liệu yêu cầu không hợp lệ';
+      case HttpStatus.UNAUTHORIZED:
+        return 'Yêu cầu cần được xác thực';
+      case HttpStatus.FORBIDDEN:
+        return 'Bạn không có quyền thực hiện hành động này';
+      case HttpStatus.NOT_FOUND:
+        return 'Không tìm thấy tài nguyên yêu cầu';
+      case HttpStatus.CONFLICT:
+        return 'Dữ liệu bị xung đột trong hệ thống';
+      case HttpStatus.TOO_MANY_REQUESTS:
+        return 'Quá nhiều yêu cầu, vui lòng thử lại sau';
+      default:
+        return 'Đã có lỗi xảy ra trên máy chủ';
     }
   }
 }

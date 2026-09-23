@@ -5,31 +5,49 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
   // Supabase PostgreSQL
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL là bắt buộc (kết nối pooler cổng 6543)'),
-  DIRECT_URL: z.string().min(1, 'DIRECT_URL là bắt buộc (kết nối trực tiếp cổng 5432)'),
+  DATABASE_URL: z
+    .string({ required_error: 'DATABASE_URL là bắt buộc (kết nối pooler cổng 6543)' })
+    .min(1, 'DATABASE_URL không được để trống'),
+  DIRECT_URL: z
+    .string({ required_error: 'DIRECT_URL là bắt buộc (kết nối trực tiếp cổng 5432)' })
+    .min(1, 'DIRECT_URL không được để trống'),
 
   // Redis Cache (Hỗ trợ REDIS_URL chuỗi kết nối chuẩn hoặc các biến riêng lẻ)
-  REDIS_URL: z.string().min(1, 'REDIS_URL là bắt buộc (kết nối Redis cache)'),
+  REDIS_URL: z
+    .string({ required_error: 'REDIS_URL là bắt buộc (kết nối Redis cache)' })
+    .min(1, 'REDIS_URL không được để trống'),
 
   // JWT & Phiên làm việc
   JWT_ACCESS_SECRET: z
-    .string()
+    .string({ required_error: 'JWT_ACCESS_SECRET là bắt buộc' })
     .min(32, 'JWT_ACCESS_SECRET phải có ít nhất 32 ký tự (256-bit entropy)'),
   JWT_ACCESS_TTL: z.string().default('15m'),
 
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
 
   // GitHub Integration
-  GITHUB_CLIENT_ID: z.string().min(1, 'GITHUB_CLIENT_ID là bắt buộc'),
-  GITHUB_CLIENT_SECRET: z.string().min(1, 'GITHUB_CLIENT_SECRET là bắt buộc'),
-  GITHUB_TOKEN: z.string().min(1, 'GITHUB_TOKEN là bắt buộc (Personal Access Token)'),
+  GITHUB_CLIENT_ID: z
+    .string({ required_error: 'GITHUB_CLIENT_ID là bắt buộc' })
+    .min(1, 'GITHUB_CLIENT_ID không được để trống'),
+  GITHUB_CLIENT_SECRET: z
+    .string({ required_error: 'GITHUB_CLIENT_SECRET là bắt buộc' })
+    .min(1, 'GITHUB_CLIENT_SECRET không được để trống'),
+  GITHUB_TOKEN: z
+    .string({ required_error: 'GITHUB_TOKEN là bắt buộc (Personal Access Token)' })
+    .min(1, 'GITHUB_TOKEN không được để trống'),
   GITHUB_CALLBACK_URL: z.string().optional(),
 
   // Dual-AI Engine (Gemini là bắt buộc, các model khác tùy chọn)
-  GEMINI_API_KEY: z.string().min(1, 'GEMINI_API_KEY là bắt buộc'),
+  GEMINI_API_KEY: z
+    .string({ required_error: 'GEMINI_API_KEY là bắt buộc' })
+    .min(1, 'GEMINI_API_KEY không được để trống'),
   TYPESAFE_API_KEY: z.string().optional(),
-  JEV_ENABLED: z.coerce.boolean().default(true),
+  JEV_ENABLED: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .default(true)
+    .transform((v) => v === true || v === 'true' || v === '1'),
   NVIDIA_API_KEY: z.string().optional(),
+
   NVIDIA_NIM_MODEL: z.string().optional(),
 
   // Google OAuth (Tùy chọn)

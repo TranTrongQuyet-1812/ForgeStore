@@ -48,3 +48,13 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Verify migrations do not drop HNSW index
+        run: |
+          if grep -rn "DROP INDEX.*idx_phan_tich_ai_vector" apps/backend/prisma/migrations/; then
+            echo "❌ Error: Migration contains DROP INDEX idx_phan_tich_ai_vector!"
+            exit 1
+          else
+            echo "✅ Verified: No migration drops idx_phan_tich_ai_vector."
+          fi
+
