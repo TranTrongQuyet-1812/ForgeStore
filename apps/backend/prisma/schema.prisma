@@ -1,0 +1,331 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector", schema: "extensions")]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// =============================================================
+// BỘ ENUM ĐỊNH DANH THUẦN VIỆT
+// =============================================================
+
+enum VaiTro {
+  NGUOI_DUNG
+  QUAN_TRI_VIEN
+}
+
+enum LoaiThietBi {
+  MAY_TINH_WINDOWS
+  DIEN_THOAI_ANDROID
+  KHAC
+}
+
+enum NenTangHoTro {
+  ANDROID
+  WINDOWS
+  DA_NEN_TANG
+}
+
+enum MucDoUyTin {
+  AN_TOAN_CAO     // Trust score 80 - 100
+  CAN_LUU_Y       // Trust score 60 - 79
+  CANH_BAO_RUI_RO // Trust score < 60
+}
+
+enum DinhDangTep {
+  APK
+  EXE
+  MSI
+  ZIP_PORTABLE
+  KHAC
+}
+
+enum KienTrucChip {
+  ARM64_V8A      // Android 64-bit hiện đại (Pixel, Galaxy, Xiaomi...)
+  ARMEABI_V7A    // Android 32-bit đời cũ
+  X86_64         // Windows PC Intel/AMD hoặc Android Emulator
+  X86            // Windows PC 32-bit
+  DUNG_CHUNG     // Universal APK chạy trên mọi kiến trúc
+  KHONG_XAC_DINH
+}
+
+enum TrangThaiNapRepo {
+  THANH_CONG
+  LINK_KHONG_HOP_LE
+  KHONG_CO_RELEASE
+  KHONG_CO_FILE_CAI_DAT
+  THAT_BAI
+}
+
+// =============================================================
+// 11 BẢNG DỮ LIỆU THUẦN VIỆT
+// =============================================================
+
+// -------------------------------------------------------------
+// BẢNG 1: NGƯỜI DÙNG (USERS)
+// -------------------------------------------------------------
+model NguoiDung {
+  maNguoiDung       String            @id @default(uuid()) @map("ma_nguoi_dung") @db.Uuid
+  maDinhDanhGithub  String?           @unique @map("ma_dinh_danh_github")
+  maDinhDanhGoogle  String?           @unique @map("ma_dinh_danh_google")
+  tenDangNhap       String            @map("ten_dang_nhap")
+  tenHienThi        String?           @map("ten_hien_thi")
+  thuDienTu         String?           @map("thu_dien_tu")
+  duongDanAvatar    String?           @map("duong_dan_avatar")
+  vaiTro            VaiTro            @default(NGUOI_DUNG) @map("vai_tro")
+  ngayTao           DateTime          @default(now()) @map("ngay_tao")
+  ngayCapNhat       DateTime          @updatedAt @map("ngay_cap_nhat")
+
+  // Quan hệ nghiệp vụ
+  danhSachThietBi   ThietBi[]
+  danhSachPhien     PhienDangNhap[]
+  danhSachYeuThich  KhoYeuThich[]
+  danhSachDaCai     UngDungDaCai[]
+  danhSachDanhGia   DanhGiaUngDung[]
+  nhatKyNapRepo     NhatKyNapRepo[]
+
+  @@map("nguoi_dung")
+}
+
+// -------------------------------------------------------------
+// BẢNG 2: THIẾT BỊ VẬT LÝ (DEVICES) - TÁCH RỜI KHỎI SESSION
+// -------------------------------------------------------------
+model ThietBi {
+  maThietBi         String            @id @default(uuid()) @map("ma_thiet_bi") @db.Uuid
+  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
+  dinhDanhPhanCung  String            @map("dinh_danh_phan_cung") // Hardware Fingerprint (UNIQUE theo maNguoiDung - D-02)
+  tenThietBi        String            @map("ten_thiet_bi") // VD: "Pixel 7 Pro", "Laptop Dell"
+  loaiThietBi       LoaiThietBi       @default(KHAC) @map("loai_thiet_bi")
+  ngayDangKy        DateTime          @default(now()) @map("ngay_dang_ky")
+  hoatDongLanCuoi   DateTime          @updatedAt @map("hoat_dong_lan_cuoi")
+
+  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
+  danhSachPhien     PhienDangNhap[]
+  danhSachDaCai     UngDungDaCai[]
+
+  @@unique([maNguoiDung, dinhDanhPhanCung])
+  @@index([maNguoiDung])
+  @@map("thiet_bi")
+}
+
+// -------------------------------------------------------------
+// BẢNG 3: PHIÊN ĐĂNG NHẬP & TOKEN (USER SESSIONS)
+// -------------------------------------------------------------
+model PhienDangNhap {
+  maPhien           String            @id @default(uuid()) @map("ma_phien") @db.Uuid
+  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
+  maThietBi         String            @map("ma_thiet_bi") @db.Uuid
+  chuoiMaHoaToken   String            @map("chuoi_ma_hoa_token")
+  diaChiIp          String?           @map("dia_chi_ip")
+  thoiGianHetHan    DateTime          @map("thoi_gian_het_han")
+  ngayTao           DateTime          @default(now()) @map("ngay_tao")
+
+  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
+  thietBi           ThietBi           @relation(fields: [maThietBi], references: [maThietBi], onDelete: Cascade)
+
+  @@index([maNguoiDung])
+  @@index([maThietBi])
+  @@map("phien_dang_nhap")
+}
+
+// -------------------------------------------------------------
+// BẢNG 4: ỨNG DỤNG TRONG STORE (APPLICATIONS)
+// -------------------------------------------------------------
+model UngDung {
+  maUngDung         String            @id @default(uuid()) @map("ma_ung_dung") @db.Uuid
+  tenRepoDayDu      String            @unique @map("ten_repo_day_du")
+  chuSoHuu          String            @map("chu_so_huu")
+  tenKhoChua        String            @map("ten_kho_chua")
+  duongDanGithub    String            @map("duong_dan_github")
+  moTaGocTiengAnh   String?           @map("mo_ta_goc_tieng_anh") @db.Text
+  duongDanIcon      String?           @map("duong_dan_icon")
+  soSaoGithub       Int               @default(0) @map("so_sao_github")
+  soLuotFork        Int               @default(0) @map("so_luot_fork")
+  loaiGiayPhep      String?           @map("loai_giay_phep")
+  ngonNguChinh      String?           @map("ngon_ngu_chinh")
+  danhSachChuDe     String[]          @default([]) @map("danh_sach_chu_de")
+  danhMucChinh      String            @default("Tiện ích hệ thống") @map("danh_muc_chinh")
+  nenTangHoTro      NenTangHoTro      @default(DA_NEN_TANG) @map("nen_tang_ho_tro")
+  duocNoiBat        Boolean           @default(false) @map("duoc_noi_bat")
+  daXacMinh         Boolean           @default(false) @map("da_xac_minh")
+  tenGoiAndroid     String?           @map("ten_goi_android") // Package name Android (VD: org.videolan.vlc - D-13)
+  trangThai         String            @default("HOAT_DONG") @map("trang_thai")
+  dongBoLanCuoi     DateTime          @default(now()) @map("dong_bo_lan_cuoi")
+  ngayTao           DateTime          @default(now()) @map("ngay_tao")
+  ngayCapNhat       DateTime          @updatedAt @map("ngay_cap_nhat")
+
+  // Quan hệ nghiệp vụ
+  phanTichAI        PhanTichAI?
+  danhSachPhatHanh  BanPhatHanh[]
+  danhSachYeuThich  KhoYeuThich[]
+  danhSachDaCai     UngDungDaCai[]
+  danhSachDanhGia   DanhGiaUngDung[]
+  nhatKyNapRepo     NhatKyNapRepo[]
+
+  @@index([danhMucChinh, soSaoGithub(sort: Desc)])
+  @@index([nenTangHoTro, duocNoiBat])
+  @@index([soSaoGithub(sort: Desc)])
+  @@index([tenGoiAndroid])
+  @@map("ung_dung")
+}
+
+// -------------------------------------------------------------
+// BẢNG 5: BỘ NÃO PHÂN TÍCH AI & VECTOR SEARCH (DUAL-AI)
+// -------------------------------------------------------------
+model PhanTichAI {
+  maPhanTich          String          @id @default(uuid()) @map("ma_phan_tich") @db.Uuid
+  maUngDung           String          @unique @map("ma_ung_dung") @db.Uuid
+  khauHieuTiengViet   String          @map("khau_hieu_tieng_viet") // Gemini Slogan
+  tomTatTinhNangVi    String          @map("tom_tat_tinh_nang_vi") @db.Text // Gemini 3 bullet points
+  diemUyTin           Int             @default(80) @map("diem_uy_tin") // Bộ luật + Jev (0 - 100)
+  mucDoAnToan         MucDoUyTin      @default(AN_TOAN_CAO) @map("muc_do_an_toan") // Khớp logic: 80 thuộc AN_TOAN_CAO
+  daThamDinhJev       Boolean         @default(false) @map("da_tham_dinh_jev") // false = chỉ có điểm từ bộ luật dự phòng
+  yeuToRuiRo          Json            @default("[]") @map("yeu_to_rui_ro")
+  quyenHanDaKiemTra   Json            @default("[]") @map("quyen_han_da_kiem_tra")
+  
+  // Vector 768 chiều phục vụ tìm kiếm ý định tự nhiên với PostgreSQL pgvector
+  vectorNguNghia      Unsupported("vector(768)")? @map("vector_ngu_nghia")
+  moHinhTomTat        String?         @map("mo_hinh_tom_tat") // D-15: Gemini / NVIDIA NIM / DU_PHONG
+  thoiGianPhanTich    DateTime        @default(now()) @map("thoi_gian_phan_tich")
+  ngayTao             DateTime        @default(now()) @map("ngay_tao")
+  ngayCapNhat         DateTime        @updatedAt @map("ngay_cap_nhat")
+
+  ungDung             UngDung         @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+
+  @@map("phan_tich_ai")
+}
+
+// -------------------------------------------------------------
+// BẢNG 6: BẢN PHÁT HÀNH (RELEASES)
+// -------------------------------------------------------------
+model BanPhatHanh {
+  maPhatHanh          String          @id @default(uuid()) @map("ma_phat_hanh") @db.Uuid
+  maUngDung           String          @map("ma_ung_dung") @db.Uuid
+  maReleaseGithub     BigInt?         @map("ma_release_github")
+  tenPhienBan         String          @map("ten_phien_ban") // VD: "v1.2.4"
+  tieuDePhatHanh      String?         @map("tieu_de_phat_hanh")
+  nhatKyThayDoiGoc    String?         @map("nhat_ky_thay_doi_goc") @db.Text
+  tomTatNangCapVi     String?         @map("tom_tat_nang_cap_vi") @db.Text // Gemini tóm tắt cập nhật
+  laBanThuNghiem      Boolean         @default(false) @map("la_ban_thu_nghiem")
+  ngayPhatHanh        DateTime        @map("ngay_phat_hanh")
+  ngayTao             DateTime        @default(now()) @map("ngay_tao")
+
+  ungDung             UngDung         @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+  danhSachTepCaiDat   TepCaiDat[]
+
+  @@unique([maUngDung, tenPhienBan])
+  @@index([maUngDung, ngayPhatHanh(sort: Desc)])
+  @@map("ban_phat_hanh")
+}
+
+// -------------------------------------------------------------
+// BẢNG 7: TỆP CÀI ĐẶT & KIẾN TRÚC CHIP (RELEASE ASSETS)
+// -------------------------------------------------------------
+model TepCaiDat {
+  maTep             String            @id @default(uuid()) @map("ma_tep") @db.Uuid
+  maPhatHanh        String            @map("ma_phat_hanh") @db.Uuid
+  tenTep            String            @map("ten_tep")
+  duongDanTaiVe     String            @map("duong_dan_tai_ve")
+  dungLuongBytes    BigInt            @default(0) @map("dung_luong_bytes")
+  dinhDangTep       DinhDangTep       @default(KHAC) @map("dinh_dang_tep")
+  kienTrucChip      KienTrucChip      @default(KHONG_XAC_DINH) @map("kien_truc_chip") // Jev AI đọc trường này
+  maBamSha256       String?           @map("ma_bam_sha256")
+  soLuotTai         Int               @default(0) @map("so_luot_tai")
+  ngayTao           DateTime          @default(now()) @map("ngay_tao")
+
+  banPhatHanh       BanPhatHanh       @relation(fields: [maPhatHanh], references: [maPhatHanh], onDelete: Cascade)
+  danhSachDaCai     UngDungDaCai[]
+
+  @@index([maPhatHanh, dinhDangTep, kienTrucChip])
+  @@map("tep_cai_dat")
+}
+
+// -------------------------------------------------------------
+// BẢNG 8: KHO YÊU THÍCH ĐỒNG BỘ ĐÁM MÂY (USER FAVORITES)
+// -------------------------------------------------------------
+model KhoYeuThich {
+  maYeuThich        String            @id @default(uuid()) @map("ma_yeu_thich") @db.Uuid
+  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
+  maUngDung         String            @map("ma_ung_dung") @db.Uuid
+  thietBiThem       String            @default("MAY_TINH") @map("thiet_bi_them")
+  ngayThem          DateTime          @default(now()) @map("ngay_them")
+
+  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
+  ungDung           UngDung           @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+
+  @@unique([maNguoiDung, maUngDung])
+  @@index([maNguoiDung, ngayThem(sort: Desc)])
+  @@map("kho_yeu_thich")
+}
+
+// -------------------------------------------------------------
+// BẢNG 9: THEO DÕI CÀI ĐẶT & CẬP NHẬT TỰ ĐỘNG (INSTALLED APPS)
+// -------------------------------------------------------------
+model UngDungDaCai {
+  maBanGhi          String            @id @default(uuid()) @map("ma_ban_ghi") @db.Uuid
+  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
+  maUngDung         String            @map("ma_ung_dung") @db.Uuid
+  maThietBi         String            @map("ma_thiet_bi") @db.Uuid // Gắn với Thiết bị vật lý
+  phienBanHienTai   String            @map("phien_ban_hien_tai") // Bản đang chạy trên máy
+  maTepDaCai        String?           @map("ma_tep_da_cai") @db.Uuid
+  duongDanThuMuc    String?           @map("duong_dan_thu_muc") // Cho Windows Portable
+  ngayCaiDat        DateTime          @default(now()) @map("ngay_cai_dat")
+  ngayCapNhatCuoi   DateTime          @updatedAt @map("ngay_cap_nhat_cuoi")
+
+  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
+  ungDung           UngDung           @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+  thietBi           ThietBi           @relation(fields: [maThietBi], references: [maThietBi], onDelete: Cascade)
+  tepDaCai          TepCaiDat?        @relation(fields: [maTepDaCai], references: [maTep], onDelete: SetNull)
+
+  @@unique([maThietBi, maUngDung])
+  @@index([maThietBi])
+  @@index([maNguoiDung])
+  @@map("ung_dung_da_cai")
+}
+
+// -------------------------------------------------------------
+// BẢNG 10: ĐÁNH GIÁ & PHẢN HỒI CỘNG ĐỒNG (APP REVIEWS)
+// -------------------------------------------------------------
+model DanhGiaUngDung {
+  maDanhGia         String            @id @default(uuid()) @map("ma_danh_gia") @db.Uuid
+  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
+  maUngDung         String            @map("ma_ung_dung") @db.Uuid
+  soSao             Int               @map("so_sao") // 1 - 5 sao
+  tieuDe            String?           @map("tieu_de")
+  noiDungNhanXet    String            @db.Text @map("noi_dung_nhan_xet")
+  phienBanDanhGia   String            @map("phien_ban_danh_gia") // Đánh giá trên bản v1.2 hay v1.3
+  thietBiDanhGia    String            @map("thiet_bi_danh_gia") // "Windows 11" hoặc "Pixel 7"
+  soLuotHuuIch      Int               @default(0) @map("so_luot_huu_ich")
+  ngayDanhGia       DateTime          @default(now()) @map("ngay_danh_gia")
+  ngayCapNhat       DateTime          @updatedAt @map("ngay_cap_nhat")
+
+  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
+  ungDung           UngDung           @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+
+  @@unique([maNguoiDung, maUngDung, phienBanDanhGia])
+  @@index([maUngDung, soSao(sort: Desc)])
+  @@map("danh_gia_ung_dung")
+}
+
+// -------------------------------------------------------------
+// BẢNG 11: NHẬT KÝ NẠP REPO TÙY CHỌN (MODULE 6 INGESTION)
+// -------------------------------------------------------------
+model NhatKyNapRepo {
+  maNhatKy            String          @id @default(uuid()) @map("ma_nhat_ky") @db.Uuid
+  maNguoiDungYeuCau   String?         @map("ma_nguoi_dung_yeu_cau") @db.Uuid
+  duongDanRepoNhap    String          @map("duong_dan_repo_nhap")
+  trangThai           TrangThaiNapRepo @default(THANH_CONG) @map("trang_thai")
+  thongBaoLoi         String?         @db.Text @map("thong_bao_loi")
+  maUngDungTaoRa      String?         @map("ma_ung_dung_tao_ra") @db.Uuid
+  ngayYeuCau          DateTime        @default(now()) @map("ngay_yeu_cau")
+
+  nguoiDungYeuCau     NguoiDung?      @relation(fields: [maNguoiDungYeuCau], references: [maNguoiDung], onDelete: SetNull)
+  ungDungTaoRa        UngDung?        @relation(fields: [maUngDungTaoRa], references: [maUngDung], onDelete: SetNull)
+
+  @@map("nhat_ky_nap_repo")
+}
