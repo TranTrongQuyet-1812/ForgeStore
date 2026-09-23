@@ -30,7 +30,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter @forgestore/backend run prisma:generate
+
       - name: Check code formatting
+
         run: pnpm format:check
 
       - name: Run ESLint

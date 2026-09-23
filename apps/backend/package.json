@@ -4,16 +4,16 @@
   "private": true,
   "description": "ForgeStore Central Backend (NestJS 11 + Prisma 6 + Redis)",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "prisma generate && tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "test": "vitest run"
+    "test": "prisma generate && vitest run"
   },
   "dependencies": {
     "@forgestore/types": "workspace:*",
