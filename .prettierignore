@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+target
+coverage
+.turbo
+*.tsbuildinfo
+pnpm-lock.yaml
+.gradle
+local.properties
+*.keystore
+*.jks
+.antigravity
+docs
