@@ -1,0 +1,14 @@
+# Force LF line endings across entire repository (Windows & Linux parity)
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.keystore binary
+*.jks binary
+*.apk binary
+*.exe binary
+*.msi binary
