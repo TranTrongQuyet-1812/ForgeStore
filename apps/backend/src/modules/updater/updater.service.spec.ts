@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UpdaterService } from './updater.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -203,5 +203,62 @@ describe('UpdaterService (P2-52)', () => {
 
     expect(result.danhSachCapNhat).toHaveLength(1);
     expect(result.danhSachCapNhat[0].coBanCapNhat).toBe(true);
+  });
+
+  it('ném ForbiddenException nếu thiết bị không thuộc về người dùng đang đăng nhập', async () => {
+    mockPrisma.thietBi.findUnique.mockResolvedValue({
+      maThietBi,
+      maNguoiDung: 'user-chinh-chu',
+    });
+
+    await expect(service.kiemTraCapNhat({ maThietBi }, 'user-xa-la')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('không báo có bản mới khi maTepDaCai đã thuộc release mới nhất (chống lỗi lặp update với suffix -fdroid)', async () => {
+    mockPrisma.thietBi.findUnique.mockResolvedValue({
+      maThietBi,
+      maNguoiDung: 'user-chinh-chu',
+    });
+    mockPrisma.thietBi.update.mockResolvedValue({});
+
+    // Release mới nhất trong store là rel-moi
+    mockPrisma.ungDung.findUnique.mockResolvedValue({
+      maUngDung,
+      danhSachPhatHanh: [
+        {
+          maPhatHanh: 'rel-moi',
+          tenPhienBan: '1.2.3',
+          laBanThuNghiem: false,
+          ngayPhatHanh: new Date('2026-09-20'),
+          danhSachTepCaiDat: [],
+        },
+      ],
+    });
+
+    // File đã cài trên máy thuộc CHÍNH rel-moi
+    mockPrisma.tepCaiDat.findUnique.mockResolvedValue({
+      maTep: 'tep-moi',
+      maPhatHanh: 'rel-moi',
+      banPhatHanh: {
+        maPhatHanh: 'rel-moi',
+        ngayPhatHanh: new Date('2026-09-20'),
+      },
+    });
+
+    mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+      {
+        maUngDung,
+        phienBanHienTai: '1.2.3-fdroid', // chuỗi versionName khác nhưng release là một
+        maTepDaCai: 'tep-moi',
+        ungDung: { tenGoiAndroid: 'com.app.test' },
+      },
+    ]);
+
+    const result = await service.kiemTraCapNhat({ maThietBi }, 'user-chinh-chu');
+
+    // Không được báo có bản cập nhật!
+    expect(result.danhSachCapNhat).toHaveLength(0);
   });
 });

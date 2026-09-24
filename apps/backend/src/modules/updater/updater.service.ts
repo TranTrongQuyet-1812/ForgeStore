@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckUpdatesDto } from './dto/check-updates.dto';
 import { coBanMoiHon } from './utils/version-comparator.util';
@@ -9,7 +9,7 @@ import {
   DinhDangTep,
   KienTrucChip,
 } from '@forgestore/types';
-import { TepCaiDat } from '@prisma/client';
+import { TepCaiDat, VaiTro } from '@prisma/client';
 
 @Injectable()
 export class UpdaterService {
@@ -20,17 +20,30 @@ export class UpdaterService {
   /**
    * Kiểm tra bản cập nhật cho thiết bị (POST /apps/check-updates - P2-52).
    */
-  async kiemTraCapNhat(dto: CheckUpdatesDto): Promise<CheckUpdatesResponseDto> {
+  async kiemTraCapNhat(
+    dto: CheckUpdatesDto,
+    maNguoiDung?: string,
+    vaiTro?: VaiTro,
+  ): Promise<CheckUpdatesResponseDto> {
     const { maThietBi } = dto;
 
-    // 1. Kiểm tra thiết bị có tồn tại trong CSDL không
+    // 1. Kiểm tra thiết bị có tồn tại trong CSDL không và xác thực quyền sở hữu (Post-Review #10)
     const thietBi = await this.prisma.thietBi.findUnique({
       where: { maThietBi },
-      select: { maThietBi: true, tenThietBi: true, loaiThietBi: true },
+      select: { maThietBi: true, tenThietBi: true, loaiThietBi: true, maNguoiDung: true },
     });
 
     if (!thietBi) {
       throw new NotFoundException(`Không tìm thấy thiết bị với mã [${maThietBi}]`);
+    }
+
+    if (
+      maNguoiDung &&
+      vaiTro !== VaiTro.QUAN_TRI_VIEN &&
+      thietBi.maNguoiDung &&
+      thietBi.maNguoiDung !== maNguoiDung
+    ) {
+      throw new ForbiddenException('Bạn không có quyền kiểm tra cập nhật trên thiết bị này');
     }
 
     // Cập nhật thời gian hoạt động gần nhất của thiết bị
@@ -125,6 +138,7 @@ export class UpdaterService {
       // So sánh phiên bản:
       // A. Nếu có maTepDaCai đã ghi nhận trong DB (Android hoặc Windows qua ForgeStore):
       // Ưu tiên kiểm tra xem ngày phát hành của release mới có sau ngày phát hành của file đã cài không (P2-52.3)
+      let daXacDinhQuaTep = false;
       let coBanMoi = false;
 
       if (item.maTepDaCai) {
@@ -134,15 +148,19 @@ export class UpdaterService {
         });
 
         if (tepDaCai && tepDaCai.banPhatHanh) {
+          daXacDinhQuaTep = true;
           // So sánh mã release hoặc ngày phát hành
           if (banMoiNhat.maPhatHanh !== tepDaCai.maPhatHanh) {
             coBanMoi = banMoiNhat.ngayPhatHanh > tepDaCai.banPhatHanh.ngayPhatHanh;
+          } else {
+            // Máy đang cài đúng release mới nhất trong Store
+            coBanMoi = false;
           }
         }
       }
 
-      // B. Nếu chưa xác định được hoặc không có maTepDaCai -> so sánh chuỗi theo hàm thuần soSanhPhienBan
-      if (!coBanMoi) {
+      // B. Nếu chưa xác định được qua maTepDaCai (do client tự gửi danh sách hoặc file không tìm thấy) -> so sánh chuỗi
+      if (!daXacDinhQuaTep) {
         coBanMoi = coBanMoiHon(item.phienBanHienTai, phienBanMoi);
       }
 
