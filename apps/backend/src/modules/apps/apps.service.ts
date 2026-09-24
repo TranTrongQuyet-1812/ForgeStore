@@ -342,8 +342,12 @@ export class AppsService {
 
   /**
    * API Duyệt Store (GET /apps) với bộ lọc, phân trang, sắp xếp và Cache (P2-23).
+   * Hỗ trợ bổ sung cờ daYeuThich nếu người dùng đã đăng nhập (P2-50.4).
    */
-  async layDanhSachApps(query: QueryAppsDto): Promise<TrangKetQua<UngDungTomTatDto>> {
+  async layDanhSachApps(
+    query: QueryAppsDto,
+    userId?: string,
+  ): Promise<TrangKetQua<UngDungTomTatDto>> {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? Math.min(query.limit, 50) : 20;
     const sort = query.sort || AppSortOption.TRENDING;
@@ -469,13 +473,35 @@ export class AppsService {
     // Lưu vào Cache với TTL 1 giờ
     await this.cacheService.luu(cacheKey, result, this.CACHE_TTL);
 
+    // Nếu người dùng đã đăng nhập, nạp cờ daYeuThich vào danh sách (P2-50.4)
+    if (userId && result.duLieu.length > 0) {
+      const appIds = result.duLieu.map((a) => a.maUngDung);
+      const yeuThichs = await this.prisma.khoYeuThich.findMany({
+        where: {
+          maNguoiDung: userId,
+          maUngDung: { in: appIds },
+        },
+        select: { maUngDung: true },
+      });
+      const likedSet = new Set(yeuThichs.map((y) => y.maUngDung));
+
+      return {
+        ...result,
+        duLieu: result.duLieu.map((item) => ({
+          ...item,
+          daYeuThich: likedSet.has(item.maUngDung),
+        })),
+      };
+    }
+
     return result;
   }
 
   /**
    * API Chi tiết Ứng dụng (GET /apps/:id) theo UUID hoặc owner/repo slug (P2-24).
+   * Hỗ trợ bổ sung cờ laYeuThich nếu người dùng đã đăng nhập (P2-50.4).
    */
-  async layChiTietApp(idOrSlug: string): Promise<UngDungChiTietDto> {
+  async layChiTietApp(idOrSlug: string, userId?: string): Promise<UngDungChiTietDto> {
     if (!idOrSlug || !idOrSlug.trim()) {
       throw new BadRequestException('Mã định danh ứng dụng không được để trống.');
     }
@@ -485,6 +511,21 @@ export class AppsService {
 
     const cached = await this.cacheService.lay<UngDungChiTietDto>(cacheKey);
     if (cached) {
+      if (userId) {
+        const daThich = await this.prisma.khoYeuThich.findUnique({
+          where: {
+            maNguoiDung_maUngDung: {
+              maNguoiDung: userId,
+              maUngDung: cached.maUngDung,
+            },
+          },
+          select: { maYeuThich: true },
+        });
+        return {
+          ...cached,
+          laYeuThich: Boolean(daThich),
+        };
+      }
       return cached;
     }
 
@@ -616,7 +657,7 @@ export class AppsService {
       })),
     };
 
-    // Lưu vào Cache
+    // Lưu vào Cache (bản lưu không gắn cờ người dùng cụ thể)
     await this.cacheService.luu(cacheKey, result, this.CACHE_TTL);
     if (!isUuid) {
       await this.cacheService.luu(
@@ -624,6 +665,22 @@ export class AppsService {
         result,
         this.CACHE_TTL,
       );
+    }
+
+    if (userId) {
+      const daThich = await this.prisma.khoYeuThich.findUnique({
+        where: {
+          maNguoiDung_maUngDung: {
+            maNguoiDung: userId,
+            maUngDung: app.maUngDung,
+          },
+        },
+        select: { maYeuThich: true },
+      });
+      return {
+        ...result,
+        laYeuThich: Boolean(daThich),
+      };
     }
 
     return result;

@@ -12,6 +12,8 @@ import { AppsService } from './apps.service';
 import { QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
 import { ResolveAssetDto } from './dto/resolve-asset.dto';
 
+import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
+
 @ApiTags('Apps - Kho Ứng Dụng')
 @Controller('apps')
 export class AppsController {
@@ -22,14 +24,17 @@ export class AppsController {
   @ApiOperation({
     summary: 'Duyệt danh sách ứng dụng trong Store (P2-23)',
     description:
-      'Lấy danh sách ứng dụng theo nền tảng (android/windows), danh mục, sắp xếp (stars/recent/trending) và phân trang (tối đa 50 app/trang). Có bộ đệm Redis.',
+      'Lấy danh sách ứng dụng theo nền tảng (android/windows), danh mục, sắp xếp (stars/recent/trending) và phân trang (tối đa 50 app/trang). Có bộ đệm Redis. Tự động gắn cờ daYeuThich nếu đã đăng nhập.',
   })
   @ApiResponse({
     status: 200,
     description: 'Danh sách ứng dụng tóm tắt kèm phân trang',
   })
-  async layDanhSachApps(@Query() query: QueryAppsDto): Promise<TrangKetQua<UngDungTomTatDto>> {
-    return this.appsService.layDanhSachApps(query);
+  async layDanhSachApps(
+    @Query() query: QueryAppsDto,
+    @NguoiDungHienTai('maNguoiDung') userId?: string,
+  ): Promise<TrangKetQua<UngDungTomTatDto>> {
+    return this.appsService.layDanhSachApps(query, userId);
   }
 
   @CongKhai()
@@ -70,7 +75,8 @@ export class AppsController {
   @Get(':owner/:repo')
   @ApiOperation({
     summary: 'Lấy chi tiết ứng dụng theo owner và repo slug (P2-24)',
-    description: 'Ví dụ: /api/v1/apps/rustdesk/rustdesk',
+    description:
+      'Ví dụ: /api/v1/apps/rustdesk/rustdesk. Tự động gắn cờ laYeuThich nếu đã đăng nhập.',
   })
   @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
   @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
@@ -81,8 +87,9 @@ export class AppsController {
   async layChiTietAppTheoSlug(
     @Param('owner') owner: string,
     @Param('repo') repo: string,
+    @NguoiDungHienTai('maNguoiDung') userId?: string,
   ): Promise<UngDungChiTietDto> {
-    return this.appsService.layChiTietApp(`${owner}/${repo}`);
+    return this.appsService.layChiTietApp(`${owner}/${repo}`, userId);
   }
 
   @CongKhai()
@@ -90,7 +97,7 @@ export class AppsController {
   @ApiOperation({
     summary: 'Lấy chi tiết ứng dụng theo UUID hoặc URL-encoded slug (P2-24)',
     description:
-      'Chấp nhận UUID của ứng dụng hoặc chuỗi owner/repo đã URL-encoded (VD: rustdesk%2Frustdesk).',
+      'Chấp nhận UUID của ứng dụng hoặc chuỗi owner/repo đã URL-encoded (VD: rustdesk%2Frustdesk). Tự động gắn cờ laYeuThich nếu đã đăng nhập.',
   })
   @ApiParam({
     name: 'id',
@@ -101,7 +108,10 @@ export class AppsController {
     status: 200,
     description: 'Thông tin chi tiết toàn diện của ứng dụng',
   })
-  async layChiTietApp(@Param('id') id: string): Promise<UngDungChiTietDto> {
-    return this.appsService.layChiTietApp(id);
+  async layChiTietApp(
+    @Param('id') id: string,
+    @NguoiDungHienTai('maNguoiDung') userId?: string,
+  ): Promise<UngDungChiTietDto> {
+    return this.appsService.layChiTietApp(id, userId);
   }
 }

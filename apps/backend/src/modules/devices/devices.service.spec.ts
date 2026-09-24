@@ -6,14 +6,8 @@ import { LoaiThietBi } from '@prisma/client';
 
 describe('DevicesService', () => {
   let service: DevicesService;
-  let mockPrisma: {
-    thietBi: {
-      upsert: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-      findUnique: ReturnType<typeof vi.fn>;
-      update: ReturnType<typeof vi.fn>;
-    };
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockPrisma: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -21,6 +15,18 @@ describe('DevicesService', () => {
         upsert: vi.fn(),
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        update: vi.fn(),
+      },
+      ungDungDaCai: {
+        findMany: vi.fn(),
+        upsert: vi.fn(),
+        deleteMany: vi.fn(),
+      },
+      ungDung: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      },
+      tepCaiDat: {
         update: vi.fn(),
       },
     };
@@ -142,6 +148,135 @@ describe('DevicesService', () => {
       expect(mockPrisma.thietBi.update).toHaveBeenCalledWith({
         where: { maThietBi: 'dev-1' },
         data: { hoatDongLanCuoi: expect.any(Date) },
+      });
+    });
+  });
+
+  describe('P2-51: Quản lý ứng dụng đã cài trên thiết bị', () => {
+    const maNguoiDung = 'user-uuid-1';
+    const maThietBi = 'device-uuid-1';
+    const maUngDung = 'app-uuid-rustdesk';
+
+    beforeEach(() => {
+      mockPrisma.thietBi.findUnique.mockResolvedValue({
+        maThietBi,
+        maNguoiDung,
+        tenThietBi: 'Laptop Dell',
+      });
+    });
+
+    describe('layDanhSachAppDaCai (P2-51.1 & P2-51.4)', () => {
+      it('ném lỗi ForbiddenException nếu thiết bị thuộc người dùng khác', async () => {
+        mockPrisma.thietBi.findUnique.mockResolvedValue({
+          maThietBi,
+          maNguoiDung: 'user-khac',
+        });
+
+        await expect(service.layDanhSachAppDaCai(maNguoiDung, maThietBi)).rejects.toThrow(
+          ForbiddenException,
+        );
+      });
+
+      it('ném lỗi NotFoundException nếu thiết bị không tồn tại', async () => {
+        mockPrisma.thietBi.findUnique.mockResolvedValue(null);
+
+        await expect(service.layDanhSachAppDaCai(maNguoiDung, 'dev-khong-ton-tai')).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+
+      it('trả về danh sách app đã cài kèm cờ coBanMoi chính xác', async () => {
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+          {
+            maBanGhi: 'record-1',
+            maNguoiDung,
+            maUngDung,
+            maThietBi,
+            phienBanHienTai: '1.2.0',
+            maTepDaCai: 'tep-1',
+            duongDanThuMuc: null,
+            ngayCaiDat: new Date('2026-09-01'),
+            ngayCapNhatCuoi: new Date('2026-09-01'),
+            ungDung: {
+              maUngDung,
+              tenKhoChua: 'rustdesk',
+              tenRepoDayDu: 'rustdesk/rustdesk',
+              anhDaiDien: 'icon.png',
+              soSaoGithub: 80000,
+              danhMucChinh: 'CONG_CU',
+              nenTangHoTro: 'TAT_CA',
+              daXacMinh: true,
+              phanTichAI: {
+                khauHieuTiengViet: 'Remote desktop',
+                diemUyTin: 95,
+                mucDoAnToan: 'AN_TOAN',
+              },
+              danhSachPhatHanh: [{ tenPhienBan: 'v1.2.3', ngayPhatHanh: new Date() }],
+            },
+          },
+        ]);
+
+        const result = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].maUngDung).toBe(maUngDung);
+        expect(result[0].phienBanHienTai).toBe('1.2.0');
+        expect(result[0].coBanMoi).toBe(true);
+        expect(result[0].phienBanMoiNhat).toBe('v1.2.3');
+      });
+    });
+
+    describe('ghiNhanCaiDat (P2-51.2)', () => {
+      it('ném NotFoundException nếu mã ứng dụng không tồn tại trong Store', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue(null);
+
+        await expect(
+          service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+            maUngDung: 'app-la',
+            phienBanHienTai: '1.0.0',
+          }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('ghi nhận cài đặt thành công qua upsert và tăng soLuotTai cho tệp cài đặt', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'rustdesk/rustdesk',
+        });
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValue({
+          maBanGhi: 'rec-new',
+          maThietBi,
+          maUngDung,
+          phienBanHienTai: '1.2.3',
+          maTepDaCai: 'tep-1',
+        });
+        mockPrisma.tepCaiDat.update.mockResolvedValue({});
+
+        const res = await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung,
+          phienBanHienTai: '1.2.3',
+          maTepDaCai: 'tep-1',
+        });
+
+        expect(res.phienBanHienTai).toBe('1.2.3');
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalled();
+        expect(mockPrisma.tepCaiDat.update).toHaveBeenCalledWith({
+          where: { maTep: 'tep-1' },
+          data: { soLuotTai: { increment: 1 } },
+        });
+      });
+    });
+
+    describe('goCaiDat (P2-51.3)', () => {
+      it('gỡ cài đặt ứng dụng thành công khỏi thiết bị', async () => {
+        mockPrisma.ungDungDaCai.deleteMany.mockResolvedValue({ count: 1 });
+
+        const res = await service.goCaiDat(maNguoiDung, maThietBi, maUngDung);
+
+        expect(res).toEqual({ daGo: true, soLuong: 1 });
+        expect(mockPrisma.ungDungDaCai.deleteMany).toHaveBeenCalledWith({
+          where: { maThietBi, maUngDung },
+        });
       });
     });
   });

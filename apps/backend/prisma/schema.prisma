@@ -262,6 +262,7 @@ model KhoYeuThich {
 
   @@unique([maNguoiDung, maUngDung])
   @@index([maNguoiDung, ngayThem(sort: Desc)])
+  @@index([maUngDung])
   @@map("kho_yeu_thich")
 }
 
@@ -287,6 +288,8 @@ model UngDungDaCai {
   @@unique([maThietBi, maUngDung])
   @@index([maThietBi])
   @@index([maNguoiDung])
+  @@index([maUngDung])
+  @@index([maTepDaCai])
   @@map("ung_dung_da_cai")
 }
 
@@ -329,5 +332,7 @@ model NhatKyNapRepo {
   nguoiDungYeuCau     NguoiDung?      @relation(fields: [maNguoiDungYeuCau], references: [maNguoiDung], onDelete: SetNull)
   ungDungTaoRa        UngDung?        @relation(fields: [maUngDungTaoRa], references: [maUngDung], onDelete: SetNull)
 
+  @@index([maNguoiDungYeuCau])
+  @@index([maUngDungTaoRa])
   @@map("nhat_ky_nap_repo")
 }

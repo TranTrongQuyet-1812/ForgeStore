@@ -109,4 +109,183 @@ export class DevicesService {
       where: { maThietBi },
     });
   }
+
+  /**
+   * Kiểm tra quyền sở hữu thiết bị của người dùng (P2-51.4).
+   * Ném 404 nếu không tìm thấy thiết bị, ném 403 nếu thiết bị thuộc người dùng khác.
+   */
+  async kiemTraQuyenSoHuu(maNguoiDung: string, maThietBi: string) {
+    const thietBi = await this.prisma.thietBi.findUnique({
+      where: { maThietBi },
+    });
+
+    if (!thietBi) {
+      throw new NotFoundException(`Không tìm thấy thiết bị với mã [${maThietBi}]`);
+    }
+
+    if (thietBi.maNguoiDung !== maNguoiDung) {
+      throw new ForbiddenException('Bạn không có quyền quản lý thiết bị này');
+    }
+
+    return thietBi;
+  }
+
+  /**
+   * Lấy danh sách ứng dụng đã cài đặt trên thiết bị, kèm cờ coBanMoi (P2-51.1).
+   */
+  async layDanhSachAppDaCai(maNguoiDung: string, maThietBi: string) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const danhSach = await this.prisma.ungDungDaCai.findMany({
+      where: { maThietBi },
+      include: {
+        ungDung: {
+          include: {
+            phanTichAI: true,
+            danhSachPhatHanh: {
+              orderBy: { ngayPhatHanh: 'desc' },
+              take: 1,
+              include: {
+                danhSachTepCaiDat: true,
+              },
+            },
+          },
+        },
+        tepDaCai: true,
+      },
+      orderBy: { ngayCapNhatCuoi: 'desc' },
+    });
+
+    return danhSach.map((item) => {
+      const app = item.ungDung;
+      const banMoiNhat = app.danhSachPhatHanh?.[0];
+      const phienBanMoi = banMoiNhat?.tenPhienBan;
+
+      // Cờ có bản mới: so sánh phiên bản hiện tại với bản mới nhất của repo
+      const coBanMoi = Boolean(
+        phienBanMoi &&
+        phienBanMoi.toLowerCase().replace(/^v/, '') !==
+          item.phienBanHienTai.toLowerCase().replace(/^v/, ''),
+      );
+
+      return {
+        maBanGhi: item.maBanGhi,
+        maNguoiDung: item.maNguoiDung,
+        maUngDung: item.maUngDung,
+        maThietBi: item.maThietBi,
+        phienBanHienTai: item.phienBanHienTai,
+        maTepDaCai: item.maTepDaCai,
+        duongDanThuMuc: item.duongDanThuMuc,
+        ngayCaiDat: item.ngayCaiDat.toISOString(),
+        ngayCapNhatCuoi: item.ngayCapNhatCuoi.toISOString(),
+        coBanMoi,
+        phienBanMoiNhat: phienBanMoi || null,
+        ungDung: {
+          maUngDung: app.maUngDung,
+          tenKhoChua: app.tenKhoChua,
+          tenRepoDayDu: app.tenRepoDayDu,
+          duongDanIcon: app.duongDanIcon ?? null,
+          soSaoGithub: app.soSaoGithub,
+          danhMucChinh: app.danhMucChinh,
+          nenTangHoTro: app.nenTangHoTro,
+          khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet ?? app.moTaGocTiengAnh ?? '',
+          diemUyTin: app.phanTichAI?.diemUyTin ?? 100,
+          mucDoAnToan: app.phanTichAI?.mucDoAnToan ?? null,
+          daXacMinh: app.daXacMinh,
+        },
+      };
+    });
+  }
+
+  /**
+   * Ghi nhận hoặc cập nhật ứng dụng vừa cài đặt trên thiết bị (P2-51.2).
+   */
+  async ghiNhanCaiDat(
+    maNguoiDung: string,
+    maThietBi: string,
+    dto: {
+      maUngDung: string;
+      phienBanHienTai: string;
+      maTepDaCai?: string;
+      duongDanThuMuc?: string;
+    },
+  ) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    // Kiểm tra ứng dụng có tồn tại trong Store không
+    const ungDung = await this.prisma.ungDung.findUnique({
+      where: { maUngDung: dto.maUngDung },
+      select: { maUngDung: true, tenRepoDayDu: true },
+    });
+
+    if (!ungDung) {
+      throw new NotFoundException(`Không tìm thấy ứng dụng với mã [${dto.maUngDung}]`);
+    }
+
+    const daCai = await this.prisma.ungDungDaCai.upsert({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung: dto.maUngDung,
+        },
+      },
+      create: {
+        maNguoiDung,
+        maThietBi,
+        maUngDung: dto.maUngDung,
+        phienBanHienTai: dto.phienBanHienTai,
+        maTepDaCai: dto.maTepDaCai || null,
+        duongDanThuMuc: dto.duongDanThuMuc || null,
+      },
+      update: {
+        phienBanHienTai: dto.phienBanHienTai,
+        maTepDaCai: dto.maTepDaCai || null,
+        duongDanThuMuc: dto.duongDanThuMuc || null,
+        ngayCapNhatCuoi: new Date(),
+      },
+    });
+
+    // Tăng số lượt tải của tệp cài đặt nếu có
+    if (dto.maTepDaCai) {
+      await this.prisma.tepCaiDat
+        .update({
+          where: { maTep: dto.maTepDaCai },
+          data: { soLuotTai: { increment: 1 } },
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
+          );
+        });
+    }
+
+    this.logger.log(
+      `Đã ghi nhận cài đặt [${ungDung.tenRepoDayDu}] (v${dto.phienBanHienTai}) trên thiết bị [${maThietBi}]`,
+    );
+
+    return daCai;
+  }
+
+  /**
+   * Gỡ cài đặt ứng dụng khỏi thiết bị (P2-51.3).
+   */
+  async goCaiDat(maNguoiDung: string, maThietBi: string, maUngDung: string) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const xoa = await this.prisma.ungDungDaCai.deleteMany({
+      where: {
+        maThietBi,
+        maUngDung,
+      },
+    });
+
+    this.logger.log(
+      `Đã gỡ cài đặt app [${maUngDung}] khỏi thiết bị [${maThietBi}] (Số lượng xóa: ${xoa.count})`,
+    );
+
+    return {
+      daGo: true,
+      soLuong: xoa.count,
+    };
+  }
 }
