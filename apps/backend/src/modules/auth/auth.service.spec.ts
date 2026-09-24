@@ -27,6 +27,7 @@ interface MockPrisma {
     create: MockFn;
     findUnique: MockFn;
     update: MockFn;
+    updateMany: MockFn;
     delete: MockFn;
     deleteMany: MockFn;
   };
@@ -36,6 +37,7 @@ interface MockCache {
   get: MockFn;
   set: MockFn;
   del: MockFn;
+  layVaXoa: MockFn;
 }
 
 interface MockDevices {
@@ -74,6 +76,7 @@ describe('AuthService', () => {
         create: vi.fn(),
         findUnique: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         delete: vi.fn(),
         deleteMany: vi.fn(),
       },
@@ -83,6 +86,7 @@ describe('AuthService', () => {
       get: vi.fn(),
       set: vi.fn().mockResolvedValue(undefined),
       del: vi.fn().mockResolvedValue(undefined),
+      layVaXoa: vi.fn(),
     };
 
     mockDevices = {
@@ -110,7 +114,6 @@ describe('AuthService', () => {
       }),
     };
 
-    // Đúng thứ tự: prisma, cacheService, devicesService, jwtService, config
     service = new AuthService(
       mockPrisma as unknown as PrismaService,
       mockCache as unknown as CacheService,
@@ -124,7 +127,7 @@ describe('AuthService', () => {
     vi.restoreAllMocks();
   });
 
-  describe('P2-10: khoiTaoGithubAuth', () => {
+  describe('P2-10 & Điểm 1: khoiTaoGithubAuth & Vá Open Redirect', () => {
     it('khởi tạo luồng GitHub OAuth với deep link forgestore:// hợp lệ', async () => {
       const challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
       const redirect = 'forgestore://auth/callback';
@@ -140,6 +143,33 @@ describe('AuthService', () => {
       );
     });
 
+    it('chấp nhận redirect loopback localhost hoặc 127.0.0.1 hợp lệ', async () => {
+      const challenge = 'test-challenge';
+      const url1 = await service.khoiTaoGithubAuth(challenge, 'http://localhost:3000/callback');
+      const url2 = await service.khoiTaoGithubAuth(challenge, 'http://127.0.0.1:1420/callback');
+
+      expect(url1).toBeDefined();
+      expect(url2).toBeDefined();
+    });
+
+    it('Điểm 1: Chặn đứng tấn công Open Redirect giả mạo localhost (http://localhost:1@evil.com)', async () => {
+      const challenge = 'test-challenge';
+      const evilRedirect = 'http://localhost:1@evil.com';
+
+      await expect(service.khoiTaoGithubAuth(challenge, evilRedirect)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('Điểm 1: Chặn đứng redirect chứa username/password (http://admin:pass@localhost:3000)', async () => {
+      const challenge = 'test-challenge';
+      const evilRedirect = 'http://admin:pass@localhost:3000';
+
+      await expect(service.khoiTaoGithubAuth(challenge, evilRedirect)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
     it('từ chối redirect không thuộc whitelist scheme (ví dụ https://evil.com)', async () => {
       const challenge = 'test-challenge';
       const redirect = 'https://evil.com/steal-token';
@@ -150,17 +180,18 @@ describe('AuthService', () => {
     });
   });
 
-  describe('P2-10: xuLyGithubCallback', () => {
-    it('ném lỗi BadRequestException (MA_XAC_THUC_KHONG_HOP_LE) khi state không tồn tại trong Redis', async () => {
-      mockCache.get.mockResolvedValue(null);
+  describe('P2-10 & Điểm 3, 8, 9, 11: xuLyGithubCallback', () => {
+    it('Điểm 3: ném lỗi BadRequestException khi state không tồn tại trong Redis (layVaXoa)', async () => {
+      mockCache.layVaXoa.mockResolvedValue(null);
 
       await expect(service.xuLyGithubCallback('gh-code-123', 'state-expired')).rejects.toThrow(
         BadRequestException,
       );
     });
 
-    it('xác thực thành công với GitHub, upsert người dùng và sinh exchange code 60s (Zero-Token-on-URL)', async () => {
-      mockCache.get.mockResolvedValue({
+    it('xác thực thành công với GitHub, lọc email verified, mask log và sinh exchange code 60s', async () => {
+      // Mock atomic layVaXoa
+      mockCache.layVaXoa.mockResolvedValue({
         challenge: 'test-challenge',
         redirect: 'forgestore://auth/callback',
       });
@@ -177,7 +208,10 @@ describe('AuthService', () => {
           return Promise.resolve({
             ok: true,
             json: () =>
-              Promise.resolve([{ email: 'user@example.com', primary: true, verified: true }]),
+              Promise.resolve([
+                { email: 'fake@example.com', primary: false, verified: false },
+                { email: 'verified@example.com', primary: true, verified: true },
+              ]),
           });
         }
         if (url.includes('api.github.com/user')) {
@@ -200,7 +234,7 @@ describe('AuthService', () => {
       mockPrisma.nguoiDung.upsert.mockResolvedValue({
         maNguoiDung: 'user-uuid-1',
         tenDangNhap: 'testuser',
-        email: 'user@example.com',
+        email: 'verified@example.com',
         tenHienThi: 'Test User',
         anhDaiDien: 'https://avatars.githubusercontent.com/u/123456',
         vaiTro: VaiTro.NGUOI_DUNG,
@@ -208,28 +242,28 @@ describe('AuthService', () => {
 
       const redirectUrl = await service.xuLyGithubCallback('gh-auth-code-valid', 'valid-state');
 
-      expect(mockCache.del).toHaveBeenCalledWith('fs:auth:state:valid-state');
-      expect(mockCache.set).toHaveBeenCalledWith(
-        expect.stringContaining('fs:auth:exchange:'),
+      // Điểm 3: Kiểm tra layVaXoa được gọi đúng key state
+      expect(mockCache.layVaXoa).toHaveBeenCalledWith('fs:auth:state:valid-state');
+      // Điểm 9: Email truyền vào upsert phải là email verified
+      expect(mockPrisma.nguoiDung.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          maNguoiDung: 'user-uuid-1',
-          challenge: 'test-challenge',
+          create: expect.objectContaining({ thuDienTu: 'verified@example.com' }),
         }),
-        DEFAULT_TTL.EXCHANGE_CODE,
       );
-      // Đảm bảo không chứa JWT hay Refresh token trên URL
+      // Zero-Token-on-URL: Không để lộ token trên URL
       expect(redirectUrl).toContain('forgestore://auth/callback?code=');
       expect(redirectUrl).not.toContain('accessToken');
       expect(redirectUrl).not.toContain('refreshToken');
     });
   });
 
-  describe('P2-13: doiMaXacThuc (PKCE Flow)', () => {
+  describe('P2-13 & Điểm 2, 3: doiMaXacThuc (PKCE RFC 7636 Flow)', () => {
+    // Verifier hợp lệ: 43 ký tự RFC 7636
     const rawVerifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     const computedChallenge = crypto.createHash('sha256').update(rawVerifier).digest('base64url');
 
-    it('ném lỗi BadRequestException khi exchange code không tồn tại hoặc hết hạn', async () => {
-      mockCache.get.mockResolvedValue(null);
+    it('Điểm 3: ném lỗi BadRequestException khi exchange code không tồn tại hoặc đã bị dùng (layVaXoa null)', async () => {
+      mockCache.layVaXoa.mockResolvedValue(null);
 
       await expect(
         service.doiMaXacThuc({
@@ -244,8 +278,8 @@ describe('AuthService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('ném lỗi BadRequestException khi PKCE verifier không khớp challenge', async () => {
-      mockCache.get.mockResolvedValue({
+    it('Điểm 2: từ chối verifier có độ dài nhỏ hơn 43 ký tự theo RFC 7636', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
         maNguoiDung: 'user-uuid-1',
         challenge: computedChallenge,
       });
@@ -253,7 +287,7 @@ describe('AuthService', () => {
       await expect(
         service.doiMaXacThuc({
           code: 'valid-code',
-          verifier: 'wrong-verifier',
+          verifier: 'too-short-verifier', // < 43 chars
           thietBi: {
             dinhDanhPhanCung: 'hw-id-1',
             tenThietBi: 'Dell XPS',
@@ -263,8 +297,48 @@ describe('AuthService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('xác thực PKCE thành công, xóa exchange code 1 lần, đăng ký thiết bị và cấp token', async () => {
-      mockCache.get.mockResolvedValue({
+    it('Điểm 2: từ chối verifier có độ dài lớn hơn 128 ký tự theo RFC 7636', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        maNguoiDung: 'user-uuid-1',
+        challenge: computedChallenge,
+      });
+
+      await expect(
+        service.doiMaXacThuc({
+          code: 'valid-code',
+          verifier: 'a'.repeat(129), // > 128 chars
+          thietBi: {
+            dinhDanhPhanCung: 'hw-id-1',
+            tenThietBi: 'Dell XPS',
+            loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('Điểm 2: từ chối PKCE plain mode (verifier === challenge)', async () => {
+      const plainChallenge = 'a'.repeat(50);
+      mockCache.layVaXoa.mockResolvedValue({
+        maNguoiDung: 'user-uuid-1',
+        challenge: plainChallenge,
+      });
+
+      // Gửi verifier bằng đúng challenge (plain mode)
+      await expect(
+        service.doiMaXacThuc({
+          code: 'valid-code',
+          verifier: plainChallenge,
+          thietBi: {
+            dinhDanhPhanCung: 'hw-id-1',
+            tenThietBi: 'Dell XPS',
+            loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
+          },
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('xác thực PKCE S256 thành công, xóa exchange code nguyên tử, đăng ký thiết bị và cấp token', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
         maNguoiDung: 'user-uuid-1',
         challenge: computedChallenge,
       });
@@ -306,9 +380,9 @@ describe('AuthService', () => {
         },
       });
 
-      // Kiểm tra exchange code bị xóa ngay (chỉ dùng 1 lần)
-      expect(mockCache.del).toHaveBeenCalledWith('fs:auth:exchange:valid-code');
-      // Kiểm tra thiết bị được đăng ký
+      // Điểm 3: Kiểm tra exchange code bị lấy và xóa nguyên tử
+      expect(mockCache.layVaXoa).toHaveBeenCalledWith('fs:auth:exchange:valid-code');
+      // Kiểm tra đăng ký thiết bị
       expect(mockDevices.dangKyThietBi).toHaveBeenCalledWith('user-uuid-1', {
         dinhDanhPhanCung: 'hw-id-1',
         tenThietBi: 'Dell XPS',
@@ -322,7 +396,7 @@ describe('AuthService', () => {
     });
   });
 
-  describe('P2-12: lamMoiToken (Token Rotation & Reuse Detection)', () => {
+  describe('P2-12 & Điểm 5, 6: lamMoiToken (Grace Period & sid.rác Protection)', () => {
     it('ném lỗi UnauthorizedException khi định dạng Refresh Token không hợp lệ', async () => {
       await expect(service.lamMoiToken({ refreshToken: 'invalid-token-no-dot' })).rejects.toThrow(
         UnauthorizedException,
@@ -344,7 +418,7 @@ describe('AuthService', () => {
     it('ném lỗi và xóa phiên khi phiên đăng nhập đã hết hạn', async () => {
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
         maPhien: 'session-expired',
-        thoiGianHetHan: new Date(Date.now() - 10000), // đã hết hạn
+        thoiGianHetHan: new Date(Date.now() - 10000),
         chuoiMaHoaToken: 'hashed-secret',
       });
 
@@ -357,28 +431,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('REUSE DETECTION: Thu hồi toàn bộ phiên đăng nhập khi bí mật không khớp (token cũ bị lộ)', async () => {
-      const realSecret = 'original-secret-string';
-      const hashed = await argon2.hash(realSecret);
-
-      mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-valid',
-        thoiGianHetHan: new Date(Date.now() + 1000000),
-        chuoiMaHoaToken: hashed,
-      });
-
-      // Kẻ tấn công hoặc client gửi refresh token cũ không khớp bí mật hiện tại
-      await expect(
-        service.lamMoiToken({ refreshToken: 'session-valid.stolen-or-outdated-secret' }),
-      ).rejects.toThrow(UnauthorizedException);
-
-      // Verify phiên bị thu hồi lập tức khỏi CSDL
-      expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
-        where: { maPhien: 'session-valid' },
-      });
-    });
-
-    it('xoay vòng Refresh Token thành công: cấp bí mật mới và Access Token mới', async () => {
+    it('xoay vòng Refresh Token thành công: lưu chuoiMaHoaTokenCu và cập nhật updateMany có điều kiện', async () => {
       const currentSecret = 'valid-current-secret-12345678901234567890123456789012';
       const hashed = await argon2.hash(currentSecret);
 
@@ -394,9 +447,7 @@ describe('AuthService', () => {
         },
       });
 
-      mockPrisma.phienDangNhap.update.mockResolvedValue({
-        maPhien: 'session-valid',
-      });
+      mockPrisma.phienDangNhap.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.lamMoiToken({
         refreshToken: `session-valid.${currentSecret}`,
@@ -404,14 +455,92 @@ describe('AuthService', () => {
 
       expect(result.accessToken).toBe('mocked-jwt-access-token');
       expect(result.refreshToken).toMatch(/^session-valid\.[a-f0-9]{64}$/);
-      expect(mockPrisma.phienDangNhap.update).toHaveBeenCalledWith({
-        where: { maPhien: 'session-valid' },
+      expect(mockPrisma.phienDangNhap.updateMany).toHaveBeenCalledWith({
+        where: {
+          maPhien: 'session-valid',
+          chuoiMaHoaToken: hashed,
+        },
         data: expect.objectContaining({
           chuoiMaHoaToken: expect.any(String),
-          thoiGianHetHan: expect.any(Date),
+          chuoiMaHoaTokenCu: hashed,
+          thoiGianXoayVongCuoi: expect.any(Date),
         }),
       });
-      expect(mockDevices.capNhatHoatDong).toHaveBeenCalledWith('device-uuid-1');
+    });
+
+    it('Điểm 5: GRACE PERIOD — client gửi lại token vừa xoay vòng trong 15s được cấp token mới mà KHÔNG bị xóa phiên', async () => {
+      const previousSecret = 'previous-valid-secret-12345678901234567890';
+      const hashedPrev = await argon2.hash(previousSecret);
+      const hashedCurrent = await argon2.hash('newer-secret-that-was-just-rotated');
+
+      // Phiên vừa xoay vòng 2 giây trước (< 15s Grace Period)
+      mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
+        maPhien: 'session-grace',
+        thoiGianHetHan: new Date(Date.now() + 1000000),
+        chuoiMaHoaToken: hashedCurrent,
+        chuoiMaHoaTokenCu: hashedPrev,
+        thoiGianXoayVongCuoi: new Date(Date.now() - 2000),
+        maNguoiDung: 'user-uuid-1',
+        maThietBi: 'device-uuid-1',
+        nguoiDung: {
+          maNguoiDung: 'user-uuid-1',
+          vaiTro: VaiTro.NGUOI_DUNG,
+        },
+      });
+
+      // Request thứ 2 gửi lại token cũ (previousSecret) trong khoảng Grace Period
+      const result = await service.lamMoiToken({
+        refreshToken: `session-grace.${previousSecret}`,
+      });
+
+      expect(result.accessToken).toBe('mocked-jwt-access-token');
+      // Đảm bảo phiên KHÔNG bị xóa
+      expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
+    });
+
+    it('Điểm 5: REUSE DETECTION NGOÀI GRACE PERIOD — Token cũ gửi sau 20s (> 15s) bị thu hồi phiên lập tức', async () => {
+      const previousSecret = 'stolen-previous-secret-123456789012345678';
+      const hashedPrev = await argon2.hash(previousSecret);
+      const hashedCurrent = await argon2.hash('current-secret-9999999999999999999');
+
+      // Phiên đã xoay vòng 20 giây trước (> 15s Grace Period)
+      mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
+        maPhien: 'session-attacked',
+        thoiGianHetHan: new Date(Date.now() + 1000000),
+        chuoiMaHoaToken: hashedCurrent,
+        chuoiMaHoaTokenCu: hashedPrev,
+        thoiGianXoayVongCuoi: new Date(Date.now() - 20000),
+      });
+
+      await expect(
+        service.lamMoiToken({ refreshToken: `session-attacked.${previousSecret}` }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      // Verify phiên bị thu hồi lập tức khỏi CSDL
+      expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
+        where: { maPhien: 'session-attacked' },
+      });
+    });
+
+    it('Điểm 6: CHỐNG PHÁ HOẠI SID.RÁC — Gửi chuỗi rác không khớp cả token mới lẫn token cũ bị 401 nhưng KHÔNG xóa phiên', async () => {
+      const currentHashed = await argon2.hash('legit-current-secret');
+      const prevHashed = await argon2.hash('legit-previous-secret');
+
+      mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
+        maPhien: 'session-victim',
+        thoiGianHetHan: new Date(Date.now() + 1000000),
+        chuoiMaHoaToken: currentHashed,
+        chuoiMaHoaTokenCu: prevHashed,
+        thoiGianXoayVongCuoi: new Date(Date.now() - 5000),
+      });
+
+      // Kẻ xấu biết sid gửi chuỗi ngẫu nhiên (sid.rac_fake_secret)
+      await expect(
+        service.lamMoiToken({ refreshToken: 'session-victim.completely_random_garbage_secret' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      // ĐẢM BẢO TUYỆT ĐỐI: Phiên của nạn nhân KHÔNG BỊ XÓA!
+      expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
     });
   });
 

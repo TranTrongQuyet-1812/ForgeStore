@@ -3,43 +3,127 @@ import { Redis } from 'ioredis';
 import { randomUUID } from 'crypto';
 import { REDIS_CLIENT } from './redis.constants';
 
+interface MemoryCacheEntry {
+  data: string;
+  expiresAt: number; // Unix timestamp in ms
+}
+
 @Injectable()
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
 
+  // In-Memory Fallback Map phục vụ kịch bản Redis offline / Demo tại trường (D-05)
+  private readonly memoryFallback = new Map<string, MemoryCacheEntry>();
+
   constructor(@Inject(REDIS_CLIENT) private readonly redisClient: Redis) {}
 
   /**
-   * Lấy giá trị từ Cache theo Key.
-   * Nếu Redis mất kết nối hoặc lỗi, trả về null để caller truy vấn trực tiếp DB.
+   * Helper: Dọn dẹp key hết hạn trong memory fallback để tránh rò rỉ bộ nhớ.
    */
-  async get<T>(key: string): Promise<T | null> {
-    try {
-      const data = await this.redisClient.get(key);
-      if (!data) return null;
-      return JSON.parse(data) as T;
-    } catch (error) {
-      this.logger.warn(
-        `Lỗi đọc cache key [${key}], chuyển tiếp truy vấn: ${(error as Error).message}`,
-      );
-      return null;
+  private cleanExpiredMemoryKeys(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.memoryFallback.entries()) {
+      if (entry.expiresAt <= now) {
+        this.memoryFallback.delete(key);
+      }
     }
   }
 
   /**
+   * Lấy giá trị từ Cache theo Key.
+   * Nếu Redis mất kết nối hoặc lỗi, tự động fallback đọc từ Memory Store (D-05).
+   */
+  async get<T>(key: string): Promise<T | null> {
+    try {
+      const data = await this.redisClient.get(key);
+      if (data) {
+        return JSON.parse(data) as T;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Lỗi đọc cache key [${key}], chuyển tiếp sang memory fallback: ${(error as Error).message}`,
+      );
+    }
+
+    // In-memory fallback
+    const memEntry = this.memoryFallback.get(key);
+    if (memEntry) {
+      if (memEntry.expiresAt > Date.now()) {
+        try {
+          return JSON.parse(memEntry.data) as T;
+        } catch {
+          return null;
+        }
+      }
+      this.memoryFallback.delete(key);
+    }
+
+    return null;
+  }
+
+  /**
    * Lưu giá trị vào Cache kèm TTL (giây).
-   * Bắt lỗi an toàn nếu Redis không phản hồi.
+   * Tự động lưu vào Memory Store nếu Redis không phản hồi (D-05).
    */
   async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    const serialized = JSON.stringify(value);
+    let redisSuccess = false;
+
     try {
-      const serialized = JSON.stringify(value);
       if (ttlSeconds && ttlSeconds > 0) {
         await this.redisClient.set(key, serialized, 'EX', ttlSeconds);
       } else {
         await this.redisClient.set(key, serialized);
       }
+      redisSuccess = true;
     } catch (error) {
       this.logger.warn(`Lỗi ghi cache key [${key}]: ${(error as Error).message}`);
+    }
+
+    // Nếu Redis ghi thất bại hoặc để đảm bảo fallback luôn có dữ liệu khi Redis sập giữa chừng:
+    if (!redisSuccess) {
+      this.cleanExpiredMemoryKeys();
+      const effectiveTtl = ttlSeconds !== undefined ? ttlSeconds : 3600;
+      const expiresAt = Date.now() + effectiveTtl * 1000;
+      this.memoryFallback.set(key, { data: serialized, expiresAt });
+      this.logger.log(`Đã lưu key [${key}] vào In-Memory Fallback Map (TTL ${effectiveTtl}s)`);
+    }
+  }
+
+  /**
+   * Lấy và xóa giá trị nguyên tử (Atomic GETDEL, Redis >= 6.2).
+   * Điểm 3 & Điểm 4: Ngăn chặn triệt để race condition khi đổi mã và hỗ trợ fallback in-memory khi Redis sập.
+   */
+  async layVaXoa<T>(key: string): Promise<T | null> {
+    try {
+      const data = await this.redisClient.getdel(key);
+      if (data) {
+        this.memoryFallback.delete(key);
+        return JSON.parse(data) as T;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Lỗi GETDEL key [${key}], chuyển sang In-Memory Fallback: ${(error as Error).message}`,
+      );
+    }
+
+    // Fallback nguyên tử trong Single Thread Node.js Event Loop
+    const memEntry = this.memoryFallback.get(key);
+    if (!memEntry) {
+      return null;
+    }
+
+    // Xóa ngay lập tức (Atomic in event loop)
+    this.memoryFallback.delete(key);
+
+    if (memEntry.expiresAt <= Date.now()) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(memEntry.data) as T;
+    } catch {
+      return null;
     }
   }
 
@@ -47,13 +131,17 @@ export class CacheService {
    * Xóa một hoặc nhiều Key khỏi Cache.
    */
   async del(keys: string | string[]): Promise<void> {
+    const keyList = Array.isArray(keys) ? keys : [keys];
+    if (keyList.length === 0) return;
+
     try {
-      const keyList = Array.isArray(keys) ? keys : [keys];
-      if (keyList.length > 0) {
-        await this.redisClient.del(...keyList);
-      }
+      await this.redisClient.del(...keyList);
     } catch (error) {
       this.logger.warn(`Lỗi xóa cache key: ${(error as Error).message}`);
+    }
+
+    for (const key of keyList) {
+      this.memoryFallback.delete(key);
     }
   }
 

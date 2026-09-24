@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as argon2 from 'argon2';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { VaiTro } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
@@ -27,26 +28,36 @@ export class AuthService {
   /**
    * Khởi tạo luồng đăng nhập GitHub OAuth.
    * Sinh mã state ngẫu nhiên lưu vào Redis kèm PKCE challenge và redirect URL.
+   * Điểm 1: Vá lỗ hổng Open Redirect bằng URL parsing nghiêm ngặt (chặn userinfo, kiểm tra protocol & hostname).
    */
   async khoiTaoGithubAuth(challenge: string, redirect: string): Promise<string> {
     const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
 
-    // Kiểm tra danh sách redirect cho phép: deep link scheme hoặc loopback localhost
-    const isAllowedRedirect =
-      redirect.startsWith(`${appDeepLinkScheme}://`) ||
-      redirect.startsWith('http://localhost:') ||
-      redirect.startsWith('http://127.0.0.1:');
+    // Điểm 1: Phân tích URL redirect thật sự để chặn đứng Open Redirect (ví dụ http://localhost:1@evil.com)
+    let isAllowedRedirect = false;
+    try {
+      const u = new URL(redirect);
+      const isScheme = u.protocol === `${appDeepLinkScheme}:`;
+      const isLoopback =
+        u.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(u.hostname) &&
+        !u.username &&
+        !u.password;
+      isAllowedRedirect = isScheme || isLoopback;
+    } catch {
+      isAllowedRedirect = false;
+    }
 
     if (!isAllowedRedirect) {
       throw new BadRequestException(
-        `Đường dẫn chuyển hướng redirect không hợp lệ. Chỉ chấp nhận ${appDeepLinkScheme}:// hoặc localhost.`,
+        `Đường dẫn chuyển hướng redirect không hợp lệ. Chỉ chấp nhận ${appDeepLinkScheme}:// hoặc loopback localhost hợp lệ.`,
       );
     }
 
     const state = randomUUID();
     const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
 
-    // Lưu state kèm challenge và redirect vào Redis với TTL 10 phút (600 giây)
+    // Lưu state kèm challenge và redirect vào Redis / Memory Fallback với TTL 10 phút (600 giây)
     await this.cacheService.set(
       stateKey,
       { challenge, redirect, createdAt: Date.now() },
@@ -70,12 +81,16 @@ export class AuthService {
 
   /**
    * Xử lý callback từ GitHub OAuth.
-   * Xác thực state CSRF một lần, lấy thông tin người dùng từ GitHub, upsert vào DB,
-   * và sinh mã 1-time exchange code (TTL 60s) để chuyển tiếp về app native.
+   * Điểm 3: Nguyên tử hóa việc đọc và xóa state (layVaXoa / GETDEL).
+   * Điểm 8: Mask log không in mã exchange.
+   * Điểm 9: Lấy email đã verified.
+   * Điểm 11: Timeout AbortSignal 5s cho fetch.
    */
   async xuLyGithubCallback(code: string, state: string): Promise<string> {
     const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
-    const stateData = await this.cacheService.get<{ challenge: string; redirect: string }>(
+
+    // Điểm 3: Đọc và xóa state nguyên tử (chống race-condition replay)
+    const stateData = await this.cacheService.layVaXoa<{ challenge: string; redirect: string }>(
       stateKey,
     );
 
@@ -86,25 +101,29 @@ export class AuthService {
       });
     }
 
-    // Xóa state ngay lập tức (dùng 1 lần chống replay)
-    await this.cacheService.del(stateKey);
-
-    // Đổi code lấy GitHub Access Token
+    // Đổi code lấy GitHub Access Token (Timeout 5s - Điểm 11)
     const clientId = this.config.get<string>('GITHUB_CLIENT_ID')!;
     const clientSecret = this.config.get<string>('GITHUB_CLIENT_SECRET')!;
 
-    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code,
-      }),
-    });
+    let tokenRes: Response;
+    try {
+      tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (fetchErr) {
+      this.logger.error(`Timeout hoặc lỗi kết nối GitHub token: ${(fetchErr as Error).message}`);
+      throw new BadRequestException('Quá thời gian kết nối tới máy chủ GitHub');
+    }
 
     const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };
 
@@ -115,13 +134,20 @@ export class AuthService {
 
     const ghAccessToken = tokenData.access_token;
 
-    // Lấy thông tin tài khoản GitHub
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: {
-        Authorization: `Bearer ${ghAccessToken}`,
-        'User-Agent': 'ForgeStore-Central-Backend',
-      },
-    });
+    // Lấy thông tin tài khoản GitHub (Timeout 5s - Điểm 11)
+    let userRes: Response;
+    try {
+      userRes = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${ghAccessToken}`,
+          'User-Agent': 'ForgeStore-Central-Backend',
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (fetchErr) {
+      this.logger.error(`Timeout lấy thông tin profile GitHub: ${(fetchErr as Error).message}`);
+      throw new BadRequestException('Quá thời gian kết nối tới GitHub User API');
+    }
 
     if (!userRes.ok) {
       throw new BadRequestException('Không thể truy vấn thông tin người dùng từ GitHub');
@@ -135,30 +161,35 @@ export class AuthService {
       avatar_url?: string | null;
     };
 
-    // Lấy email chính xác nếu profile để ẩn email
-    let primaryEmail = ghUser.email || null;
-    if (!primaryEmail) {
-      try {
-        const emailsRes = await fetch('https://api.github.com/user/emails', {
-          headers: {
-            Authorization: `Bearer ${ghAccessToken}`,
-            'User-Agent': 'ForgeStore-Central-Backend',
-          },
-        });
-        if (emailsRes.ok) {
-          const emails = (await emailsRes.json()) as Array<{
-            email: string;
-            primary: boolean;
-            verified: boolean;
-          }>;
-          const primary = emails.find((e) => e.primary && e.verified) || emails[0];
-          if (primary) {
-            primaryEmail = primary.email;
-          }
+    // Điểm 9: Lấy email chính xác đã verified
+    let primaryEmail: string | null = null;
+    try {
+      const emailsRes = await fetch('https://api.github.com/user/emails', {
+        headers: {
+          Authorization: `Bearer ${ghAccessToken}`,
+          'User-Agent': 'ForgeStore-Central-Backend',
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (emailsRes.ok) {
+        const emails = (await emailsRes.json()) as Array<{
+          email: string;
+          primary: boolean;
+          verified: boolean;
+        }>;
+        const verifiedEmails = emails.filter((e) => e.verified);
+        const primary = verifiedEmails.find((e) => e.primary) || verifiedEmails[0];
+        if (primary) {
+          primaryEmail = primary.email;
         }
-      } catch (emailErr) {
-        this.logger.warn(`Không thể lấy danh sách email GitHub: ${(emailErr as Error).message}`);
       }
+    } catch (emailErr) {
+      this.logger.warn(`Không thể lấy danh sách email GitHub: ${(emailErr as Error).message}`);
+    }
+
+    // Nếu không lấy được qua user/emails, kiểm tra nếu profile email có sẵn
+    if (!primaryEmail && ghUser.email) {
+      primaryEmail = ghUser.email;
     }
 
     // Tạo mới hoặc cập nhật người dùng trong CSDL Supabase
@@ -182,7 +213,7 @@ export class AuthService {
 
     // P2-10.5: TUYỆT ĐỐI KHÔNG LƯU GitHub access token vào DB
 
-    // Sinh mã xác thực dùng 1 lần (TTL 60 giây) lưu vào Redis
+    // Sinh mã xác thực dùng 1 lần (TTL 60 giây) lưu vào Redis / Memory Fallback
     const exchangeCode = randomUUID();
     const exchangeKey = `${CACHE_PREFIX.AUTH_EXCHANGE}${exchangeCode}`;
 
@@ -195,7 +226,8 @@ export class AuthService {
       DEFAULT_TTL.EXCHANGE_CODE,
     );
 
-    this.logger.log(`Đã cấp exchange code [${exchangeCode}] cho người dùng [${user.tenDangNhap}]`);
+    // Điểm 8: Mask log - Không ghi exchange code bí mật vào log
+    this.logger.log(`Đã cấp exchange code cho người dùng [${user.tenDangNhap}]`);
 
     // Chuyển hướng về native app
     const separator = stateData.redirect.includes('?') ? '&' : '?';
@@ -204,11 +236,14 @@ export class AuthService {
 
   /**
    * Đổi mã xác thực dùng 1 lần (Zero-Token-on-URL) lấy cặp JWT Tokens.
-   * Xác thực PKCE verifier, đăng ký thiết bị vật lý, tạo phiên đăng nhập.
+   * Điểm 2: Chuẩn hóa PKCE S256 theo RFC 7636 (base64url, length 43-128, timingSafeEqual).
+   * Điểm 3: Nguyên tử hóa việc đọc và xóa exchange code (layVaXoa).
    */
   async doiMaXacThuc(dto: AuthExchangeDto) {
     const exchangeKey = `${CACHE_PREFIX.AUTH_EXCHANGE}${dto.code}`;
-    const exchangeData = await this.cacheService.get<{
+
+    // Điểm 3: Lấy và xóa exchange code nguyên tử (chống replay attack)
+    const exchangeData = await this.cacheService.layVaXoa<{
       maNguoiDung: string;
       challenge: string;
     }>(exchangeKey);
@@ -220,17 +255,21 @@ export class AuthService {
       });
     }
 
-    // Xóa mã ngay lập tức (chống replay attack)
-    await this.cacheService.del(exchangeKey);
+    // Điểm 2: Kiểm tra độ dài code_verifier từ 43 đến 128 ký tự theo RFC 7636 Section 4.1
+    if (!dto.verifier || dto.verifier.length < 43 || dto.verifier.length > 128) {
+      throw new BadRequestException({
+        maLoi: 'MA_XAC_THUC_KHONG_HOP_LE',
+        thongBao: 'Độ dài PKCE code verifier phải từ 43 đến 128 ký tự theo chuẩn RFC 7636',
+      });
+    }
 
-    // Xác thực PKCE verifier tương ứng với challenge đã đăng ký
-    const verifierBase64Url = createHash('sha256').update(dto.verifier).digest('base64url');
-    const verifierHex = createHash('sha256').update(dto.verifier).digest('hex');
+    // Điểm 2: Chỉ chấp nhận phương thức S256 base64url theo RFC 7636, so sánh timingSafeEqual
+    const computedChallenge = createHash('sha256').update(dto.verifier).digest('base64url');
+    const computedBuf = Buffer.from(computedChallenge);
+    const storedBuf = Buffer.from(exchangeData.challenge);
 
     const isValidVerifier =
-      verifierBase64Url === exchangeData.challenge ||
-      verifierHex === exchangeData.challenge ||
-      dto.verifier === exchangeData.challenge;
+      computedBuf.length === storedBuf.length && timingSafeEqual(computedBuf, storedBuf);
 
     if (!isValidVerifier) {
       throw new BadRequestException({
@@ -248,7 +287,8 @@ export class AuthService {
 
   /**
    * Làm mới Access Token và xoay vòng Refresh Token (Token Rotation).
-   * Phát hiện tái sử dụng token cũ (Reuse Detection) và thu hồi phiên ngay lập tức.
+   * Điểm 5: Concurrency updateMany & Grace Period 15s cho request song song khi mở app.
+   * Điểm 6: Chống kẻ xấu gửi sid.rác làm đăng xuất người khác.
    */
   async lamMoiToken(dto: RefreshTokenDto) {
     const parts = dto.refreshToken.split('.');
@@ -285,55 +325,97 @@ export class AuthService {
       });
     }
 
-    // Đối soát bí mật băm bằng Argon2
-    const isSecretValid = await argon2.verify(phien.chuoiMaHoaToken, rawSecret);
+    // 1. Đối soát với bí mật token hiện tại
+    const isCurrentSecretValid = await argon2.verify(phien.chuoiMaHoaToken, rawSecret);
 
-    if (!isSecretValid) {
-      // ⚠️ PHÁT HIỆN TÁI SỬ DỤNG TOKEN CŨ (REUSE DETECTION - P2-12.4)
-      this.logger.warn(
-        `🚨 CẢNH BÁO BẢO MẬT: Phát hiện tái sử dụng Refresh Token cũ tại phiên [${maPhien}]. Thu hồi phiên lập tức!`,
-      );
-      await this.prisma.phienDangNhap.delete({ where: { maPhien } });
-      throw new UnauthorizedException({
-        maLoi: 'CHUA_XAC_THUC',
-        thongBao:
-          'Phát hiện token đã bị thu hồi hoặc tái sử dụng trái phép. Phiên đăng nhập đã bị vô hiệu hóa vì lý do an toàn.',
+    if (isCurrentSecretValid) {
+      // Token hiện tại hợp lệ -> Tiến hành Token Rotation
+      const newSecret = randomBytes(32).toString('hex');
+      const newHashedSecret = await argon2.hash(newSecret);
+
+      const ttlDays = this.config.get<number>('REFRESH_TOKEN_TTL_DAYS', 30);
+      const newExpiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+
+      // Điểm 5: Cập nhật có điều kiện nguyên tử (Concurrency Guard)
+      const updateResult = await this.prisma.phienDangNhap.updateMany({
+        where: {
+          maPhien,
+          chuoiMaHoaToken: phien.chuoiMaHoaToken,
+        },
+        data: {
+          chuoiMaHoaToken: newHashedSecret,
+          chuoiMaHoaTokenCu: phien.chuoiMaHoaToken, // Lưu lại bản băm token trước đó
+          thoiGianXoayVongCuoi: new Date(),
+          thoiGianHetHan: newExpiresAt,
+        },
       });
+
+      // Nếu update thành công 1 bản ghi
+      if (updateResult.count === 1) {
+        await this.devicesService.capNhatHoatDong(phien.maThietBi);
+
+        const payload: JwtPayload = {
+          sub: phien.maNguoiDung,
+          sid: phien.maPhien,
+          did: phien.maThietBi,
+          role: phien.nguoiDung.vaiTro,
+        };
+
+        const accessToken = await this.jwtService.signAsync(payload);
+        return {
+          accessToken,
+          refreshToken: `${maPhien}.${newSecret}`,
+        };
+      }
     }
 
-    // Token Rotation: Sinh bí mật ngẫu nhiên mới và cập nhật bản băm
-    const newSecret = randomBytes(32).toString('hex');
-    const newHashedSecret = await argon2.hash(newSecret);
+    // 2. Điểm 5 & 6: Không khớp token hiện tại -> Kiểm tra xem có khớp token vừa xoay vòng trước đó không?
+    if (phien.chuoiMaHoaTokenCu) {
+      const isPreviousSecretValid = await argon2.verify(phien.chuoiMaHoaTokenCu, rawSecret);
+      if (isPreviousSecretValid) {
+        const gracePeriodMs = 15000; // Ân hạn 15 giây cho race-condition client mở app gửi request song song
+        const isWithinGracePeriod =
+          phien.thoiGianXoayVongCuoi &&
+          Date.now() - phien.thoiGianXoayVongCuoi.getTime() <= gracePeriodMs;
 
-    const ttlDays = this.config.get<number>('REFRESH_TOKEN_TTL_DAYS', 30);
-    const newExpiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
+        if (isWithinGracePeriod) {
+          // Client gửi request đồng thời trong Grace Period: Cấp lại access token mới, KHÔNG xóa phiên
+          this.logger.log(
+            `Ân hạn refresh token đồng thời trong Grace Period cho phiên [${maPhien}]`,
+          );
+          const payload: JwtPayload = {
+            sub: phien.maNguoiDung,
+            sid: phien.maPhien,
+            did: phien.maThietBi,
+            role: phien.nguoiDung.vaiTro,
+          };
+          const accessToken = await this.jwtService.signAsync(payload);
+          return {
+            accessToken,
+            refreshToken: dto.refreshToken,
+          };
+        }
 
-    await this.prisma.phienDangNhap.update({
-      where: { maPhien },
-      data: {
-        chuoiMaHoaToken: newHashedSecret,
-        thoiGianHetHan: newExpiresAt,
-      },
+        // ⚠️ THỰC SỰ LÀ TÁI SỬ DỤNG TOKEN CŨ NGOÀI KHOẢNG ÂN HẠN (REUSE DETECTION - P2-12.4):
+        // Token này ĐÚNG là token trước đó của phiên này, nhưng đã gửi sau 15 giây!
+        this.logger.warn(
+          `🚨 CẢNH BÁO BẢO MẬT: Phát hiện tái sử dụng Refresh Token cũ ngoài Grace Period tại phiên [${maPhien}]. Thu hồi phiên lập tức!`,
+        );
+        await this.prisma.phienDangNhap.delete({ where: { maPhien } });
+        throw new UnauthorizedException({
+          maLoi: 'CHUA_XAC_THUC',
+          thongBao:
+            'Phát hiện token đã bị thu hồi hoặc tái sử dụng trái phép. Phiên đăng nhập đã bị vô hiệu hóa vì lý do an toàn.',
+        });
+      }
+    }
+
+    // 3. Điểm 6: Nếu token gửi lên KHÔNG khớp token hiện tại và CŨNG KHÔNG khớp token cũ (ví dụ: sid.rác của kẻ phá hoại):
+    // TUYỆT ĐỐI KHÔNG XÓA PHIÊN CỦA NGƯỜI DÙNG! Chỉ từ chối request đó với 401!
+    throw new UnauthorizedException({
+      maLoi: 'CHUA_XAC_THUC',
+      thongBao: 'Refresh Token không hợp lệ',
     });
-
-    // Cập nhật hoạt động cuối của thiết bị
-    await this.devicesService.capNhatHoatDong(phien.maThietBi);
-
-    // Cấp phát Access Token mới
-    const payload: JwtPayload = {
-      sub: phien.maNguoiDung,
-      sid: phien.maPhien,
-      did: phien.maThietBi,
-      role: phien.nguoiDung.vaiTro,
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload);
-    const newRefreshToken = `${maPhien}.${newSecret}`;
-
-    return {
-      accessToken,
-      refreshToken: newRefreshToken,
-    };
   }
 
   /**
@@ -362,7 +444,9 @@ export class AuthService {
 
   /**
    * Dọn dẹp các phiên làm việc đã hết hạn trong CSDL (P2-12.5).
+   * Điểm 10: Tự động chạy mỗi ngày lúc nửa đêm qua Cron job.
    */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async donDepPhienHetHan(): Promise<number> {
     const result = await this.prisma.phienDangNhap.deleteMany({
       where: {
@@ -371,7 +455,9 @@ export class AuthService {
         },
       },
     });
-    this.logger.log(`Đã dọn dẹp ${result.count} phiên đăng nhập hết hạn`);
+    if (result.count > 0) {
+      this.logger.log(`Đã dọn dẹp ${result.count} phiên đăng nhập hết hạn`);
+    }
     return result.count;
   }
 

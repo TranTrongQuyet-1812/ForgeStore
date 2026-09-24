@@ -119,9 +119,11 @@ model ThietBi {
 model PhienDangNhap {
   maPhien           String            @id @default(uuid()) @map("ma_phien") @db.Uuid
   maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
-  maThietBi         String            @map("ma_thiet_bi") @db.Uuid
-  chuoiMaHoaToken   String            @map("chuoi_ma_hoa_token")
-  diaChiIp          String?           @map("dia_chi_ip")
+  maThietBi            String            @map("ma_thiet_bi") @db.Uuid
+  chuoiMaHoaToken      String            @map("chuoi_ma_hoa_token")
+  chuoiMaHoaTokenCu    String?           @map("chuoi_ma_hoa_token_cu")
+  thoiGianXoayVongCuoi DateTime?         @map("thoi_gian_xoay_vong_cuoi")
+  diaChiIp             String?           @map("dia_chi_ip")
   thoiGianHetHan    DateTime          @map("thoi_gian_het_han")
   ngayTao           DateTime          @default(now()) @map("ngay_tao")
 
