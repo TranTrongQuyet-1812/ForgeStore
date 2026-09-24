@@ -243,6 +243,7 @@ model TepCaiDat {
   banPhatHanh       BanPhatHanh       @relation(fields: [maPhatHanh], references: [maPhatHanh], onDelete: Cascade)
   danhSachDaCai     UngDungDaCai[]
 
+  @@unique([maPhatHanh, tenTep])
   @@index([maPhatHanh, dinhDangTep, kienTrucChip])
   @@map("tep_cai_dat")
 }
