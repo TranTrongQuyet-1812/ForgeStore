@@ -33,6 +33,7 @@ local.properties
 .DS_Store
 Thumbs.db
 .antigravity/
+scratchpad/
 
 # Logs
 *.log

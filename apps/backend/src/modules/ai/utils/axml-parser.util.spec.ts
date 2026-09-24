@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseAxml } from './axml-parser.util';
 
@@ -138,5 +140,17 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     expect(res.permissions).toContain('android.permission.INTERNET');
     expect(res.permissions).toContain('android.permission.READ_SMS');
     expect(res.coAccessibilityService).toBe(true);
+  });
+
+  it('Giải mã chính xác file AndroidManifest.xml thực tế của NewPipe (P2-35.4)', () => {
+    const fixturePath = path.join(__dirname, '__fixtures__/newpipe_manifest.bin');
+    expect(fs.existsSync(fixturePath)).toBe(true);
+    const buf = fs.readFileSync(fixturePath);
+    const res = parseAxml(buf);
+    expect(res.packageName).toBe('org.schabi.newpipe');
+    expect(res.permissions).toContain('android.permission.INTERNET');
+    expect(res.permissions).toContain('android.permission.SYSTEM_ALERT_WINDOW');
+    expect(res.permissions.length).toBeGreaterThanOrEqual(10);
+    expect(res.coAccessibilityService).toBe(false);
   });
 });
