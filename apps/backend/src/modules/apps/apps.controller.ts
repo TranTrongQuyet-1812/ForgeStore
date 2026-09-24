@@ -1,9 +1,16 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { TrangKetQua, UngDungChiTietDto, UngDungTomTatDto } from '@forgestore/types';
+import { Throttle } from '@nestjs/throttler';
+import {
+  ResolveAssetResponseDto,
+  TrangKetQua,
+  UngDungChiTietDto,
+  UngDungTomTatDto,
+} from '@forgestore/types';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { AppsService } from './apps.service';
 import { QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
+import { ResolveAssetDto } from './dto/resolve-asset.dto';
 
 @ApiTags('Apps - Kho Ứng Dụng')
 @Controller('apps')
@@ -26,6 +33,7 @@ export class AppsController {
   }
 
   @CongKhai()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('sync')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -40,6 +48,22 @@ export class AppsController {
   async dongBoRepo(@Body() body: SyncRepoDto): Promise<UngDungChiTietDto> {
     const { owner, repo } = this.appsService.phanTichUrlRepo(body.url);
     return this.appsService.dongBoRepo(owner, repo);
+  }
+
+  @CongKhai()
+  @Post('resolve-asset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Phân giải tệp cài đặt phù hợp với kiến trúc thiết bị (P2-33)',
+    description:
+      'Nhận nền tảng và danh sách ABI ưu tiên của máy khách, tự động chọn file APK/EXE/MSI phù hợp nhất (1-Click matching). Sử dụng Jev Choice khi tên file mơ hồ.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tệp cài đặt phù hợp nhất và nguồn quyết định (LUAT | JEV | DU_PHONG)',
+  })
+  async giaiQuyetFileCaiDat(@Body() dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
+    return this.appsService.giaiQuyetFileCaiDat(dto);
   }
 
   @CongKhai()

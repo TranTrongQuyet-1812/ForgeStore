@@ -6,6 +6,11 @@ import { GithubService } from '../github/github.service';
 import { CacheService } from '../redis/cache.service';
 import { AppsService } from './apps.service';
 import { AppSortOption, PlatformFilter, QueryAppsDto } from './dto/query-apps.dto';
+import { JevClientService } from '../ai/services/jev-client.service';
+import { LlmRotationService } from '../ai/services/llm-rotation.service';
+import { TrustScoreService } from '../ai/services/trust-score.service';
+import { ApkInspectorService } from '../ai/services/apk-inspector.service';
+import { SemanticSearchService } from '../ai/services/semantic-search.service';
 
 interface MockPrisma {
   $transaction: (cb: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
@@ -41,6 +46,8 @@ interface MockCacheService {
   luu: ReturnType<typeof vi.fn>;
   xoa: ReturnType<typeof vi.fn>;
   xoaTheoPrefix: ReturnType<typeof vi.fn>;
+  del: ReturnType<typeof vi.fn>;
+  withLock: ReturnType<typeof vi.fn>;
 }
 
 describe('AppsService (P2-21, P2-23, P2-24)', () => {
@@ -48,6 +55,26 @@ describe('AppsService (P2-21, P2-23, P2-24)', () => {
   let mockPrisma: MockPrisma;
   let mockGithubService: MockGithubService;
   let mockCacheService: MockCacheService;
+  let mockJevClientService: {
+    isEnabled: boolean;
+    hoiChoice: ReturnType<typeof vi.fn>;
+    hoiNoulBatch: ReturnType<typeof vi.fn>;
+  };
+  let mockLlmRotationService: {
+    tomTatReadme: ReturnType<typeof vi.fn>;
+    tomTatChangelog: ReturnType<typeof vi.fn>;
+  };
+  let mockTrustScoreService: {
+    tinhTrustScore: ReturnType<typeof vi.fn>;
+  };
+  let mockApkInspectorService: {
+    docQuyenApkTuUrl: ReturnType<typeof vi.fn>;
+  };
+  let mockSemanticSearchService: {
+    chuanBiVanBanNhung: ReturnType<typeof vi.fn>;
+    sinhEmbedding: ReturnType<typeof vi.fn>;
+    luuVectorNguNghia: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     mockPrisma = {
@@ -56,15 +83,24 @@ describe('AppsService (P2-21, P2-23, P2-24)', () => {
         upsert: vi.fn(),
         findMany: vi.fn(),
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         count: vi.fn(),
+        update: vi.fn(),
+      },
+      phanTichAI: {
+        findUnique: vi.fn(),
+        upsert: vi.fn(),
       },
       banPhatHanh: {
         upsert: vi.fn(),
         deleteMany: vi.fn(),
+        findMany: vi.fn(),
+        update: vi.fn(),
       },
       tepCaiDat: {
         deleteMany: vi.fn(),
         createMany: vi.fn(),
+        update: vi.fn(),
       },
       nhatKyNapRepo: {
         create: vi.fn(),
@@ -86,12 +122,65 @@ describe('AppsService (P2-21, P2-23, P2-24)', () => {
       luu: vi.fn(),
       xoa: vi.fn(),
       xoaTheoPrefix: vi.fn(),
+      del: vi.fn(),
+      withLock: vi.fn(async (_k, _ttl, cb) => cb()),
+    };
+
+    mockJevClientService = {
+      isEnabled: true,
+      hoiChoice: vi.fn(),
+      hoiNoulBatch: vi.fn(),
+    };
+
+    mockLlmRotationService = {
+      tomTatReadme: vi.fn().mockResolvedValue({
+        ketQua: {
+          khauHieu: 'Ứng dụng điều khiển máy từ xa mã nguồn mở',
+          tinhNang: ['Bảo mật đầu cuối', 'Độ trễ thấp', 'Đa nền tảng'],
+        },
+        moHinhTomTat: 'gemini-2.0-flash',
+      }),
+      tomTatChangelog: vi.fn().mockResolvedValue({
+        ketQua: {
+          tomTatNangCapVi: ['Sửa lỗi âm thanh', 'Tăng tốc kết nối'],
+        },
+        moHinhTomTat: 'gemini-2.0-flash',
+      }),
+    };
+
+    mockTrustScoreService = {
+      tinhTrustScore: vi.fn().mockResolvedValue({
+        diemUyTin: 95,
+        mucDoAnToan: 'XUAT_SAC',
+        yeuToRuiRo: [],
+        daThamDinhJev: true,
+      }),
+    };
+
+    mockApkInspectorService = {
+      docQuyenApkTuUrl: vi.fn().mockResolvedValue({
+        thanhCong: true,
+        permissions: ['android.permission.INTERNET'],
+        coAccessibilityService: false,
+        packageName: 'com.carriez.rustdesk',
+      }),
+    };
+
+    mockSemanticSearchService = {
+      chuanBiVanBanNhung: vi.fn().mockReturnValue('van ban nhung text'),
+      sinhEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
+      luuVectorNguNghia: vi.fn().mockResolvedValue(undefined),
     };
 
     service = new AppsService(
       mockPrisma as unknown as PrismaService,
       mockGithubService as unknown as GithubService,
       mockCacheService as unknown as CacheService,
+      mockJevClientService as unknown as JevClientService,
+      mockLlmRotationService as unknown as LlmRotationService,
+      mockTrustScoreService as unknown as TrustScoreService,
+      mockApkInspectorService as unknown as ApkInspectorService,
+      mockSemanticSearchService as unknown as SemanticSearchService,
     );
   });
 
@@ -130,6 +219,14 @@ describe('AppsService (P2-21, P2-23, P2-24)', () => {
       expect(() => service.phanTichUrlRepo('https://github.com/onlyowner')).toThrow(
         BadRequestException,
       );
+    });
+
+    it('Ném BadRequestException khi owner hoặc repo chứa ký tự độc hại / không hợp lệ', () => {
+      expect(() => service.phanTichUrlRepo('owner/repo;injection')).toThrow(BadRequestException);
+      expect(() => service.phanTichUrlRepo('https://github.com/owner$/repo')).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.phanTichUrlRepo('../etc/passwd')).toThrow(BadRequestException);
     });
   });
 
@@ -466,6 +563,329 @@ describe('AppsService (P2-21, P2-23, P2-24)', () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(null);
 
       await expect(service.layChiTietApp('nonexistent/app')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('giaiQuyetFileCaiDat (P2-33)', () => {
+    const mockApp = {
+      maUngDung: 'app-uuid-rustdesk',
+      tenRepoDayDu: 'rustdesk/rustdesk',
+    };
+
+    const mockApkArm64 = {
+      maTep: 'file-arm64',
+      maPhatHanh: 'rel-1',
+      tenTep: 'rustdesk-arm64-v8a.apk',
+      duongDanTaiVe:
+        'https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-arm64-v8a.apk',
+      dungLuongBytes: BigInt(25000000),
+      dinhDangTep: DinhDangTep.APK,
+      kienTrucChip: KienTrucChip.ARM64_V8A,
+      maBamSha256: 'sha256arm64',
+      soLuotTai: 100,
+      ngayTao: new Date(),
+    };
+
+    const mockApkUniversal = {
+      maTep: 'file-universal',
+      maPhatHanh: 'rel-1',
+      tenTep: 'rustdesk-universal.apk',
+      duongDanTaiVe:
+        'https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-universal.apk',
+      dungLuongBytes: BigInt(45000000),
+      dinhDangTep: DinhDangTep.APK,
+      kienTrucChip: KienTrucChip.DUNG_CHUNG,
+      maBamSha256: 'sha256uni',
+      soLuotTai: 200,
+      ngayTao: new Date(),
+    };
+
+    const mockApkAmbiguous = {
+      maTep: 'file-ambiguous',
+      maPhatHanh: 'rel-1',
+      tenTep: 'rustdesk-custom-build.apk',
+      duongDanTaiVe:
+        'https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-custom-build.apk',
+      dungLuongBytes: BigInt(22000000),
+      dinhDangTep: DinhDangTep.APK,
+      kienTrucChip: KienTrucChip.KHONG_XAC_DINH,
+      maBamSha256: 'sha256amb',
+      soLuotTai: 50,
+      ngayTao: new Date(),
+    };
+
+    const mockExeX64 = {
+      maTep: 'file-exe-x64',
+      maPhatHanh: 'rel-1',
+      tenTep: 'rustdesk-x86_64.exe',
+      duongDanTaiVe:
+        'https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-x86_64.exe',
+      dungLuongBytes: BigInt(30000000),
+      dinhDangTep: DinhDangTep.EXE,
+      kienTrucChip: KienTrucChip.X86_64,
+      maBamSha256: 'sha256win64',
+      soLuotTai: 500,
+      ngayTao: new Date(),
+    };
+
+    const mockZipPortable = {
+      maTep: 'file-zip-x64',
+      maPhatHanh: 'rel-1',
+      tenTep: 'rustdesk-portable-x86_64.zip',
+      duongDanTaiVe:
+        'https://github.com/rustdesk/rustdesk/releases/download/1.2.3/rustdesk-portable-x86_64.zip',
+      dungLuongBytes: BigInt(28000000),
+      dinhDangTep: DinhDangTep.ZIP_PORTABLE,
+      kienTrucChip: KienTrucChip.X86_64,
+      maBamSha256: 'sha256zip',
+      soLuotTai: 120,
+      ngayTao: new Date(),
+    };
+
+    it('Thiết bị Android arm64: ưu tiên chọn APK arm64-v8a theo luật không cần gọi Jev', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockApkUniversal, mockApkArm64],
+        },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'ANDROID',
+        abis: ['arm64-v8a', 'armeabi-v7a'],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-arm64');
+      expect(res.nguonQuyetDinh).toBe('LUAT');
+      expect(mockJevClientService.hoiChoice).not.toHaveBeenCalled();
+    });
+
+    it('Thiết bị Android x86_64: fallback về Universal APK khi không có bản riêng x86_64', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockApkArm64, mockApkUniversal],
+        },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'ANDROID',
+        abis: ['x86_64'],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-universal');
+      expect(res.nguonQuyetDinh).toBe('LUAT');
+    });
+
+    it('Thiết bị Android: tên file mơ hồ (KHONG_XAC_DINH), gọi Jev Choice thành công và cập nhật kiến trúc chip vào CSDL', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockApkAmbiguous],
+        },
+      ]);
+
+      mockJevClientService.hoiChoice.mockResolvedValue({
+        luaChon: 'file-ambiguous',
+        doTinCay: 0.92,
+      });
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'ANDROID',
+        abis: ['arm64-v8a'],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-ambiguous');
+      expect(res.nguonQuyetDinh).toBe('JEV');
+      expect(res.doTinCay).toBe(0.92);
+      expect(mockJevClientService.hoiChoice).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.tepCaiDat.update).toHaveBeenCalledWith({
+        where: { maTep: 'file-ambiguous' },
+        data: { kienTrucChip: KienTrucChip.ARM64_V8A },
+      });
+    });
+
+    it('Thiết bị Android: không có APK nào phù hợp ném NotFoundException với mã KHONG_CO_FILE_PHU_HOP', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockExeX64], // Chỉ có file Windows
+        },
+      ]);
+
+      await expect(
+        service.giaiQuyetFileCaiDat({
+          maUngDung: 'rustdesk/rustdesk',
+          nenTang: 'ANDROID',
+          abis: ['arm64-v8a'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('Thiết bị Windows: ưu tiên chọn EXE x86_64 theo luật', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockZipPortable, mockExeX64],
+        },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'WINDOWS',
+        abis: ['x86_64'],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-exe-x64');
+      expect(res.nguonQuyetDinh).toBe('LUAT');
+    });
+
+    it('Thiết bị Windows: chọn ZIP_PORTABLE khi không có MSI hoặc EXE', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [mockZipPortable],
+        },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'WINDOWS',
+        abis: ['x86_64'],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-zip-x64');
+      expect(res.nguonQuyetDinh).toBe('LUAT');
+    });
+
+    it('Bản phát hành không có tệp nào ném NotFoundException', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.2.3',
+          danhSachTepCaiDat: [],
+        },
+      ]);
+
+      await expect(
+        service.giaiQuyetFileCaiDat({
+          maUngDung: 'rustdesk/rustdesk',
+          nenTang: 'WINDOWS',
+          abis: ['x86_64'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('Không tìm thấy ứng dụng ném NotFoundException', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.giaiQuyetFileCaiDat({
+          maUngDung: 'nonexistent/app',
+          nenTang: 'WINDOWS',
+          abis: ['x86_64'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('Lazy AI & Distributed Lock (P2-31)', () => {
+    it('10 request mở app đồng thời chỉ gọi Gemini tóm tắt đúng 1 lần duy nhất qua withLock (Nghiệm thu P2-31)', async () => {
+      // Giả lập lock: request đầu tiên thấy record chưa có, các request sau thấy record đã có
+      let count = 0;
+      mockPrisma.phanTichAI.findUnique.mockImplementation(async () => {
+        count++;
+        if (count === 1) return null;
+        return { maPhanTich: 'existing-analysis' };
+      });
+
+      mockPrisma.ungDung.findUnique.mockResolvedValue({
+        maUngDung: 'app-uuid-rustdesk',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+        chuSoHuu: 'rustdesk',
+        tenKhoChua: 'rustdesk',
+        moTaGocTiengAnh: 'Remote desktop software',
+        danhSachChuDe: ['remote-desktop'],
+        soSaoGithub: 75000,
+        soLuotFork: 9000,
+        loaiGiayPhep: 'GPL-3.0',
+        dongBoLanCuoi: new Date(),
+        danhSachPhatHanh: [],
+      });
+
+      mockPrisma.phanTichAI.upsert.mockResolvedValue({
+        maPhanTich: 'new-analysis-uuid',
+      });
+
+      // 10 request song song
+      await Promise.all(
+        Array.from({ length: 10 }).map(() => service.phanTichUngDung('app-uuid-rustdesk')),
+      );
+
+      // Nghiệm thu P2-31: LLM tóm tắt chỉ được gọi đúng 1 lần
+      expect(mockLlmRotationService.tomTatReadme).toHaveBeenCalledTimes(1);
+      expect(mockTrustScoreService.tinhTrustScore).toHaveBeenCalledTimes(1);
+    });
+
+    it('Khi LLM lỗi vẫn lưu Trust Score với mô hình DU_PHONG (P2-31.4)', async () => {
+      mockPrisma.phanTichAI.findUnique.mockResolvedValue(null);
+      mockPrisma.ungDung.findUnique.mockResolvedValue({
+        maUngDung: 'app-uuid-rustdesk',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+        chuSoHuu: 'rustdesk',
+        tenKhoChua: 'rustdesk',
+        moTaGocTiengAnh: 'Remote desktop software',
+        danhSachChuDe: ['remote-desktop'],
+        soSaoGithub: 75000,
+        soLuotFork: 9000,
+        loaiGiayPhep: 'GPL-3.0',
+        dongBoLanCuoi: new Date(),
+        danhSachPhatHanh: [],
+      });
+
+      mockLlmRotationService.tomTatReadme.mockRejectedValue(new Error('Rate limit 429'));
+      mockPrisma.phanTichAI.upsert.mockResolvedValue({
+        maPhanTich: 'fallback-analysis-uuid',
+      });
+
+      await service.phanTichUngDung('app-uuid-rustdesk');
+
+      expect(mockPrisma.phanTichAI.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            moHinhTomTat: 'DU_PHONG',
+            diemUyTin: 95,
+          }),
+        }),
+      );
+    });
+
+    it('Admin prewarm chạy phân tích hàng loạt cho các app (P2-31.5)', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([
+        { maUngDung: 'app-1' },
+        { maUngDung: 'app-2' },
+      ]);
+      mockPrisma.phanTichAI.findUnique.mockResolvedValue({ maPhanTich: 'done' });
+
+      const res = await service.chayPrewarmAI(['app-1', 'app-2']);
+      expect(res.daChay).toBe(2);
+      expect(res.thanhCong).toBe(2);
     });
   });
 });

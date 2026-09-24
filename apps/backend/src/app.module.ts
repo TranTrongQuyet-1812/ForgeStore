@@ -12,6 +12,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GithubModule } from './modules/github/github.module';
 import { AppsModule } from './modules/apps/apps.module';
+import { AiModule } from './modules/ai/ai.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 
@@ -35,6 +36,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     AuthModule,
     GithubModule,
     AppsModule,
+    AiModule,
   ],
   providers: [
     {

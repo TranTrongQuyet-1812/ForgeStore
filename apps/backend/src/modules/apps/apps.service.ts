@@ -1,6 +1,14 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { DinhDangTep, NenTangHoTro, Prisma, TrangThaiNapRepo } from '@prisma/client';
 import {
+  DinhDangTep,
+  KienTrucChip,
+  NenTangHoTro,
+  Prisma,
+  TepCaiDat,
+  TrangThaiNapRepo,
+} from '@prisma/client';
+import {
+  ResolveAssetResponseDto,
   TrangKetQua,
   UngDungChiTietDto,
   UngDungTomTatDto,
@@ -9,9 +17,15 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
+import { JevClientService } from '../ai/services/jev-client.service';
+import { LlmRotationService, KetQuaTomTatKemModel } from '../ai/services/llm-rotation.service';
+import { TrustScoreService } from '../ai/services/trust-score.service';
+import { ApkInspectorService } from '../ai/services/apk-inspector.service';
+import { SemanticSearchService } from '../ai/services/semantic-search.service';
 import { phanLoaiTep } from './utils/file-classifier.util';
 import { anhXaDanhMuc, doanTenGoiAndroid } from './utils/category-mapper.util';
 import { AppSortOption, PlatformFilter, QueryAppsDto } from './dto/query-apps.dto';
+import { ResolveAssetDto } from './dto/resolve-asset.dto';
 
 @Injectable()
 export class AppsService {
@@ -25,6 +39,11 @@ export class AppsService {
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
     private readonly cacheService: CacheService,
+    private readonly jevClientService: JevClientService,
+    private readonly llmRotationService: LlmRotationService,
+    private readonly trustScoreService: TrustScoreService,
+    private readonly apkInspectorService: ApkInspectorService,
+    private readonly semanticSearchService: SemanticSearchService,
   ) {}
 
   /**
@@ -56,18 +75,20 @@ export class AppsService {
       cleaned = cleaned.slice(0, -1);
     }
 
+    let extracted: { owner: string; repo: string } | null = null;
+
     // Trường hợp git@github.com:owner/repo
     if (cleaned.startsWith('git@github.com:')) {
       const parts = cleaned.replace('git@github.com:', '').split('/');
       if (parts.length === 2 && parts[0] && parts[1]) {
         let repo = parts[1];
         if (repo.endsWith('.git')) repo = repo.slice(0, -4);
-        return { owner: parts[0], repo };
+        extracted = { owner: parts[0], repo };
       }
     }
 
     // Trường hợp URL HTTP/HTTPS
-    if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
+    if (!extracted && (cleaned.startsWith('http://') || cleaned.startsWith('https://'))) {
       try {
         const u = new URL(cleaned);
         if (u.hostname.toLowerCase() !== 'github.com') {
@@ -80,7 +101,7 @@ export class AppsService {
           repo = repo.slice(0, -4);
         }
         if (owner && repo) {
-          return { owner, repo };
+          extracted = { owner, repo };
         }
       } catch (err: unknown) {
         if (err instanceof BadRequestException) throw err;
@@ -89,16 +110,27 @@ export class AppsService {
     }
 
     // Trường hợp slug "owner/repo"
-    const slugParts = cleaned.split('/');
-    if (slugParts.length === 2 && slugParts[0] && slugParts[1]) {
-      let repo = slugParts[1];
-      if (repo.endsWith('.git')) repo = repo.slice(0, -4);
-      return { owner: slugParts[0], repo };
+    if (!extracted) {
+      const slugParts = cleaned.split('/');
+      if (slugParts.length === 2 && slugParts[0] && slugParts[1]) {
+        let repo = slugParts[1];
+        if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+        extracted = { owner: slugParts[0], repo };
+      }
     }
 
-    throw new BadRequestException(
-      'Định dạng kho GitHub không hợp lệ. Vui lòng nhập dạng "owner/repo" hoặc URL đầy đủ.',
-    );
+    if (!extracted) {
+      throw new BadRequestException(
+        'Định dạng kho GitHub không hợp lệ. Vui lòng nhập dạng "owner/repo" hoặc URL đầy đủ.',
+      );
+    }
+
+    const GITHUB_NAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
+    if (!GITHUB_NAME_REGEX.test(extracted.owner) || !GITHUB_NAME_REGEX.test(extracted.repo)) {
+      throw new BadRequestException('Tên chủ sở hữu hoặc tên repository chứa ký tự không hợp lệ.');
+    }
+
+    return extracted;
   }
 
   /**
@@ -470,6 +502,15 @@ export class AppsService {
       throw new NotFoundException(`Không tìm thấy ứng dụng với định danh: ${cleanId}`);
     }
 
+    if (!app.phanTichAI) {
+      // Lazy AI (P2-31.3): Chạy nền non-blocking không bắt request chi tiết app phải chờ
+      this.phanTichUngDung(app.maUngDung).catch((err: unknown) => {
+        this.logger.warn(
+          `Phân tích AI nền cho [${app.tenRepoDayDu}] thất bại: ${(err as Error).message}`,
+        );
+      });
+    }
+
     const phienBanMoiNhat = app.danhSachPhatHanh[0]?.tenPhienBan || null;
 
     // Chuẩn hóa DTO và chuyển đổi BigInt sang string/number
@@ -577,5 +618,446 @@ export class AppsService {
     }
 
     return result;
+  }
+
+  /**
+   * Phân giải tệp cài đặt phù hợp nhất theo nền tảng và kiến trúc phần cứng (P2-33).
+   * Luật xử lý tên file rõ ràng; Jev AI Choice xử lý tên file mơ hồ.
+   */
+  async giaiQuyetFileCaiDat(dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
+    const { maUngDung, nenTang, abis, choPhepBanThuNghiem = false, phienBan } = dto;
+    const cleanId = decodeURIComponent(maUngDung.trim());
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+
+    // 1. Tìm ứng dụng
+    const app = await this.prisma.ungDung.findFirst({
+      where: isUuid
+        ? { maUngDung: cleanId }
+        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+    });
+
+    if (!app) {
+      throw new NotFoundException(`Không tìm thấy ứng dụng với mã hoặc slug: ${cleanId}`);
+    }
+
+    // 2. Tìm bản phát hành phù hợp
+    const releases = await this.prisma.banPhatHanh.findMany({
+      where: {
+        maUngDung: app.maUngDung,
+        ...(phienBan ? { tenPhienBan: phienBan } : {}),
+        ...(choPhepBanThuNghiem ? {} : { laBanThuNghiem: false }),
+      },
+      orderBy: { ngayPhatHanh: 'desc' },
+      include: {
+        danhSachTepCaiDat: true,
+      },
+      take: 5,
+    });
+
+    if (releases.length === 0) {
+      throw new NotFoundException({
+        maLoi: 'KHONG_CO_RELEASE',
+        thongBao: 'Không tìm thấy bản phát hành phù hợp cho ứng dụng này.',
+      });
+    }
+
+    const targetRelease = releases.find((r) => r.danhSachTepCaiDat.length > 0);
+    if (!targetRelease) {
+      throw new NotFoundException({
+        maLoi: 'KHONG_CO_FILE_PHU_HOP',
+        thongBao: 'Bản phát hành hiện tại không có tệp cài đặt nào.',
+      });
+    }
+
+    const allFiles = targetRelease.danhSachTepCaiDat;
+
+    // 3. Phân giải trên Android (P2-33.3)
+    if (nenTang === 'ANDROID') {
+      const apkFiles = allFiles.filter((f) => f.dinhDangTep === DinhDangTep.APK);
+
+      if (apkFiles.length === 0) {
+        throw new NotFoundException({
+          maLoi: 'KHONG_CO_FILE_PHU_HOP',
+          thongBao: 'Bản phát hành không chứa tệp cài đặt định dạng APK cho Android.',
+          abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))),
+        });
+      }
+
+      // 3.1. Thử khớp theo thứ tự ưu tiên ABI của máy khách
+      for (const rawAbi of abis) {
+        const targetChip = this.chuyenDoiAbiSangEnum(rawAbi);
+        const match = apkFiles.find((f) => f.kienTrucChip === targetChip);
+        if (match) {
+          return this.dongGoiResponseAsset(match, 'LUAT');
+        }
+      }
+
+      // 3.2. Thử khớp bản dùng chung (Universal APK)
+      const universalMatch = apkFiles.find((f) => f.kienTrucChip === KienTrucChip.DUNG_CHUNG);
+      if (universalMatch) {
+        return this.dongGoiResponseAsset(universalMatch, 'LUAT');
+      }
+
+      // 3.3. Tên file mơ hồ -> Hỏi Jev AI primitive Choice (P2-33.7)
+      const ambiguousFiles = apkFiles.filter((f) => f.kienTrucChip === KienTrucChip.KHONG_XAC_DINH);
+      if (ambiguousFiles.length > 0 && this.jevClientService.isEnabled) {
+        try {
+          const choiceOptions: Record<string, string> = {
+            KHONG_FILE_NAO_PHU_HOP: 'Không có tệp nào phù hợp với kiến trúc này',
+          };
+          for (const file of ambiguousFiles) {
+            choiceOptions[file.maTep] = file.tenTep;
+          }
+
+          const prompt = `Chọn tệp APK phù hợp nhất để cài đặt trên thiết bị Android có kiến trúc ABI chính là [${abis[0]}]:`;
+
+          const resJev = await this.jevClientService.hoiChoice(
+            {
+              app: app.tenRepoDayDu,
+              nenTang: 'ANDROID',
+              clientAbis: abis,
+            },
+            prompt,
+            choiceOptions,
+          );
+
+          if (resJev.luaChon && resJev.luaChon !== 'KHONG_FILE_NAO_PHU_HOP') {
+            const selected = ambiguousFiles.find((f) => f.maTep === resJev.luaChon);
+            if (selected) {
+              const primaryAbi = abis[0] || 'arm64-v8a';
+              const inferredChip = this.chuyenDoiAbiSangEnum(primaryAbi);
+              await this.prisma.tepCaiDat.update({
+                where: { maTep: selected.maTep },
+                data: { kienTrucChip: inferredChip },
+              });
+              return this.dongGoiResponseAsset(selected, 'JEV', resJev.doTinCay);
+            }
+          }
+        } catch (err: unknown) {
+          this.logger.warn(`Jev Choice giải quyết file thất bại: ${(err as Error).message}`);
+        }
+      }
+
+      throw new NotFoundException({
+        maLoi: 'KHONG_CO_FILE_PHU_HOP',
+        thongBao: `Không tìm thấy tệp APK tương thích với các kiến trúc thiết bị: ${abis.join(', ')}`,
+        abisHienCo: Array.from(new Set(apkFiles.map((f) => f.kienTrucChip))),
+      });
+    }
+
+    // 4. Phân giải trên Windows (P2-33.4)
+    if (nenTang === 'WINDOWS') {
+      const winFiles = allFiles.filter(
+        (f) =>
+          f.dinhDangTep === DinhDangTep.EXE ||
+          f.dinhDangTep === DinhDangTep.MSI ||
+          f.dinhDangTep === DinhDangTep.ZIP_PORTABLE,
+      );
+
+      if (winFiles.length === 0) {
+        throw new NotFoundException({
+          maLoi: 'KHONG_CO_FILE_PHU_HOP',
+          thongBao: 'Bản phát hành không chứa tệp cài đặt cho Windows.',
+          abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))),
+        });
+      }
+
+      // 4.1. MSI hoặc EXE X86_64
+      const msiX64 = winFiles.find(
+        (f) => f.dinhDangTep === DinhDangTep.MSI && f.kienTrucChip === KienTrucChip.X86_64,
+      );
+      if (msiX64) return this.dongGoiResponseAsset(msiX64, 'LUAT');
+
+      const exeX64 = winFiles.find(
+        (f) => f.dinhDangTep === DinhDangTep.EXE && f.kienTrucChip === KienTrucChip.X86_64,
+      );
+      if (exeX64) return this.dongGoiResponseAsset(exeX64, 'LUAT');
+
+      // 4.2. ZIP_PORTABLE X86_64
+      const zipX64 = winFiles.find(
+        (f) => f.dinhDangTep === DinhDangTep.ZIP_PORTABLE && f.kienTrucChip === KienTrucChip.X86_64,
+      );
+      if (zipX64) return this.dongGoiResponseAsset(zipX64, 'LUAT');
+
+      // 4.3. EXE hoặc MSI X86 (32-bit)
+      const exeX86 = winFiles.find(
+        (f) =>
+          (f.dinhDangTep === DinhDangTep.EXE || f.dinhDangTep === DinhDangTep.MSI) &&
+          f.kienTrucChip === KienTrucChip.X86,
+      );
+      if (exeX86) return this.dongGoiResponseAsset(exeX86, 'LUAT');
+
+      // 4.4. ZIP_PORTABLE X86
+      const zipX86 = winFiles.find(
+        (f) => f.dinhDangTep === DinhDangTep.ZIP_PORTABLE && f.kienTrucChip === KienTrucChip.X86,
+      );
+      if (zipX86) return this.dongGoiResponseAsset(zipX86, 'LUAT');
+
+      // 4.5. File Windows bất kỳ còn lại
+      if (winFiles.length > 0 && winFiles[0]) {
+        return this.dongGoiResponseAsset(winFiles[0], 'LUAT');
+      }
+
+      throw new NotFoundException({
+        maLoi: 'KHONG_CO_FILE_PHU_HOP',
+        thongBao: 'Không tìm thấy tệp cài đặt phù hợp cho Windows.',
+      });
+    }
+
+    throw new BadRequestException(`Nền tảng không hỗ trợ: ${nenTang}`);
+  }
+
+  private chuyenDoiAbiSangEnum(abi: string): KienTrucChip {
+    const norm = abi.toLowerCase().replace(/[-_]/g, '');
+    if (norm.includes('arm64') || norm.includes('v8a')) return KienTrucChip.ARM64_V8A;
+    if (norm.includes('armeabi') || norm.includes('v7a')) return KienTrucChip.ARMEABI_V7A;
+    if (norm.includes('x8664') || norm.includes('x64') || norm.includes('amd64'))
+      return KienTrucChip.X86_64;
+    if (norm.includes('x86') || norm.includes('i386') || norm.includes('i686'))
+      return KienTrucChip.X86;
+    return KienTrucChip.KHONG_XAC_DINH;
+  }
+
+  private dongGoiResponseAsset(
+    file: TepCaiDat,
+    nguonQuyetDinh: 'LUAT' | 'JEV' | 'DU_PHONG',
+    doTinCay?: number,
+  ): ResolveAssetResponseDto {
+    return {
+      tepCaiDat: {
+        maTep: file.maTep,
+        maPhatHanh: file.maPhatHanh,
+        tenTep: file.tenTep,
+        duongDanTaiVe: file.duongDanTaiVe,
+        dungLuongBytes: file.dungLuongBytes.toString(),
+        dinhDangTep: file.dinhDangTep,
+        kienTrucChip: file.kienTrucChip,
+        maBamSha256: file.maBamSha256,
+        soLuotTai: file.soLuotTai,
+        ngayTao: file.ngayTao.toISOString(),
+      },
+      nguonQuyetDinh,
+      doTinCay,
+    };
+  }
+
+  /**
+   * Phân tích Dual-AI cho ứng dụng (Lazy AI & Distributed Lock - P2-31).
+   * Bọc trong withLock("fs:ai:<id>") đảm bảo 10 request đồng thời chỉ chạy AI 1 lần.
+   */
+  async phanTichUngDung(maUngDung: string): Promise<void> {
+    const lockKey = `fs:ai:${maUngDung}`;
+
+    try {
+      await this.cacheService.withLock(lockKey, 60000, async () => {
+        // Double-check xem đã có ai phân tích xong chưa
+        const existing = await this.prisma.phanTichAI.findUnique({
+          where: { maUngDung },
+        });
+        if (existing) {
+          return;
+        }
+
+        const app = await this.prisma.ungDung.findUnique({
+          where: { maUngDung },
+          include: {
+            danhSachPhatHanh: {
+              orderBy: { ngayPhatHanh: 'desc' },
+              take: 1,
+              include: { danhSachTepCaiDat: true },
+            },
+          },
+        });
+
+        if (!app) return;
+
+        const owner = app.chuSoHuu || app.tenRepoDayDu.split('/')[0] || '';
+        const repo = app.tenKhoChua || app.tenRepoDayDu.split('/')[1] || '';
+
+        // 1. Lấy README từ GitHub
+        let readme = '';
+        try {
+          readme = (await this.githubService.layReadme(owner, repo)) || '';
+        } catch (err: unknown) {
+          this.logger.warn(
+            `Không lấy được README cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+          );
+        }
+
+        // 2. Tóm tắt README qua LLM Rotation (Gemini ⇄ NVIDIA NIM) (P2-30, P2-39)
+        let ketQuaTomTat: KetQuaTomTatKemModel;
+        try {
+          ketQuaTomTat = await this.llmRotationService.tomTatReadme(
+            readme,
+            repo,
+            app.moTaGocTiengAnh || undefined,
+          );
+        } catch (err: unknown) {
+          this.logger.error(`Lỗi tóm tắt README [${app.tenRepoDayDu}]: ${(err as Error).message}`);
+          ketQuaTomTat = {
+            ketQua: {
+              khauHieu: app.moTaGocTiengAnh?.slice(0, 80) || app.tenKhoChua,
+              tinhNang: [
+                {
+                  tieuDe: app.tenKhoChua,
+                  moTa: app.moTaGocTiengAnh || 'Ứng dụng nguồn mở chất lượng cao',
+                  trichDan: app.moTaGocTiengAnh || app.tenKhoChua,
+                },
+              ],
+            },
+            moHinhTomTat: 'DU_PHONG',
+          };
+        }
+
+        // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35)
+        let danhSachQuyen: string[] = [];
+        let coAccessibilityService = false;
+        const latestRelease = app.danhSachPhatHanh[0];
+        const apkFile = latestRelease?.danhSachTepCaiDat?.find(
+          (f) => f.dinhDangTep === DinhDangTep.APK,
+        );
+
+        if (apkFile && apkFile.duongDanTaiVe) {
+          try {
+            const kqApk = await this.apkInspectorService.docQuyenApkTuUrl(apkFile.duongDanTaiVe);
+            if (kqApk.thanhCong) {
+              danhSachQuyen = kqApk.permissions;
+              coAccessibilityService = kqApk.coAccessibilityService;
+              if (kqApk.packageName && !app.tenGoiAndroid) {
+                await this.prisma.ungDung.update({
+                  where: { maUngDung },
+                  data: { tenGoiAndroid: kqApk.packageName },
+                });
+              }
+            }
+          } catch (err: unknown) {
+            this.logger.warn(
+              `Lỗi phân tích APK cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+            );
+          }
+        }
+
+        // 4. Tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
+        const trustScore = await this.trustScoreService.tinhTrustScore({
+          tenApp: app.tenKhoChua,
+          moTaApp: app.moTaGocTiengAnh || '',
+          topics: app.danhSachChuDe,
+          soSaoGithub: app.soSaoGithub,
+          soLuotFork: app.soLuotFork,
+          loaiGiayPhep: app.loaiGiayPhep,
+          daArchived: false,
+          ngayPushCuoi: app.dongBoLanCuoi,
+          soContributor: 5,
+          danhSachQuyenAndroid: danhSachQuyen,
+          coAccessibilityService,
+        });
+
+        // 5. Lưu kết quả vào phan_tich_ai
+        const chuoiTinhNangVi = ketQuaTomTat.ketQua.tinhNang
+          .map((t) => `- **${t.tieuDe}**: ${t.moTa}`)
+          .join('\n');
+
+        const phanTich = await this.prisma.phanTichAI.upsert({
+          where: { maUngDung },
+          create: {
+            maUngDung,
+            khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
+            tomTatTinhNangVi: chuoiTinhNangVi,
+            diemUyTin: trustScore.diemUyTin,
+            mucDoAnToan: trustScore.mucDoAnToan,
+            daThamDinhJev: trustScore.daThamDinhJev,
+            yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
+            quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
+            moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+          },
+          update: {
+            khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
+            tomTatTinhNangVi: chuoiTinhNangVi,
+            diemUyTin: trustScore.diemUyTin,
+            mucDoAnToan: trustScore.mucDoAnToan,
+            daThamDinhJev: trustScore.daThamDinhJev,
+            yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
+            quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
+            moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+          },
+        });
+
+        // 6. Sinh vector 768 chiều & lưu pgvector (P2-36)
+        try {
+          const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
+            tenKhoChua: app.tenKhoChua,
+            slogan: ketQuaTomTat.ketQua.khauHieu,
+            tinhNang: ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`),
+            topics: app.danhSachChuDe,
+            moTa: app.moTaGocTiengAnh,
+          });
+          const vector = await this.semanticSearchService.sinhEmbedding(textEmbed);
+          await this.semanticSearchService.luuVectorNguNghia(phanTich.maPhanTich, vector);
+        } catch (err: unknown) {
+          this.logger.warn(`Lỗi sinh/lưu vector embedding: ${(err as Error).message}`);
+        }
+
+        // 7. Tóm tắt changelog nếu có release mới nhất (P2-34)
+        if (latestRelease && latestRelease.nhatKyThayDoiGoc && !latestRelease.tomTatNangCapVi) {
+          try {
+            const changelogRes = await this.llmRotationService.tomTatChangelog(
+              latestRelease.nhatKyThayDoiGoc,
+              app.tenKhoChua,
+            );
+            await this.prisma.banPhatHanh.update({
+              where: { maPhatHanh: latestRelease.maPhatHanh },
+              data: {
+                tomTatNangCapVi: changelogRes.ketQua.diemMoi.join('\n- '),
+              },
+            });
+          } catch (err: unknown) {
+            this.logger.warn(`Lỗi tóm tắt changelog: ${(err as Error).message}`);
+          }
+        }
+
+        // 8. Làm sạch cache chi tiết app
+        await this.cacheService.del([
+          `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,
+          `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
+        ]);
+        this.logger.log(`Hoàn thành phân tích Dual-AI cho [${app.tenRepoDayDu}]`);
+      });
+    } catch (err: unknown) {
+      this.logger.error(`Lỗi phân tích AI cho ứng dụng [${maUngDung}]: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Prewarm phân tích Dual-AI cho các ứng dụng (P2-31.5, phục vụ demo P6-07).
+   */
+  async chayPrewarmAI(danhSachAppIds?: string[]): Promise<{ daChay: number; thanhCong: number }> {
+    let appsToWarm: { maUngDung: string }[];
+    if (danhSachAppIds && danhSachAppIds.length > 0) {
+      appsToWarm = await this.prisma.ungDung.findMany({
+        where: {
+          OR: [{ maUngDung: { in: danhSachAppIds } }, { tenRepoDayDu: { in: danhSachAppIds } }],
+        },
+        select: { maUngDung: true },
+      });
+    } else {
+      // Prewarm các app chưa có phân tích AI
+      appsToWarm = await this.prisma.ungDung.findMany({
+        where: { phanTichAI: null },
+        select: { maUngDung: true },
+        take: 20,
+      });
+    }
+
+    let thanhCong = 0;
+    for (const app of appsToWarm) {
+      try {
+        await this.phanTichUngDung(app.maUngDung);
+        thanhCong++;
+      } catch (err: unknown) {
+        this.logger.warn(`Lỗi prewarm app [${app.maUngDung}]: ${(err as Error).message}`);
+      }
+    }
+
+    return { daChay: appsToWarm.length, thanhCong };
   }
 }
