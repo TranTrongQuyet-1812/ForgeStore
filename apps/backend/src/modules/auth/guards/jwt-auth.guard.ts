@@ -27,12 +27,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest<TUser = unknown>(
-    err: unknown,
-    user: TUser,
-    _info: unknown,
-    context: ExecutionContext,
-  ): TUser {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleRequest(err: any, user: any, _info: any, context: ExecutionContext): any {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
