@@ -242,12 +242,29 @@ export class GithubService {
       }
 
       if (!response.ok) {
-        const errorBody = await response.text();
+        const rawBody = await response.text();
         this.logger.error(
-          `[GitHub API Error ${response.status}] Endpoint: ${endpoint}, Body: ${errorBody}`,
+          `[GitHub API Error ${response.status}] Endpoint: ${endpoint}, Body: ${rawBody}`,
         );
+
+        let cleanMessage = `GitHub API trả mã lỗi ${response.status}.`;
+        try {
+          const parsed = JSON.parse(rawBody) as { message?: string };
+          if (parsed && typeof parsed.message === 'string') {
+            cleanMessage = parsed.message;
+          }
+        } catch {
+          if (rawBody.trim()) {
+            cleanMessage = rawBody.slice(0, 100);
+          }
+        }
+
+        if (response.status === HttpStatus.NOT_FOUND) {
+          throw new NotFoundException(`Không tìm thấy tài nguyên trên GitHub: ${cleanMessage}`);
+        }
+
         throw new HttpException(
-          `Lỗi khi kết nối tới GitHub API (HTTP ${response.status}): ${errorBody}`,
+          `Yêu cầu GitHub thất bại (${response.status}): ${cleanMessage}`,
           response.status,
         );
       }

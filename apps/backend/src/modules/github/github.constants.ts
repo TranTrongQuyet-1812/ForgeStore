@@ -54,6 +54,8 @@ export interface GithubRepo {
   language: string | null;
   topics?: string[];
   updated_at: string;
+  pushed_at?: string;
+  archived?: boolean;
 }
 
 export type GithubSearchRepoItem = GithubRepo;

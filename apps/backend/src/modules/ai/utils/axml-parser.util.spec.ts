@@ -74,7 +74,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     elemManifest.writeUInt16LE(16, 2);
     elemManifest.writeUInt32LE(elemManifest.length, 4);
     elemManifest.writeUInt32LE(0, 20); // nameIdx: 0 ('manifest')
-    elemManifest.writeUInt16LE(36, 24); // attrStart
+    elemManifest.writeUInt16LE(20, 24); // attrStart (offset tính từ sau 16 bytes header = 20)
     elemManifest.writeUInt16LE(20, 26); // attrSize
     elemManifest.writeUInt16LE(1, 28); // attrCount: 1
 
@@ -88,7 +88,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     elemPerm1.writeUInt16LE(16, 2);
     elemPerm1.writeUInt32LE(elemPerm1.length, 4);
     elemPerm1.writeUInt32LE(3, 20); // nameIdx: 3 ('uses-permission')
-    elemPerm1.writeUInt16LE(36, 24);
+    elemPerm1.writeUInt16LE(20, 24);
     elemPerm1.writeUInt16LE(20, 26);
     elemPerm1.writeUInt16LE(1, 28);
     elemPerm1.writeUInt32LE(4, 36 + 4); // attrNameIdx: 4 ('name')
@@ -100,7 +100,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     elemPerm2.writeUInt16LE(16, 2);
     elemPerm2.writeUInt32LE(elemPerm2.length, 4);
     elemPerm2.writeUInt32LE(3, 20);
-    elemPerm2.writeUInt16LE(36, 24);
+    elemPerm2.writeUInt16LE(20, 24);
     elemPerm2.writeUInt16LE(20, 26);
     elemPerm2.writeUInt16LE(1, 28);
     elemPerm2.writeUInt32LE(4, 36 + 4);
@@ -112,7 +112,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     elemService.writeUInt16LE(16, 2);
     elemService.writeUInt32LE(elemService.length, 4);
     elemService.writeUInt32LE(4, 20);
-    elemService.writeUInt16LE(36, 24);
+    elemService.writeUInt16LE(20, 24);
     elemService.writeUInt16LE(20, 26);
     elemService.writeUInt16LE(1, 28);
     elemService.writeUInt32LE(4, 36 + 4);

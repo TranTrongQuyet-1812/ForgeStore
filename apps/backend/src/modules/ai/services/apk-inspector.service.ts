@@ -228,6 +228,19 @@ export class ApkInspectorService {
       // 8. Giải mã nhị phân AXML để lấy permissions và package name (P2-35.4)
       const axmlResult = parseAxml(decompressedAxml);
 
+      if (!axmlResult.packageName && axmlResult.permissions.length === 0) {
+        this.logger.warn(
+          'Giải mã AXML thất bại: Không trích xuất được package name và không có quyền nào.',
+        );
+        return {
+          thanhCong: false,
+          permissions: [],
+          coAccessibilityService: false,
+          soByteDaTai,
+          lyDoThatBai: 'Không trích xuất được package name hoặc quyền từ AndroidManifest.xml',
+        };
+      }
+
       this.logger.log(
         `✓ Đọc APK thành công [Package: ${axmlResult.packageName || 'N/A'}, Quyền: ${axmlResult.permissions.length}, Bytes tải: ${(soByteDaTai / 1024).toFixed(1)} KB]`,
       );

@@ -114,7 +114,8 @@ function docStartElement(
 
   const tagName = stringPool[nameIdx] || '';
 
-  let attrOffset = offset + attrStart;
+  // attrStart được tính từ sau 16 bytes header của chunk RES_XML_START_ELEMENT_TYPE
+  let attrOffset = offset + 16 + attrStart;
   for (let i = 0; i < attrCount; i++) {
     if (attrOffset + 20 > buffer.length) break;
 

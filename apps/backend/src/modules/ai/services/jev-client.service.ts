@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { choice, noul, TypeSafeClient } from '@typesafe-ai/sdk';
+import { CacheService } from '../../redis/cache.service';
 
 export interface JevNoulCauHoi {
   instruction: string;
@@ -17,16 +18,20 @@ export class JevClientService {
   private readonly client: TypeSafeClient | null = null;
   public readonly isEnabled: boolean;
 
-  // Giám sát chi tiêu (P2-37.5): ngân sách 5 USD/tháng (~500.000 tokens)
+  // Giám sát chi tiêu (P2-37.5, Post-Review #15): ngân sách 5 USD/tháng (~119 triệu tokens)
   private tongTokenInput = 0;
   private tongTokenOutput = 0;
-  private readonly CANH_BAO_TOKEN = 400000; // 80% của 500k tokens
+  private readonly CANH_BAO_TOKEN = 95_000_000; // 80% của 119M tokens
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly cacheService: CacheService,
+  ) {
     const apiKey = this.configService.get<string>('TYPESAFE_API_KEY');
-    const jevEnabledStr = this.configService.get<string>('JEV_ENABLED');
+    const jevEnabled = this.configService.get<boolean | string>('JEV_ENABLED');
+    const isExplicitlyEnabled = jevEnabled === true || jevEnabled === 'true' || jevEnabled === '1';
     this.isEnabled =
-      jevEnabledStr !== 'false' && Boolean(apiKey && apiKey.trim() && !apiKey.startsWith('your_'));
+      isExplicitlyEnabled && Boolean(apiKey && apiKey.trim() && !apiKey.startsWith('your_'));
 
     if (this.isEnabled && apiKey) {
       try {
@@ -132,15 +137,27 @@ export class JevClientService {
           questions: questions as any,
         });
 
-        // Theo dõi chi tiêu token (P2-37.5)
+        // Theo dõi chi tiêu token (P2-37.5, Post-Review #15)
         if (response.usage) {
-          this.tongTokenInput += response.usage.input_tokens || 0;
-          this.tongTokenOutput += response.usage.output_tokens || 0;
-          if (this.tongTokenInput > this.CANH_BAO_TOKEN) {
-            this.logger.warn(
-              `⚠️ [Jev Quota Warning] Tổng token input đã dùng: ${this.tongTokenInput} tokens (vượt 80% ngân sách 5$/tháng)`,
-            );
-          }
+          const inTokens = response.usage.input_tokens || 0;
+          const outTokens = response.usage.output_tokens || 0;
+          this.tongTokenInput += inTokens;
+          this.tongTokenOutput += outTokens;
+
+          const thangHienTai = new Date().toISOString().slice(0, 7);
+          const redisKey = `fs:jev:usage:${thangHienTai}`;
+          this.cacheService
+            .lay<number>(redisKey)
+            .then(async (cur) => {
+              const tongMoi = (cur || 0) + inTokens;
+              await this.cacheService.dat(redisKey, tongMoi, 86400 * 35);
+              if (tongMoi > this.CANH_BAO_TOKEN) {
+                this.logger.warn(
+                  `⚠️ [Jev Quota Warning] Tổng token Jev đã dùng trong tháng [${thangHienTai}]: ${tongMoi} tokens (vượt 80% ngân sách 5$/tháng ~ 119M tokens)`,
+                );
+              }
+            })
+            .catch(() => {});
         }
 
         return response as {
