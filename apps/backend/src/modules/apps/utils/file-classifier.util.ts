@@ -159,19 +159,22 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
 
   // A. ARM64 (Android 64-bit hiện đại & Windows on ARM)
   if (
-    /(?:^|[-_.])(arm64-v8a|arm64|aarch64)(?:[-_.]|$)/i.test(lowerName) ||
+    /(?:^|[-_.])(arm64-v8a|arm64|aarch64|arm-64)(?:[-_.]|$)/i.test(lowerName) ||
     lowerName.includes('arm64-v8a') ||
     lowerName.includes('arm64') ||
-    lowerName.includes('aarch64')
+    lowerName.includes('aarch64') ||
+    lowerName.includes('arm-64')
   ) {
     kienTruc = KienTrucChip.ARM64_V8A;
   }
   // B. ARM 32-bit (Android 32-bit đời cũ)
   else if (
-    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32)(?:[-_.]|$)/i.test(lowerName) ||
+    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32)(?:[-_.]|$)/i.test(lowerName) ||
     lowerName.includes('armeabi-v7a') ||
     lowerName.includes('armeabi') ||
-    lowerName.includes('armv7')
+    lowerName.includes('armv7') ||
+    lowerName.includes('arm32v7') ||
+    lowerName.includes('arm32')
   ) {
     kienTruc = KienTrucChip.ARMEABI_V7A;
   }
@@ -205,10 +208,15 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
     kienTruc = KienTrucChip.DUNG_CHUNG;
   }
 
-  // 6. Quy tắc Fallback mặc định khi không ghi rõ kiến trúc chip:
-  // - Nếu là APK: Không ghi chip mặc định là DUNG_CHUNG (Universal APK chạy trên mọi máy Android)
-  // - Nếu là Windows (.exe, .msi, .zip): Không ghi chip mặc định là X86_64 (chuẩn Windows 64-bit phổ biến)
-  if (kienTruc === KienTrucChip.KHONG_XAC_DINH) {
+  // 6. Quy tắc Fallback & Phát hiện biến thể mơ hồ (P2-22 & Post-Review #9):
+  // - Nếu tên file chứa các biến thể mơ hồ (-fdroid, -google-play, -foss, -debug, -unsigned)
+  //   mà không xác định được chip, giữ nguyên KHONG_XAC_DINH để kích hoạt Jev Choice (P2-33.7).
+  const isAmbiguousVariant =
+    /(?:^|[-_.])(fdroid|f-droid|foss|google-play|googleplay|play|debug|unsigned)(?:[-_.]|$)/i.test(
+      lowerName,
+    );
+
+  if (kienTruc === KienTrucChip.KHONG_XAC_DINH && !isAmbiguousVariant) {
     if (dinhDang === DinhDangTep.APK) {
       kienTruc = KienTrucChip.DUNG_CHUNG;
     } else {

@@ -16,7 +16,7 @@ describe('SemanticSearchService (P2-36)', () => {
     mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-        if (key === 'GEMINI_EMBEDDING_MODEL') return 'text-embedding-004';
+        if (key === 'GEMINI_EMBEDDING_MODEL') return 'gemini-embedding-001';
         return null;
       }),
     };
@@ -82,7 +82,7 @@ describe('SemanticSearchService (P2-36)', () => {
       expect(vector).toHaveLength(768);
       expect(vector[0]).toBeCloseTo(0.12345);
       expect(mockEmbedContent).toHaveBeenCalledWith({
-        model: 'text-embedding-004',
+        model: 'gemini-embedding-001',
         contents: 'Phần mềm ghi chú mã nguồn mở',
         config: { outputDimensionality: 768 },
       });

@@ -107,8 +107,10 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         update: vi.fn(),
       },
       tepCaiDat: {
-        deleteMany: vi.fn(),
-        createMany: vi.fn(),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+        findMany: vi.fn().mockResolvedValue([]),
+        upsert: vi.fn().mockResolvedValue({}),
         update: vi.fn(),
       },
       nhatKyNapRepo: {
@@ -121,6 +123,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       layReadme: vi.fn(),
       layDanhSachRelease: vi.fn(),
       layReleaseMoiNhat: vi.fn(),
+      laySoLuongContributor: vi.fn().mockResolvedValue(10),
       getRateLimitInfo: vi
         .fn()
         .mockReturnValue({ remaining: 4800, limit: 5000, reset: 1700000000 }),

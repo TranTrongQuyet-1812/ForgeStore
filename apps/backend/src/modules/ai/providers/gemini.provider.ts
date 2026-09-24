@@ -21,7 +21,7 @@ export class GeminiProvider implements INhaCungCapTomTat {
 
   constructor(private readonly configService: ConfigService) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.tenModel = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash';
+    this.tenModel = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
 
     if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
       try {

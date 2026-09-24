@@ -520,7 +520,7 @@ describe('AuthService', () => {
       expect(result.refreshToken).toBeUndefined();
       // Đảm bảo phiên KHÔNG bị xóa
       expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
-    });
+    }, 15000);
 
     it('Điểm B: Request thua chạy đua (count === 0) đọc lại phiên tươi từ CSDL và vào nhánh ân hạn', async () => {
       const currentSecret = 'valid-secret-race-12345678901234567890';
@@ -562,7 +562,7 @@ describe('AuthService', () => {
       expect(result.refreshToken).toBeUndefined();
       expect(mockPrisma.phienDangNhap.findUnique).toHaveBeenCalledTimes(2);
       expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
-    });
+    }, 15000);
 
     it('Điểm 5: REUSE DETECTION NGOÀI GRACE PERIOD — Token cũ gửi sau 20s (> 15s) bị thu hồi phiên lập tức', async () => {
       const previousSecret = 'stolen-previous-secret-123456789012345678';

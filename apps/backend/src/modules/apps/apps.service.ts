@@ -35,6 +35,16 @@ import { ResolveAssetDto } from './dto/resolve-asset.dto';
 import { SearchQueryDto } from './dto/search.dto';
 import { InspectRepoDto } from './dto/inspect-repo.dto';
 
+/**
+ * Chuẩn hóa mã băm SHA256: bỏ tiền tố sha256:, chỉ giữ 64 ký tự hex chữ thường.
+ */
+export function chuanHoaSha256(raw?: string | null): string | null {
+  if (!raw) return null;
+  const cleaned = raw.trim().toLowerCase();
+  const hex = cleaned.startsWith('sha256:') ? cleaned.slice(7) : cleaned;
+  return /^[0-9a-f]{64}$/.test(hex) ? hex : null;
+}
+
 @Injectable()
 export class AppsService {
   private readonly logger = new Logger(AppsService.name);
@@ -225,109 +235,139 @@ export class AppsService {
     // 5. Dự đoán Android package name (D-13)
     const tenGoiAndroid = doanTenGoiAndroid(repoData.full_name, danhSachFileApk);
 
-    // 6. Thực thi cập nhật CSDL trong một Transaction nguyên tử (P2-21.6)
-    const ungDungUpdated = await this.prisma.$transaction(async (tx) => {
-      // 6.1. Upsert bảng UngDung
-      const app = await tx.ungDung.upsert({
-        where: { tenRepoDayDu: repoData.full_name },
-        update: {
-          chuSoHuu: repoData.owner.login,
-          tenKhoChua: repoData.name,
-          duongDanGithub: repoData.html_url,
-          moTaGocTiengAnh: repoData.description,
-          duongDanIcon: repoData.owner.avatar_url || null,
-          soSaoGithub: repoData.stargazers_count,
-          soLuotFork: repoData.forks_count,
-          loaiGiayPhep: repoData.license?.name || repoData.license?.spdx_id || null,
-          ngonNguChinh: repoData.language || null,
-          danhSachChuDe: repoData.topics || [],
-          danhMucChinh,
-          nenTangHoTro,
-          tenGoiAndroid: tenGoiAndroid || undefined,
-          dongBoLanCuoi: new Date(),
-        },
-        create: {
-          tenRepoDayDu: repoData.full_name,
-          chuSoHuu: repoData.owner.login,
-          tenKhoChua: repoData.name,
-          duongDanGithub: repoData.html_url,
-          moTaGocTiengAnh: repoData.description,
-          duongDanIcon: repoData.owner.avatar_url || null,
-          soSaoGithub: repoData.stargazers_count,
-          soLuotFork: repoData.forks_count,
-          loaiGiayPhep: repoData.license?.name || repoData.license?.spdx_id || null,
-          ngonNguChinh: repoData.language || null,
-          danhSachChuDe: repoData.topics || [],
-          danhMucChinh,
-          nenTangHoTro,
-          tenGoiAndroid: tenGoiAndroid || null,
-          dongBoLanCuoi: new Date(),
-        },
-      });
-
-      // 6.2. Đồng bộ các bản phát hành và tệp cài đặt đính kèm
-      for (const { release, validAssets } of parsedReleases) {
-        const releaseRecord = await tx.banPhatHanh.upsert({
-          where: {
-            maUngDung_tenPhienBan: {
-              maUngDung: app.maUngDung,
-              tenPhienBan: release.tag_name,
-            },
-          },
+    // 6. Thực thi cập nhật CSDL trong một Transaction nguyên tử (P2-21.6, timeout 20s per Post-Review #13)
+    const ungDungUpdated = await this.prisma.$transaction(
+      async (tx) => {
+        // 6.1. Upsert bảng UngDung
+        const app = await tx.ungDung.upsert({
+          where: { tenRepoDayDu: repoData.full_name },
           update: {
-            maReleaseGithub: BigInt(release.id),
-            tieuDePhatHanh: release.name || release.tag_name,
-            nhatKyThayDoiGoc: release.body || null,
-            laBanThuNghiem: release.prerelease,
-            ngayPhatHanh: new Date(release.published_at || release.created_at),
+            chuSoHuu: repoData.owner.login,
+            tenKhoChua: repoData.name,
+            duongDanGithub: repoData.html_url,
+            moTaGocTiengAnh: repoData.description,
+            duongDanIcon: repoData.owner.avatar_url || null,
+            soSaoGithub: repoData.stargazers_count,
+            soLuotFork: repoData.forks_count,
+            loaiGiayPhep: repoData.license?.name || repoData.license?.spdx_id || null,
+            ngonNguChinh: repoData.language || null,
+            danhSachChuDe: repoData.topics || [],
+            danhMucChinh,
+            nenTangHoTro,
+            tenGoiAndroid: tenGoiAndroid || undefined,
+            dongBoLanCuoi: new Date(),
           },
           create: {
-            maUngDung: app.maUngDung,
-            maReleaseGithub: BigInt(release.id),
-            tenPhienBan: release.tag_name,
-            tieuDePhatHanh: release.name || release.tag_name,
-            nhatKyThayDoiGoc: release.body || null,
-            laBanThuNghiem: release.prerelease,
-            ngayPhatHanh: new Date(release.published_at || release.created_at),
+            tenRepoDayDu: repoData.full_name,
+            chuSoHuu: repoData.owner.login,
+            tenKhoChua: repoData.name,
+            duongDanGithub: repoData.html_url,
+            moTaGocTiengAnh: repoData.description,
+            duongDanIcon: repoData.owner.avatar_url || null,
+            soSaoGithub: repoData.stargazers_count,
+            soLuotFork: repoData.forks_count,
+            loaiGiayPhep: repoData.license?.name || repoData.license?.spdx_id || null,
+            ngonNguChinh: repoData.language || null,
+            danhSachChuDe: repoData.topics || [],
+            danhMucChinh,
+            nenTangHoTro,
+            tenGoiAndroid: tenGoiAndroid || null,
+            dongBoLanCuoi: new Date(),
           },
         });
 
-        // Xóa tệp cũ của phiên bản này để cập nhật tệp mới sạch sẽ
-        await tx.tepCaiDat.deleteMany({
-          where: { maPhatHanh: releaseRecord.maPhatHanh },
-        });
+        // 6.2. Đồng bộ các bản phát hành và tệp cài đặt đính kèm
+        for (const { release, validAssets } of parsedReleases) {
+          const releaseRecord = await tx.banPhatHanh.upsert({
+            where: {
+              maUngDung_tenPhienBan: {
+                maUngDung: app.maUngDung,
+                tenPhienBan: release.tag_name,
+              },
+            },
+            update: {
+              maReleaseGithub: BigInt(release.id),
+              tieuDePhatHanh: release.name || release.tag_name,
+              nhatKyThayDoiGoc: release.body || null,
+              laBanThuNghiem: release.prerelease,
+              ngayPhatHanh: new Date(release.published_at || release.created_at),
+            },
+            create: {
+              maUngDung: app.maUngDung,
+              maReleaseGithub: BigInt(release.id),
+              tenPhienBan: release.tag_name,
+              tieuDePhatHanh: release.name || release.tag_name,
+              nhatKyThayDoiGoc: release.body || null,
+              laBanThuNghiem: release.prerelease,
+              ngayPhatHanh: new Date(release.published_at || release.created_at),
+            },
+          });
 
-        // Thêm các file cài đặt đã được phân loại
-        if (validAssets.length > 0) {
-          await tx.tepCaiDat.createMany({
-            data: validAssets.map(({ asset, dinhDang, kienTruc }) => ({
-              maPhatHanh: releaseRecord.maPhatHanh,
-              tenTep: asset.name,
-              duongDanTaiVe: asset.browser_download_url,
-              dungLuongBytes: BigInt(asset.size),
-              dinhDangTep: dinhDang,
-              kienTrucChip: kienTruc,
-              maBamSha256: asset.digest || asset.sha256 || null,
-              soLuotTai: asset.download_count || 0,
-            })),
+          // P2-21 & Post-Review (#7, #8): Upsert tệp cài đặt theo compound unique maPhatHanh_tenTep,
+          // chỉ xóa những file thật sự không còn trên GitHub để bảo toàn maTep trong ung_dung_da_cai.
+          const currentAssetNames = new Set(validAssets.map(({ asset }) => asset.name));
+          const existingAssets = await tx.tepCaiDat.findMany({
+            where: { maPhatHanh: releaseRecord.maPhatHanh },
+            select: { maTep: true, tenTep: true },
+          });
+
+          const staleAssetIds = existingAssets
+            .filter((f) => !currentAssetNames.has(f.tenTep))
+            .map((f) => f.maTep);
+
+          if (staleAssetIds.length > 0) {
+            await tx.tepCaiDat.deleteMany({
+              where: { maTep: { in: staleAssetIds } },
+            });
+          }
+
+          for (const { asset, dinhDang, kienTruc } of validAssets) {
+            const maBamSha256 = chuanHoaSha256(asset.digest || asset.sha256);
+            await tx.tepCaiDat.upsert({
+              where: {
+                maPhatHanh_tenTep: {
+                  maPhatHanh: releaseRecord.maPhatHanh,
+                  tenTep: asset.name,
+                },
+              },
+              update: {
+                duongDanTaiVe: asset.browser_download_url,
+                dungLuongBytes: BigInt(asset.size),
+                dinhDangTep: dinhDang,
+                kienTrucChip: kienTruc,
+                maBamSha256,
+                soLuotTai: asset.download_count || 0,
+              },
+              create: {
+                maPhatHanh: releaseRecord.maPhatHanh,
+                tenTep: asset.name,
+                duongDanTaiVe: asset.browser_download_url,
+                dungLuongBytes: BigInt(asset.size),
+                dinhDangTep: dinhDang,
+                kienTrucChip: kienTruc,
+                maBamSha256,
+                soLuotTai: asset.download_count || 0,
+              },
+            });
+          }
+        }
+
+        // 6.3. Nếu có người dùng yêu cầu nạp repo, ghi nhật ký (Module 6)
+        if (maNguoiDungYeuCau) {
+          await tx.nhatKyNapRepo.create({
+            data: {
+              maNguoiDungYeuCau,
+              duongDanRepoNhap: `${owner}/${repo}`,
+              trangThai: TrangThaiNapRepo.THANH_CONG,
+              maUngDungTaoRa: app.maUngDung,
+            },
           });
         }
-      }
 
-      // 6.3. Nếu có người dùng yêu cầu nạp repo, ghi nhật ký (Module 6)
-      if (maNguoiDungYeuCau) {
-        await tx.nhatKyNapRepo.create({
-          data: {
-            maNguoiDungYeuCau,
-            duongDanRepoNhap: `${owner}/${repo}`,
-            trangThai: TrangThaiNapRepo.THANH_CONG,
-            maUngDungTaoRa: app.maUngDung,
-          },
-        });
-      }
-
-      return app;
-    });
+        return app;
+      },
+      { timeout: 20000, maxWait: 5000 },
+    );
 
     // 7. Xóa sạch Cache liên quan sau khi đồng bộ thành công (P2-23.5)
     await this.cacheService.xoaTheoPrefix(this.CACHE_KEY_LIST);
@@ -828,15 +868,35 @@ export class AppsService {
         });
       }
 
+      // Ưu tiên các file GUI/Installer tiêu chuẩn trước bản CLI, debug, unsigned
+      const isPreferredFile = (fileName: string) => {
+        const lower = fileName.toLowerCase();
+        return !lower.includes('cli') && !lower.includes('debug') && !lower.includes('unsigned');
+      };
+
       // 4.1. MSI hoặc EXE X86_64
-      const msiX64 = winFiles.find(
-        (f) => f.dinhDangTep === DinhDangTep.MSI && f.kienTrucChip === KienTrucChip.X86_64,
-      );
+      const msiX64 =
+        winFiles.find(
+          (f) =>
+            f.dinhDangTep === DinhDangTep.MSI &&
+            f.kienTrucChip === KienTrucChip.X86_64 &&
+            isPreferredFile(f.tenTep),
+        ) ||
+        winFiles.find(
+          (f) => f.dinhDangTep === DinhDangTep.MSI && f.kienTrucChip === KienTrucChip.X86_64,
+        );
       if (msiX64) return this.dongGoiResponseAsset(msiX64, 'LUAT');
 
-      const exeX64 = winFiles.find(
-        (f) => f.dinhDangTep === DinhDangTep.EXE && f.kienTrucChip === KienTrucChip.X86_64,
-      );
+      const exeX64 =
+        winFiles.find(
+          (f) =>
+            f.dinhDangTep === DinhDangTep.EXE &&
+            f.kienTrucChip === KienTrucChip.X86_64 &&
+            isPreferredFile(f.tenTep),
+        ) ||
+        winFiles.find(
+          (f) => f.dinhDangTep === DinhDangTep.EXE && f.kienTrucChip === KienTrucChip.X86_64,
+        );
       if (exeX64) return this.dongGoiResponseAsset(exeX64, 'LUAT');
 
       // 4.2. ZIP_PORTABLE X86_64
@@ -1003,7 +1063,33 @@ export class AppsService {
           }
         }
 
-        // 4. Tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
+        // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
+        let daArchived = false;
+        let ngayPushCuoi = app.dongBoLanCuoi;
+        let soContributor = 1;
+
+        try {
+          const [repoInfo, contributorsCount] = await Promise.all([
+            this.githubService.layRepo(owner, repo),
+            this.githubService.laySoLuongContributor(owner, repo),
+          ]);
+
+          if (repoInfo) {
+            daArchived = Boolean(repoInfo.archived);
+            if (repoInfo.pushed_at) {
+              ngayPushCuoi = new Date(repoInfo.pushed_at);
+            }
+          }
+
+          if (typeof contributorsCount === 'number' && contributorsCount > 0) {
+            soContributor = contributorsCount;
+          }
+        } catch (err: unknown) {
+          this.logger.warn(
+            `Không lấy được thông tin repo/contributors sống cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+          );
+        }
+
         const trustScore = await this.trustScoreService.tinhTrustScore({
           tenApp: app.tenKhoChua,
           moTaApp: app.moTaGocTiengAnh || '',
@@ -1011,9 +1097,9 @@ export class AppsService {
           soSaoGithub: app.soSaoGithub,
           soLuotFork: app.soLuotFork,
           loaiGiayPhep: app.loaiGiayPhep,
-          daArchived: false,
-          ngayPushCuoi: app.dongBoLanCuoi,
-          soContributor: 5,
+          daArchived,
+          ngayPushCuoi,
+          soContributor,
           danhSachQuyenAndroid: danhSachQuyen,
           coAccessibilityService,
         });
@@ -1575,34 +1661,46 @@ export class AppsService {
     }
     const assets = latestRelease.assets || [];
 
-    if (dto.nenTang) {
-      const coFileHopLe = assets.some((a) => {
-        const classified = phanLoaiTep(a.name);
-        if (!classified) return false;
-        if (dto.nenTang === 'ANDROID') {
-          return classified.dinhDang === DinhDangTep.APK;
-        }
-        if (dto.nenTang === 'WINDOWS') {
-          return (
-            classified.dinhDang === DinhDangTep.EXE ||
-            classified.dinhDang === DinhDangTep.MSI ||
-            classified.dinhDang === DinhDangTep.ZIP_PORTABLE
-          );
-        }
-        return false;
-      });
+    // 3.3: Kiểm tra tệp cài đặt phù hợp với nền tảng (P2-41.3, Post-Review #14)
+    const coFileHopLe = assets.some((a) => {
+      const classified = phanLoaiTep(a.name);
+      if (!classified || classified.boQua) return false;
 
-      if (!coFileHopLe) {
-        await this.ghiNhatKyNapRepo({
-          duongDan: rawUrl,
-          trangThai: TrangThaiNapRepo.KHONG_CO_FILE_CAI_DAT,
-          thongBaoLoi: `Bản phát hành không chứa file cài đặt cho nền tảng ${dto.nenTang}.`,
-          userId,
-        });
-        throw new BadRequestException(
-          `Bản phát hành của [${fullSlug}] không có tệp cài đặt phù hợp với ${dto.nenTang}.`,
+      if (dto.nenTang === 'ANDROID') {
+        return classified.dinhDang === DinhDangTep.APK;
+      }
+      if (dto.nenTang === 'WINDOWS') {
+        return (
+          classified.dinhDang === DinhDangTep.EXE ||
+          classified.dinhDang === DinhDangTep.MSI ||
+          classified.dinhDang === DinhDangTep.ZIP_PORTABLE
         );
       }
+
+      // Khi không chỉ định nền tảng: phải có ít nhất 1 file cài đặt cho Windows hoặc Android
+      return (
+        classified.dinhDang === DinhDangTep.APK ||
+        classified.dinhDang === DinhDangTep.EXE ||
+        classified.dinhDang === DinhDangTep.MSI ||
+        classified.dinhDang === DinhDangTep.ZIP_PORTABLE
+      );
+    });
+
+    if (!coFileHopLe) {
+      const thongBaoLoi = dto.nenTang
+        ? `Bản phát hành không chứa file cài đặt cho nền tảng ${dto.nenTang}.`
+        : 'Bản phát hành không chứa bất kỳ tệp cài đặt hợp lệ nào cho Windows hoặc Android.';
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.KHONG_CO_FILE_CAI_DAT,
+        thongBaoLoi,
+        userId,
+      });
+      throw new BadRequestException(
+        dto.nenTang
+          ? `Bản phát hành của [${fullSlug}] không có tệp cài đặt phù hợp với ${dto.nenTang}.`
+          : `Bản phát hành của [${fullSlug}] không chứa tệp cài đặt hợp lệ cho Windows hoặc Android.`,
+      );
     }
 
     // 4. Đồng bộ repo vào CSDL (P2-21 & P2-41.4)

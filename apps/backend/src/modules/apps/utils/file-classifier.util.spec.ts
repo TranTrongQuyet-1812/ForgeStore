@@ -59,6 +59,30 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
       expected: { dinhDang: DinhDangTep.APK, kienTruc: KienTrucChip.ARM64_V8A, boQua: false },
     },
     {
+      tenTep: 'LocalSend-1.14.0-android-arm32v7.apk',
+      expected: { dinhDang: DinhDangTep.APK, kienTruc: KienTrucChip.ARMEABI_V7A, boQua: false },
+    },
+    {
+      tenTep: 'LocalSend-1.14.0-windows-arm-64.zip',
+      expected: {
+        dinhDang: DinhDangTep.ZIP_PORTABLE,
+        kienTruc: KienTrucChip.ARM64_V8A,
+        boQua: false,
+      },
+    },
+    {
+      tenTep: 'CLI-windows-arm-64.exe',
+      expected: { dinhDang: DinhDangTep.EXE, kienTruc: KienTrucChip.ARM64_V8A, boQua: false },
+    },
+    {
+      tenTep: 'app-release-fdroid.apk',
+      expected: { dinhDang: DinhDangTep.APK, kienTruc: KienTrucChip.KHONG_XAC_DINH, boQua: false },
+    },
+    {
+      tenTep: 'app-foss-debug.apk',
+      expected: { dinhDang: DinhDangTep.APK, kienTruc: KienTrucChip.KHONG_XAC_DINH, boQua: false },
+    },
+    {
       tenTep: 'LocalSend-1.14.0-android-universal.apk',
       expected: { dinhDang: DinhDangTep.APK, kienTruc: KienTrucChip.DUNG_CHUNG, boQua: false },
     },

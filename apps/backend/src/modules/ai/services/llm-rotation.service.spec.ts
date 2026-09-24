@@ -29,7 +29,7 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
   beforeEach(() => {
     mockGeminiProvider = {
       ten: 'GEMINI',
-      tenModel: 'gemini-2.0-flash',
+      tenModel: 'gemini-3.1-flash-lite',
       tomTatReadme: vi.fn(),
       tomTatChangelog: vi.fn(),
     };
@@ -60,7 +60,7 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
 
       const res = await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
 
-      expect(res.moHinhTomTat).toBe('gemini-2.0-flash');
+      expect(res.moHinhTomTat).toBe('gemini-3.1-flash-lite');
       expect(res.ketQua.khauHieu).toBe(sampleKetQua.khauHieu);
       expect(mockGeminiProvider.tomTatReadme).toHaveBeenCalledTimes(1);
       expect(mockNvidiaNimProvider.tomTatReadme).not.toHaveBeenCalled();
@@ -87,6 +87,32 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
         true,
         expect.any(Number),
       );
+    });
+
+    it('Khóa 60 giây khi lỗi 429 theo phút và khóa 12 giờ khi lỗi theo ngày (Post-Review #11)', async () => {
+      const errMinute = new Error(
+        'Quota exceeded for quota metric Queries and limit Queries per minute',
+      );
+      (errMinute as unknown as { status: number }).status = 429;
+      (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        errMinute,
+      );
+      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        sampleKetQua,
+      );
+
+      await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
+      expect(mockCacheService.luu).toHaveBeenCalledWith('fs:llm:khoa:GEMINI', true, 60);
+
+      const errDaily = new Error('Requests per day exceeded for this project');
+      (errDaily as unknown as { status: number }).status = 429;
+      (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockRejectedValueOnce(errDaily);
+      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        sampleKetQua,
+      );
+
+      await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
+      expect(mockCacheService.luu).toHaveBeenCalledWith('fs:llm:khoa:GEMINI', true, 43200);
     });
 
     it('Bỏ qua Gemini khi đang có khóa trong Cache và gọi thẳng NVIDIA NIM', async () => {
@@ -133,7 +159,7 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
       });
 
       const res = await service.tomTatChangelog('Fix bug and improve perf', 'rustdesk/rustdesk');
-      expect(res.moHinhTomTat).toBe('gemini-2.0-flash');
+      expect(res.moHinhTomTat).toBe('gemini-3.1-flash-lite');
       expect(res.ketQua.diemMoi).toHaveLength(2);
     });
   });

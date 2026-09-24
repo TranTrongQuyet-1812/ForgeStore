@@ -46,7 +46,7 @@ export class SemanticSearchService {
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     this.embeddingModel =
-      this.configService.get<string>('GEMINI_EMBEDDING_MODEL') || 'text-embedding-004';
+      this.configService.get<string>('GEMINI_EMBEDDING_MODEL') || 'gemini-embedding-001';
 
     if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
       try {

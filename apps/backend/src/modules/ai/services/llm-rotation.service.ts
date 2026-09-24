@@ -111,10 +111,14 @@ export class LlmRotationService {
         };
       } catch (err: unknown) {
         const error = err as { status?: number; message?: string };
-        const isRateLimit = error.status === 429 || Boolean(error.message?.includes('429'));
+        const isRateLimit =
+          error.status === 429 ||
+          Boolean(error.message?.includes('429')) ||
+          Boolean(error.message?.includes('RESOURCE_EXHAUSTED'));
 
         if (isRateLimit) {
-          await this.khoaProvider(provider.ten, this.THOI_GIAN_KHOA_PHUT);
+          const lockTtl = this.tinhThoiGianKhoa(error.message || '');
+          await this.khoaProvider(provider.ten, lockTtl);
         }
       }
     }
@@ -155,16 +159,34 @@ export class LlmRotationService {
   }
 
   /**
-   * Phân biệt khóa theo phút (60s) hoặc khóa theo ngày (reset 12h) (P2-39.4).
+   * Phân biệt khóa theo phút (60s) hoặc khóa theo ngày (reset 12h) (P2-39.4, Post-Review #11).
    */
   private tinhThoiGianKhoa(errorMessage: string): number {
+    const lower = errorMessage.toLowerCase();
+
+    // 1. Kiểm tra rõ ràng giới hạn theo phút / RPM
     if (
-      errorMessage.toLowerCase().includes('per day') ||
-      errorMessage.toLowerCase().includes('daily') ||
-      errorMessage.toLowerCase().includes('quota exceeded')
+      lower.includes('per minute') ||
+      lower.includes('perminute') ||
+      lower.includes('per_minute') ||
+      lower.includes('retrydelay') ||
+      lower.includes('rate limit') ||
+      lower.includes('ratelimit')
+    ) {
+      return this.THOI_GIAN_KHOA_PHUT;
+    }
+
+    // 2. Chỉ khóa 12h khi thông báo chỉ định rõ hạn mức theo ngày (PerDay / Daily)
+    if (
+      lower.includes('per day') ||
+      lower.includes('perday') ||
+      lower.includes('per_day') ||
+      lower.includes('daily')
     ) {
       return this.THOI_GIAN_KHOA_NGAY;
     }
+
+    // 3. Mặc định cho lỗi 429 tạm thời: chỉ khóa theo phút (60s) để nhanh chóng phục hồi
     return this.THOI_GIAN_KHOA_PHUT;
   }
 

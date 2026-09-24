@@ -20,7 +20,7 @@ export class SearchTranslatorService {
     private readonly cacheService: CacheService,
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash';
+    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
 
     if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
       try {

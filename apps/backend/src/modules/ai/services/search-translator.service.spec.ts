@@ -7,7 +7,7 @@ describe('SearchTranslatorService (P2-42)', () => {
   const mockConfigService = {
     get: vi.fn((key: string, defaultVal?: string) => {
       if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-      if (key === 'GEMINI_MODEL') return 'gemini-2.0-flash';
+      if (key === 'GEMINI_MODEL') return 'gemini-3.1-flash-lite';
       return defaultVal;
     }),
   } as unknown as ConfigService;
