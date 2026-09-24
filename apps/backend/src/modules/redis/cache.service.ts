@@ -242,4 +242,62 @@ export class CacheService {
       return false;
     }
   }
+
+  // =============================================================
+  // CÁC HÀM BÍ DANH TIẾNG VIỆT (TƯƠNG THÍCH ĐẶC TẢ THUẦN VIỆT)
+  // =============================================================
+
+  /**
+   * Đọc giá trị từ Cache (Bí danh tiếng Việt của get)
+   */
+  async lay<T>(key: string): Promise<T | null> {
+    return this.get<T>(key);
+  }
+
+  /**
+   * Lưu giá trị vào Cache kèm TTL giây (Bí danh tiếng Việt của set)
+   */
+  async luu<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    return this.set<T>(key, value, ttlSeconds);
+  }
+
+  /**
+   * Xóa một hoặc nhiều Key (Bí danh tiếng Việt của del)
+   */
+  async xoa(keys: string | string[]): Promise<void> {
+    return this.del(keys);
+  }
+
+  /**
+   * Xóa tất cả các Key bắt đầu bằng một tiền tố (prefix) nhất định.
+   * Dùng để dọn dẹp cache danh sách (VD: fs:apps:list:*) khi có app mới đồng bộ.
+   */
+  async xoaTheoPrefix(prefix: string): Promise<void> {
+    try {
+      // Dùng SCAN để tìm key an toàn mà không chặn Redis Event Loop
+      let cursor = '0';
+      do {
+        const [nextCursor, matchingKeys] = await this.redisClient.scan(
+          cursor,
+          'MATCH',
+          `${prefix}*`,
+          'COUNT',
+          100,
+        );
+        cursor = nextCursor;
+        if (matchingKeys.length > 0) {
+          await this.redisClient.del(...matchingKeys);
+        }
+      } while (cursor !== '0');
+    } catch (error) {
+      this.logger.warn(`Lỗi xóa key theo prefix [${prefix}]: ${(error as Error).message}`);
+    }
+
+    // Dọn dẹp cả trong In-Memory Fallback Map
+    for (const key of this.memoryFallback.keys()) {
+      if (key.startsWith(prefix)) {
+        this.memoryFallback.delete(key);
+      }
+    }
+  }
 }
