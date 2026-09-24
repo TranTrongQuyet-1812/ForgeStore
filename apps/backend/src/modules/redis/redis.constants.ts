@@ -14,6 +14,7 @@ export const CACHE_PREFIX = {
 export const DEFAULT_TTL = {
   SEARCH_RESULTS: 3600, // 1 giờ (bảo vệ hạn ngạch 30 req/phút của GitHub)
   APP_DETAIL: 7200, // 2 giờ
-  EXCHANGE_CODE: 300, // 5 phút (OAuth 1-time code)
+  EXCHANGE_CODE: 60, // 60 giây (OAuth 1-time exchange code per D-09)
+  OAUTH_STATE: 600, // 10 phút (OAuth state login flow)
   RATE_LIMIT: 60, // 1 phút
 } as const;

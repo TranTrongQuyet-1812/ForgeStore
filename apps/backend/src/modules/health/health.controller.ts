@@ -5,6 +5,8 @@ import { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 
+import { CongKhai } from '../../common/decorators/cong-khai.decorator';
+
 export interface HealthResponseDto {
   trangThai: 'HOAT_DONG' | 'GIAM_DUNG' | 'KHONG_SAN_SANG';
   db: 'SAN_SANG' | 'LOI';
@@ -15,6 +17,7 @@ export interface HealthResponseDto {
 
 @ApiTags('Health - Kiểm Tra Sức Khỏe')
 @SkipThrottle()
+@CongKhai()
 @Controller('health')
 export class HealthController {
   constructor(
