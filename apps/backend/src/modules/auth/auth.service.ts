@@ -31,18 +31,26 @@ export class AuthService {
    * Điểm 1: Vá lỗ hổng Open Redirect bằng URL parsing nghiêm ngặt (chặn userinfo, kiểm tra protocol & hostname).
    */
   async khoiTaoGithubAuth(challenge: string, redirect: string): Promise<string> {
+    // Kiểm tra định dạng challenge PKCE: Chuẩn RFC 7636 S256 base64url luôn có độ dài đúng 43 ký tự
+    if (!challenge || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+      throw new BadRequestException(
+        'Mã PKCE challenge không hợp lệ. Bắt buộc phải là chuỗi S256 base64url có độ dài đúng 43 ký tự.',
+      );
+    }
+
     const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
 
     // Điểm 1: Phân tích URL redirect thật sự để chặn đứng Open Redirect (ví dụ http://localhost:1@evil.com)
     let isAllowedRedirect = false;
     try {
       const u = new URL(redirect);
-      const isScheme = u.protocol === `${appDeepLinkScheme}:`;
+      const isScheme = u.protocol === `${appDeepLinkScheme}:` && !u.hash;
       const isLoopback =
         u.protocol === 'http:' &&
         ['localhost', '127.0.0.1'].includes(u.hostname) &&
         !u.username &&
-        !u.password;
+        !u.password &&
+        !u.hash;
       isAllowedRedirect = isScheme || isLoopback;
     } catch {
       isAllowedRedirect = false;
@@ -301,7 +309,7 @@ export class AuthService {
 
     const [maPhien, rawSecret] = parts as [string, string];
 
-    const phien = await this.prisma.phienDangNhap.findUnique({
+    let phien = await this.prisma.phienDangNhap.findUnique({
       where: { maPhien },
       include: {
         nguoiDung: true,
@@ -367,6 +375,20 @@ export class AuthService {
           refreshToken: `${maPhien}.${newSecret}`,
         };
       }
+
+      // Điểm B (Review): Request thua khi chạy đua (count === 0) do request đồng thời khác vừa xoay vòng token.
+      // Đọc lại phiên tươi từ CSDL để nạp chuoiMaHoaTokenCu và thoiGianXoayVongCuoi mới nhất,
+      // sau đó chuyển tiếp xuống nhánh kiểm tra Grace Period thay vì bị 401 oan.
+      const phienMoiNhat = await this.prisma.phienDangNhap.findUnique({
+        where: { maPhien },
+        include: {
+          nguoiDung: true,
+          thietBi: true,
+        },
+      });
+      if (phienMoiNhat) {
+        phien = phienMoiNhat;
+      }
     }
 
     // 2. Điểm 5 & 6: Không khớp token hiện tại -> Kiểm tra xem có khớp token vừa xoay vòng trước đó không?
@@ -379,9 +401,10 @@ export class AuthService {
           Date.now() - phien.thoiGianXoayVongCuoi.getTime() <= gracePeriodMs;
 
         if (isWithinGracePeriod) {
-          // Client gửi request đồng thời trong Grace Period: Cấp lại access token mới, KHÔNG xóa phiên
+          // Điểm A (Review): Client gửi request đồng thời trong Grace Period:
+          // Cấp lại accessToken mới, TUYỆT ĐỐI KHÔNG cấp lại refreshToken cũ để tránh client ghi đè token cũ lên token mới
           this.logger.log(
-            `Ân hạn refresh token đồng thời trong Grace Period cho phiên [${maPhien}]`,
+            `Ân hạn refresh token đồng thời trong Grace Period cho phiên [${maPhien}] (chỉ cấp accessToken mới)`,
           );
           const payload: JwtPayload = {
             sub: phien.maNguoiDung,
@@ -392,7 +415,6 @@ export class AuthService {
           const accessToken = await this.jwtService.signAsync(payload);
           return {
             accessToken,
-            refreshToken: dto.refreshToken,
           };
         }
 

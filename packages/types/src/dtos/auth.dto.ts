@@ -43,7 +43,16 @@ export interface AuthRefreshRequest {
  */
 export interface AuthResponseDto {
   accessToken: string;
-  refreshToken: string;
-  nguoiDung: NguoiDungDto;
+  refreshToken?: string;
+  nguoiDung?: NguoiDungDto;
   thietBi?: ThietBiDto;
+}
+
+/**
+ * Response sau khi làm mới token.
+ * Lưu ý: Trong cửa sổ ân hạn 15s (Grace Period), server chỉ trả về accessToken và không trả về refreshToken.
+ */
+export interface AuthRefreshResponseDto {
+  accessToken: string;
+  refreshToken?: string;
 }

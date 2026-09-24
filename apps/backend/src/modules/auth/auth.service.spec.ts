@@ -127,54 +127,76 @@ describe('AuthService', () => {
     vi.restoreAllMocks();
   });
 
-  describe('P2-10 & Điểm 1: khoiTaoGithubAuth & Vá Open Redirect', () => {
+  describe('P2-10 & Điểm 1 & Điểm D: khoiTaoGithubAuth & Vá Open Redirect', () => {
+    const validChallenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'; // 43 chars S256 base64url
+
     it('khởi tạo luồng GitHub OAuth với deep link forgestore:// hợp lệ', async () => {
-      const challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
       const redirect = 'forgestore://auth/callback';
 
-      const url = await service.khoiTaoGithubAuth(challenge, redirect);
+      const url = await service.khoiTaoGithubAuth(validChallenge, redirect);
 
       expect(url).toContain('https://github.com/login/oauth/authorize?');
       expect(url).toContain('client_id=mock-client-id');
       expect(mockCache.set).toHaveBeenCalledWith(
         expect.stringContaining('fs:auth:state:'),
-        expect.objectContaining({ challenge, redirect }),
+        expect.objectContaining({ challenge: validChallenge, redirect }),
         DEFAULT_TTL.OAUTH_STATE,
       );
     });
 
     it('chấp nhận redirect loopback localhost hoặc 127.0.0.1 hợp lệ', async () => {
-      const challenge = 'test-challenge';
-      const url1 = await service.khoiTaoGithubAuth(challenge, 'http://localhost:3000/callback');
-      const url2 = await service.khoiTaoGithubAuth(challenge, 'http://127.0.0.1:1420/callback');
+      const url1 = await service.khoiTaoGithubAuth(
+        validChallenge,
+        'http://localhost:3000/callback',
+      );
+      const url2 = await service.khoiTaoGithubAuth(
+        validChallenge,
+        'http://127.0.0.1:1420/callback',
+      );
 
       expect(url1).toBeDefined();
       expect(url2).toBeDefined();
     });
 
+    it('Điểm D: từ chối challenge không đúng 43 ký tự S256 base64url', async () => {
+      await expect(
+        service.khoiTaoGithubAuth('too-short', 'forgestore://auth/callback'),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.khoiTaoGithubAuth(
+          'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM+',
+          'forgestore://auth/callback',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('từ chối redirect có chứa URL hash/fragment', async () => {
+      await expect(
+        service.khoiTaoGithubAuth(validChallenge, 'forgestore://auth/callback#token=123'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('Điểm 1: Chặn đứng tấn công Open Redirect giả mạo localhost (http://localhost:1@evil.com)', async () => {
-      const challenge = 'test-challenge';
       const evilRedirect = 'http://localhost:1@evil.com';
 
-      await expect(service.khoiTaoGithubAuth(challenge, evilRedirect)).rejects.toThrow(
+      await expect(service.khoiTaoGithubAuth(validChallenge, evilRedirect)).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('Điểm 1: Chặn đứng redirect chứa username/password (http://admin:pass@localhost:3000)', async () => {
-      const challenge = 'test-challenge';
       const evilRedirect = 'http://admin:pass@localhost:3000';
 
-      await expect(service.khoiTaoGithubAuth(challenge, evilRedirect)).rejects.toThrow(
+      await expect(service.khoiTaoGithubAuth(validChallenge, evilRedirect)).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('từ chối redirect không thuộc whitelist scheme (ví dụ https://evil.com)', async () => {
-      const challenge = 'test-challenge';
       const redirect = 'https://evil.com/steal-token';
 
-      await expect(service.khoiTaoGithubAuth(challenge, redirect)).rejects.toThrow(
+      await expect(service.khoiTaoGithubAuth(validChallenge, redirect)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -468,7 +490,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('Điểm 5: GRACE PERIOD — client gửi lại token vừa xoay vòng trong 15s được cấp token mới mà KHÔNG bị xóa phiên', async () => {
+    it('Điểm 5 & Điểm A: GRACE PERIOD — client gửi lại token vừa xoay vòng trong 15s được cấp accessToken mới mà KHÔNG bị xóa phiên và KHÔNG cấp refreshToken cũ', async () => {
       const previousSecret = 'previous-valid-secret-12345678901234567890';
       const hashedPrev = await argon2.hash(previousSecret);
       const hashedCurrent = await argon2.hash('newer-secret-that-was-just-rotated');
@@ -494,7 +516,51 @@ describe('AuthService', () => {
       });
 
       expect(result.accessToken).toBe('mocked-jwt-access-token');
+      // Điểm A: Không trả refreshToken cũ trong ân hạn để client không ghi đè
+      expect(result.refreshToken).toBeUndefined();
       // Đảm bảo phiên KHÔNG bị xóa
+      expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
+    });
+
+    it('Điểm B: Request thua chạy đua (count === 0) đọc lại phiên tươi từ CSDL và vào nhánh ân hạn', async () => {
+      const currentSecret = 'valid-secret-race-12345678901234567890';
+      const hashedCurrent = await argon2.hash(currentSecret);
+      const hashedNewer = await argon2.hash('winner-new-secret-999999999999999');
+
+      // Ban đầu findUnique trả về bản ghi cũ (chưa xoay)
+      mockPrisma.phienDangNhap.findUnique
+        .mockResolvedValueOnce({
+          maPhien: 'session-race',
+          thoiGianHetHan: new Date(Date.now() + 1000000),
+          chuoiMaHoaToken: hashedCurrent,
+          chuoiMaHoaTokenCu: null,
+          thoiGianXoayVongCuoi: null,
+          maNguoiDung: 'user-uuid-1',
+          maThietBi: 'device-uuid-1',
+          nguoiDung: { maNguoiDung: 'user-uuid-1', vaiTro: VaiTro.NGUOI_DUNG },
+        })
+        // Lần findUnique thứ 2 (khi count === 0) trả về bản ghi mới nhất vừa do request thắng cuộc cập nhật
+        .mockResolvedValueOnce({
+          maPhien: 'session-race',
+          thoiGianHetHan: new Date(Date.now() + 1000000),
+          chuoiMaHoaToken: hashedNewer,
+          chuoiMaHoaTokenCu: hashedCurrent,
+          thoiGianXoayVongCuoi: new Date(Date.now() - 1000), // trong 15s
+          maNguoiDung: 'user-uuid-1',
+          maThietBi: 'device-uuid-1',
+          nguoiDung: { maNguoiDung: 'user-uuid-1', vaiTro: VaiTro.NGUOI_DUNG },
+        });
+
+      // updateMany trả về count === 0 vì request chạy đua khác đã cập nhật trước
+      mockPrisma.phienDangNhap.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.lamMoiToken({
+        refreshToken: `session-race.${currentSecret}`,
+      });
+
+      expect(result.accessToken).toBe('mocked-jwt-access-token');
+      expect(result.refreshToken).toBeUndefined();
+      expect(mockPrisma.phienDangNhap.findUnique).toHaveBeenCalledTimes(2);
       expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
     });
 

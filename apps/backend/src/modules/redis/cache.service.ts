@@ -12,6 +12,9 @@ interface MemoryCacheEntry {
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
 
+  // Giới hạn số lượng key tối đa trong RAM để chống tràn bộ nhớ khi Redis offline kéo dài (Điểm C)
+  public static readonly GIOI_HAN_KEY_BO_NHO = 1000;
+
   // In-Memory Fallback Map phục vụ kịch bản Redis offline / Demo tại trường (D-05)
   private readonly memoryFallback = new Map<string, MemoryCacheEntry>();
 
@@ -27,6 +30,14 @@ export class CacheService {
         this.memoryFallback.delete(key);
       }
     }
+  }
+
+  /**
+   * Lấy số lượng key hiện tại trong bộ nhớ dự phòng (phục vụ kiểm thử & giám sát).
+   */
+  laySoLuongKeyFallback(): number {
+    this.cleanExpiredMemoryKeys();
+    return this.memoryFallback.size;
   }
 
   /**
@@ -64,6 +75,7 @@ export class CacheService {
   /**
    * Lưu giá trị vào Cache kèm TTL (giây).
    * Tự động lưu vào Memory Store nếu Redis không phản hồi (D-05).
+   * Điểm C: Giới hạn tối đa 1.000 key trong RAM, tự động giải phóng key cũ nhất khi đầy.
    */
   async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
     const serialized = JSON.stringify(value);
@@ -83,6 +95,18 @@ export class CacheService {
     // Nếu Redis ghi thất bại hoặc để đảm bảo fallback luôn có dữ liệu khi Redis sập giữa chừng:
     if (!redisSuccess) {
       this.cleanExpiredMemoryKeys();
+
+      // Điểm C: Kiểm soát trần bộ nhớ RAM. Nếu đầy trần 1.000 key, xóa key cũ nhất (FIFO eviction)
+      if (
+        !this.memoryFallback.has(key) &&
+        this.memoryFallback.size >= CacheService.GIOI_HAN_KEY_BO_NHO
+      ) {
+        const oldestKey = this.memoryFallback.keys().next().value;
+        if (oldestKey) {
+          this.memoryFallback.delete(oldestKey);
+        }
+      }
+
       const effectiveTtl = ttlSeconds !== undefined ? ttlSeconds : 3600;
       const expiresAt = Date.now() + effectiveTtl * 1000;
       this.memoryFallback.set(key, { data: serialized, expiresAt });

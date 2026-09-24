@@ -61,7 +61,8 @@ export class AuthController {
   @ApiOperation({
     summary: 'Làm mới Access Token và xoay vòng Refresh Token (Token Rotation, P2-12)',
     description:
-      'Cung cấp refresh token cũ. Server xác thực bằng Argon2, tạo bí mật mới và thay thế bản băm trong DB. Nếu phát hiện token cũ bị dùng lại (Reuse Detection), toàn bộ phiên bị thu hồi ngay lập tức.',
+      'Cung cấp refresh token cũ. Server xác thực bằng Argon2, tạo bí mật mới và thay thế bản băm trong DB. Nếu phát hiện token cũ bị dùng lại ngoài ân hạn, toàn bộ phiên bị thu hồi ngay lập tức.\n\n' +
+      '⚠️ Lưu ý cho Client (P3-03): Trong cửa sổ ân hạn 15 giây (Grace Period khi nhiều request refresh gửi đồng thời), server chỉ trả về accessToken mới và KHÔNG trả về refreshToken. Client phải giữ nguyên refreshToken đang lưu, không được ghi đè.',
   })
   @ApiResponse({ status: 200, description: 'Làm mới token thành công' })
   @ApiResponse({

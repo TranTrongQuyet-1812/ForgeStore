@@ -77,5 +77,26 @@ describe('CacheService (Resilience & Atomic GETDEL)', () => {
 
       expect(val).toBeNull();
     });
+
+    it('Điểm C: giới hạn trần bộ nhớ RAM 1.000 key và tự động xóa key cũ nhất (FIFO eviction) khi đầy', async () => {
+      mockRedis.set.mockRejectedValue(new Error('Redis is down'));
+      mockRedis.get.mockRejectedValue(new Error('Redis is down'));
+
+      // Đẩy 1.005 key vào cache khi Redis offline
+      for (let i = 1; i <= 1005; i++) {
+        await service.set(`bulk:key:${i}`, { index: i }, 3600);
+      }
+
+      // Số lượng key tối đa trong RAM không vượt quá 1.000
+      expect(service.laySoLuongKeyFallback()).toBe(1000);
+
+      // Các key đầu tiên (bulk:key:1 đến bulk:key:5) đã bị giải phóng theo FIFO
+      expect(await service.get('bulk:key:1')).toBeNull();
+      expect(await service.get('bulk:key:5')).toBeNull();
+
+      // Key mới nhất vẫn còn nguyên
+      expect(await service.get('bulk:key:6')).toEqual({ index: 6 });
+      expect(await service.get('bulk:key:1005')).toEqual({ index: 1005 });
+    });
   });
 });
