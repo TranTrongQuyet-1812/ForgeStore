@@ -262,6 +262,13 @@ export class CacheService {
   }
 
   /**
+   * Lưu giá trị vào Cache kèm TTL giây (Bí danh tương đương của luu/set)
+   */
+  async dat<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    return this.set<T>(key, value, ttlSeconds);
+  }
+
+  /**
    * Xóa một hoặc nhiều Key (Bí danh tiếng Việt của del)
    */
   async xoa(keys: string | string[]): Promise<void> {

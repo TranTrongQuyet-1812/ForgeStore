@@ -15,6 +15,7 @@ import { RulePermissionJudgeService } from './services/rule-permission-judge.ser
 import { JevPermissionJudgeService } from './services/jev-permission-judge.service';
 import { TrustScoreService } from './services/trust-score.service';
 import { SemanticSearchService } from './services/semantic-search.service';
+import { SearchTranslatorService } from './services/search-translator.service';
 import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
 
 @Module({
@@ -30,6 +31,7 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
     JevPermissionJudgeService,
     TrustScoreService,
     SemanticSearchService,
+    SearchTranslatorService,
     JevBenchmarkService,
   ],
   exports: [
@@ -39,6 +41,7 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
     JevPermissionJudgeService,
     TrustScoreService,
     SemanticSearchService,
+    SearchTranslatorService,
     JevBenchmarkService,
   ],
 })

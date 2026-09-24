@@ -8,7 +8,11 @@ import {
   TrangThaiNapRepo,
 } from '@prisma/client';
 import {
+  InspectRepoResponseDto,
+  MucDoUyTin,
   ResolveAssetResponseDto,
+  TepCaiDatDto,
+  TimKiemResponseDto,
   TrangKetQua,
   UngDungChiTietDto,
   UngDungTomTatDto,
@@ -22,10 +26,14 @@ import { LlmRotationService, KetQuaTomTatKemModel } from '../ai/services/llm-rot
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { SemanticSearchService } from '../ai/services/semantic-search.service';
+import { SearchTranslatorService } from '../ai/services/search-translator.service';
 import { phanLoaiTep } from './utils/file-classifier.util';
 import { anhXaDanhMuc, doanTenGoiAndroid } from './utils/category-mapper.util';
+import { phanLuongInput } from './utils/smart-input-dispatcher.util';
 import { AppSortOption, PlatformFilter, QueryAppsDto } from './dto/query-apps.dto';
 import { ResolveAssetDto } from './dto/resolve-asset.dto';
+import { SearchQueryDto } from './dto/search.dto';
+import { InspectRepoDto } from './dto/inspect-repo.dto';
 
 @Injectable()
 export class AppsService {
@@ -44,6 +52,7 @@ export class AppsService {
     private readonly trustScoreService: TrustScoreService,
     private readonly apkInspectorService: ApkInspectorService,
     private readonly semanticSearchService: SemanticSearchService,
+    private readonly searchTranslatorService: SearchTranslatorService,
   ) {}
 
   /**
@@ -1059,5 +1068,547 @@ export class AppsService {
     }
 
     return { daChay: appsToWarm.length, thanhCong };
+  }
+
+  /**
+   * P2-40: Tìm kiếm thông minh (Smart Input Dispatcher - GET /search).
+   * Phân luồng câu nhập:
+   * 1. URL GitHub: Phát hiện link GitHub -> trả trạng thái nhận diện để Paste & Play.
+   * 2. TEN_APP: Tìm kiếm trực tiếp trong CSDL Store qua ILIKE (tên, mô tả, slogan) -> fallback GitHub Search.
+   * 3. Y_DINH: Tìm kiếm ngữ nghĩa pgvector + Gemini dịch câu tìm kiếm thành query GitHub an toàn.
+   */
+  async timKiemThongMinh(query: SearchQueryDto): Promise<TimKiemResponseDto> {
+    const rawQ = query.q?.trim() || '';
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const limit = Number(query.limit) > 0 ? Math.min(Number(query.limit), 50) : 20;
+
+    if (!rawQ) {
+      return {
+        duLieu: [],
+        tongSo: 0,
+        trangHienTai: page,
+        tongSoTrang: 0,
+        kichThuocTrang: limit,
+        loaiTruyVan: 'TEN_APP',
+        nguonKetQua: 'CSDL',
+      };
+    }
+
+    // Cache key cho kết quả tìm kiếm với TTL 300s (5 phút)
+    const queryHash = Buffer.from(
+      `${rawQ.toLowerCase()}_${query.platform || 'all'}_${page}_${limit}`,
+    ).toString('base64');
+    const cacheKey = `fs:search:query:${queryHash}`;
+    const cached = await this.cacheService.lay<TimKiemResponseDto>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const phanLuong = phanLuongInput(rawQ);
+
+    // LUỒNG 1: URL GITHUB (P2-40.2)
+    if (phanLuong.loai === 'URL' && phanLuong.owner && phanLuong.repo) {
+      const fullSlug = `${phanLuong.owner}/${phanLuong.repo}`;
+      const app = await this.prisma.ungDung.findUnique({
+        where: { tenRepoDayDu: fullSlug },
+        include: {
+          phanTichAI: true,
+          danhSachPhatHanh: {
+            orderBy: { ngayPhatHanh: 'desc' },
+            take: 1,
+            select: { tenPhienBan: true },
+          },
+        },
+      });
+
+      let res: TimKiemResponseDto;
+      if (app) {
+        const item: UngDungTomTatDto = {
+          maUngDung: app.maUngDung,
+          tenRepoDayDu: app.tenRepoDayDu,
+          chuSoHuu: app.chuSoHuu,
+          tenKhoChua: app.tenKhoChua,
+          duongDanGithub: app.duongDanGithub,
+          duongDanIcon: app.duongDanIcon,
+          soSaoGithub: app.soSaoGithub,
+          danhMucChinh: app.danhMucChinh,
+          nenTangHoTro: app.nenTangHoTro,
+          duocNoiBat: app.duocNoiBat,
+          daXacMinh: app.daXacMinh,
+          tenGoiAndroid: app.tenGoiAndroid,
+          khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet || null,
+          diemUyTin: app.phanTichAI?.diemUyTin ?? null,
+          mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
+          phienBanMoiNhat: app.danhSachPhatHanh[0]?.tenPhienBan || null,
+          ngayCapNhat: app.dongBoLanCuoi.toISOString(),
+        };
+
+        res = {
+          duLieu: [item],
+          tongSo: 1,
+          trangHienTai: 1,
+          tongSoTrang: 1,
+          kichThuocTrang: query.limit,
+          loaiTruyVan: 'URL',
+          thongDiep: 'Ứng dụng đã có sẵn trong ForgeStore.',
+          duongDanUrl: {
+            owner: phanLuong.owner,
+            repo: phanLuong.repo,
+            urlGoc: rawQ,
+            daCoTrongStore: true,
+          },
+          nguonKetQua: 'URL',
+        };
+      } else {
+        res = {
+          duLieu: [],
+          tongSo: 0,
+          trangHienTai: 1,
+          tongSoTrang: 0,
+          kichThuocTrang: limit,
+          loaiTruyVan: 'URL',
+          thongDiep: 'Đã nhận diện liên kết GitHub. Sẵn sàng thẩm định và nạp (Paste & Play).',
+          duongDanUrl: {
+            owner: phanLuong.owner,
+            repo: phanLuong.repo,
+            urlGoc: rawQ,
+            daCoTrongStore: false,
+          },
+          nguonKetQua: 'URL',
+        };
+      }
+
+      await this.cacheService.dat(cacheKey, res, 300);
+      return res;
+    }
+
+    // LUỒNG 2: TÊN ỨNG DỤNG (P2-40.3)
+    if (phanLuong.loai === 'TEN_APP') {
+      const skip = (page - 1) * limit;
+      const where: Prisma.UngDungWhereInput = {
+        trangThai: 'HOAT_DONG',
+        OR: [
+          { tenKhoChua: { contains: phanLuong.tuKhoa, mode: 'insensitive' } },
+          { tenRepoDayDu: { contains: phanLuong.tuKhoa, mode: 'insensitive' } },
+          { moTaGocTiengAnh: { contains: phanLuong.tuKhoa, mode: 'insensitive' } },
+        ],
+      };
+
+      if (query.platform && query.platform !== NenTangHoTro.DA_NEN_TANG) {
+        where.nenTangHoTro = { in: [query.platform, NenTangHoTro.DA_NEN_TANG] };
+      }
+
+      const [dbApps, tongSo] = await Promise.all([
+        this.prisma.ungDung.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { soSaoGithub: 'desc' },
+          include: {
+            phanTichAI: true,
+            danhSachPhatHanh: {
+              orderBy: { ngayPhatHanh: 'desc' },
+              take: 1,
+              select: { tenPhienBan: true },
+            },
+          },
+        }),
+        this.prisma.ungDung.count({ where }),
+      ]);
+
+      if (dbApps.length > 0) {
+        const duLieu: UngDungTomTatDto[] = dbApps.map((app) => ({
+          maUngDung: app.maUngDung,
+          tenRepoDayDu: app.tenRepoDayDu,
+          chuSoHuu: app.chuSoHuu,
+          tenKhoChua: app.tenKhoChua,
+          duongDanGithub: app.duongDanGithub,
+          duongDanIcon: app.duongDanIcon,
+          soSaoGithub: app.soSaoGithub,
+          danhMucChinh: app.danhMucChinh,
+          nenTangHoTro: app.nenTangHoTro,
+          duocNoiBat: app.duocNoiBat,
+          daXacMinh: app.daXacMinh,
+          tenGoiAndroid: app.tenGoiAndroid,
+          khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet || null,
+          diemUyTin: app.phanTichAI?.diemUyTin ?? null,
+          mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
+          phienBanMoiNhat: app.danhSachPhatHanh[0]?.tenPhienBan || null,
+          ngayCapNhat: app.dongBoLanCuoi.toISOString(),
+        }));
+
+        const res: TimKiemResponseDto = {
+          duLieu,
+          tongSo,
+          trangHienTai: page,
+          tongSoTrang: Math.ceil(tongSo / limit) || 1,
+          kichThuocTrang: limit,
+          loaiTruyVan: 'TEN_APP',
+          nguonKetQua: 'CSDL',
+        };
+
+        await this.cacheService.dat(cacheKey, res, 300);
+        return res;
+      }
+
+      // Nếu không có trong DB Store -> gọi GitHub Search API (P2-40.3)
+      try {
+        const ghSearch = await this.githubService.timKiemRepo(phanLuong.tuKhoa, limit, page);
+        const duLieu: UngDungTomTatDto[] = ghSearch.items.map((r) => ({
+          maUngDung: r.html_url,
+          tenRepoDayDu: r.full_name,
+          chuSoHuu: r.owner.login,
+          tenKhoChua: r.name,
+          duongDanGithub: r.html_url,
+          duongDanIcon: r.owner.avatar_url || null,
+          soSaoGithub: r.stargazers_count,
+          danhMucChinh: anhXaDanhMuc(r.topics, r.description),
+          nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
+          duocNoiBat: false,
+          daXacMinh: false,
+          khauHieuTiengViet: null,
+          diemUyTin: null,
+          mucDoAnToan: null,
+          phienBanMoiNhat: null,
+          ngayCapNhat: r.updated_at,
+        }));
+
+        const res: TimKiemResponseDto = {
+          duLieu,
+          tongSo: ghSearch.total_count,
+          trangHienTai: page,
+          tongSoTrang: Math.ceil(ghSearch.total_count / limit) || 1,
+          kichThuocTrang: limit,
+          loaiTruyVan: 'TEN_APP',
+          thongDiep: 'Kết quả tìm kiếm trực tiếp từ GitHub.',
+          nguonKetQua: 'GITHUB',
+        };
+
+        await this.cacheService.dat(cacheKey, res, 300);
+        return res;
+      } catch (err) {
+        this.logger.warn(`Lỗi GitHub search: ${(err as Error).message}`);
+        return {
+          duLieu: [],
+          tongSo: 0,
+          trangHienTai: page,
+          tongSoTrang: 0,
+          kichThuocTrang: limit,
+          loaiTruyVan: 'TEN_APP',
+          nguonKetQua: 'CSDL',
+        };
+      }
+    }
+
+    // LUỒNG 3: Ý ĐỊNH TỰ NHIÊN (P2-40.4 & P2-42)
+    // 3.1: Tìm kiếm pgvector trong DB
+    let semanticApps: UngDungTomTatDto[] = [];
+    try {
+      const vectorMatches = await this.semanticSearchService.timKiemNguNghia(rawQ, limit);
+      if (vectorMatches.length > 0) {
+        semanticApps = vectorMatches.map((m) => ({
+          maUngDung: m.maUngDung,
+          tenRepoDayDu: m.tenRepoDayDu,
+          chuSoHuu: m.chuSoHuu,
+          tenKhoChua: m.tenKhoChua,
+          duongDanGithub: `https://github.com/${m.tenRepoDayDu}`,
+          duongDanIcon: m.duongDanIcon,
+          soSaoGithub: m.soSaoGithub,
+          danhMucChinh: m.danhMucChinh,
+          nenTangHoTro: m.nenTangHoTro as NenTangHoTro,
+          duocNoiBat: false,
+          daXacMinh: true,
+          khauHieuTiengViet: m.khauHieuTiengViet,
+          diemUyTin: m.diemUyTin,
+          mucDoAnToan: (m.mucDoAnToan as MucDoUyTin) || null,
+          ngayCapNhat: new Date().toISOString(),
+        }));
+      }
+    } catch (err) {
+      this.logger.warn(`Lỗi tìm kiếm pgvector: ${(err as Error).message}`);
+    }
+
+    // 3.2: Dịch câu tìm kiếm sang GitHub Search Query qua Gemini (P2-42)
+    let ghQuery = '';
+    let githubItems: UngDungTomTatDto[] = [];
+    try {
+      ghQuery = await this.searchTranslatorService.dichVaGhepQuery(rawQ);
+      const ghRes = await this.githubService.timKiemRepo(ghQuery, 10, 1);
+      githubItems = ghRes.items
+        .filter(
+          (r) =>
+            !semanticApps.some((sa) => sa.tenRepoDayDu.toLowerCase() === r.full_name.toLowerCase()),
+        )
+        .map((r) => ({
+          maUngDung: r.html_url,
+          tenRepoDayDu: r.full_name,
+          chuSoHuu: r.owner.login,
+          tenKhoChua: r.name,
+          duongDanGithub: r.html_url,
+          duongDanIcon: r.owner.avatar_url || null,
+          soSaoGithub: r.stargazers_count,
+          danhMucChinh: anhXaDanhMuc(r.topics, r.description),
+          nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
+          duocNoiBat: false,
+          daXacMinh: false,
+          khauHieuTiengViet: null,
+          diemUyTin: null,
+          mucDoAnToan: null,
+          phienBanMoiNhat: null,
+          ngayCapNhat: r.updated_at,
+        }));
+    } catch (err) {
+      this.logger.warn(`Lỗi Gemini dịch tìm kiếm: ${(err as Error).message}`);
+    }
+
+    const duLieu = [...semanticApps, ...githubItems].slice(0, limit);
+    const res: TimKiemResponseDto = {
+      duLieu,
+      tongSo: duLieu.length,
+      trangHienTai: page,
+      tongSoTrang: 1,
+      kichThuocTrang: limit,
+      loaiTruyVan: 'Y_DINH',
+      truyVanDich: ghQuery,
+      thongDiep: 'Kết quả tìm kiếm ý định tự nhiên kết hợp Kho ForgeStore và GitHub.',
+      nguonKetQua: semanticApps.length > 0 ? 'KET_HOP' : 'GITHUB',
+    };
+
+    await this.cacheService.dat(cacheKey, res, 300);
+    return res;
+  }
+
+  /**
+   * P2-41: Thẩm định và nạp Repository (Paste & Play - POST /repos/inspect).
+   * Kiểm tra điều kiện:
+   * 1. URL hợp lệ.
+   * 2. Repo tồn tại trên GitHub.
+   * 3. Có bản phát hành (release).
+   * 4. Bản phát hành có file cài đặt tương thích với nền tảng được chọn.
+   * Ghi nhận đầy đủ vào CSDL nhật ký nạp repo (NhatKyNapRepo).
+   */
+  async kiemDinhVaNapRepo(dto: InspectRepoDto, userId?: string): Promise<InspectRepoResponseDto> {
+    const rawUrl = dto.urlRepo?.trim() || '';
+    if (!rawUrl) {
+      throw new BadRequestException('Đường dẫn repository không được để trống.');
+    }
+
+    // 1. Phân tích URL repo bằng smart-input-dispatcher (P2-40 & P2-41.1)
+    const phanLuong = phanLuongInput(rawUrl);
+    let owner = phanLuong.owner;
+    let repo = phanLuong.repo;
+
+    // Nếu không match URL regex, thử dùng hàm phanTichUrlRepo hiện có
+    if (!owner || !repo) {
+      try {
+        const parsed = this.phanTichUrlRepo(rawUrl);
+        owner = parsed.owner;
+        repo = parsed.repo;
+      } catch {
+        await this.ghiNhatKyNapRepo({
+          duongDan: rawUrl,
+          trangThai: TrangThaiNapRepo.LINK_KHONG_HOP_LE,
+          thongBaoLoi: 'Đường dẫn GitHub không đúng định dạng.',
+          userId,
+        });
+        throw new BadRequestException('Đường dẫn GitHub không đúng định dạng.');
+      }
+    }
+
+    const fullSlug = `${owner}/${repo}`;
+
+    // 2. Kiểm tra xem Repo đã có trong CSDL Store chưa (P2-41.2)
+    const existingApp = await this.prisma.ungDung.findUnique({
+      where: { tenRepoDayDu: fullSlug },
+      include: {
+        phanTichAI: true,
+        danhSachPhatHanh: {
+          orderBy: { ngayPhatHanh: 'desc' },
+          take: 5,
+          include: { danhSachTepCaiDat: true },
+        },
+      },
+    });
+
+    if (existingApp) {
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.THANH_CONG,
+        thongBaoLoi: 'Ứng dụng đã có sẵn trong Store.',
+        maUngDung: existingApp.maUngDung,
+        userId,
+      });
+
+      const appChiTiet = await this.layChiTietApp(existingApp.maUngDung);
+
+      let tepPhuHop: TepCaiDatDto | undefined = undefined;
+      if (dto.nenTang && dto.abis && dto.abis.length > 0) {
+        try {
+          const resAsset = await this.giaiQuyetFileCaiDat({
+            maUngDung: existingApp.maUngDung,
+            nenTang: dto.nenTang,
+            abis: dto.abis,
+            choPhepBanThuNghiem: dto.choPhepBanThuNghiem,
+          });
+          tepPhuHop = resAsset.tepCaiDat;
+        } catch {
+          // Bỏ qua lỗi giải quyết asset nếu không khớp
+        }
+      }
+
+      return {
+        trangThai: TrangThaiNapRepo.THANH_CONG,
+        thongBao: 'Ứng dụng đã có sẵn trong ForgeStore.',
+        ungDung: appChiTiet,
+        banPhatHanh: appChiTiet.banPhatHanhMoiNhat ?? undefined,
+        tepPhuHop,
+      };
+    }
+
+    // 3. Repo chưa có: Thẩm định trực tiếp từ GitHub Releases (P2-41.3)
+    // 3.1: Kiểm tra repo tồn tại
+    try {
+      await this.githubService.layRepo(owner, repo);
+    } catch (err: unknown) {
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.THAT_BAI,
+        thongBaoLoi: `Không tìm thấy repository trên GitHub: ${(err as Error).message}`,
+        userId,
+      });
+      throw new NotFoundException(`Không tìm thấy repository [${fullSlug}] trên GitHub.`);
+    }
+
+    // 3.2: Kiểm tra bản phát hành
+    let releases;
+    try {
+      releases = await this.githubService.layDanhSachRelease(owner, repo, 5);
+    } catch (err: unknown) {
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.THAT_BAI,
+        thongBaoLoi: `Lỗi truy vấn releases: ${(err as Error).message}`,
+        userId,
+      });
+      throw new BadRequestException(`Lỗi khi lấy danh sách release của [${fullSlug}].`);
+    }
+
+    const validReleases = (releases || []).filter(
+      (r) => !r.draft && (dto.choPhepBanThuNghiem || !r.prerelease),
+    );
+
+    if (validReleases.length === 0) {
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.KHONG_CO_RELEASE,
+        thongBaoLoi: 'Repository không có bản phát hành nào.',
+        userId,
+      });
+      throw new BadRequestException(
+        `Repository [${fullSlug}] chưa có bản phát hành (releases) hợp lệ nào.`,
+      );
+    }
+
+    // 3.3: Kiểm tra tệp cài đặt phù hợp với nền tảng
+    const latestRelease = validReleases[0];
+    if (!latestRelease) {
+      throw new BadRequestException(
+        `Repository [${fullSlug}] chưa có bản phát hành (releases) hợp lệ nào.`,
+      );
+    }
+    const assets = latestRelease.assets || [];
+
+    if (dto.nenTang) {
+      const coFileHopLe = assets.some((a) => {
+        const classified = phanLoaiTep(a.name);
+        if (!classified) return false;
+        if (dto.nenTang === 'ANDROID') {
+          return classified.dinhDang === DinhDangTep.APK;
+        }
+        if (dto.nenTang === 'WINDOWS') {
+          return (
+            classified.dinhDang === DinhDangTep.EXE ||
+            classified.dinhDang === DinhDangTep.MSI ||
+            classified.dinhDang === DinhDangTep.ZIP_PORTABLE
+          );
+        }
+        return false;
+      });
+
+      if (!coFileHopLe) {
+        await this.ghiNhatKyNapRepo({
+          duongDan: rawUrl,
+          trangThai: TrangThaiNapRepo.KHONG_CO_FILE_CAI_DAT,
+          thongBaoLoi: `Bản phát hành không chứa file cài đặt cho nền tảng ${dto.nenTang}.`,
+          userId,
+        });
+        throw new BadRequestException(
+          `Bản phát hành của [${fullSlug}] không có tệp cài đặt phù hợp với ${dto.nenTang}.`,
+        );
+      }
+    }
+
+    // 4. Đồng bộ repo vào CSDL (P2-21 & P2-41.4)
+    const newApp = await this.dongBoRepo(owner, repo);
+
+    // Kích hoạt Lazy AI chạy nền non-blocking (P2-31)
+    this.phanTichUngDung(newApp.maUngDung).catch((err) => {
+      this.logger.error(`Lỗi phân tích AI nền cho [${newApp.tenRepoDayDu}]:`, err);
+    });
+
+    // 5. Phân giải tệp cài đặt phù hợp (P2-33)
+    let tepPhuHop: TepCaiDatDto | undefined = undefined;
+    if (dto.nenTang && dto.abis && dto.abis.length > 0) {
+      try {
+        const resAsset = await this.giaiQuyetFileCaiDat({
+          maUngDung: newApp.maUngDung,
+          nenTang: dto.nenTang,
+          abis: dto.abis,
+          choPhepBanThuNghiem: dto.choPhepBanThuNghiem,
+        });
+        tepPhuHop = resAsset.tepCaiDat;
+      } catch {
+        // Bỏ qua lỗi asset
+      }
+    }
+
+    // 6. Ghi nhật ký thành công (P2-41.5)
+    await this.ghiNhatKyNapRepo({
+      duongDan: rawUrl,
+      trangThai: TrangThaiNapRepo.THANH_CONG,
+      thongBaoLoi: 'Thẩm định và nạp ứng dụng thành công',
+      maUngDung: newApp.maUngDung,
+      userId,
+    });
+
+    return {
+      trangThai: TrangThaiNapRepo.THANH_CONG,
+      thongBao: 'Thẩm định và nạp ứng dụng vào ForgeStore thành công.',
+      ungDung: newApp,
+      banPhatHanh: newApp.banPhatHanhMoiNhat ?? undefined,
+      tepPhuHop,
+    };
+  }
+
+  private async ghiNhatKyNapRepo(params: {
+    duongDan: string;
+    trangThai: TrangThaiNapRepo;
+    thongBaoLoi?: string;
+    maUngDung?: string;
+    userId?: string;
+  }): Promise<void> {
+    try {
+      await this.prisma.nhatKyNapRepo.create({
+        data: {
+          duongDanRepoNhap: params.duongDan,
+          trangThai: params.trangThai,
+          thongBaoLoi: params.thongBaoLoi,
+          maUngDungTaoRa: params.maUngDung,
+          maNguoiDungYeuCau: params.userId,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Lỗi ghi nhật ký nạp repo: ${(err as Error).message}`);
+    }
   }
 }
