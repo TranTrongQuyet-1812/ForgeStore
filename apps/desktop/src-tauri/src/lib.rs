@@ -1,3 +1,13 @@
+pub mod downloader;
+pub mod installer;
+
+use downloader::{KetQuaTai, TienDoTai, TrinhQuanLyTai};
+use installer::KetQuaCaiDat;
+use std::path::Path;
+use std::sync::Arc;
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Manager, State};
+
 const SERVICE_NAME: &str = "com.forgestore.desktop";
 const USER_ACCOUNT: &str = "refresh_token";
 
@@ -85,13 +95,146 @@ fn lay_thong_tin_thiet_bi() -> Result<ThongTinThietBi, String> {
     }
 }
 
+/// Tải file asset nhị phân với reqwest stream và tính SHA-256 trực tiếp (P3-08 & P3-09)
+#[tauri::command]
+async fn tai_tep_cai_dat(
+    app: AppHandle,
+    id_tai: String,
+    url: String,
+    ten_tep: String,
+    sha256_du_kien: Option<String>,
+    trinh_quan_ly: State<'_, Arc<TrinhQuanLyTai>>,
+    on_progress: Channel<TienDoTai>,
+) -> Result<KetQuaTai, String> {
+    downloader::thuc_thi_tai_tep(
+        &app,
+        id_tai,
+        url,
+        ten_tep,
+        sha256_du_kien,
+        trinh_quan_ly.inner().clone(),
+        on_progress,
+    )
+    .await
+}
+
+/// Hủy tải tệp và xóa file tạm .part ngay lập tức (P3-08.5)
+#[tauri::command]
+fn huy_tai_tep(
+    id_tai: String,
+    trinh_quan_ly: State<'_, Arc<TrinhQuanLyTai>>,
+) -> Result<bool, String> {
+    Ok(trinh_quan_ly.huy(&id_tai))
+}
+
+/// Kiểm tra tính toàn vẹn SHA-256 cho tệp có sẵn trên đĩa (P3-09)
+#[tauri::command]
+async fn kiem_tra_sha256(
+    duong_dan_tep: String,
+    sha256_du_kien: Option<String>,
+) -> Result<KetQuaTai, String> {
+    use sha2::{Digest, Sha256};
+    use tokio::io::AsyncReadExt;
+
+    let path = Path::new(&duong_dan_tep);
+    if !path.exists() {
+        return Err(format!("Tệp không tồn tại: {}", duong_dan_tep));
+    }
+
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| format!("Không thể mở tệp: {}", e))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+
+    loop {
+        let n = file
+            .read(&mut buf)
+            .await
+            .map_err(|e| format!("Lỗi khi đọc tệp để tính băm: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    let sha256_tinh_duoc = hex::encode(hasher.finalize());
+    let (da_xac_minh, canh_bao_khong_co_hash) =
+        downloader::kiem_tra_sha256_noi_bo(&sha256_tinh_duoc, sha256_du_kien.as_deref())?;
+
+    let meta = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| format!("Không thể đọc thông tin tệp: {}", e))?;
+
+    let ten_tep = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "asset".to_string());
+
+    Ok(KetQuaTai {
+        id_tai: "verify-only".to_string(),
+        duong_dan_tep,
+        ten_tep,
+        sha256_tinh_duoc,
+        da_xac_minh_sha256: da_xac_minh,
+        canh_bao_khong_co_hash,
+        kich_thuoc_bytes: meta.len(),
+    })
+}
+
+/// Thực thi bộ cài đặt (.exe, .msi) hoặc giải nén bản portable .zip (P3-10)
+#[tauri::command]
+fn cai_dat_ung_dung(
+    duong_dan_tep: String,
+    loai_tep: String,
+    ten_app: String,
+) -> Result<KetQuaCaiDat, String> {
+    let path = Path::new(&duong_dan_tep);
+    let loai_upper = loai_tep.trim().to_uppercase();
+
+    match loai_upper.as_str() {
+        "EXE" => installer::chay_bo_cai_exe(path),
+        "MSI" => installer::chay_bo_cai_msi(path),
+        "ZIP" | "PORTABLE_ZIP" => installer::giai_nen_portable_zip(path, &ten_app),
+        _ => {
+            // Tự động nhận diện đuôi mở rộng nếu không truyền đúng loại
+            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                match ext.to_lowercase().as_str() {
+                    "exe" => installer::chay_bo_cai_exe(path),
+                    "msi" => installer::chay_bo_cai_msi(path),
+                    "zip" => installer::giai_nen_portable_zip(path, &ten_app),
+                    _ => Err(format!("Định dạng tệp không được hỗ trợ để cài đặt: .{}", ext)),
+                }
+            } else {
+                Err("Không thể xác định định dạng tệp cài đặt.".to_string())
+            }
+        }
+    }
+}
+
+/// Mở ứng dụng đã cài đặt qua đường dẫn thực thi
+#[tauri::command]
+fn mo_ung_dung(duong_dan_thuc_thi: String) -> Result<(), String> {
+    let path = Path::new(&duong_dan_thuc_thi);
+    installer::mo_ung_dung_thuc_thi(path)
+}
+
+/// Lấy thư mục tải về ForgeStore downloads trên máy
+#[tauri::command]
+fn lay_thu_muc_tai_ve_cmd() -> Result<String, String> {
+    let dir = downloader::lay_thu_muc_tai_ve()?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let trinh_quan_ly_tai = Arc::new(TrinhQuanLyTai::new());
+
     tauri::Builder::default()
+        .manage(trinh_quan_ly_tai)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
             let _ = app.get_webview_window("main").map(|w| {
                 let _ = w.show();
                 let _ = w.set_focus();
@@ -101,7 +244,13 @@ pub fn run() {
             luu_refresh_token,
             lay_refresh_token,
             xoa_refresh_token,
-            lay_thong_tin_thiet_bi
+            lay_thong_tin_thiet_bi,
+            tai_tep_cai_dat,
+            huy_tai_tep,
+            kiem_tra_sha256,
+            cai_dat_ung_dung,
+            mo_ung_dung,
+            lay_thu_muc_tai_ve_cmd
         ])
         .run(tauri::generate_context!())
         .expect("error while running forgestore desktop application");

@@ -24,9 +24,11 @@ import {
   Layers,
   Info,
   X,
+  Loader2,
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
+import { useInstallStore } from '../stores/useInstallStore';
 import { storeService } from '../services/store/store-service';
 
 export const DetailPage: React.FC = () => {
@@ -43,11 +45,8 @@ export const DetailPage: React.FC = () => {
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
   const [showAllVersions, setShowAllVersions] = useState<boolean>(false);
 
-  // Trạng thái cài đặt (mô phỏng giai đoạn giao diện)
-  const [installStatus, setInstallStatus] = useState<
-    'idle' | 'downloading' | 'verifying' | 'installed'
-  >('idle');
-  const [progress, setProgress] = useState<number>(0);
+  // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
+  const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
 
   // TanStack Query nạp dữ liệu sống từ Backend
   const {
@@ -103,33 +102,6 @@ export const DetailPage: React.FC = () => {
     setTimeout(() => setCopiedSha(null), 2000);
   };
 
-  // Xử lý nút cài đặt
-  const handleInstallClick = (fileInfo?: { tenTep: string; dungLuong: string }) => {
-    if (installStatus === 'installed') {
-      alert(
-        `Đang khởi chạy ${fileInfo?.tenTep || appDetail?.tenKhoChua || 'ứng dụng'} trên Windows!`,
-      );
-      return;
-    }
-    if (installStatus !== 'idle') return;
-
-    setInstallStatus('downloading');
-    let p = 0;
-    const timer = setInterval(() => {
-      p += 14;
-      if (p >= 100) {
-        clearInterval(timer);
-        setProgress(100);
-        setInstallStatus('verifying');
-        setTimeout(() => {
-          setInstallStatus('installed');
-        }, 1200);
-      } else {
-        setProgress(p);
-      }
-    }, 200);
-  };
-
   // Phân tích các tệp cài đặt của bản phát hành mới nhất
   const latestRelease = appDetail?.banPhatHanhMoiNhat || appDetail?.danhSachBanPhatHanh?.[0];
   const allAssets = latestRelease?.danhSachTepCaiDat || [];
@@ -155,6 +127,41 @@ export const DetailPage: React.FC = () => {
 
   const selectedAsset =
     displayAssets.find((a) => a.dinhDangTep?.toString() === selectedFormat) || displayAssets[0];
+
+  // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11)
+  const appKey = appDetail?.maUngDung || appId;
+  const installInfo = caiDatMap[appKey];
+  const currentStatus = installInfo?.trangThai || 'CHUA_CAI';
+
+  // Xử lý nút cài đặt
+  const handleInstallClick = () => {
+    if (currentStatus === 'DA_CAI_DAT') {
+      moApp(appKey);
+      return;
+    }
+    if (
+      currentStatus === 'DANG_TAI' ||
+      currentStatus === 'XAC_MINH' ||
+      currentStatus === 'DANG_CAI_DAT'
+    ) {
+      return;
+    }
+
+    if (!selectedAsset) {
+      alert('Không tìm thấy tệp cài đặt phù hợp.');
+      return;
+    }
+
+    batDauCaiDat({
+      maUngDung: appKey,
+      tenApp: appDetail?.tenKhoChua || 'App',
+      url: selectedAsset.duongDanTaiVe,
+      tenTep: selectedAsset.tenTep,
+      loaiTep: selectedAsset.dinhDangTep?.toString() || selectedFormat,
+      sha256DuKien: selectedAsset.maBamSha256 || undefined,
+      phienBan: latestRelease?.tenPhienBan,
+    });
+  };
 
   // Bóc tách 3 tính năng từ tomTatTinhNangVi
   const featureList = (appDetail?.phanTichAi?.tomTatTinhNangVi || '')
@@ -616,47 +623,73 @@ export const DetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Nút Cài Đặt Đa Trạng Thái */}
+            {/* Nút Cài Đặt Đa Trạng Thái (P3-11) */}
             <button
-              onClick={() =>
-                handleInstallClick({
-                  tenTep: selectedAsset?.tenTep || 'app',
-                  dungLuong: formatBytes(selectedAsset?.dungLuongBytes),
-                })
-              }
-              disabled={installStatus === 'downloading' || installStatus === 'verifying'}
-              className={`btn-tactile relative overflow-hidden w-full h-12 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all duration-200 ${
-                installStatus === 'installed'
+              onClick={handleInstallClick}
+              disabled={currentStatus === 'XAC_MINH' || currentStatus === 'DANG_CAI_DAT'}
+              className={`btn-tactile relative overflow-hidden w-full h-12 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all duration-150 ${
+                currentStatus === 'DA_CAI_DAT'
                   ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
-                  : installStatus === 'verifying'
+                  : currentStatus === 'XAC_MINH'
                     ? 'bg-amber-600 text-white cursor-wait'
-                    : installStatus === 'downloading'
-                      ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-wait'
-                      : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/40'
+                    : currentStatus === 'DANG_CAI_DAT'
+                      ? 'bg-blue-600 text-white cursor-wait'
+                      : currentStatus === 'DANG_TAI'
+                        ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-default px-3'
+                        : currentStatus === 'LOI'
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40'
+                          : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/40'
               }`}
             >
-              {installStatus === 'downloading' && (
+              {currentStatus === 'DANG_TAI' && (
                 <div
-                  className="absolute left-0 top-0 bottom-0 bg-accent-forge/30 transition-all duration-200"
-                  style={{ width: `${progress}%` }}
+                  className="absolute left-0 top-0 bottom-0 bg-accent-forge/25 transition-all duration-150"
+                  style={{ width: `${installInfo?.phanTram ?? 0}%` }}
                 />
               )}
 
-              <div className="relative z-10 flex items-center gap-2 font-mono">
-                {installStatus === 'downloading' ? (
+              <div className="relative z-10 w-full flex items-center justify-center gap-2 font-mono">
+                {currentStatus === 'DANG_TAI' ? (
                   <>
-                    <Download className="w-4 h-4 animate-bounce text-accent-forge" />
-                    <span className="font-tnum">Đang tải {progress}%</span>
+                    <Download className="w-4 h-4 animate-bounce text-accent-forge shrink-0" />
+                    <span className="font-tnum">Đang tải {installInfo?.phanTram ?? 0}%</span>
+                    {(installInfo?.tocDoBps ?? 0) > 0 && (
+                      <span className="text-[11px] text-muted font-tnum hidden sm:inline">
+                        ({formatBytes(installInfo?.tocDoBps)}/s)
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        huyCaiDat(appKey);
+                      }}
+                      className="btn-tactile ml-auto px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-mono flex items-center gap-1 border border-rose-500/30"
+                      title="Hủy tải tệp"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Huỷ</span>
+                    </button>
                   </>
-                ) : installStatus === 'verifying' ? (
+                ) : currentStatus === 'XAC_MINH' ? (
                   <>
-                    <ShieldCheck className="w-4 h-4 animate-pulse text-amber-300" />
+                    <ShieldCheck className="w-4 h-4 animate-pulse text-amber-200" />
                     <span>Xác minh SHA-256...</span>
                   </>
-                ) : installStatus === 'installed' ? (
+                ) : currentStatus === 'DANG_CAI_DAT' ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
+                    <span>Đang cài đặt...</span>
+                  </>
+                ) : currentStatus === 'DA_CAI_DAT' ? (
                   <>
                     <Check className="w-4 h-4 stroke-[3]" />
                     <span>Mở Ứng Dụng</span>
+                  </>
+                ) : currentStatus === 'LOI' ? (
+                  <>
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Lỗi – Thử Lại</span>
                   </>
                 ) : (
                   <>
@@ -666,6 +699,14 @@ export const DetailPage: React.FC = () => {
                 )}
               </div>
             </button>
+
+            {/* Thông báo lỗi nếu xảy ra (P3-09.2) */}
+            {currentStatus === 'LOI' && installInfo?.thongDiepLoi && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 font-mono flex items-start gap-2 leading-relaxed">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1 break-words">{installInfo.thongDiepLoi}</div>
+              </div>
+            )}
 
             <div className="flex items-center justify-center gap-2 text-[11px] text-muted">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
