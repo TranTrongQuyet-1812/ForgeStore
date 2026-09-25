@@ -30,6 +30,7 @@ import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { storeService } from '../services/store/store-service';
+import { favoritesService } from '../services/favorites/favorites-service';
 
 export const DetailPage: React.FC = () => {
   const { selectedAppId, navigateTo } = useNavStore();
@@ -44,6 +45,23 @@ export const DetailPage: React.FC = () => {
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
   const [showAllVersions, setShowAllVersions] = useState<boolean>(false);
+
+  // Đổi trạng thái yêu thích kết nối API Backend Supabase
+  const handleToggleFavorite = async () => {
+    const targetId = appDetail?.maUngDung || appId;
+    if (!targetId) return;
+
+    const prevState = isFavorited;
+    setIsFavorited(!prevState);
+
+    try {
+      const res = await favoritesService.chuyenDoiYeuThich(targetId);
+      setIsFavorited(res.daYeuThich);
+    } catch (err) {
+      console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
+      setIsFavorited(prevState);
+    }
+  };
 
   // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
   const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
@@ -595,7 +613,7 @@ export const DetailPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
               <button
-                onClick={() => setIsFavorited(!isFavorited)}
+                onClick={handleToggleFavorite}
                 className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
                   isFavorited
                     ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
@@ -708,6 +726,14 @@ export const DetailPage: React.FC = () => {
               <p className="text-[11px] text-muted text-center leading-normal">
                 Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Start Menu hoặc Desktop.
               </p>
+            )}
+
+            {/* Thông báo hủy tiến trình (P3-08.5) */}
+            {currentStatus === 'DA_HUY' && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 font-mono flex items-center gap-2 animate-fade-in">
+                <X className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Đã hủy tiến trình tải/cài đặt. Tệp tạm đã được dọn sạch.</span>
+              </div>
             )}
 
             {/* Thông báo lỗi nếu xảy ra (P3-09.2) */}
