@@ -102,6 +102,15 @@ export class AuthService {
     try {
       // Phân tách tham số code từ URL (ví dụ: forgestore://auth?code=xyz hoặc forgestore://auth/callback?code=xyz)
       const parsedUrl = new URL(urlStr.replace('forgestore://auth', 'http://localhost/auth'));
+
+      // Kiểm tra nếu callback trả về mã lỗi (ví dụ người dùng hủy cấp quyền)
+      const error = parsedUrl.searchParams.get('error');
+      if (error) {
+        pkce.getAndClearVerifier();
+        console.warn(`[AuthService] Đăng nhập GitHub không thành công: ${error}`);
+        return false;
+      }
+
       const code = parsedUrl.searchParams.get('code');
 
       if (!code) {

@@ -88,6 +88,14 @@ export class AuthService {
   }
 
   /**
+   * Đọc và xóa state nguyên tử từ Redis (layVaXoa / GETDEL).
+   */
+  async layVaXoaState(state: string): Promise<{ challenge: string; redirect: string } | null> {
+    const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
+    return await this.cacheService.layVaXoa<{ challenge: string; redirect: string }>(stateKey);
+  }
+
+  /**
    * Xử lý callback từ GitHub OAuth.
    * Điểm 3: Nguyên tử hóa việc đọc và xóa state (layVaXoa / GETDEL).
    * Điểm 8: Mask log không in mã exchange.
@@ -95,12 +103,8 @@ export class AuthService {
    * Điểm 11: Timeout AbortSignal 5s cho fetch.
    */
   async xuLyGithubCallback(code: string, state: string): Promise<string> {
-    const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
-
     // Điểm 3: Đọc và xóa state nguyên tử (chống race-condition replay)
-    const stateData = await this.cacheService.layVaXoa<{ challenge: string; redirect: string }>(
-      stateKey,
-    );
+    const stateData = await this.layVaXoaState(state);
 
     if (!stateData) {
       throw new BadRequestException({

@@ -37,8 +37,36 @@ export class AuthController {
   @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
   @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
   async xuLyCallback(@Query() query: GithubCallbackQueryDto, @Res() res: Response) {
-    const deepLinkUrl = await this.authService.xuLyGithubCallback(query.code, query.state);
-    return res.redirect(deepLinkUrl);
+    try {
+      // 1. Nếu GitHub trả về lỗi hoặc người dùng hủy ủy quyền
+      if (query.error || !query.code || !query.state) {
+        let redirectTarget = 'forgestore://auth';
+        if (query.state) {
+          try {
+            const stateData = await this.authService.layVaXoaState(query.state);
+            if (stateData?.redirect) {
+              redirectTarget = stateData.redirect;
+            }
+          } catch {
+            // Nuốt lỗi Redis để luôn redirect về client
+          }
+        }
+        const errCode = query.error || 'DANG_NHAP_BI_HUY';
+        const sep = redirectTarget.includes('?') ? '&' : '?';
+        return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+      }
+
+      // 2. Luồng bình thường: Đổi code lấy GitHub token và sinh exchange code
+      const deepLinkUrl = await this.authService.xuLyGithubCallback(query.code, query.state);
+      return res.redirect(deepLinkUrl);
+    } catch (err: unknown) {
+      // 3. Bắt các lỗi trong quá trình callback và redirect về deep-link để UI client không bị treo
+      const redirectTarget = 'forgestore://auth';
+      const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
+      const errCode = errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI';
+      const sep = redirectTarget.includes('?') ? '&' : '?';
+      return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+    }
   }
 
   @CongKhai()
