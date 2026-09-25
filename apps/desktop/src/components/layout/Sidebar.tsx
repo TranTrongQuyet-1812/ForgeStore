@@ -10,6 +10,7 @@ import {
   Laptop,
 } from 'lucide-react';
 import { useNavStore, NavTab } from '../../stores/useNavStore';
+import { useUpdaterStore } from '../../stores/useUpdaterStore';
 
 interface NavGroup {
   groupName: string;
@@ -17,7 +18,6 @@ interface NavGroup {
     id: NavTab;
     label: string;
     icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-    badge?: string;
   }[];
 }
 
@@ -32,8 +32,8 @@ const NAV_GROUPS: NavGroup[] = [
   {
     groupName: 'BỘ SƯU TẬP',
     items: [
-      { id: 'library', label: 'Thư viện máy', icon: Library, badge: '2' },
-      { id: 'favorites', label: 'Kho yêu thích', icon: Heart, badge: '2' },
+      { id: 'library', label: 'Thư viện máy', icon: Library },
+      { id: 'favorites', label: 'Kho yêu thích', icon: Heart },
     ],
   },
   {
@@ -44,6 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 export const Sidebar: React.FC = () => {
   const { currentTab, navigateTo } = useNavStore();
+  const { soLuongBanCapNhat } = useUpdaterStore();
 
   return (
     <aside className="w-[240px] min-w-[240px] h-full bg-surface border-r border-border/80 flex flex-col justify-between p-3 select-none transition-colors duration-200 shadow-sm">
@@ -58,11 +59,13 @@ export const Sidebar: React.FC = () => {
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
+                const hasUpdateBadge = item.id === 'library' && soLuongBanCapNhat > 0;
+
                 return (
                   <button
                     key={item.id}
                     onClick={() => navigateTo(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent-forge outline-none ${
                       isActive
                         ? 'bg-surface-elevated text-accent-forge font-semibold shadow-xs border border-border/60'
                         : 'text-secondary hover:text-primary hover:bg-surface-elevated/50'
@@ -75,9 +78,10 @@ export const Sidebar: React.FC = () => {
                       />
                       <span>{item.label}</span>
                     </div>
-                    {item.badge && (
-                      <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-surface-elevated text-muted font-mono font-bold border border-border/50">
-                        {item.badge}
+
+                    {hasUpdateBadge && (
+                      <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-accent-forge text-white font-mono font-bold shadow-xs animate-pulse">
+                        {soLuongBanCapNhat}
                       </span>
                     )}
                   </button>

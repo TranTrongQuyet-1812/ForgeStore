@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Star,
@@ -155,11 +155,19 @@ interface SpotlightConfig {
 }
 
 export const ExplorePage: React.FC = () => {
-  const { openAppDetail } = useNavStore();
+  const { openAppDetail, selectedCategory, setSelectedCategory } = useNavStore();
   const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
+
+  // Đồng bộ danh mục khi được chọn từ CategoriesPage
+  useEffect(() => {
+    if (selectedCategory) {
+      setActiveCategory(selectedCategory);
+      setSelectedCategory(null);
+    }
+  }, [selectedCategory, setSelectedCategory]);
 
   // Đấu nối TanStack Query: Nạp danh sách ứng dụng sống từ Supabase Backend (P3-05.1)
   const {
