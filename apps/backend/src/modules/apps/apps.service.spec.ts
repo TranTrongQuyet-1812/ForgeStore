@@ -186,6 +186,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         mucDoAnToan: 'XUAT_SAC',
         yeuToRuiRo: [],
         daThamDinhJev: true,
+        trangThaiThamDinhJev: 'DA_THAM_DINH',
       }),
     };
 

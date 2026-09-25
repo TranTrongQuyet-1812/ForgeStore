@@ -105,10 +105,17 @@ describe('TrustScoreService (P2-32: Trust Score Lai TypeScript + Jev API)', () =
       const res = await service.tinhTrustScore({
         ...defaultInput,
         danhSachQuyenAndroid: ['android.permission.INTERNET'],
+        tinhNangTomTat: ['Truyền dữ liệu: Kết nối máy tính từ xa'],
       });
 
       expect(res.diemUyTin).toBe(100);
       expect(res.daThamDinhJev).toBe(true);
+      expect(res.trangThaiThamDinhJev).toBe('DA_THAM_DINH');
+      expect(mockJudge.phanDoan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tinhNangTomTat: ['Truyền dữ liệu: Kết nối máy tính từ xa'],
+        }),
+      );
     });
 
     it('Trừ 5 điểm và gắn cờ phanVan khi Jev phân vân (0.2 < noul < 0.8)', async () => {
@@ -133,6 +140,7 @@ describe('TrustScoreService (P2-32: Trust Score Lai TypeScript + Jev API)', () =
       expect(res.diemUyTin).toBe(95);
       expect(res.yeuToRuiRo[0].phanVan).toBe(true);
       expect(res.yeuToRuiRo[0].xacSuat).toBe(0.55);
+      expect(res.trangThaiThamDinhJev).toBe('DA_THAM_DINH');
     });
 
     it('LUẬT VI PHẠM NGHIÊM TRỌNG: App đèn pin xin READ_SMS (noul <= 0.2) bị ép thẳng xuống CANH_BAO_RUI_RO (P2-32.7)', async () => {
@@ -160,9 +168,10 @@ describe('TrustScoreService (P2-32: Trust Score Lai TypeScript + Jev API)', () =
       expect(res.diemUyTin).toBe(85);
       // Nhưng vi phạm nghiêm trọng ép thẳng xuống CANH_BAO_RUI_RO!
       expect(res.mucDoAnToan).toBe(MucDoUyTin.CANH_BAO_RUI_RO);
+      expect(res.trangThaiThamDinhJev).toBe('DA_THAM_DINH');
     });
 
-    it('Dự phòng: Khi Jev offline, hệ thống vẫn tính điểm với nguồn DU_PHONG và daThamDinhJev: false', async () => {
+    it('Dự phòng: Khi Jev offline, hệ thống vẫn tính điểm với nguồn DU_PHONG và trangThaiThamDinhJev: CHUA_THAM_DINH', async () => {
       mockJudge.phanDoan.mockResolvedValue([
         {
           quyen: 'android.permission.CAMERA',
@@ -183,7 +192,30 @@ describe('TrustScoreService (P2-32: Trust Score Lai TypeScript + Jev API)', () =
 
       expect(res.diemUyTin).toBe(90);
       expect(res.daThamDinhJev).toBe(false);
+      expect(res.trangThaiThamDinhJev).toBe('CHUA_THAM_DINH');
       expect(res.yeuToRuiRo[0].nguon).toBe('DU_PHONG');
+    });
+
+    it('Tách bạch trạng thái Jev: App không có quyền (VD: 14 app Windows) có trangThaiThamDinhJev: KHONG_CAN_THIET', async () => {
+      const res = await service.tinhTrustScore({
+        ...defaultInput,
+        danhSachQuyenAndroid: [],
+      });
+
+      expect(res.daThamDinhJev).toBe(false);
+      expect(res.trangThaiThamDinhJev).toBe('KHONG_CAN_THIET');
+    });
+
+    it('Tách bạch trạng thái Jev: App Android không có quyền nhạy cảm có trangThaiThamDinhJev: KHONG_CAN_THIET', async () => {
+      mockJudge.phanDoan.mockResolvedValue([]); // Không có quyền nhạy cảm cần hỏi Jev
+
+      const res = await service.tinhTrustScore({
+        ...defaultInput,
+        danhSachQuyenAndroid: ['android.permission.ACCESS_NETWORK_STATE'],
+      });
+
+      expect(res.daThamDinhJev).toBe(false);
+      expect(res.trangThaiThamDinhJev).toBe('KHONG_CAN_THIET');
     });
   });
 });

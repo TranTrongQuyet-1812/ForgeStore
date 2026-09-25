@@ -8,6 +8,7 @@ export interface DauVaoPhanDoan {
   moTaApp: string;
   topics: string[];
   quyenCanKiemTra: string[];
+  tinhNangTomTat?: string[]; // Danh sách tính năng Gemini vừa tóm tắt cung cấp ngữ cảnh phong phú cho Jev
 }
 
 export interface PhanDoanQuyen {

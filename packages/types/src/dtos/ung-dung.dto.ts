@@ -1,4 +1,10 @@
-import type { DinhDangTep, KienTrucChip, MucDoUyTin, NenTangHoTro } from '../enums.js';
+import type {
+  DinhDangTep,
+  KienTrucChip,
+  MucDoUyTin,
+  NenTangHoTro,
+  TrangThaiThamDinhJev,
+} from '../enums.js';
 
 /**
  * Mục chi tiết cảnh báo / điểm trừ trong Trust Score.
@@ -23,7 +29,8 @@ export interface PhanTichAiDto {
   tomTatTinhNangVi: string; // 3 gạch đầu dòng tiếng Việt
   diemUyTin: number; // 0 - 100
   mucDoAnToan: MucDoUyTin;
-  daThamDinhJev: boolean; // false nếu mới qua bộ luật dự phòng
+  daThamDinhJev: boolean; // false nếu mới qua bộ luật dự phòng hoặc không cần thiết (tương thích ngược)
+  trangThaiThamDinhJev?: TrangThaiThamDinhJev; // Phân tách rõ: DA_THAM_DINH | KHONG_CAN_THIET | CHUA_THAM_DINH
   yeuToRuiRo: YeuToRuiRoItem[];
   quyenHanDaKiemTra: string[]; // Danh sách quyền Android trích xuất từ APK Range Request
   moHinhTomTat?: string | null; // Tên model (gemini-3.1-flash-lite, NVIDIA NIM, DU_PHONG)

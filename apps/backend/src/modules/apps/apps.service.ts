@@ -639,6 +639,7 @@ export class AppsService {
             diemUyTin: app.phanTichAI.diemUyTin,
             mucDoAnToan: app.phanTichAI.mucDoAnToan,
             daThamDinhJev: app.phanTichAI.daThamDinhJev,
+            trangThaiThamDinhJev: app.phanTichAI.trangThaiThamDinhJev,
             yeuToRuiRo: (app.phanTichAI.yeuToRuiRo as unknown as YeuToRuiRoItem[]) || [],
             quyenHanDaKiemTra: (app.phanTichAI.quyenHanDaKiemTra as unknown as string[]) || [],
             moHinhTomTat: app.phanTichAI.moHinhTomTat,
@@ -1084,6 +1085,8 @@ export class AppsService {
           );
         }
 
+        const tinhNangTomTat = ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`);
+
         const trustScore = await this.trustScoreService.tinhTrustScore({
           tenApp: app.tenKhoChua,
           moTaApp: app.moTaGocTiengAnh || '',
@@ -1096,6 +1099,7 @@ export class AppsService {
           soContributor,
           danhSachQuyenAndroid: danhSachQuyen,
           coAccessibilityService,
+          tinhNangTomTat,
         });
 
         // 5. Lưu kết quả vào phan_tich_ai
@@ -1112,6 +1116,7 @@ export class AppsService {
             diemUyTin: trustScore.diemUyTin,
             mucDoAnToan: trustScore.mucDoAnToan,
             daThamDinhJev: trustScore.daThamDinhJev,
+            trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
             yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
             quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
             moHinhTomTat: ketQuaTomTat.moHinhTomTat,
@@ -1122,6 +1127,7 @@ export class AppsService {
             diemUyTin: trustScore.diemUyTin,
             mucDoAnToan: trustScore.mucDoAnToan,
             daThamDinhJev: trustScore.daThamDinhJev,
+            trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
             yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
             quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
             moHinhTomTat: ketQuaTomTat.moHinhTomTat,

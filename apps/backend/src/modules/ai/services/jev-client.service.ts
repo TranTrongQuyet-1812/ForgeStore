@@ -35,9 +35,10 @@ export class JevClientService {
 
     if (this.isEnabled && apiKey) {
       try {
+        const timeoutMs = this.configService.get<number>('JEV_TIMEOUT_MS') || 5000;
         this.client = new TypeSafeClient({
           apiKey: apiKey.trim(),
-          timeout: 2000, // Timeout ngắn 2s theo P2-37.4
+          timeout: timeoutMs, // Nâng lên 5000ms (5s) theo đề xuất Reviewer để tránh timeout mạng khi xử lý batch
         });
         this.logger.log(`JevClientService khởi tạo thành công với model [${this.MODEL_PHIEN_BAN}]`);
       } catch (err) {

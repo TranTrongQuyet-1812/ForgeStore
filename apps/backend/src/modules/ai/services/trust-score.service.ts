@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MucDoUyTin } from '@prisma/client';
+import { MucDoUyTin, TrangThaiThamDinhJev } from '@prisma/client';
 import { YeuToRuiRoItem } from '@forgestore/types';
 import { JevPermissionJudgeService } from './jev-permission-judge.service';
 
@@ -15,13 +15,15 @@ export interface DauVaoTrustScore {
   soContributor: number;
   danhSachQuyenAndroid: string[];
   coAccessibilityService?: boolean;
+  tinhNangTomTat?: string[]; // Ngữ cảnh tính năng Gemini vừa tóm tắt cung cấp cho Jev Noul
 }
 
 export interface KetQuaTrustScore {
   diemUyTin: number;
   mucDoAnToan: MucDoUyTin;
   yeuToRuiRo: YeuToRuiRoItem[];
-  daThamDinhJev: boolean;
+  daThamDinhJev: boolean; // Tương thích ngược
+  trangThaiThamDinhJev: TrangThaiThamDinhJev; // DA_THAM_DINH | KHONG_CAN_THIET | CHUA_THAM_DINH
 }
 
 @Injectable()
@@ -114,6 +116,7 @@ export class TrustScoreService {
     // ============================================================
     let daThamDinhJev = false;
     let coViPhamNghiemTrong = false;
+    let trangThaiThamDinhJev: TrangThaiThamDinhJev = TrangThaiThamDinhJev.KHONG_CAN_THIET;
 
     if (dauVao.danhSachQuyenAndroid && dauVao.danhSachQuyenAndroid.length > 0) {
       const ketQuaPhanDoan = await this.permissionJudge.phanDoan({
@@ -121,41 +124,55 @@ export class TrustScoreService {
         moTaApp: dauVao.moTaApp,
         topics: dauVao.topics,
         quyenCanKiemTra: dauVao.danhSachQuyenAndroid,
+        tinhNangTomTat: dauVao.tinhNangTomTat,
       });
 
-      for (const pd of ketQuaPhanDoan) {
-        if (pd.nguon === 'JEV') {
-          daThamDinhJev = true;
+      if (ketQuaPhanDoan.length > 0) {
+        for (const pd of ketQuaPhanDoan) {
+          if (pd.nguon === 'JEV') {
+            daThamDinhJev = true;
+          }
+
+          if (pd.diemTru > 0) {
+            diem -= pd.diemTru;
+            yeuToRuiRo.push({
+              ma: `QUYEN_${pd.quyen.replace('android.permission.', '')}`,
+              moTa: pd.lyDo,
+              diemTru: pd.diemTru,
+              nguon: pd.nguon,
+              xacSuat: pd.xacSuatNoul,
+              phanVan: pd.phanVan,
+            });
+          }
+
+          // P2-32.7: LUẬT VI PHẠM NGHIÊM TRỌNG
+          // Quyền nguy hiểm cao (BIND_ACCESSIBILITY_SERVICE, READ_SMS, BIND_DEVICE_ADMIN)
+          // mà bị Jev đánh giá không cần thiết (noul <= 0.2) -> ép xuống CANH_BAO_RUI_RO
+          if (
+            !pd.canThiet &&
+            pd.xacSuatNoul <= 0.2 &&
+            (pd.quyen === 'android.permission.BIND_ACCESSIBILITY_SERVICE' ||
+              pd.quyen === 'android.permission.READ_SMS' ||
+              pd.quyen === 'android.permission.BIND_DEVICE_ADMIN')
+          ) {
+            coViPhamNghiemTrong = true;
+            this.logger.warn(
+              `🚨 [Vi phạm nghiêm trọng] App [${dauVao.tenApp}] xin quyền nguy hiểm [${pd.quyen}] không hợp lý! Ép xuống CANH_BAO_RUI_RO.`,
+            );
+          }
         }
 
-        if (pd.diemTru > 0) {
-          diem -= pd.diemTru;
-          yeuToRuiRo.push({
-            ma: `QUYEN_${pd.quyen.replace('android.permission.', '')}`,
-            moTa: pd.lyDo,
-            diemTru: pd.diemTru,
-            nguon: pd.nguon,
-            xacSuat: pd.xacSuatNoul,
-            phanVan: pd.phanVan,
-          });
-        }
-
-        // P2-32.7: LUẬT VI PHẠM NGHIÊM TRỌNG
-        // Quyền nguy hiểm cao (BIND_ACCESSIBILITY_SERVICE, READ_SMS, BIND_DEVICE_ADMIN)
-        // mà bị Jev đánh giá không cần thiết (noul <= 0.2) -> ép xuống CANH_BAO_RUI_RO
-        if (
-          !pd.canThiet &&
-          pd.xacSuatNoul <= 0.2 &&
-          (pd.quyen === 'android.permission.BIND_ACCESSIBILITY_SERVICE' ||
-            pd.quyen === 'android.permission.READ_SMS' ||
-            pd.quyen === 'android.permission.BIND_DEVICE_ADMIN')
-        ) {
-          coViPhamNghiemTrong = true;
-          this.logger.warn(
-            `🚨 [Vi phạm nghiêm trọng] App [${dauVao.tenApp}] xin quyền nguy hiểm [${pd.quyen}] không hợp lý! Ép xuống CANH_BAO_RUI_RO.`,
-          );
-        }
+        // Tách bạch trạng thái Jev: Nếu có quyền nhạy cảm mà Jev phản hồi -> DA_THAM_DINH, nếu Jev lỗi/offline -> CHUA_THAM_DINH
+        trangThaiThamDinhJev = daThamDinhJev
+          ? TrangThaiThamDinhJev.DA_THAM_DINH
+          : TrangThaiThamDinhJev.CHUA_THAM_DINH;
+      } else {
+        // App có quyền nhưng không chứa quyền nhạy cảm nào cần hỏi Jev
+        trangThaiThamDinhJev = TrangThaiThamDinhJev.KHONG_CAN_THIET;
       }
+    } else {
+      // Ứng dụng không có quyền (VD: 14 app Windows hoặc APK không xin quyền) -> KHONG_CAN_THIET
+      trangThaiThamDinhJev = TrangThaiThamDinhJev.KHONG_CAN_THIET;
     }
 
     // Kẹp điểm trong khoảng [0, 100] (P2-32.6)
@@ -178,6 +195,7 @@ export class TrustScoreService {
       mucDoAnToan,
       yeuToRuiRo,
       daThamDinhJev,
+      trangThaiThamDinhJev,
     };
   }
 }

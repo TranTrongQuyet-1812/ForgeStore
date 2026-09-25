@@ -49,12 +49,16 @@ export class JevPermissionJudgeService implements IBoPhanDoanQuyen {
     }
 
     try {
-      // 3. Xây dựng batch questions cho Jev Noul
-      const state = {
+      // 3. Xây dựng batch questions cho Jev Noul kèm ngữ cảnh tính năng
+      const state: Record<string, unknown> = {
         tenApp: dauVao.tenApp,
         moTaApp: dauVao.moTaApp,
         topics: dauVao.topics,
       };
+
+      if (dauVao.tinhNangTomTat && dauVao.tinhNangTomTat.length > 0) {
+        state.tinhNangTomTat = dauVao.tinhNangTomTat;
+      }
 
       const questions: Record<
         string,
