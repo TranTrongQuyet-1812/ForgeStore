@@ -119,9 +119,16 @@ pub async fn thuc_thi_tai_tep<R: tauri::Runtime>(
     let cancel_flag = trinh_quan_ly.dang_ky(&id_tai);
     let download_dir = lay_thu_muc_tai_ve()?;
     
+    // Sanitize ten_tep: chỉ giữ lại tên tệp thuần túy, loại bỏ các thành phần đường dẫn traversal (Điểm 3)
+    let safe_ten_tep = std::path::Path::new(&ten_tep)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("asset.bin")
+        .to_string();
+
     // File tạm mang đuôi .part (P3-08.3)
-    let part_path = download_dir.join(format!("{}.part", &ten_tep));
-    let final_path = download_dir.join(&ten_tep);
+    let part_path = download_dir.join(format!("{}.part", &safe_ten_tep));
+    let final_path = download_dir.join(&safe_ten_tep);
 
     let client = reqwest::Client::builder()
         .user_agent("ForgeStore-Desktop/0.1.0")
@@ -348,7 +355,7 @@ pub async fn thuc_thi_tai_tep<R: tauri::Runtime>(
     Ok(KetQuaTai {
         id_tai,
         duong_dan_tep: final_path.to_string_lossy().to_string(),
-        ten_tep,
+        ten_tep: safe_ten_tep,
         sha256_tinh_duoc,
         da_xac_minh_sha256: da_xac_minh,
         canh_bao_khong_co_hash,

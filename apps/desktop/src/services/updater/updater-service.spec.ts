@@ -4,6 +4,8 @@ import { useUpdaterStore } from '../../stores/useUpdaterStore';
 import { apiClient } from '../api/api-client';
 import type { CheckUpdatesResponseDto } from '@forgestore/types';
 
+const mockDeviceId = 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d';
+
 describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -37,13 +39,13 @@ describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
 
       const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockResponse as never);
 
-      const res = await updaterService.kiemTraCapNhat('device-123', [
+      const res = await updaterService.kiemTraCapNhat(mockDeviceId, [
         { maUngDung: 'app-obsidian', phienBanHienTai: '1.5.8' },
         { maUngDung: 'app-rustdesk', phienBanHienTai: '1.3.1' },
       ]);
 
       expect(postSpy).toHaveBeenCalledWith('/apps/check-updates', {
-        maThietBi: 'device-123',
+        maThietBi: mockDeviceId,
         danhSachCaiDat: [
           { maUngDung: 'app-obsidian', phienBanHienTai: '1.5.8' },
           { maUngDung: 'app-rustdesk', phienBanHienTai: '1.3.1' },
@@ -56,7 +58,7 @@ describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
     it('trả về object danh sách rỗng khi kiểm tra cập nhật gặp lỗi', async () => {
       vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Network offline'));
 
-      const res = await updaterService.kiemTraCapNhat('device-123', []);
+      const res = await updaterService.kiemTraCapNhat(mockDeviceId, []);
 
       expect(res).toEqual({ danhSachCapNhat: [] });
     });
@@ -89,7 +91,7 @@ describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
 
       vi.spyOn(updaterService, 'kiemTraCapNhat').mockResolvedValueOnce(mockResponse);
 
-      const count = await useUpdaterStore.getState().kiemTraCapNhat('device-123', []);
+      const count = await useUpdaterStore.getState().kiemTraCapNhat(mockDeviceId, []);
 
       expect(count).toBe(2);
       expect(useUpdaterStore.getState().soLuongBanCapNhat).toBe(2);
@@ -101,10 +103,20 @@ describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
     it('xử lý an toàn khi updaterService gặp exception', async () => {
       vi.spyOn(updaterService, 'kiemTraCapNhat').mockRejectedValueOnce(new Error('Crash'));
 
-      const count = await useUpdaterStore.getState().kiemTraCapNhat('device-123', []);
+      const count = await useUpdaterStore.getState().kiemTraCapNhat(mockDeviceId, []);
 
       expect(count).toBe(0);
       expect(useUpdaterStore.getState().soLuongBanCapNhat).toBe(0);
+      expect(useUpdaterStore.getState().dangKiemTra).toBe(false);
+    });
+
+    it('bỏ qua kiểm tra và trả về 0 nếu deviceId không phải UUID hợp lệ', async () => {
+      const spy = vi.spyOn(updaterService, 'kiemTraCapNhat');
+
+      const count = await useUpdaterStore.getState().kiemTraCapNhat('invalid-device-id', []);
+
+      expect(count).toBe(0);
+      expect(spy).not.toHaveBeenCalled();
       expect(useUpdaterStore.getState().dangKiemTra).toBe(false);
     });
   });

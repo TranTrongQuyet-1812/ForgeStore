@@ -31,26 +31,67 @@ pub fn lay_thu_muc_cai_dat_app(ten_app: &str) -> Result<PathBuf, String> {
     Ok(app_dir)
 }
 
-/// Chạy bộ cài Windows .exe (P3-10.1)
+/// Kiểm tra xem tệp có nằm trong thư mục dữ liệu an toàn của ForgeStore hay không (Điểm 3)
+pub fn kiem_tra_tep_an_toan(duong_dan_tep: &Path) -> Result<PathBuf, String> {
+    if !duong_dan_tep.exists() {
+        return Err(format!("Tệp không tồn tại: {}", duong_dan_tep.display()));
+    }
+
+    let canonical = duong_dan_tep
+        .canonicalize()
+        .map_err(|e| format!("Không thể giải quyết đường dẫn tệp: {}", e))?;
+
+    let base_dir = std::env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")));
+
+    let forgestore_root = base_dir.join("ForgeStore");
+    let forgestore_canonical = forgestore_root.canonicalize().unwrap_or(forgestore_root);
+
+    if !canonical.starts_with(&forgestore_canonical) {
+        return Err(format!(
+            "BẢO MẬT: Đường dẫn '{}' nằm ngoài thư mục an toàn của ForgeStore.",
+            canonical.display()
+        ));
+    }
+
+    Ok(canonical)
+}
+
+/// Chạy bộ cài Windows .exe và chờ tiến trình kết thúc (P3-10.1 & Điểm 4, 5)
 pub fn chay_bo_cai_exe(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
     if !duong_dan_tep.exists() {
         return Err(format!("Tệp cài đặt .exe không tồn tại: {}", duong_dan_tep.display()));
     }
 
+    let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
+
     #[cfg(target_os = "windows")]
     {
-        // Khởi chạy file EXE, Windows tự xử lý hiển thị UAC nếu cần quyền Admin
-        Command::new(duong_dan_tep)
+        // Khởi chạy file EXE và chờ người dùng hoàn tất cài đặt (Điểm 4)
+        let mut child = Command::new(&safe_path)
             .spawn()
             .map_err(|e| format!("Không thể khởi chạy bộ cài đặt .exe: {}", e))?;
 
-        Ok(KetQuaCaiDat {
-            thanh_cong: true,
-            loai_cai_dat: "EXE".to_string(),
-            thong_diep: "Đã khởi chạy bộ cài đặt Windows (.exe) thành công.".to_string(),
-            duong_dan_cai_dat: Some(duong_dan_tep.to_string_lossy().to_string()),
-            duong_dan_thuc_thi: Some(duong_dan_tep.to_string_lossy().to_string()),
-        })
+        let status = child
+            .wait()
+            .map_err(|e| format!("Lỗi khi theo dõi tiến trình cài đặt .exe: {}", e))?;
+
+        if status.success() {
+            Ok(KetQuaCaiDat {
+                thanh_cong: true,
+                loai_cai_dat: "EXE".to_string(),
+                thong_diep: "Đã cài đặt phần mềm (.exe) thành công.".to_string(),
+                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
+            })
+        } else {
+            let code = status.code().unwrap_or(-1);
+            Err(format!(
+                "Bộ cài đặt .exe kết thúc không thành công hoặc người dùng đã hủy (mã thoát: {}).",
+                code
+            ))
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -58,34 +99,55 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "EXE".to_string(),
-            thong_diep: "Môi trường không phải Windows, giả lập mở bộ cài .exe.".to_string(),
-            duong_dan_cai_dat: Some(duong_dan_tep.to_string_lossy().to_string()),
-            duong_dan_thuc_thi: Some(duong_dan_tep.to_string_lossy().to_string()),
+            thong_diep: "Môi trường không phải Windows, giả lập cài đặt .exe thành công.".to_string(),
+            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+            duong_dan_thuc_thi: None,
         })
     }
 }
 
-/// Chạy bộ cài Windows .msi qua msiexec.exe (P3-10.1)
+/// Chạy bộ cài Windows .msi qua msiexec.exe và kiểm tra mã thoát (P3-10.1 & Điểm 4, 5)
 pub fn chay_bo_cai_msi(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
     if !duong_dan_tep.exists() {
         return Err(format!("Tệp cài đặt .msi không tồn tại: {}", duong_dan_tep.display()));
     }
 
+    let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
+
     #[cfg(target_os = "windows")]
     {
-        Command::new("msiexec.exe")
+        let mut child = Command::new("msiexec.exe")
             .arg("/i")
-            .arg(duong_dan_tep)
+            .arg(&safe_path)
             .spawn()
             .map_err(|e| format!("Không thể khởi chạy msiexec cho tệp .msi: {}", e))?;
 
-        Ok(KetQuaCaiDat {
-            thanh_cong: true,
-            loai_cai_dat: "MSI".to_string(),
-            thong_diep: "Đã khởi chạy Windows Installer (.msi) thành công.".to_string(),
-            duong_dan_cai_dat: Some(duong_dan_tep.to_string_lossy().to_string()),
-            duong_dan_thuc_thi: None,
-        })
+        let status = child
+            .wait()
+            .map_err(|e| format!("Lỗi khi theo dõi tiến trình msiexec: {}", e))?;
+
+        let code = status.code().unwrap_or(-1);
+        match code {
+            0 => Ok(KetQuaCaiDat {
+                thanh_cong: true,
+                loai_cai_dat: "MSI".to_string(),
+                thong_diep: "Đã hoàn tất cài đặt Windows Installer (.msi) thành công.".to_string(),
+                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
+            }),
+            1602 => Err("Người dùng đã hủy tiến trình cài đặt Windows Installer (.msi).".to_string()),
+            3010 => Ok(KetQuaCaiDat {
+                thanh_cong: true,
+                loai_cai_dat: "MSI".to_string(),
+                thong_diep: "Cài đặt thành công nhưng hệ thống yêu cầu khởi động lại máy để hoàn tất.".to_string(),
+                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                duong_dan_thuc_thi: None,
+            }),
+            _ => Err(format!(
+                "Bộ cài đặt Windows Installer kết thúc với mã lỗi: {}.",
+                code
+            )),
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -93,8 +155,8 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "MSI".to_string(),
-            thong_diep: "Môi trường không phải Windows, giả lập chạy msiexec.".to_string(),
-            duong_dan_cai_dat: Some(duong_dan_tep.to_string_lossy().to_string()),
+            thong_diep: "Môi trường không phải Windows, giả lập chạy msiexec thành công.".to_string(),
+            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
         })
     }
@@ -106,11 +168,12 @@ pub fn giai_nen_portable_zip(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQ
         return Err(format!("Tệp nén .zip không tồn tại: {}", duong_dan_tep.display()));
     }
 
+    let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
     let dest_dir = lay_thu_muc_cai_dat_app(ten_app)?;
     let canonical_dest = dest_dir.canonicalize()
         .map_err(|e| format!("Không thể chuẩn hóa đường dẫn đích: {}", e))?;
 
-    let file = std::fs::File::open(duong_dan_tep)
+    let file = std::fs::File::open(&safe_path)
         .map_err(|e| format!("Không thể mở tệp zip: {}", e))?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| format!("Tệp không phải định dạng zip hợp lệ hoặc bị hỏng: {}", e))?;
@@ -183,9 +246,11 @@ pub fn mo_ung_dung_thuc_thi(duong_dan: &Path) -> Result<(), String> {
         return Err(format!("Đường dẫn thực thi không tồn tại: {}", duong_dan.display()));
     }
 
+    let safe_path = kiem_tra_tep_an_toan(duong_dan)?;
+
     #[cfg(target_os = "windows")]
     {
-        Command::new(duong_dan)
+        Command::new(&safe_path)
             .spawn()
             .map_err(|e| format!("Không thể mở ứng dụng: {}", e))?;
         Ok(())

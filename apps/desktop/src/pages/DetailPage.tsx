@@ -136,7 +136,9 @@ export const DetailPage: React.FC = () => {
   // Xử lý nút cài đặt
   const handleInstallClick = () => {
     if (currentStatus === 'DA_CAI_DAT') {
-      moApp(appKey);
+      if (installInfo?.duongDanThucThi) {
+        moApp(appKey);
+      }
       return;
     }
     if (
@@ -160,6 +162,7 @@ export const DetailPage: React.FC = () => {
       loaiTep: selectedAsset.dinhDangTep?.toString() || selectedFormat,
       sha256DuKien: selectedAsset.maBamSha256 || undefined,
       phienBan: latestRelease?.tenPhienBan,
+      maTep: selectedAsset.maTep,
     });
   };
 
@@ -684,7 +687,7 @@ export const DetailPage: React.FC = () => {
                 ) : currentStatus === 'DA_CAI_DAT' ? (
                   <>
                     <Check className="w-4 h-4 stroke-[3]" />
-                    <span>Mở Ứng Dụng</span>
+                    <span>{installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Đã Cài Đặt'}</span>
                   </>
                 ) : currentStatus === 'LOI' ? (
                   <>
@@ -699,6 +702,13 @@ export const DetailPage: React.FC = () => {
                 )}
               </div>
             </button>
+
+            {/* Chú thích cho app cài qua EXE/MSI đã xong */}
+            {currentStatus === 'DA_CAI_DAT' && !installInfo?.duongDanThucThi && (
+              <p className="text-[11px] text-muted text-center leading-normal">
+                Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Start Menu hoặc Desktop.
+              </p>
+            )}
 
             {/* Thông báo lỗi nếu xảy ra (P3-09.2) */}
             {currentStatus === 'LOI' && installInfo?.thongDiepLoi && (

@@ -4,14 +4,17 @@ import { Library, RefreshCw, Play, Trash2, Download, Search, Laptop, Compass } f
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { useUpdaterStore } from '../stores/useUpdaterStore';
+import { useAuthStore } from '../stores/useAuthStore';
 import { libraryService } from '../services/library/library-service';
 import { deviceService, DeviceInfo } from '../services/device/device-service';
 import { installService } from '../services/install/install-service';
+import { authService } from '../services/auth/auth-service';
 
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
   const { caiDatMap, goCaiDatLocal, moApp } = useInstallStore();
   const { soLuongBanCapNhat, danhSachCapNhat, dangKiemTra, kiemTraCapNhat } = useUpdaterStore();
+  const { isAuthenticated, maThietBi } = useAuthStore();
   const queryClient = useQueryClient();
 
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
@@ -24,26 +27,25 @@ export const LibraryPage: React.FC = () => {
     });
   }, []);
 
-  const deviceId = deviceInfo?.dinhDanhPhanCung || 'default-device';
-
-  // 2. Nạp danh sách ứng dụng đã cài đặt từ Backend (P3-12.2)
+  // 2. Nạp danh sách ứng dụng đã cài đặt từ Backend (P3-12.2 & Điểm 1)
   const {
     data: backendInstalledApps = [],
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['device-installed-apps', deviceId],
-    queryFn: () => libraryService.layDanhSachAppDaCai(deviceId),
-    enabled: Boolean(deviceInfo),
+    queryKey: ['device-installed-apps', maThietBi],
+    queryFn: () =>
+      maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
+    enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
   });
 
-  // 3. Tự động kiểm tra cập nhật khi tải trang thư viện (P3-12.3)
+  // 3. Tự động kiểm tra cập nhật khi tải trang thư viện (P3-12.3 & Điểm 1)
   useEffect(() => {
-    if (deviceId) {
-      kiemTraCapNhat(deviceId);
+    if (isAuthenticated && maThietBi) {
+      kiemTraCapNhat(maThietBi);
     }
-  }, [deviceId, kiemTraCapNhat]);
+  }, [isAuthenticated, maThietBi, kiemTraCapNhat]);
 
   // 4. Hợp nhất danh sách ứng dụng đã cài đặt (Backend + Local Install Cache)
   const localAppsList = Object.values(caiDatMap).filter((app) => app.trangThai === 'DA_CAI_DAT');
@@ -118,9 +120,9 @@ export const LibraryPage: React.FC = () => {
   const handleRemoveApp = async (maUngDung: string) => {
     if (confirm('Bạn có chắc muốn gỡ ứng dụng này khỏi danh sách quản lý trên máy?')) {
       goCaiDatLocal(maUngDung);
-      if (deviceId) {
-        await libraryService.goCaiDat(deviceId, maUngDung);
-        queryClient.invalidateQueries({ queryKey: ['device-installed-apps', deviceId] });
+      if (maThietBi) {
+        await libraryService.goCaiDat(maThietBi, maUngDung);
+        queryClient.invalidateQueries({ queryKey: ['device-installed-apps', maThietBi] });
       }
     }
   };
@@ -138,8 +140,8 @@ export const LibraryPage: React.FC = () => {
             <Laptop className="w-3.5 h-3.5 text-secondary" />
             <span>Thiết bị: {deviceInfo?.tenThietBi || 'Windows PC'}</span>
             <span>•</span>
-            <span className="truncate max-w-[200px]" title={deviceId}>
-              ID: {deviceId.substring(0, 12)}...
+            <span className="truncate max-w-[200px]" title={maThietBi || 'Lưu trữ cục bộ'}>
+              {maThietBi ? `Mã thiết bị: ${maThietBi.substring(0, 8)}...` : 'Chế độ lưu cục bộ'}
             </span>
           </div>
         </div>
@@ -148,7 +150,7 @@ export const LibraryPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (deviceId) kiemTraCapNhat(deviceId);
+              if (maThietBi) kiemTraCapNhat(maThietBi);
               refetch();
             }}
             disabled={dangKiemTra}
@@ -166,6 +168,32 @@ export const LibraryPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Banner khuyến khích đăng nhập nếu chưa có phiên */}
+      {!isAuthenticated && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-surface-elevated/80 border border-border/80">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-accent-forge/10 flex items-center justify-center text-accent-forge shrink-0">
+              <Laptop className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-primary">
+                Đăng nhập tài khoản ForgeStore
+              </div>
+              <div className="text-[11px] text-muted">
+                Đăng nhập để đồng bộ ứng dụng đã cài đặt và nhận cảnh báo cập nhật mới tự động từ
+                máy chủ.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => authService.loginWithGithub()}
+            className="btn-tactile h-8 px-4 rounded-lg bg-accent-forge hover:bg-accent-forge/90 text-white text-xs font-medium transition-all shadow-xs shrink-0"
+          >
+            Đăng nhập ngay
+          </button>
+        </div>
+      )}
 
       {/* Thanh tìm kiếm nhanh trong thư viện */}
       {allInstalledApps.length > 0 && (

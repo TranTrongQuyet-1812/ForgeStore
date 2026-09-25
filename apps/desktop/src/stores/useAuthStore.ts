@@ -1,10 +1,17 @@
 import { create } from 'zustand';
-import type { NguoiDungDto, AuthResponseDto, AuthRefreshResponseDto } from '@forgestore/types';
-import { tokenStorage } from '../services/auth/token-storage';
+import type {
+  NguoiDungDto,
+  ThietBiDto,
+  AuthResponseDto,
+  AuthRefreshResponseDto,
+} from '@forgestore/types';
+import { tokenStorage, parseJwtDid } from '../services/auth/token-storage';
 import { apiClient, ApiError } from '../services/api/api-client';
 
 interface AuthState {
   user: NguoiDungDto | null;
+  thietBi: ThietBiDto | null;
+  maThietBi: string | null;
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -24,6 +31,8 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  thietBi: null,
+  maThietBi: null,
   accessToken: null,
   isAuthenticated: false,
   isLoading: true,
@@ -34,7 +43,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // 1. Kiểm tra xem có Refresh Token trong Windows Credential Manager không
       const refreshToken = await tokenStorage.getRefreshToken();
       if (!refreshToken) {
-        set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
+        set({
+          user: null,
+          thietBi: null,
+          maThietBi: null,
+          accessToken: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
         return;
       }
 
@@ -48,15 +64,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await tokenStorage.setRefreshToken(refreshRes.refreshToken);
       }
 
-      set({ accessToken: refreshRes.accessToken, isAuthenticated: true });
+      const did = parseJwtDid(refreshRes.accessToken) || null;
+      set({
+        accessToken: refreshRes.accessToken,
+        maThietBi: did,
+        isAuthenticated: true,
+      });
 
-      // 3. Tải hồ sơ người dùng
+      // 3. Tải hồ sơ người dùng và thiết bị
       await get().fetchProfile();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         console.warn('[useAuthStore] Phiên đăng nhập trước đó đã hết hạn hoặc không hợp lệ.');
         await tokenStorage.clearAllTokens();
-        set({ user: null, accessToken: null, isAuthenticated: false });
+        set({
+          user: null,
+          thietBi: null,
+          maThietBi: null,
+          accessToken: null,
+          isAuthenticated: false,
+        });
       } else {
         console.warn(
           '[useAuthStore] Không thể kết nối tới máy chủ khi khôi phục phiên (mất mạng/timeout/5xx): Giữ nguyên token để thử lại sau.',
@@ -76,8 +103,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await tokenStorage.setRefreshToken(data.refreshToken);
     }
 
+    const did = data.thietBi?.maThietBi || parseJwtDid(data.accessToken) || null;
+
     set({
       user: data.nguoiDung || null,
+      thietBi: data.thietBi || null,
+      maThietBi: did,
       accessToken: data.accessToken,
       isAuthenticated: true,
       isLoading: false,
@@ -88,6 +119,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await tokenStorage.clearAllTokens();
     set({
       user: null,
+      thietBi: null,
+      maThietBi: null,
       accessToken: null,
       isAuthenticated: false,
       isLoading: false,
@@ -98,6 +131,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const profile = await apiClient.get<NguoiDungDto>('/user/profile');
       set({ user: profile });
+
+      // Nạp danh sách thiết bị của tài khoản để đồng bộ đúng ThietBiDto
+      const did = get().maThietBi;
+      try {
+        const devices = await apiClient.get<ThietBiDto[]>('/devices');
+        if (devices && devices.length > 0) {
+          const currentDev = did ? devices.find((d) => d.maThietBi === did) : devices[0];
+          if (currentDev) {
+            set({ thietBi: currentDev, maThietBi: currentDev.maThietBi });
+          }
+        }
+      } catch {
+        // Bỏ qua nếu chưa nạp được danh sách thiết bị
+      }
     } catch (err) {
       console.error('[useAuthStore] Không thể tải thông tin hồ sơ:', err);
     }
@@ -110,5 +157,10 @@ apiClient.onLogout(() => {
 });
 
 apiClient.onTokenRefresh((newToken) => {
-  useAuthStore.setState({ accessToken: newToken, isAuthenticated: true });
+  const did = parseJwtDid(newToken);
+  useAuthStore.setState((prev) => ({
+    accessToken: newToken,
+    maThietBi: did || prev.maThietBi,
+    isAuthenticated: true,
+  }));
 });

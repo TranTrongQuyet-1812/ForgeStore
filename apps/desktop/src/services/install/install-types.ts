@@ -71,6 +71,7 @@ export interface ThamSoCaiDat {
   loaiTep: 'EXE' | 'MSI' | 'ZIP' | string;
   sha256DuKien?: string;
   phienBan?: string;
+  maTep?: string;
 }
 
 /**

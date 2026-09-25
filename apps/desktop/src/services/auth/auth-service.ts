@@ -29,10 +29,27 @@ export class AuthService {
     // 1. Khởi tạo phiên từ Windows Credential Manager
     await useAuthStore.getState().initAuth();
 
-    // 2. Lắng nghe Deep Link nếu chạy trên Tauri native
+    // 2. Lắng nghe Deep Link nếu chạy trên Tauri native (P3-04 & Điểm 2)
     if (isTauri() && !this.isListening) {
       try {
-        const { onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+        const { onOpenUrl, getCurrent } = await import('@tauri-apps/plugin-deep-link');
+        const { listen } = await import('@tauri-apps/api/event');
+
+        // Bắt deep link khi app mở nguội (cold start)
+        try {
+          const currentUrls = await getCurrent();
+          if (currentUrls && currentUrls.length > 0) {
+            for (const url of currentUrls) {
+              if (url.startsWith('forgestore://auth')) {
+                await this.handleDeepLinkUrl(url);
+              }
+            }
+          }
+        } catch (coldErr) {
+          console.warn('[AuthService] Lỗi khi đọc getCurrent deep-link:', coldErr);
+        }
+
+        // Lắng nghe deep link từ plugin deep-link khi app đang chạy
         this.unlistenDeepLink = await onOpenUrl(async (urls: string[]) => {
           for (const url of urls) {
             if (url.startsWith('forgestore://auth')) {
@@ -40,6 +57,19 @@ export class AuthService {
             }
           }
         });
+
+        // Lắng nghe thêm sự kiện forward từ single-instance nếu có
+        await listen<string[]>('deep-link://new-url', async (event) => {
+          const urls = event.payload;
+          if (Array.isArray(urls)) {
+            for (const url of urls) {
+              if (url.startsWith('forgestore://auth')) {
+                await this.handleDeepLinkUrl(url);
+              }
+            }
+          }
+        });
+
         this.isListening = true;
       } catch (err) {
         console.error('[AuthService] Không thể khởi tạo deep-link listener:', err);

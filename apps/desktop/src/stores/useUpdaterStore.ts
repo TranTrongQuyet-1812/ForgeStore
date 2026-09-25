@@ -14,6 +14,8 @@ interface UpdaterState {
   ) => Promise<number>;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const useUpdaterStore = create<UpdaterState>((set) => ({
   soLuongBanCapNhat: 0,
   danhSachCapNhat: [],
@@ -21,6 +23,15 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   thoiGianKiemTraCuoi: null,
 
   kiemTraCapNhat: async (deviceId, danhSach = []) => {
+    // Chặn gọi API nếu deviceId không phải là UUID v4 hợp lệ (tránh 400 Bad Request)
+    if (!deviceId || !UUID_REGEX.test(deviceId)) {
+      console.warn(
+        `[useUpdaterStore] Bỏ qua kiểm tra cập nhật: deviceId không phải UUID hợp lệ (${deviceId})`,
+      );
+      set({ dangKiemTra: false });
+      return 0;
+    }
+
     set({ dangKiemTra: true });
     try {
       const res = await updaterService.kiemTraCapNhat(deviceId, danhSach);

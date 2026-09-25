@@ -4,6 +4,7 @@ import { useThemeStore } from '../../stores/useThemeStore';
 import { useNavStore } from '../../stores/useNavStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { authService } from '../../services/auth/auth-service';
+import { isTauri } from '../../services/auth/token-storage';
 
 const TAB_TITLES: Record<string, string> = {
   explore: 'Khám phá',
@@ -76,6 +77,11 @@ export const Titlebar: React.FC = () => {
           <span className="font-display font-bold text-primary tracking-wide">ForgeStore</span>
           <span className="text-muted">/</span>
           <span className="text-secondary font-medium">{TAB_TITLES[currentTab] || 'Khám phá'}</span>
+          {!isTauri() && (
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[10px] font-bold tracking-wide">
+              Chế độ giả lập Web
+            </span>
+          )}
         </div>
       </div>
 

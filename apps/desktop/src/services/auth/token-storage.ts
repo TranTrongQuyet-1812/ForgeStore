@@ -97,3 +97,25 @@ export const tokenStorage = {
     await this.clearRefreshToken();
   },
 };
+
+/**
+ * Trích xuất mã thiết bị (did - UUID v4) từ Access Token JWT an toàn
+ */
+export const parseJwtDid = (token?: string | null): string | null => {
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    const payload = JSON.parse(jsonStr) as { did?: string };
+    return payload.did || null;
+  } catch {
+    return null;
+  }
+};

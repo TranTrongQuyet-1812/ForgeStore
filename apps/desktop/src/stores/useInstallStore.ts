@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { installService } from '../services/install/install-service';
-import { deviceService } from '../services/device/device-service';
 import { libraryService } from '../services/library/library-service';
+import { useAuthStore } from './useAuthStore';
 import type {
   ThamSoCaiDat,
   ThongTinCaiDatApp,
@@ -119,18 +119,22 @@ export const useInstallStore = create<InstallState>()(
               duongDanThucThi: res.duong_dan_thuc_thi ?? undefined,
             });
 
-            // Ghi nhận cài đặt lên Backend nếu có thể (P3-10.3 & P3-12.2)
+            // Ghi nhận cài đặt lên Backend nếu có thể (P3-10.3 & P3-12.2 & Điểm 1, 6)
             try {
-              const dev = await deviceService.getDeviceInfo();
-              if (dev?.dinhDanhPhanCung) {
-                await libraryService.ghiNhanCaiDat(dev.dinhDanhPhanCung, {
+              const maThietBi = useAuthStore.getState().maThietBi;
+              if (maThietBi) {
+                await libraryService.ghiNhanCaiDat(maThietBi, {
                   maUngDung,
-                  phienBanHienTai: params.phienBan || 'v1.0.0',
+                  phienBanHienTai: params.phienBan || '0.0.0',
+                  maTepDaCai: params.maTep,
                   duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
                 });
               }
-            } catch {
-              // Bỏ qua lỗi đồng bộ mạng ngầm
+            } catch (syncErr) {
+              console.warn(
+                '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
+                syncErr,
+              );
             }
 
             return true;

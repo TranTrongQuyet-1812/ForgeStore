@@ -137,11 +137,9 @@ async fn kiem_tra_sha256(
     use tokio::io::AsyncReadExt;
 
     let path = Path::new(&duong_dan_tep);
-    if !path.exists() {
-        return Err(format!("Tệp không tồn tại: {}", duong_dan_tep));
-    }
+    let safe_path = installer::kiem_tra_tep_an_toan(path)?;
 
-    let mut file = tokio::fs::File::open(path)
+    let mut file = tokio::fs::File::open(&safe_path)
         .await
         .map_err(|e| format!("Không thể mở tệp: {}", e))?;
     let mut hasher = Sha256::new();
@@ -162,18 +160,18 @@ async fn kiem_tra_sha256(
     let (da_xac_minh, canh_bao_khong_co_hash) =
         downloader::kiem_tra_sha256_noi_bo(&sha256_tinh_duoc, sha256_du_kien.as_deref())?;
 
-    let meta = tokio::fs::metadata(path)
+    let meta = tokio::fs::metadata(&safe_path)
         .await
         .map_err(|e| format!("Không thể đọc thông tin tệp: {}", e))?;
 
-    let ten_tep = path
+    let ten_tep = safe_path
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "asset".to_string());
 
     Ok(KetQuaTai {
         id_tai: "verify-only".to_string(),
-        duong_dan_tep,
+        duong_dan_tep: safe_path.to_string_lossy().to_string(),
         ten_tep,
         sha256_tinh_duoc,
         da_xac_minh_sha256: da_xac_minh,
@@ -182,34 +180,38 @@ async fn kiem_tra_sha256(
     })
 }
 
-/// Thực thi bộ cài đặt (.exe, .msi) hoặc giải nén bản portable .zip (P3-10)
+/// Thực thi bộ cài đặt (.exe, .msi) hoặc giải nén bản portable .zip (P3-10, Điểm 4 & 7)
 #[tauri::command]
-fn cai_dat_ung_dung(
+async fn cai_dat_ung_dung(
     duong_dan_tep: String,
     loai_tep: String,
     ten_app: String,
 ) -> Result<KetQuaCaiDat, String> {
-    let path = Path::new(&duong_dan_tep);
-    let loai_upper = loai_tep.trim().to_uppercase();
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&duong_dan_tep);
+        let loai_upper = loai_tep.trim().to_uppercase();
 
-    match loai_upper.as_str() {
-        "EXE" => installer::chay_bo_cai_exe(path),
-        "MSI" => installer::chay_bo_cai_msi(path),
-        "ZIP" | "PORTABLE_ZIP" => installer::giai_nen_portable_zip(path, &ten_app),
-        _ => {
-            // Tự động nhận diện đuôi mở rộng nếu không truyền đúng loại
-            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                match ext.to_lowercase().as_str() {
-                    "exe" => installer::chay_bo_cai_exe(path),
-                    "msi" => installer::chay_bo_cai_msi(path),
-                    "zip" => installer::giai_nen_portable_zip(path, &ten_app),
-                    _ => Err(format!("Định dạng tệp không được hỗ trợ để cài đặt: .{}", ext)),
+        match loai_upper.as_str() {
+            "EXE" => installer::chay_bo_cai_exe(path),
+            "MSI" => installer::chay_bo_cai_msi(path),
+            "ZIP" | "PORTABLE_ZIP" | "ZIP_PORTABLE" => installer::giai_nen_portable_zip(path, &ten_app),
+            _ => {
+                // Tự động nhận diện đuôi mở rộng nếu không truyền đúng loại
+                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    match ext.to_lowercase().as_str() {
+                        "exe" => installer::chay_bo_cai_exe(path),
+                        "msi" => installer::chay_bo_cai_msi(path),
+                        "zip" => installer::giai_nen_portable_zip(path, &ten_app),
+                        _ => Err(format!("Định dạng tệp không được hỗ trợ để cài đặt: .{}", ext)),
+                    }
+                } else {
+                    Err("Không thể xác định định dạng tệp cài đặt.".to_string())
                 }
-            } else {
-                Err("Không thể xác định định dạng tệp cài đặt.".to_string())
             }
         }
-    }
+    })
+    .await
+    .map_err(|e| format!("Lỗi runtime task khi cài đặt ứng dụng: {}", e))?
 }
 
 /// Mở ứng dụng đã cài đặt qua đường dẫn thực thi
@@ -232,14 +234,33 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(trinh_quan_ly_tai)
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            use tauri::Emitter;
             let _ = app.get_webview_window("main").map(|w| {
                 let _ = w.show();
                 let _ = w.set_focus();
             });
+            // Forward các tham số/link deep-link nhận từ instance thứ hai về cửa sổ chính
+            let mut deep_links = Vec::new();
+            for arg in args {
+                if arg.starts_with("forgestore://") {
+                    deep_links.push(arg);
+                }
+            }
+            if !deep_links.is_empty() {
+                let _ = app.emit("deep-link://new-url", deep_links);
+            }
         }))
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = app.deep_link().register_all();
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             luu_refresh_token,
             lay_refresh_token,
