@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Minus, Square, X, Sun, Moon, Flame, LogOut, User as UserIcon } from 'lucide-react';
+import { Search, Minus, Square, X, Sun, Moon, LogOut, User as UserIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/useThemeStore';
 import { useNavStore } from '../../stores/useNavStore';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -69,8 +69,8 @@ export const Titlebar: React.FC = () => {
     >
       {/* Vùng bên trái: Logo & Breadcrumbs thanh lịch */}
       <div data-tauri-drag-region className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent-forge to-accent-forge-hover flex items-center justify-center shadow-md shadow-orange-950/30">
-          <Flame className="w-4 h-4 text-white fill-white" />
+        <div className="w-8 h-8 rounded-xl bg-surface-elevated/80 border border-border/80 flex items-center justify-center shadow-xs overflow-hidden p-1">
+          <img src="/logo.png" alt="ForgeStore Logo" className="w-full h-full object-contain" />
         </div>
         <div data-tauri-drag-region className="flex items-center gap-1.5 text-xs">
           <span className="font-display font-bold text-primary tracking-wide">ForgeStore</span>

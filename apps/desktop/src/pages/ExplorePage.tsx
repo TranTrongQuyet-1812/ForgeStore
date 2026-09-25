@@ -1,14 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { Star, Clock, Download, Check, Flame, ArrowUpRight, Shield } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Star,
+  Clock,
+  Download,
+  Check,
+  Flame,
+  ArrowUpRight,
+  Shield,
+  RefreshCw,
+  AlertCircle,
+  PackageOpen,
+} from 'lucide-react';
 import { AppCard, AppCardData } from '../components/common/AppCard';
 import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
+import { storeService } from '../services/store/store-service';
+import type { UngDungTomTatDto } from '@forgestore/types';
 
 type SpotlightMode = 'trending' | 'curated' | 'security';
 type TimeWindow = 'today' | 'week' | 'month';
 type SortTab = 'trending' | 'stars' | 'recent';
 
-const SAMPLE_APPS: AppCardData[] = [
+// Dữ liệu mẫu dự phòng khi server backend chưa phản hồi hoặc offline
+const FALLBACK_APPS: AppCardData[] = [
   {
     id: 'obsidian',
     tenApp: 'Obsidian',
@@ -34,7 +49,7 @@ const SAMPLE_APPS: AppCardData[] = [
     tacGia: 'RustDesk Team',
     moTaNgan:
       'Phần mềm điều khiển máy tính từ xa mã nguồn mở an toàn, thay thế hoàn hảo cho TeamViewer và AnyDesk.',
-    soSaoGithub: 78400,
+    soSaoGithub: 124400,
     starDelta: '+1.4k tuần này',
     phienBanMoiNhat: 'v1.3.8',
     kichThuocFile: '18.2 MB',
@@ -43,6 +58,60 @@ const SAMPLE_APPS: AppCardData[] = [
     diemUyTin: 95,
     danhMucChinh: 'Tiện ích hệ thống',
     giayPhep: 'GPL-3.0',
+    isVerifiedFoss: true,
+  },
+  {
+    id: 'powertoys',
+    tenApp: 'PowerToys',
+    repoHandle: 'microsoft/PowerToys',
+    tacGia: 'microsoft',
+    moTaNgan:
+      'Bộ công cụ tinh chỉnh và gia tăng năng suất tối thượng cho người dùng nâng cao trên Windows 11.',
+    soSaoGithub: 139000,
+    starDelta: '+1.8k tuần này',
+    phienBanMoiNhat: 'v0.84.0',
+    kichThuocFile: '68.4 MB',
+    dinhDangFile: ['EXE', 'MSI'],
+    kienTruc: ['x64', 'ARM64'],
+    diemUyTin: 100,
+    danhMucChinh: 'Tiện ích hệ thống',
+    giayPhep: 'MIT',
+    isVerifiedFoss: true,
+  },
+  {
+    id: 'localsend',
+    tenApp: 'LocalSend',
+    repoHandle: 'localsend/localsend',
+    tacGia: 'localsend',
+    moTaNgan:
+      'Chia sẻ tệp tin và tin nhắn an toàn, tức thì qua mạng Wi-Fi nội bộ mà không cần Internet.',
+    soSaoGithub: 92600,
+    starDelta: '+1.1k tuần này',
+    phienBanMoiNhat: 'v1.14.0',
+    kichThuocFile: '24.1 MB',
+    dinhDangFile: ['EXE'],
+    kienTruc: ['x64', 'ARM64'],
+    diemUyTin: 95,
+    danhMucChinh: 'Mạng & Giao tiếp',
+    giayPhep: 'MIT',
+    isVerifiedFoss: true,
+  },
+  {
+    id: 'vlc',
+    tenApp: 'VLC Media Player',
+    repoHandle: 'videolan/vlc',
+    tacGia: 'VideoLAN',
+    moTaNgan:
+      'Trình phát đa phương tiện mã nguồn mở tự do, hỗ trợ phát mọi định dạng audio/video không cần codec phụ.',
+    soSaoGithub: 19800,
+    starDelta: '+290 tuần này',
+    phienBanMoiNhat: 'v3.0.21',
+    kichThuocFile: '42.0 MB',
+    dinhDangFile: ['EXE', 'MSI'],
+    kienTruc: ['x64'],
+    diemUyTin: 100,
+    danhMucChinh: 'Đa phương tiện',
+    giayPhep: 'GPL-2.0',
     isVerifiedFoss: true,
   },
   {
@@ -59,73 +128,21 @@ const SAMPLE_APPS: AppCardData[] = [
     dinhDangFile: ['EXE'],
     kienTruc: ['x64', 'ARM64'],
     diemUyTin: 97,
-    danhMucChinh: 'Bảo mật',
-    giayPhep: 'GPL-3.0',
-    isVerifiedFoss: true,
-  },
-  {
-    id: 'newpipe',
-    tenApp: 'NewPipe',
-    repoHandle: 'TeamNewPipe/NewPipe',
-    tacGia: 'TeamNewPipe',
-    moTaNgan:
-      'Trình phát đa phương tiện tự do nhẹ nhàng, tôn trọng quyền riêng tư, hỗ trợ phát popup và tải video không quảng cáo.',
-    soSaoGithub: 32500,
-    starDelta: '+850 tuần này',
-    phienBanMoiNhat: 'v0.27.0',
-    kichThuocFile: '12.4 MB',
-    dinhDangFile: ['APK'],
-    kienTruc: ['ARM64', 'x86'],
-    diemUyTin: 92,
-    danhMucChinh: 'Đa phương tiện',
-    giayPhep: 'GPL-3.0',
-    isVerifiedFoss: true,
-  },
-  {
-    id: 'sharex',
-    tenApp: 'ShareX',
-    repoHandle: 'ShareX/ShareX',
-    tacGia: 'Jaex',
-    moTaNgan:
-      'Công cụ chụp ảnh màn hình, quay video, trích xuất OCR văn bản và chia sẻ tệp mã nguồn mở hàng đầu trên Windows.',
-    soSaoGithub: 28900,
-    starDelta: '+450 tuần này',
-    phienBanMoiNhat: 'v16.1.0',
-    kichThuocFile: '34.8 MB',
-    dinhDangFile: ['EXE', 'ZIP'],
-    kienTruc: ['x64'],
-    diemUyTin: 96,
-    danhMucChinh: 'Tiện ích hệ thống',
-    giayPhep: 'GPL-3.0',
-    isVerifiedFoss: true,
-  },
-  {
-    id: 'notepad-plus-plus',
-    tenApp: 'Notepad++',
-    repoHandle: 'notepad-plus-plus/notepad-plus-plus',
-    tacGia: 'Don Ho',
-    moTaNgan:
-      'Trình soạn thảo mã nguồn và văn bản siêu nhẹ, tốc độ cao được hàng triệu lập trình viên toàn cầu tin dùng.',
-    soSaoGithub: 24200,
-    starDelta: '+310 tuần này',
-    phienBanMoiNhat: 'v8.6.9',
-    kichThuocFile: '4.8 MB',
-    dinhDangFile: ['EXE', 'MSI', 'ZIP'],
-    kienTruc: ['x64', 'x86', 'ARM64'],
-    diemUyTin: 94,
-    danhMucChinh: 'Lập trình',
+    danhMucChinh: 'Bảo mật & Quyền riêng tư',
     giayPhep: 'GPL-3.0',
     isVerifiedFoss: true,
   },
 ];
 
 const CATEGORIES = [
-  { name: 'Tất cả', count: 22 },
-  { name: 'Tiện ích hệ thống', count: 6 },
-  { name: 'Đa phương tiện', count: 5 },
-  { name: 'Lập trình', count: 4 },
-  { name: 'Bảo mật', count: 3 },
-  { name: 'Văn phòng', count: 4 },
+  'Tất cả',
+  'Tiện ích hệ thống',
+  'Lập trình & Phát triển',
+  'Đa phương tiện',
+  'Mạng & Giao tiếp',
+  'Bảo mật & Quyền riêng tư',
+  'Học tập & Giáo dục',
+  'Năng suất & Văn phòng',
 ];
 
 interface SpotlightConfig {
@@ -137,36 +154,6 @@ interface SpotlightConfig {
   gradient: string;
 }
 
-const SPOTLIGHT_CONFIGS: Record<SpotlightMode, SpotlightConfig> = {
-  trending: {
-    app: SAMPLE_APPS[0], // Obsidian
-    badge: 'QUÁN QUÂN XU HƯỚNG GIT',
-    badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge" />,
-    subtitle: 'Tăng trưởng sao nhanh nhất tuần (+2.1k sao)',
-    quote:
-      '"Ứng dụng ghi chú kiến thức cá nhân dạng mạng lưới (Second Brain), hỗ trợ Markdown và bảo mật dữ liệu offline hàng đầu."',
-    gradient: 'from-purple-500 to-indigo-600',
-  },
-  curated: {
-    app: SAMPLE_APPS[1], // RustDesk
-    badge: 'FORGE ĐỀ XUẤT • TIÊU ĐIỂM FOSS',
-    badgeIcon: <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />,
-    subtitle: 'Giải pháp điều khiển máy tính từ xa thay thế TeamViewer',
-    quote:
-      '"Giải pháp truy cập và điều khiển máy tính từ xa tự lưu trữ (self-hosted), bảo mật mã hóa đầu cuối NaCl và không phụ thuộc hạ tầng bên thứ ba."',
-    gradient: 'from-orange-500 to-amber-600',
-  },
-  security: {
-    app: SAMPLE_APPS[2], // Bitwarden
-    badge: 'AN TOÀN TUYỆT ĐỐI • JEV AI 97/100',
-    badgeIcon: <Shield className="w-3.5 h-3.5 text-emerald-400" />,
-    subtitle: 'Mã hóa đầu cuối Zero-Knowledge, bảo vệ danh tính số',
-    quote:
-      '"Trình quản lý mật khẩu mã hóa đầu cuối an toàn, minh bạch mã nguồn, tự động điền form và bảo vệ thông tin đăng nhập đa nền tảng tuyệt đối."',
-    gradient: 'from-blue-600 to-cyan-600',
-  },
-};
-
 export const ExplorePage: React.FC = () => {
   const { openAppDetail } = useNavStore();
   const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
@@ -174,20 +161,97 @@ export const ExplorePage: React.FC = () => {
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
 
-  const currentSpotlight = SPOTLIGHT_CONFIGS[spotlightMode];
+  // Đấu nối TanStack Query: Nạp danh sách ứng dụng sống từ Supabase Backend (P3-05.1)
+  const {
+    data: appsResponse,
+    isLoading: isAppsLoading,
+    isError: isAppsError,
+    refetch: refetchApps,
+  } = useQuery({
+    queryKey: ['store-apps', activeCategory, activeSort],
+    queryFn: () =>
+      storeService.layDanhSachApps({
+        platform: 'windows',
+        category: activeCategory !== 'Tất cả' ? activeCategory : undefined,
+        sort: activeSort,
+        page: 1,
+        limit: 30,
+      }),
+    staleTime: 1000 * 60 * 3, // 3 phút cache
+  });
+
+  // Đấu nối TanStack Query: Nạp các ứng dụng nổi bật (Featured Apps)
+  const { data: featuredAppsData } = useQuery({
+    queryKey: ['featured-apps'],
+    queryFn: () => storeService.layAppsNoiBat(),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  // Chuyển đổi dữ liệu backend DTO sang AppCardData, ưu tiên dữ liệu sống
+  const liveApps = useMemo(() => {
+    if (appsResponse?.duLieu && appsResponse.duLieu.length > 0) {
+      return appsResponse.duLieu.map((dto: UngDungTomTatDto) => storeService.mapDtoToAppCard(dto));
+    }
+    return FALLBACK_APPS;
+  }, [appsResponse]);
+
+  const featuredAppsList = useMemo(() => {
+    if (featuredAppsData && featuredAppsData.length > 0) {
+      return featuredAppsData.map((dto: UngDungTomTatDto) => storeService.mapDtoToAppCard(dto));
+    }
+    return FALLBACK_APPS;
+  }, [featuredAppsData]);
+
+  // Cấu hình Spotlight tương ứng với 3 chế độ
+  const spotlightConfigs: Record<SpotlightMode, SpotlightConfig> = useMemo(() => {
+    // Top app nhiều sao nhất làm quán quân Trending
+    const topStarApp =
+      [...featuredAppsList].sort((a, b) => b.soSaoGithub - a.soSaoGithub)[0] || FALLBACK_APPS[2];
+
+    // App đề xuất (RustDesk hoặc LocalSend)
+    const curatedApp =
+      featuredAppsList.find((a) => a.repoHandle?.includes('rustdesk')) ||
+      featuredAppsList[1] ||
+      FALLBACK_APPS[1];
+
+    // App an toàn cao nhất (Jev AI 97-100)
+    const securityApp =
+      featuredAppsList.find((a) => a.diemUyTin >= 97) || featuredAppsList[0] || FALLBACK_APPS[5];
+
+    return {
+      trending: {
+        app: topStarApp,
+        badge: 'QUÁN QUÂN XU HƯỚNG GIT',
+        badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge" />,
+        subtitle: `Dẫn đầu cộng đồng FOSS (${((topStarApp.soSaoGithub || 0) / 1000).toFixed(0)}k sao)`,
+        quote: `"${topStarApp.moTaNgan}"`,
+        gradient: 'from-orange-500 to-amber-600',
+      },
+      curated: {
+        app: curatedApp,
+        badge: 'FORGE ĐỀ XUẤT • TIÊU ĐIỂM FOSS',
+        badgeIcon: <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />,
+        subtitle: 'Tuyển chọn chất lượng: mã nguồn minh bạch, hiệu năng cao',
+        quote: `"${curatedApp.moTaNgan}"`,
+        gradient: 'from-purple-500 to-indigo-600',
+      },
+      security: {
+        app: securityApp,
+        badge: `AN TOÀN TUYỆT ĐỐI • JEV AI ${securityApp.diemUyTin}/100`,
+        badgeIcon: <Shield className="w-3.5 h-3.5 text-emerald-400" />,
+        subtitle: 'Thẩm định an toàn tự động bởi Dual-AI & Jev Protocol',
+        quote: `"${securityApp.moTaNgan}"`,
+        gradient: 'from-blue-600 to-cyan-600',
+      },
+    };
+  }, [featuredAppsList]);
+
+  const currentSpotlight = spotlightConfigs[spotlightMode];
   const spotlightApp = currentSpotlight.app;
 
-  const parseDelta = (delta?: string): number => {
-    if (!delta) return 0;
-    const matchK = delta.match(/([0-9.]+)\s*k/i);
-    if (matchK) return Math.round(parseFloat(matchK[1]) * 1000);
-    const matchNum = delta.match(/([0-9]+)/);
-    return matchNum ? parseInt(matchNum[1], 10) : 0;
-  };
-
-  // Lọc theo danh mục và sắp xếp theo tab / khung thời gian
+  // Xử lý lọc danh mục và sắp xếp cục bộ nếu đang dùng fallback
   const processedApps = useMemo(() => {
-    let result = [...SAMPLE_APPS];
+    let result = [...liveApps];
 
     if (activeCategory !== 'Tất cả') {
       result = result.filter((a) => a.danhMucChinh === activeCategory);
@@ -195,17 +259,10 @@ export const ExplorePage: React.FC = () => {
 
     if (activeSort === 'stars') {
       result.sort((a, b) => b.soSaoGithub - a.soSaoGithub);
-    } else if (activeSort === 'trending') {
-      // Khi chọn Trending: sắp xếp theo delta sao chính xác (hỗ trợ hậu tố k)
-      result.sort((a, b) => {
-        const deltaA = parseDelta(a.starDelta);
-        const deltaB = parseDelta(b.starDelta);
-        return deltaB - deltaA;
-      });
     }
 
     return result;
-  }, [activeCategory, activeSort]);
+  }, [liveApps, activeCategory, activeSort]);
 
   const formatStars = (stars: number) => {
     if (stars >= 1000) return `${(stars / 1000).toFixed(1)}k`;
@@ -213,8 +270,8 @@ export const ExplorePage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none">
-      {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Phục vụ cả Dev lẫn Người dùng phổ thông) */}
+    <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none animate-fade-in">
+      {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Trụ cột 4: Morphing Breathe Transition) */}
       <section className="tactile-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border/80">
         <div className="relative z-10 flex flex-col gap-5">
           {/* Hàng trên: Bộ chọn 3 chế độ Spotlight */}
@@ -222,7 +279,7 @@ export const ExplorePage: React.FC = () => {
             <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
               <button
                 onClick={() => setSpotlightMode('trending')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
                   spotlightMode === 'trending'
                     ? 'bg-accent-forge text-white shadow-sm font-semibold'
                     : 'text-muted hover:text-primary'
@@ -234,7 +291,7 @@ export const ExplorePage: React.FC = () => {
 
               <button
                 onClick={() => setSpotlightMode('curated')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
                   spotlightMode === 'curated'
                     ? 'bg-accent-forge text-white shadow-sm font-semibold'
                     : 'text-muted hover:text-primary'
@@ -246,7 +303,7 @@ export const ExplorePage: React.FC = () => {
 
               <button
                 onClick={() => setSpotlightMode('security')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
                   spotlightMode === 'security'
                     ? 'bg-accent-forge text-white shadow-sm font-semibold'
                     : 'text-muted hover:text-primary'
@@ -258,14 +315,19 @@ export const ExplorePage: React.FC = () => {
             </div>
 
             <span className="text-xs font-mono text-muted">
-              {spotlightMode === 'trending' && 'Dữ liệu đo lường tốc độ tăng sao Git 7 ngày qua'}
-              {spotlightMode === 'curated' && 'Tuyển chọn biên tập: FOSS chất lượng cao, dễ dùng'}
-              {spotlightMode === 'security' && 'Thẩm định bảo mật tự động bởi Jev AI'}
+              {spotlightMode === 'trending' &&
+                'Dữ liệu đo lường tốc độ tăng sao Git trực tiếp từ GitHub'}
+              {spotlightMode === 'curated' &&
+                'Tuyển chọn biên tập: FOSS chất lượng cao, chuẩn Windows'}
+              {spotlightMode === 'security' && 'Thẩm định bảo mật tự động bởi Jev AI Protocol'}
             </span>
           </div>
 
-          {/* Khung nội dung chính của Spotlight */}
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pt-1">
+          {/* Khung nội dung chính của Spotlight với Morphing Fade Animation */}
+          <div
+            key={spotlightMode}
+            className="animate-fade-in flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pt-1"
+          >
             {/* Cột trái: Thông tin ứng dụng theo chế độ đang chọn */}
             <div className="flex-1 max-w-2xl flex flex-col gap-3">
               <div className="flex items-center gap-2">
@@ -278,9 +340,17 @@ export const ExplorePage: React.FC = () => {
 
               <div className="flex items-center gap-3 mt-1">
                 <div
-                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentSpotlight.gradient} flex items-center justify-center font-bold text-2xl font-display text-white shadow-lg`}
+                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentSpotlight.gradient} flex items-center justify-center font-bold text-2xl font-display text-white shadow-lg shrink-0 overflow-hidden`}
                 >
-                  {spotlightApp.tenApp.charAt(0)}
+                  {spotlightApp.iconUrl ? (
+                    <img
+                      src={spotlightApp.iconUrl}
+                      alt={spotlightApp.tenApp}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    spotlightApp.tenApp.charAt(0)
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -314,11 +384,13 @@ export const ExplorePage: React.FC = () => {
                   {spotlightApp.phienBanMoiNhat} (Mới nhất)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                  {spotlightApp.kienTruc?.join(' & ')}
+                  {spotlightApp.kienTruc?.join(' & ') || 'x64'}
                 </span>
-                <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                  {spotlightApp.kichThuocFile}
-                </span>
+                {spotlightApp.kichThuocFile && (
+                  <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
+                    {spotlightApp.kichThuocFile}
+                  </span>
+                )}
                 <TrustPill score={spotlightApp.diemUyTin} size="sm" showLabel />
               </div>
             </div>
@@ -327,15 +399,15 @@ export const ExplorePage: React.FC = () => {
             <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
               <button
                 onClick={() => openAppDetail(spotlightApp.id)}
-                className="h-11 px-6 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/30 transition-all active:scale-95"
+                className="btn-tactile h-11 px-6 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/30"
               >
                 <Download className="w-4 h-4" />
-                <span>Cài Đặt 1-Click ({spotlightApp.kichThuocFile})</span>
+                <span>Cài Đặt 1-Click</span>
               </button>
 
               <button
                 onClick={() => openAppDetail(spotlightApp.id)}
-                className="h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
+                className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
               >
                 <span>Xem phân tích Dual-AI</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-muted" />
@@ -345,7 +417,7 @@ export const ExplorePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. THANH CÔNG CỤ LỌC & SẮP XẾP HỢP NHẤT (Triệt tiêu khối lặp lại gây rối UX) */}
+      {/* 2. THANH CÔNG CỤ LỌC & SẮP XẾP HỢP NHẤT (P3-05.2 & P3-05.3) */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-border pb-3">
           {/* Cụm tab sắp xếp + Toggle khung thời gian GitHub */}
@@ -353,7 +425,7 @@ export const ExplorePage: React.FC = () => {
             <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-medium">
               <button
                 onClick={() => setActiveSort('trending')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'trending'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
@@ -365,7 +437,7 @@ export const ExplorePage: React.FC = () => {
 
               <button
                 onClick={() => setActiveSort('stars')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'stars'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
@@ -377,7 +449,7 @@ export const ExplorePage: React.FC = () => {
 
               <button
                 onClick={() => setActiveSort('recent')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'recent'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
@@ -388,12 +460,12 @@ export const ExplorePage: React.FC = () => {
               </button>
             </div>
 
-            {/* Toggle khung thời gian (Hôm nay / Tuần này / Tháng này) khi đang ở tab Thịnh Hành */}
+            {/* Toggle khung thời gian (Hôm nay / Tuần này / Tháng này) khi ở tab Thịnh Hành */}
             {activeSort === 'trending' && (
               <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-mono">
                 <button
                   onClick={() => setTimeWindow('today')}
-                  className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'today'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -403,7 +475,7 @@ export const ExplorePage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setTimeWindow('week')}
-                  className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'week'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -413,7 +485,7 @@ export const ExplorePage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setTimeWindow('month')}
-                  className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'month'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -425,35 +497,92 @@ export const ExplorePage: React.FC = () => {
             )}
           </div>
 
-          {/* Dải chip lọc danh mục với số lượng */}
+          {/* Dải chip lọc danh mục chuẩn CSDL */}
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 lg:pb-0">
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.map((category) => (
               <button
-                key={cat.name}
-                onClick={() => setActiveCategory(cat.name)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  activeCategory === cat.name
-                    ? 'bg-accent-forge text-white shadow-sm'
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                  activeCategory === category
+                    ? 'bg-accent-forge text-white shadow-sm font-semibold'
                     : 'bg-surface hover:bg-surface-elevated text-secondary hover:text-primary border border-border'
                 }`}
               >
-                <span>{cat.name}</span>
-                <span
-                  className={`text-[10px] font-mono ${activeCategory === cat.name ? 'text-white/80' : 'text-muted'}`}
-                >
-                  {cat.count}
-                </span>
+                <span>{category}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* 3. LƯỚI THẺ ỨNG DỤNG 3 CỘT RỘNG RÃI */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {processedApps.map((app) => (
-            <AppCard key={app.id} app={app} />
-          ))}
-        </div>
+        {/* 3. LƯỚI THẺ ỨNG DỤNG 3 CỘT RỘNG RÃI (Trụ cột 2: Sibling Stagger Wave < 120ms) */}
+        {isAppsLoading ? (
+          /* Trạng thái Skeleton Shimmer chống giật layout (CLS = 0) */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="tactile-card flex flex-col justify-between p-4 rounded-xl min-h-[170px] select-none"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-xl skeleton-shimmer shrink-0" />
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="w-32 h-4 rounded skeleton-shimmer" />
+                    <div className="w-48 h-3 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+                <div className="w-full h-8 mt-4 rounded skeleton-shimmer" />
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
+                  <div className="w-16 h-5 rounded-full skeleton-shimmer" />
+                  <div className="w-20 h-7 rounded-lg skeleton-shimmer" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : isAppsError ? (
+          /* Trạng thái Lỗi kết nối kèm nút Thử lại */
+          <div className="p-8 rounded-2xl bg-surface border border-red-500/20 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-bold text-primary">Không thể kết nối máy chủ Store</h3>
+            <p className="text-xs text-muted max-w-md">
+              Đang hiển thị dữ liệu lưu tạm. Vui lòng kiểm tra lại dịch vụ Backend hoặc bấm thử lại.
+            </p>
+            <button
+              onClick={() => refetchApps()}
+              className="btn-tactile mt-2 px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold flex items-center gap-2 border border-border"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-accent-forge" />
+              <span>Thử lại ngay</span>
+            </button>
+          </div>
+        ) : processedApps.length === 0 ? (
+          /* Trạng thái Không có ứng dụng phù hợp bộ lọc */
+          <div className="p-12 rounded-2xl bg-surface border border-border flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-surface-elevated flex items-center justify-center text-muted">
+              <PackageOpen className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-primary">Chưa có ứng dụng trong danh mục này</h3>
+            <p className="text-xs text-muted max-w-sm">
+              Không tìm thấy ứng dụng nào thuộc danh mục "{activeCategory}". Ông hãy thử chọn danh
+              mục khác nhé!
+            </p>
+            <button
+              onClick={() => setActiveCategory('Tất cả')}
+              className="btn-tactile mt-2 px-4 py-1.5 rounded-lg bg-accent-forge text-white text-xs font-semibold"
+            >
+              Xem tất cả ứng dụng
+            </button>
+          </div>
+        ) : (
+          /* Lưới ứng dụng thật với hiệu ứng Sibling Stagger Wave */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {processedApps.map((app, index) => (
+              <AppCard key={app.id} app={app} staggerIndex={index} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

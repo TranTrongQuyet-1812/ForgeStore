@@ -12,3 +12,4 @@ local.properties
 *.jks
 .antigravity
 docs
+**/src-tauri/gen

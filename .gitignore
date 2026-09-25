@@ -9,6 +9,8 @@ node_modules/
 dist/
 build/
 target/
+**/src-tauri/target/
+**/src-tauri/gen/
 *.apk
 *.exe
 *.msi

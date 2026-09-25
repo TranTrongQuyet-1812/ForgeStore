@@ -101,3 +101,83 @@ button, a, input, select, textarea, [data-no-drag] {
   app-region: no-drag;
   -webkit-app-region: no-drag;
 }
+
+/* ==========================================================================
+   BỘ 4 TRỤ CỘT ANIMATION PRO-CRAFT CHO FORGESTORE DESKTOP (E:\AI_Agent_Skills)
+   - Tối ưu GPU (transform & opacity)
+   - Zero blocking, thời lượng vàng 75ms - 150ms
+   - Easing tự nhiên cubic-bezier(0.16, 1, 0.3, 1)
+   ========================================================================== */
+
+/* Trụ cột 1: Chuyển Tab Zero-Latency Crossfade + 4px Micro-Elevation */
+@keyframes fadeInElevation {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInElevation 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Trụ cột 2: Sibling Stagger Wave Entrance (< 120ms total) */
+.stagger-item {
+  animation: fadeInElevation 130ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 20ms; }
+.stagger-3 { animation-delay: 40ms; }
+.stagger-4 { animation-delay: 60ms; }
+.stagger-5 { animation-delay: 80ms; }
+.stagger-6 { animation-delay: 100ms; }
+
+/* Trụ cột 3: Xúc giác nút bấm & Delight Checkmark Pop */
+.btn-tactile {
+  transition: transform 75ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease, border-color 150ms ease;
+}
+.btn-tactile:active {
+  transform: scale(0.97);
+}
+
+@keyframes checkmarkPop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+.animate-pop {
+  animation: checkmarkPop 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Skeleton Shimmer Loading (CLS = 0) */
+@keyframes shimmerWave {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface-elevated) 25%,
+    var(--color-bg-surface-hover) 50%,
+    var(--color-bg-surface-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.6s infinite ease-in-out;
+}
+
+/* Tuân thủ WCAG & Impeccable: Hỗ trợ giảm chuyển động nếu người dùng bật Reduce Motion trong Windows */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

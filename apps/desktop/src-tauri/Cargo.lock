@@ -1088,11 +1088,13 @@ dependencies = [
  "keyring",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "winreg",
 ]
 
 [[package]]

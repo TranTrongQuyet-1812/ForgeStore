@@ -36,7 +36,7 @@ fn lay_refresh_token() -> Result<Option<String>, String> {
 fn xoa_refresh_token() -> Result<(), String> {
     let entry = keyring::Entry::new(SERVICE_NAME, USER_ACCOUNT)
         .map_err(|e| format!("Không thể khởi tạo Keyring: {}", e))?;
-    match entry.delete_password() {
+    match entry.delete_credential() {
         Ok(_) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(format!("Lỗi khi xóa token trong Windows Credential Manager: {}", e)),

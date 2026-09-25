@@ -41,8 +41,11 @@ export const AppLayout: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         <Sidebar />
 
-        {/* Vùng cuộn nội dung chính */}
-        <main className="flex-1 h-full overflow-y-auto ambient-canvas transition-colors duration-200">
+        {/* Vùng cuộn nội dung chính với Zero-Latency Crossfade & Micro-Elevation */}
+        <main
+          key={currentTab}
+          className="flex-1 h-full overflow-y-auto ambient-canvas transition-colors duration-200 animate-fade-in"
+        >
           {renderContent()}
         </main>
       </div>

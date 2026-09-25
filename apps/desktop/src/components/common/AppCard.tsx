@@ -24,9 +24,10 @@ export interface AppCardData {
 
 interface AppCardProps {
   app: AppCardData;
+  staggerIndex?: number;
 }
 
-export const AppCard: React.FC<AppCardProps> = ({ app }) => {
+export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
   const { openAppDetail } = useNavStore();
 
   const formatStars = (stars: number) => {
@@ -34,10 +35,15 @@ export const AppCard: React.FC<AppCardProps> = ({ app }) => {
     return stars.toString();
   };
 
+  const staggerClass =
+    staggerIndex !== undefined && staggerIndex < 6
+      ? `stagger-item stagger-${staggerIndex + 1}`
+      : '';
+
   return (
     <div
       onClick={() => openAppDetail(app.id)}
-      className="tactile-card group relative flex flex-col justify-between p-4 rounded-xl cursor-pointer select-none"
+      className={`tactile-card group relative flex flex-col justify-between p-4 rounded-xl cursor-pointer select-none ${staggerClass}`}
     >
       <div>
         {/* Phần đầu: Icon, Tên, Repo Handle, Giấy phép, Sao */}

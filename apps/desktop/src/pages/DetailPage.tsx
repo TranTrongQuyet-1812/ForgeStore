@@ -209,14 +209,18 @@ export const DetailPage: React.FC = () => {
                     <button
                       onClick={handleCopySha}
                       title="Sao chép toàn bộ mã băm SHA-256"
-                      className="text-accent-ai hover:text-primary flex items-center gap-1"
+                      className="text-accent-ai hover:text-primary flex items-center gap-1 btn-tactile"
                     >
                       {copiedSha ? (
-                        <Check className="w-3 h-3 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
                       ) : (
                         <Copy className="w-3 h-3" />
                       )}
-                      <span className="text-[10px]">{copiedSha ? 'Đã chép' : 'Chép mã'}</span>
+                      <span
+                        className={`text-[10px] transition-colors ${copiedSha ? 'text-emerald-400 font-semibold' : ''}`}
+                      >
+                        {copiedSha ? 'Đã chép SHA-256' : 'Chép mã'}
+                      </span>
                     </button>
                   </div>
                 </div>
