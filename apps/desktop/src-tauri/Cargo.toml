@@ -1,0 +1,20 @@
+[package]
+name = "forgestore-desktop"
+version = "0.1.0"
+description = "ForgeStore Desktop Client"
+authors = ["ForgeStore Team"]
+edition = "2021"
+
+[lib]
+name = "forgestore_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.1", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

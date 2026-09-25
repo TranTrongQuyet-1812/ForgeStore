@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Bảng màu Trắng ngà sữa (Light Mode sau này) - Tuyệt đối không trắng toát #FFFFFF gây chói */
+  --color-bg-canvas: #F8F7F4;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-surface-elevated: #FFFFFF;
+  --color-bg-surface-hover: #F3F1EC;
+  --color-border-subtle: #E5E3DC;
+  --color-border-active: #CBD5E1;
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94A3B8;
+}
+
+.dark {
+  /* Bảng màu Dark Mode dịu mắt - Than chì #0B0F19, tuyệt đối không đen kịt #000000 chống lóa */
+  --color-bg-canvas: #0B0F19;
+  --color-bg-surface: #151E2E;
+  --color-bg-surface-elevated: #1E293B;
+  --color-bg-surface-hover: #1D2A40;
+  --color-border-subtle: #1E293B;
+  --color-border-active: #334155;
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+}
+
+/* Custom Scrollbar thanh mảnh, hòa vào nền */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-active);
+}
+
+/* Font số tabular chống rung giật giao diện */
+.font-tnum {
+  font-feature-settings: 'tnum' on;
+}
+
+/* Vùng kéo thả cửa sổ Tauri Custom Titlebar */
+[data-tauri-drag-region] {
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+button, a, input, select, textarea, [data-no-drag] {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
