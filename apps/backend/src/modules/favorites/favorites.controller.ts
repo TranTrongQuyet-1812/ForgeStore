@@ -76,7 +76,25 @@ export class FavoritesController {
     @Param('id') id: string,
     @Headers('x-device-type') thietBiHeader?: string,
   ) {
+    const cleanId = decodeURIComponent(id.trim());
     const thietBi = thietBiHeader?.toUpperCase() === 'DI_DONG' ? 'DI_DONG' : 'MAY_TINH';
-    return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, id, thietBi);
+    return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, cleanId, thietBi);
+  }
+
+  @Post('apps/:owner/:repo/favorite')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Bật / Tắt trạng thái yêu thích của ứng dụng theo GitHub slug (owner/repo)',
+  })
+  async chuyenDoiYeuThichTheoSlug(
+    @NguoiDungHienTai('maNguoiDung') maNguoiDung: string,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Headers('x-device-type') thietBiHeader?: string,
+  ) {
+    const slug = `${owner}/${repo}`;
+    const thietBi = thietBiHeader?.toUpperCase() === 'DI_DONG' ? 'DI_DONG' : 'MAY_TINH';
+    return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, slug, thietBi);
   }
 }
+

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
+import { useAuthStore } from '../stores/useAuthStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
@@ -35,6 +36,7 @@ import { favoritesService } from '../services/favorites/favorites-service';
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo } = useNavStore();
+  const { isAuthenticated } = useAuthStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
 
   // Quản lý polling AI
@@ -47,29 +49,6 @@ export const DetailPage: React.FC = () => {
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
   const [showAllVersions, setShowAllVersions] = useState<boolean>(false);
-
-  // Đổi trạng thái yêu thích kết nối API Backend Supabase
-  const handleToggleFavorite = async () => {
-    if (isTogglingFavorite) return;
-    const targetId = appDetail?.maUngDung || appId;
-    if (!targetId) return;
-
-    setIsTogglingFavorite(true);
-    const prevState = isFavorited;
-    setIsFavorited(!prevState);
-
-    try {
-      const res = await favoritesService.chuyenDoiYeuThich(targetId);
-      setIsFavorited(res.daYeuThich);
-      queryClient.invalidateQueries({ queryKey: ['app-detail', appId] });
-      queryClient.invalidateQueries({ queryKey: ['user-favorites'] });
-    } catch (err) {
-      console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
-      setIsFavorited(prevState);
-    } finally {
-      setIsTogglingFavorite(false);
-    }
-  };
 
   // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
   const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
@@ -96,12 +75,64 @@ export const DetailPage: React.FC = () => {
     },
   });
 
-  // Đồng bộ trạng thái yêu thích từ backend
+  // Nạp danh sách yêu thích người dùng để đồng bộ hai chiều chính xác 100%
+  const { data: userFavoritesData } = useQuery({
+    queryKey: ['user-favorites'],
+    queryFn: () => favoritesService.layDanhSachYeuThich(1, 100),
+    enabled: isAuthenticated,
+    staleTime: 60 * 1000,
+  });
+
+  // Đồng bộ trạng thái yêu thích từ backend hoặc danh sách user-favorites
   useEffect(() => {
     if (appDetail?.laYeuThich !== undefined) {
       setIsFavorited(appDetail.laYeuThich);
+    } else if (userFavoritesData?.duLieu) {
+      const match = userFavoritesData.duLieu.some(
+        (fav) =>
+          fav.maUngDung === appDetail?.maUngDung ||
+          fav.tenRepoDayDu === appId ||
+          fav.tenKhoChua === appId,
+      );
+      setIsFavorited(match);
     }
-  }, [appDetail?.laYeuThich]);
+  }, [appDetail?.laYeuThich, appDetail?.maUngDung, appId, userFavoritesData]);
+
+  // Đổi trạng thái yêu thích kết nối API Backend Supabase
+  const handleToggleFavorite = async () => {
+    if (isTogglingFavorite) return;
+    if (!isAuthenticated) {
+      alert('Vui lòng đăng nhập GitHub ở thanh trên cùng để lưu ứng dụng vào Kho yêu thích!');
+      return;
+    }
+
+    const targetId = appDetail?.maUngDung || appId;
+    if (!targetId) return;
+
+    setIsTogglingFavorite(true);
+    const prevState = isFavorited;
+    const nextState = !prevState;
+    setIsFavorited(nextState);
+
+    try {
+      const res = await favoritesService.chuyenDoiYeuThich(targetId);
+      setIsFavorited(res.daYeuThich);
+      // Cập nhật ngay trong cache của app-detail
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queryClient.setQueryData(['app-detail', appId], (old: any) => {
+        if (!old) return old;
+        return { ...old, laYeuThich: res.daYeuThich };
+      });
+      // Làm tươi danh sách yêu thích
+      queryClient.invalidateQueries({ queryKey: ['user-favorites'] });
+    } catch (err) {
+      console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
+      setIsFavorited(prevState);
+    } finally {
+      setIsTogglingFavorite(false);
+    }
+  };
+
 
   // Format kích thước tệp
   const formatBytes = (bytes?: number | string): string => {

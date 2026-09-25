@@ -20,10 +20,15 @@ export const favoritesService = {
    * Bật / Tắt trạng thái yêu thích của ứng dụng (P3-12.1)
    */
   async chuyenDoiYeuThich(appId: string): Promise<ToggleFavoriteResult> {
-    return apiClient.post<ToggleFavoriteResult>(`/apps/${appId}/favorite`, undefined, {
+    const cleanId = appId.trim();
+    const targetEndpoint = cleanId.includes('/')
+      ? `/apps/${encodeURIComponent(cleanId)}/favorite`
+      : `/apps/${cleanId}/favorite`;
+    return apiClient.post<ToggleFavoriteResult>(targetEndpoint, undefined, {
       headers: {
         'x-device-type': 'MAY_TINH',
       },
     });
   },
+
 };
