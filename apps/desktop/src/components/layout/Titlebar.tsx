@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Minus, Square, X, Sun, Moon, Flame } from 'lucide-react';
+import { Search, Minus, Square, X, Sun, Moon, Flame, LogOut, User as UserIcon } from 'lucide-react';
 import { useThemeStore } from '../../stores/useThemeStore';
 import { useNavStore } from '../../stores/useNavStore';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { authService } from '../../services/auth/auth-service';
 
 const TAB_TITLES: Record<string, string> = {
   explore: 'Khám phá',
@@ -15,6 +17,7 @@ const TAB_TITLES: Record<string, string> = {
 export const Titlebar: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore();
   const { currentTab, setSearchModalOpen } = useNavStore();
+  const { user, isAuthenticated, isLoading } = useAuthStore();
   const [isMaximized, setIsMaximized] = useState(false);
 
   // Xử lý điều khiển cửa sổ Tauri an toàn
@@ -102,13 +105,40 @@ export const Titlebar: React.FC = () => {
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
-        <button
-          onClick={() => alert('Đăng nhập GitHub qua Deep Link sẽ được hoàn thiện ở P3-04')}
-          className="h-7 px-2.5 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-1.5 transition-colors"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          Đăng nhập
-        </button>
+        {isAuthenticated && user ? (
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-elevated border border-border text-xs shadow-xs">
+              {user.duongDanAvatar ? (
+                <img
+                  src={user.duongDanAvatar}
+                  alt={user.tenDangNhap}
+                  className="w-4 h-4 rounded-full object-cover border border-border/50"
+                />
+              ) : (
+                <UserIcon className="w-3.5 h-3.5 text-muted" />
+              )}
+              <span className="font-medium text-primary max-w-[110px] truncate text-[11px]">
+                {user.tenHienThi || user.tenDangNhap}
+              </span>
+            </div>
+            <button
+              onClick={() => authService.logout()}
+              title="Đăng xuất khỏi tài khoản"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-rose-400 hover:bg-surface-elevated transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => authService.loginWithGithub()}
+            disabled={isLoading}
+            className="h-7 px-2.5 rounded-lg bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            {isLoading ? 'Đang kết nối...' : 'Đăng nhập'}
+          </button>
+        )}
 
         {/* 3 nút Windows Controls */}
         <div className="flex items-center ml-1">

@@ -42,6 +42,10 @@ export class ApiClient {
     this.baseUrl = this.baseUrl.replace(/\/$/, '');
   }
 
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   public onLogout(listener: LogoutListener): () => void {
     this.logoutListeners.add(listener);
     return () => this.logoutListeners.delete(listener);

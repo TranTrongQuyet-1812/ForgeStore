@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppLayout } from './components/layout/AppLayout';
+import { authService } from './services/auth/auth-service';
 
 // Khởi tạo QueryClient cho việc quản lý server cache & API calls
 const queryClient = new QueryClient({
@@ -14,6 +15,13 @@ const queryClient = new QueryClient({
 });
 
 export const App: React.FC = () => {
+  useEffect(() => {
+    authService.init();
+    return () => {
+      authService.destroy();
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppLayout />
