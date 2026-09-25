@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Star,
@@ -33,6 +33,7 @@ import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
 
 export const DetailPage: React.FC = () => {
+  const queryClient = useQueryClient();
   const { selectedAppId, navigateTo } = useNavStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
 
@@ -41,6 +42,7 @@ export const DetailPage: React.FC = () => {
 
   // Trạng thái giao diện
   const [isFavorited, setIsFavorited] = useState<boolean>(false);
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState<boolean>(false);
   const [selectedFormat, setSelectedFormat] = useState<string>('EXE');
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
@@ -48,18 +50,24 @@ export const DetailPage: React.FC = () => {
 
   // Đổi trạng thái yêu thích kết nối API Backend Supabase
   const handleToggleFavorite = async () => {
+    if (isTogglingFavorite) return;
     const targetId = appDetail?.maUngDung || appId;
     if (!targetId) return;
 
+    setIsTogglingFavorite(true);
     const prevState = isFavorited;
     setIsFavorited(!prevState);
 
     try {
       const res = await favoritesService.chuyenDoiYeuThich(targetId);
       setIsFavorited(res.daYeuThich);
+      queryClient.invalidateQueries({ queryKey: ['app-detail', appId] });
+      queryClient.invalidateQueries({ queryKey: ['user-favorites'] });
     } catch (err) {
       console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
       setIsFavorited(prevState);
+    } finally {
+      setIsTogglingFavorite(false);
     }
   };
 
@@ -614,14 +622,19 @@ export const DetailPage: React.FC = () => {
               <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
               <button
                 onClick={handleToggleFavorite}
+                disabled={isTogglingFavorite}
                 className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
                   isFavorited
                     ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
                     : 'bg-surface-elevated border-border text-muted hover:text-primary'
-                }`}
-                title={isFavorited ? 'Đã yêu thích' : 'Thêm vào yêu thích'}
+                } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
               >
-                <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                {isTogglingFavorite ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                ) : (
+                  <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                )}
               </button>
             </div>
 

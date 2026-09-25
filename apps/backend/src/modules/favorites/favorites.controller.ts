@@ -6,7 +6,6 @@ import {
   Query,
   Headers,
   UseGuards,
-  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -74,7 +73,7 @@ export class FavoritesController {
   })
   async chuyenDoiYeuThich(
     @NguoiDungHienTai('maNguoiDung') maNguoiDung: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Headers('x-device-type') thietBiHeader?: string,
   ) {
     const thietBi = thietBiHeader?.toUpperCase() === 'DI_DONG' ? 'DI_DONG' : 'MAY_TINH';

@@ -85,18 +85,36 @@ export class FavoritesService {
    */
   async chuyenDoiYeuThich(
     maNguoiDung: string,
-    maUngDung: string,
+    idOrSlug: string,
     thietBiThem: string = 'MAY_TINH',
   ): Promise<{ daYeuThich: boolean }> {
-    // 1. Kiểm tra ứng dụng có tồn tại trong Store không
-    const ungDung = await this.prisma.ungDung.findUnique({
-      where: { maUngDung },
-      select: { maUngDung: true, tenRepoDayDu: true },
-    });
+    const cleanId = decodeURIComponent(idOrSlug.trim());
+
+    // 1. Kiểm tra ứng dụng có tồn tại trong Store không (hỗ trợ cả UUID lẫn Repo Slug)
+    let ungDung = await this.prisma.ungDung
+      .findUnique({
+        where: { maUngDung: cleanId },
+        select: { maUngDung: true, tenRepoDayDu: true },
+      })
+      .catch(() => null);
+
+    if (!ungDung && typeof this.prisma.ungDung?.findFirst === 'function') {
+      ungDung = await this.prisma.ungDung.findFirst({
+        where: {
+          OR: [
+            { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+            { tenKhoChua: { equals: cleanId, mode: 'insensitive' } },
+          ],
+        },
+        select: { maUngDung: true, tenRepoDayDu: true },
+      });
+    }
 
     if (!ungDung) {
-      throw new NotFoundException(`Không tìm thấy ứng dụng với mã [${maUngDung}]`);
+      throw new NotFoundException(`Không tìm thấy ứng dụng với mã hoặc tên [${idOrSlug}]`);
     }
+
+    const maUngDung = ungDung.maUngDung;
 
     // 2. Tìm bản ghi yêu thích hiện tại
     const daCo = await this.prisma.khoYeuThich.findUnique({

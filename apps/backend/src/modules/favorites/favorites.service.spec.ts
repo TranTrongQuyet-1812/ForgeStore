@@ -19,6 +19,7 @@ describe('FavoritesService (P2-50)', () => {
       },
       ungDung: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
       },
     };
 
@@ -87,6 +88,30 @@ describe('FavoritesService (P2-50)', () => {
           },
         },
       });
+    });
+
+    it('tìm ứng dụng theo repo slug nếu không phải UUID và toggle thành công', async () => {
+      prisma.ungDung.findUnique.mockResolvedValue(null);
+      prisma.ungDung.findFirst.mockResolvedValue({
+        maUngDung,
+        tenRepoDayDu: 'microsoft/PowerToys',
+      });
+      prisma.khoYeuThich.findUnique.mockResolvedValue(null);
+      prisma.khoYeuThich.create.mockResolvedValue({
+        maYeuThich: 'fav-powertoys',
+        maNguoiDung,
+        maUngDung,
+        thietBiThem: 'MAY_TINH',
+      });
+
+      const result = await service.chuyenDoiYeuThich(
+        maNguoiDung,
+        'microsoft/PowerToys',
+        'MAY_TINH',
+      );
+
+      expect(result).toEqual({ daYeuThich: true });
+      expect(prisma.ungDung.findFirst).toHaveBeenCalled();
     });
 
     it('bấm 2 lần liên tiếp không gây trùng lặp bản ghi nhờ ràng buộc UNIQUE', async () => {
