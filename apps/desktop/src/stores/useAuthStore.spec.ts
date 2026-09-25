@@ -94,4 +94,19 @@ describe('useAuthStore (P3-03.4)', () => {
     expect(tokenStorage.getAccessToken()).toBeNull();
     expect(await tokenStorage.getRefreshToken()).toBeNull();
   });
+
+  it('initAuth khi gặp lỗi mạng (offline / timeout): giữ nguyên refresh token và không xóa phiên', async () => {
+    await tokenStorage.setRefreshToken('stored-offline-token');
+
+    const mockFetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    global.fetch = mockFetch;
+
+    await useAuthStore.getState().initAuth();
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(false);
+    expect(state.isLoading).toBe(false);
+    // Refresh token vẫn được bảo toàn trong Windows Credential Manager!
+    expect(await tokenStorage.getRefreshToken()).toBe('stored-offline-token');
+  });
 });

@@ -49,6 +49,8 @@ async function bootstrap() {
       desktopOrigin,
       landingOrigin,
       'tauri://localhost',
+      'http://tauri.localhost',
+      'https://tauri.localhost',
       'http://localhost:1420',
       'http://localhost:3000',
       'http://localhost:5173',

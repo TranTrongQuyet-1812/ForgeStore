@@ -25,8 +25,15 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 http://localhost:1420 http://127.0.0.1:1420 https://api.github.com; img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline';",
       "capabilities": ["default"]
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["forgestore"]
+      }
     }
   },
   "bundle": {

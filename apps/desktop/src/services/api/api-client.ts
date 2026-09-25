@@ -37,7 +37,7 @@ export class ApiClient {
     this.baseUrl =
       baseUrl ||
       (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
-      'http://localhost:3000';
+      'http://localhost:3000/api/v1';
     // Đảm bảo không có trailing slash
     this.baseUrl = this.baseUrl.replace(/\/$/, '');
   }
@@ -102,9 +102,12 @@ export class ApiClient {
         this.notifyTokenRefresh(newAccessToken);
         return newAccessToken;
       } catch (error) {
-        // Refresh thất bại (hết hạn hoặc bị thu hồi) -> Dọn dẹp sạch token và đăng xuất
-        await tokenStorage.clearAllTokens();
-        this.notifyLogout();
+        // Chỉ dọn dẹp sạch token và đăng xuất khi lỗi xác thực (401 hoặc 403)
+        // Nếu lỗi mất mạng (Network error, timeout) hoặc 5xx, KHÔNG xóa token!
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          await tokenStorage.clearAllTokens();
+          this.notifyLogout();
+        }
         throw error;
       } finally {
         this.refreshPromise = null;

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { NguoiDungDto, AuthResponseDto, AuthRefreshResponseDto } from '@forgestore/types';
 import { tokenStorage } from '../services/auth/token-storage';
-import { apiClient } from '../services/api/api-client';
+import { apiClient, ApiError } from '../services/api/api-client';
 
 interface AuthState {
   user: NguoiDungDto | null;
@@ -52,10 +52,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 3. Tải hồ sơ người dùng
       await get().fetchProfile();
-    } catch {
-      console.warn('[useAuthStore] Phiên đăng nhập trước đó đã hết hạn hoặc không hợp lệ.');
-      await tokenStorage.clearAllTokens();
-      set({ user: null, accessToken: null, isAuthenticated: false });
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        console.warn('[useAuthStore] Phiên đăng nhập trước đó đã hết hạn hoặc không hợp lệ.');
+        await tokenStorage.clearAllTokens();
+        set({ user: null, accessToken: null, isAuthenticated: false });
+      } else {
+        console.warn(
+          '[useAuthStore] Không thể kết nối tới máy chủ khi khôi phục phiên (mất mạng/timeout/5xx): Giữ nguyên token để thử lại sau.',
+          err,
+        );
+        set({ isAuthenticated: false });
+      }
     } finally {
       set({ isLoading: false });
     }

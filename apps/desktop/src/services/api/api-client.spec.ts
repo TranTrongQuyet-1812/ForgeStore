@@ -148,4 +148,32 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     expect(tokenStorage.getAccessToken()).toBeNull();
     expect(await tokenStorage.getRefreshToken()).toBeNull();
   });
+
+  it('khi gặp lỗi mạng (TypeError / offline) khi refresh: ném lỗi nhưng KHÔNG xóa token và KHÔNG kích hoạt logout', async () => {
+    tokenStorage.setAccessToken('expired-access-token');
+    await tokenStorage.setRefreshToken('valid-refresh-token');
+
+    const logoutMock = vi.fn();
+    client.onLogout(logoutMock);
+
+    const mockFetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/auth/refresh')) {
+        throw new TypeError('Failed to fetch'); // Giả lập mất mạng
+      }
+      return {
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: async () => ({ message: 'Access token expired' }),
+      };
+    });
+
+    global.fetch = mockFetch;
+
+    await expect(client.get('/user/profile')).rejects.toThrow('Failed to fetch');
+
+    // Khẳng định: Lỗi mạng không làm mất token và không kích hoạt logout
+    expect(logoutMock).not.toHaveBeenCalled();
+    expect(await tokenStorage.getRefreshToken()).toBe('valid-refresh-token');
+  });
 });
