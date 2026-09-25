@@ -32,12 +32,16 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
+import { ApiError } from '../services/api/api-client';
 
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo } = useNavStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
+  // Cờ `laYeuThich` trong chi tiết app phụ thuộc người đang đăng nhập, nên khóa cache phải gắn với
+  // người dùng. Nếu không, bản tải lúc chưa có token (laYeuThich rỗng) bị giữ lại sau khi đăng nhập.
+  const appDetailKey = ['app-detail', appId, user?.maNguoiDung ?? 'khach'] as const;
 
   // Quản lý polling AI
   const [pollStartTime] = useState<number>(() => Date.now());
@@ -45,6 +49,7 @@ export const DetailPage: React.FC = () => {
   // Trạng thái giao diện
   const [isFavorited, setIsFavorited] = useState<boolean>(false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState<boolean>(false);
+  const [loiYeuThich, setLoiYeuThich] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<string>('EXE');
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
@@ -60,7 +65,7 @@ export const DetailPage: React.FC = () => {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['app-detail', appId],
+    queryKey: appDetailKey,
     queryFn: () => storeService.layChiTietApp(appId),
     staleTime: 3 * 60 * 1000,
     refetchInterval: (query) => {
@@ -78,7 +83,8 @@ export const DetailPage: React.FC = () => {
   // Nạp danh sách yêu thích người dùng để đồng bộ hai chiều chính xác 100%
   const { data: userFavoritesData } = useQuery({
     queryKey: ['user-favorites'],
-    queryFn: () => favoritesService.layDanhSachYeuThich(1, 100),
+    // Backend giới hạn limit tối đa 50 (QueryFavoritesDto); gửi 100 sẽ bị trả 400.
+    queryFn: () => favoritesService.layDanhSachYeuThich(1, 50),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
@@ -110,6 +116,7 @@ export const DetailPage: React.FC = () => {
     if (!targetId) return;
 
     setIsTogglingFavorite(true);
+    setLoiYeuThich(null);
     const prevState = isFavorited;
     const nextState = !prevState;
     setIsFavorited(nextState);
@@ -119,7 +126,7 @@ export const DetailPage: React.FC = () => {
       setIsFavorited(res.daYeuThich);
       // Cập nhật ngay trong cache của app-detail
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      queryClient.setQueryData(['app-detail', appId], (old: any) => {
+      queryClient.setQueryData(appDetailKey, (old: any) => {
         if (!old) return old;
         return { ...old, laYeuThich: res.daYeuThich };
       });
@@ -128,11 +135,16 @@ export const DetailPage: React.FC = () => {
     } catch (err) {
       console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
       setIsFavorited(prevState);
+      // Báo lỗi ra giao diện thay vì âm thầm quay về trạng thái cũ
+      setLoiYeuThich(
+        err instanceof ApiError
+          ? `Không lưu được yêu thích (mã ${err.status}). Vui lòng thử lại.`
+          : 'Không kết nối được máy chủ để lưu yêu thích. Vui lòng thử lại.',
+      );
     } finally {
       setIsTogglingFavorite(false);
     }
   };
-
 
   // Format kích thước tệp
   const formatBytes = (bytes?: number | string): string => {
@@ -668,6 +680,11 @@ export const DetailPage: React.FC = () => {
                 )}
               </button>
             </div>
+            {loiYeuThich && (
+              <p role="alert" className="-mt-3 text-[11px] text-rose-400">
+                {loiYeuThich}
+              </p>
+            )}
 
             {/* Bộ chọn định dạng tệp có sẵn */}
             {availableFormats.length > 0 && (

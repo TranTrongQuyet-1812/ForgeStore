@@ -83,6 +83,18 @@ export class FavoritesService {
    * Nếu đã thích -> xóa khỏi danh sách (trả về false).
    * Nếu chưa thích -> thêm vào danh sách (trả về true).
    */
+  /**
+   * Xác định loại thiết bị bấm thích từ bản ghi thiết bị của phiên (JWT `did`),
+   * thay vì tin vào header do client tự gửi.
+   */
+  async xacDinhThietBiThem(maThietBi?: string): Promise<'MAY_TINH' | 'DIEN_THOAI'> {
+    if (!maThietBi) return 'MAY_TINH';
+    const thietBi = await this.prisma.thietBi
+      .findUnique({ where: { maThietBi }, select: { loaiThietBi: true } })
+      .catch(() => null);
+    return thietBi?.loaiThietBi === 'DIEN_THOAI_ANDROID' ? 'DIEN_THOAI' : 'MAY_TINH';
+  }
+
   async chuyenDoiYeuThich(
     maNguoiDung: string,
     idOrSlug: string,
@@ -141,14 +153,22 @@ export class FavoritesService {
       return { daYeuThich: false };
     }
 
-    // Chưa có -> Thêm yêu thích
-    await this.prisma.khoYeuThich.create({
-      data: {
-        maNguoiDung,
-        maUngDung,
-        thietBiThem: thietBiThem || 'MAY_TINH',
-      },
-    });
+    // Chưa có -> Thêm yêu thích. Hai lần bấm gần như đồng thời có thể cùng tới đây:
+    // lần sau vấp ràng buộc UNIQUE (P2002) thì coi như đã thích, không trả lỗi 500.
+    try {
+      await this.prisma.khoYeuThich.create({
+        data: {
+          maNguoiDung,
+          maUngDung,
+          thietBiThem: thietBiThem || 'MAY_TINH',
+        },
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string }).code === 'P2002') {
+        return { daYeuThich: true };
+      }
+      throw err;
+    }
 
     this.logger.log(
       `Người dùng [${maNguoiDung}] đã thích ứng dụng [${ungDung.tenRepoDayDu}] từ thiết bị [${thietBiThem}]`,

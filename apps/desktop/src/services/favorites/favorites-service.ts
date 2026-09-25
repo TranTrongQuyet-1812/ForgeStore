@@ -24,11 +24,8 @@ export const favoritesService = {
     const targetEndpoint = cleanId.includes('/')
       ? `/apps/${encodeURIComponent(cleanId)}/favorite`
       : `/apps/${cleanId}/favorite`;
-    return apiClient.post<ToggleFavoriteResult>(targetEndpoint, undefined, {
-      headers: {
-        'x-device-type': 'MAY_TINH',
-      },
-    });
+    // Không gửi header tự đặt (vd. x-device-type): header lạ làm preflight CORS của WebView2
+    // chặn request trước khi tới backend. Loại thiết bị do backend tự xác định từ phiên đăng nhập.
+    return apiClient.post<ToggleFavoriteResult>(targetEndpoint);
   },
-
 };

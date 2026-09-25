@@ -21,6 +21,9 @@ describe('FavoritesService (P2-50)', () => {
         findUnique: vi.fn(),
         findFirst: vi.fn(),
       },
+      thietBi: {
+        findUnique: vi.fn(),
+      },
     };
 
     service = new FavoritesService(prisma as unknown as PrismaService);
@@ -202,6 +205,41 @@ describe('FavoritesService (P2-50)', () => {
       expect(set.has('app1')).toBe(true);
       expect(set.has('app2')).toBe(false);
       expect(set.has('app3')).toBe(true);
+    });
+  });
+
+  describe('bấm thích đồng thời', () => {
+    it('lần bấm thứ hai vấp UNIQUE (P2002) vẫn trả daYeuThich = true, không ném lỗi 500', async () => {
+      prisma.ungDung.findUnique.mockResolvedValue({
+        maUngDung: 'app-1',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+      });
+      prisma.khoYeuThich.findUnique.mockResolvedValue(null);
+      prisma.khoYeuThich.create.mockRejectedValue(
+        Object.assign(new Error('Unique'), { code: 'P2002' }),
+      );
+
+      await expect(service.chuyenDoiYeuThich('user-1', 'app-1')).resolves.toEqual({
+        daYeuThich: true,
+      });
+    });
+  });
+
+  describe('xacDinhThietBiThem (loại thiết bị lấy từ phiên, không từ header client)', () => {
+    it('máy tính Windows -> MAY_TINH', async () => {
+      prisma.thietBi.findUnique.mockResolvedValue({ loaiThietBi: 'MAY_TINH_WINDOWS' });
+      await expect(service.xacDinhThietBiThem('tb-1')).resolves.toBe('MAY_TINH');
+    });
+
+    it('điện thoại Android -> DIEN_THOAI', async () => {
+      prisma.thietBi.findUnique.mockResolvedValue({ loaiThietBi: 'DIEN_THOAI_ANDROID' });
+      await expect(service.xacDinhThietBiThem('tb-2')).resolves.toBe('DIEN_THOAI');
+    });
+
+    it('không có mã thiết bị hoặc không tìm thấy -> MAY_TINH', async () => {
+      await expect(service.xacDinhThietBiThem(undefined)).resolves.toBe('MAY_TINH');
+      prisma.thietBi.findUnique.mockResolvedValue(null);
+      await expect(service.xacDinhThietBiThem('khong-co')).resolves.toBe('MAY_TINH');
     });
   });
 });
