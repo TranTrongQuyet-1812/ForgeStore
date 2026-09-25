@@ -1,5 +1,11 @@
 import { apiClient } from '../api/api-client';
-import type { TrangKetQua, UngDungTomTatDto, UngDungChiTietDto } from '@forgestore/types';
+import type {
+  TrangKetQua,
+  UngDungTomTatDto,
+  UngDungChiTietDto,
+  TimKiemResponseDto,
+  InspectRepoResponseDto,
+} from '@forgestore/types';
 import type { AppCardData } from '../../components/common/AppCard';
 
 export interface QueryAppsParams {
@@ -53,6 +59,31 @@ export class StoreService {
       ? `/apps/${maUngDung.split('/').map(encodeURIComponent).join('/')}`
       : `/apps/${encodeURIComponent(maUngDung)}`;
     return apiClient.get<UngDungChiTietDto>(endpoint);
+  }
+
+  /**
+   * Tìm kiếm thông minh đa năng: tên app, ý định AI hoặc URL GitHub (P2-40 / P3-07)
+   */
+  async timKiem(
+    query: string,
+    platform: 'WINDOWS' | 'ANDROID' = 'WINDOWS',
+  ): Promise<TimKiemResponseDto> {
+    const params = new URLSearchParams({
+      q: query.trim(),
+      platform,
+    });
+    return apiClient.get<TimKiemResponseDto>(`/search?${params.toString()}`);
+  }
+
+  /**
+   * Kiểm định và nạp Repository tùy chọn - Paste & Play (P2-41 / P3-07)
+   */
+  async kiemDinhRepo(urlRepo: string): Promise<InspectRepoResponseDto> {
+    return apiClient.post<InspectRepoResponseDto>('/repos/inspect', {
+      urlRepo: urlRepo.trim(),
+      nenTang: 'WINDOWS',
+      abis: ['X86_64'],
+    });
   }
 
   /**

@@ -1,50 +1,181 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, Github, ArrowRight, Sparkles } from 'lucide-react';
+import {
+  Search,
+  X,
+  Github,
+  ArrowRight,
+  Sparkles,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Star,
+} from 'lucide-react';
 import { useNavStore } from '../../stores/useNavStore';
+import { storeService } from '../../services/store/store-service';
+import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
 export const SearchModal: React.FC = () => {
   const { isSearchModalOpen, setSearchModalOpen, openAppDetail } = useNavStore();
-  const [query, setQuery] = useState('');
+
+  const [query, setQuery] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchResult, setSearchResult] = useState<TimKiemResponseDto | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
+
+  // Trạng thái kiểm định Paste & Play
+  const [isInspecting, setIsInspecting] = useState<boolean>(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  const [inspectSuccess, setInspectSuccess] = useState<InspectRepoResponseDto | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Tự động focus vào input khi mở modal
+  // Tự động focus vào input khi mở modal và reset trạng thái khi đóng
   useEffect(() => {
     if (isSearchModalOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
       setQuery('');
+      setSearchResult(null);
+      setSelectedIndex(-1);
+      setIsInspecting(false);
+      setInspectError(null);
+      setInspectSuccess(null);
     }
   }, [isSearchModalOpen]);
-
-  if (!isSearchModalOpen) return null;
 
   // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play
   const isGithubUrl = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(query.trim());
 
+  // Debounce 300ms gọi API tìm kiếm (P3-07.1)
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed || trimmed.length < 2) {
+      setSearchResult(null);
+      setIsSearching(false);
+      setSelectedIndex(-1);
+      return;
+    }
+
+    setIsSearching(true);
+    setInspectError(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await storeService.timKiem(trimmed, 'WINDOWS');
+        setSearchResult(res);
+        setSelectedIndex(res.duLieu && res.duLieu.length > 0 ? 0 : -1);
+      } catch (err) {
+        console.error('Lỗi tìm kiếm:', err);
+        setSearchResult(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // Xử lý nạp và kiểm định repo Paste & Play (P3-07.2)
+  const handleInspectRepo = async (urlToInspect: string) => {
+    if (!urlToInspect || isInspecting) return;
+    setIsInspecting(true);
+    setInspectError(null);
+    setInspectSuccess(null);
+
+    try {
+      const res = await storeService.kiemDinhRepo(urlToInspect);
+      if (res.trangThai === 'THANH_CONG' && res.ungDung) {
+        setInspectSuccess(res);
+        // Tự động chuyển trang sau 800ms
+        setTimeout(() => {
+          openAppDetail(res.ungDung!.tenRepoDayDu || res.ungDung!.maUngDung);
+          setSearchModalOpen(false);
+        }, 800);
+      } else {
+        // Thông báo lỗi dễ hiểu theo TrangThaiNapRepo
+        let errorMsg = 'Không thể nạp ứng dụng từ liên kết này.';
+        if (res.trangThai === 'LINK_KHONG_HOP_LE') {
+          errorMsg = 'Liên kết GitHub không hợp lệ hoặc kho lưu trữ không công khai.';
+        } else if (res.trangThai === 'KHONG_CO_RELEASE') {
+          errorMsg = 'Kho lưu trữ này chưa có bất kỳ bản phát hành (Release) nào trên GitHub.';
+        } else if (res.trangThai === 'KHONG_CO_FILE_CAI_DAT') {
+          errorMsg =
+            'Không tìm thấy tệp cài đặt tương thích Windows (.exe, .msi, .zip) trong bản phát hành mới nhất.';
+        }
+        setInspectError(res.thongBao || errorMsg);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Lỗi kết nối khi thẩm định repository.';
+      setInspectError(message);
+    } finally {
+      setIsInspecting(false);
+    }
+  };
+
+  // Điều khiển bàn phím (P3-07.3: Mũi tên lên/xuống, Enter, Esc)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setSearchModalOpen(false);
+      return;
+    }
+
+    const items = searchResult?.duLieu || [];
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (items.length > 0) {
+        setSelectedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (items.length > 0) {
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isGithubUrl || searchResult?.loaiTruyVan === 'URL') {
+        if (searchResult?.duongDanUrl?.daCoTrongStore) {
+          openAppDetail(searchResult.duongDanUrl.repo);
+          setSearchModalOpen(false);
+        } else {
+          handleInspectRepo(query.trim());
+        }
+      } else if (items.length > 0 && selectedIndex >= 0 && selectedIndex < items.length) {
+        const selectedApp = items[selectedIndex];
+        openAppDetail(selectedApp.tenRepoDayDu || selectedApp.maUngDung);
+        setSearchModalOpen(false);
+      }
+    }
+  };
+
+  if (!isSearchModalOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-sm select-none animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-black/60 backdrop-blur-xs select-none animate-fade-in"
+      onClick={() => setSearchModalOpen(false)}
+    >
       <div
-        className="w-full max-w-2xl rounded-2xl bg-surface border border-border shadow-2xl overflow-hidden flex flex-col"
+        className="tactile-card w-full max-w-2xl rounded-2xl bg-surface border border-border shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Thanh nhập tìm kiếm */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
+        {/* 1. Thanh nhập tìm kiếm (Ctrl+K) */}
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border bg-surface-elevated/40">
           <Search className="w-5 h-5 text-accent-ai shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setSearchModalOpen(false);
-            }}
-            placeholder="Tìm theo tên app, mô tả ý định tiếng Việt hoặc dán link GitHub..."
+            onKeyDown={handleKeyDown}
+            placeholder="Tìm theo tên app, ý định AI tiếng Việt hoặc dán link GitHub..."
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
           />
-          {query && (
+          {isSearching && <Loader2 className="w-4 h-4 text-accent-forge animate-spin shrink-0" />}
+          {query && !isSearching && (
             <button
               onClick={() => setQuery('')}
-              className="text-muted hover:text-primary transition-colors"
+              className="btn-tactile text-muted hover:text-primary transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -54,67 +185,222 @@ export const SearchModal: React.FC = () => {
           </kbd>
         </div>
 
-        {/* Nội dung kết quả tìm kiếm / chế độ Paste & Play */}
-        <div className="p-4 max-h-[380px] overflow-y-auto flex flex-col gap-2">
-          {/* Nhánh 1: Phát hiện link GitHub (Paste & Play) */}
-          {isGithubUrl ? (
-            <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-accent-forge font-semibold text-xs">
-                <Github className="w-4 h-4" />
-                <span>PHÁT HIỆN LIÊN KẾT GITHUB (PASTE & PLAY)</span>
-              </div>
-              <p className="text-xs text-secondary">
-                Hệ thống sẽ thẩm định repo, trích xuất tệp cài đặt Windows tương thích và tóm tắt AI
-                tiếng Việt tự động.
-              </p>
-              <button
-                onClick={() => {
-                  alert(`Đang thẩm định repo: ${query}. Tính năng sẽ liên kết API ở P3-07!`);
-                  setSearchModalOpen(false);
-                }}
-                className="mt-1 w-full py-2 px-3 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-              >
-                <span>Thẩm Định & Nạp Cài Đặt Ngay</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : query.length > 0 ? (
-            /* Nhánh 2: Kết quả tìm kiếm theo tên hoặc ý định AI */
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-accent-ai px-1 py-0.5">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Tìm kiếm theo ý định tự nhiên với Gemini Flash...</span>
-              </div>
-              <div
-                onClick={() => {
-                  openAppDetail('newpipe-id');
-                  setSearchModalOpen(false);
-                }}
-                className="p-3 rounded-xl hover:bg-surface-elevated flex items-center justify-between cursor-pointer border border-transparent hover:border-border transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-surface-elevated flex items-center justify-center text-primary font-bold">
-                    N
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-primary">NewPipe</h4>
-                    <p className="text-[11px] text-muted">Trình xem video nhẹ không quảng cáo</p>
-                  </div>
+        {/* 2. Nội dung kết quả tìm kiếm / chế độ Paste & Play */}
+        <div className="p-4 max-h-[420px] overflow-y-auto flex flex-col gap-2">
+          {/* Nhánh 1: Phát hiện link GitHub hoặc loaiTruyVan === 'URL' (P3-07.2 Paste & Play) */}
+          {isGithubUrl || searchResult?.loaiTruyVan === 'URL' ? (
+            <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-accent-forge font-semibold text-xs">
+                  <Github className="w-4 h-4" />
+                  <span>PHÁT HIỆN LIÊN KẾT GITHUB (PASTE & PLAY)</span>
                 </div>
-                <span className="text-[11px] font-mono text-emerald-400 font-bold">92/100</span>
+                {searchResult?.duongDanUrl?.daCoTrongStore && (
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
+                    ĐÃ CÓ TRONG STORE
+                  </span>
+                )}
               </div>
+
+              <p className="text-xs text-secondary leading-relaxed">
+                {searchResult?.duongDanUrl?.daCoTrongStore
+                  ? 'Ứng dụng này đã được thẩm định an toàn và đồng bộ đầy đủ tệp cài đặt trong kho ForgeStore.'
+                  : 'Hệ thống sẽ kết nối GitHub API, tự động trích xuất bản phát hành mới nhất, thẩm định SHA-256 và tóm tắt AI tiếng Việt.'}
+              </p>
+
+              {/* Thông báo lỗi khi thẩm định thất bại */}
+              {inspectError && (
+                <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{inspectError}</span>
+                </div>
+              )}
+
+              {/* Thông báo thành công */}
+              {inspectSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>
+                    Thẩm định hoàn tất! Đang chuyển sang trang cài đặt của{' '}
+                    <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                  </span>
+                </div>
+              )}
+
+              {/* Nút hành động */}
+              {searchResult?.duongDanUrl?.daCoTrongStore ? (
+                <button
+                  onClick={() => {
+                    openAppDetail(searchResult.duongDanUrl!.repo);
+                    setSearchModalOpen(false);
+                  }}
+                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30"
+                >
+                  <span>Mở Trang Cài Đặt Ngay</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleInspectRepo(query.trim())}
+                  disabled={isInspecting || !!inspectSuccess}
+                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30 disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {isInspecting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang thẩm định repo và tệp cài đặt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Thẩm Định & Nạp Cài Đặt Ngay</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          ) : query.trim().length >= 2 ? (
+            /* Nhánh 2: Kết quả tìm kiếm theo tên hoặc ý định AI (P3-07.1) */
+            <div className="flex flex-col gap-2">
+              {/* Huy hiệu thông báo loại truy vấn */}
+              {searchResult?.loaiTruyVan === 'Y_DINH' && (
+                <div className="p-2.5 rounded-xl bg-accent-ai/10 border border-accent-ai/20 flex items-center justify-between text-xs text-accent-ai">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>
+                      {searchResult.truyVanDich
+                        ? `Tìm theo ý định ngữ nghĩa AI: "${searchResult.truyVanDich}"`
+                        : 'Tìm kiếm thông minh kết hợp Dual-AI & pgvector'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-muted">gemini-3.1-flash-lite</span>
+                </div>
+              )}
+
+              {/* Danh sách ứng dụng tìm thấy */}
+              {searchResult?.duLieu && searchResult.duLieu.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {searchResult.duLieu.map((app, idx) => {
+                    const isSelected = selectedIndex === idx;
+
+                    return (
+                      <div
+                        key={app.maUngDung}
+                        onClick={() => {
+                          openAppDetail(app.tenRepoDayDu || app.maUngDung);
+                          setSearchModalOpen(false);
+                        }}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        className={`btn-tactile p-3 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${
+                          isSelected
+                            ? 'bg-surface-elevated border-accent-forge/40 shadow-xs'
+                            : 'bg-surface-elevated/40 border-border/40 hover:border-border hover:bg-surface-elevated/70'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden">
+                            {app.duongDanIcon ? (
+                              <img
+                                src={app.duongDanIcon}
+                                alt={app.tenKhoChua}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-primary font-bold text-sm font-display">
+                                {app.tenKhoChua.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <div className="flex items-center gap-2 truncate">
+                              <h4 className="text-xs font-bold text-primary font-display truncate">
+                                {app.tenKhoChua}
+                              </h4>
+                              <span className="text-[10px] font-mono text-muted truncate">
+                                {app.tenRepoDayDu}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-secondary truncate">
+                              {app.khauHieuTiengViet ||
+                                `${app.danhMucChinh} • Cập nhật ${app.phienBanMoiNhat || 'mới'}`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0 ml-3 font-mono text-xs">
+                          <span className="text-amber-400 flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-amber-400" />
+                            {app.soSaoGithub >= 1000
+                              ? `${(app.soSaoGithub / 1000).toFixed(1)}k`
+                              : app.soSaoGithub}
+                          </span>
+                          {app.diemUyTin !== undefined && app.diemUyTin !== null && (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                                app.diemUyTin >= 80
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : app.diemUyTin >= 60
+                                    ? 'bg-amber-500/10 text-amber-400'
+                                    : 'bg-rose-500/10 text-rose-400'
+                              }`}
+                            >
+                              {app.diemUyTin}/100
+                            </span>
+                          )}
+                          <ArrowRight className="w-3.5 h-3.5 text-muted" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : !isSearching ? (
+                /* Không tìm thấy kết quả */
+                <div className="py-8 flex flex-col items-center justify-center text-center gap-2 text-muted">
+                  <div className="w-10 h-10 rounded-full bg-surface-elevated flex items-center justify-center text-muted">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs text-secondary">
+                    Không tìm thấy ứng dụng nào khớp với "<strong>{query}</strong>".
+                  </p>
+                  <p className="text-[11px] text-muted max-w-sm">
+                    Ông có thể dán trực tiếp đường dẫn GitHub repo để hệ thống thẩm định và nạp cài
+                    đặt ngay!
+                  </p>
+                </div>
+              ) : null}
             </div>
           ) : (
             /* Trạng thái rỗng: Hướng dẫn tìm kiếm */
-            <div className="py-6 flex flex-col items-center justify-center text-center gap-2 text-muted">
-              <div className="w-10 h-10 rounded-full bg-surface-elevated flex items-center justify-center text-accent-forge">
-                <Search className="w-5 h-5" />
+            <div className="py-8 flex flex-col items-center justify-center text-center gap-3 text-muted">
+              <div className="w-12 h-12 rounded-2xl bg-surface-elevated flex items-center justify-center text-accent-forge">
+                <Search className="w-6 h-6" />
               </div>
-              <p className="text-xs max-w-sm text-secondary">
-                Gõ <strong className="text-primary">tên ứng dụng</strong>, mô tả nhu cầu bằng{' '}
-                <strong className="text-primary">tiếng Việt</strong> (VD: <em>"app ghi chú nhẹ"</em>
-                ) hoặc <strong className="text-primary">dán trực tiếp link GitHub</strong>.
-              </p>
+              <div className="flex flex-col gap-1 max-w-sm">
+                <p className="text-xs font-medium text-primary">
+                  Tìm kiếm thông minh hoặc Nạp ứng dụng trực tiếp
+                </p>
+                <p className="text-[11px] text-secondary leading-relaxed">
+                  Gõ <strong>tên ứng dụng</strong> (vd: <em>RustDesk</em>), mô tả ý định bằng{' '}
+                  <strong>tiếng Việt</strong> (vd: <em>"quay màn hình nhẹ"</em>) hoặc{' '}
+                  <strong>dán liên kết GitHub</strong> (Paste & Play).
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-muted mt-1">
+                <span>Dùng</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-surface-elevated border border-border">
+                  ↑
+                </kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-surface-elevated border border-border">
+                  ↓
+                </kbd>
+                <span>để chọn</span>
+                <span>•</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-surface-elevated border border-border">
+                  ENTER
+                </kbd>
+                <span>để mở</span>
+              </div>
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { MucDoUyTin } from '@forgestore/types';
 vi.mock('../api/api-client', () => ({
   apiClient: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -268,5 +269,66 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(card.moTaNgan).toBe('A helpful desktop utility');
     expect(card.diemUyTin).toBe(92);
     expect(card.giayPhep).toBe('FOSS');
+  });
+
+  it('timKiem gọi đúng endpoint /search kèm tham số query và platform', async () => {
+    const mockSearchRes = {
+      duLieu: [],
+      tongSo: 0,
+      trangHienTai: 1,
+      kichThuocTrang: 20,
+      tongSoTrang: 0,
+      loaiTruyVan: 'TEN_APP',
+      nguonKetQua: 'CSDL',
+    };
+    vi.mocked(apiClient.get).mockResolvedValueOnce(mockSearchRes);
+
+    const result = await service.timKiem('rustdesk', 'WINDOWS');
+    expect(apiClient.get).toHaveBeenCalledWith('/search?q=rustdesk&platform=WINDOWS');
+    expect(result.loaiTruyVan).toBe('TEN_APP');
+  });
+
+  it('timKiem xử lý kết quả phân luồng URL cho Paste & Play', async () => {
+    const mockUrlRes = {
+      duLieu: [],
+      tongSo: 0,
+      trangHienTai: 1,
+      kichThuocTrang: 20,
+      tongSoTrang: 0,
+      loaiTruyVan: 'URL',
+      nguonKetQua: 'URL',
+      duongDanUrl: {
+        owner: 'rustdesk',
+        repo: 'rustdesk',
+        urlGoc: 'https://github.com/rustdesk/rustdesk',
+        daCoTrongStore: true,
+      },
+    };
+    vi.mocked(apiClient.get).mockResolvedValueOnce(mockUrlRes);
+
+    const result = await service.timKiem('https://github.com/rustdesk/rustdesk');
+    expect(result.loaiTruyVan).toBe('URL');
+    expect(result.duongDanUrl?.daCoTrongStore).toBe(true);
+  });
+
+  it('kiemDinhRepo gọi POST /repos/inspect với method POST và payload chuẩn', async () => {
+    const mockInspectRes = {
+      trangThai: 'THANH_CONG',
+      thongBao: 'Kiểm định thành công',
+      ungDung: {
+        maUngDung: 'uuid-123',
+        tenKhoChua: 'new-app',
+        tenRepoDayDu: 'owner/new-app',
+      },
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce(mockInspectRes);
+
+    const result = await service.kiemDinhRepo('https://github.com/owner/new-app');
+    expect(apiClient.post).toHaveBeenCalledWith('/repos/inspect', {
+      urlRepo: 'https://github.com/owner/new-app',
+      nenTang: 'WINDOWS',
+      abis: ['X86_64'],
+    });
+    expect(result.trangThai).toBe('THANH_CONG');
   });
 });
