@@ -234,22 +234,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(trinh_quan_ly_tai)
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            use tauri::Emitter;
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let _ = app.get_webview_window("main").map(|w| {
                 let _ = w.show();
                 let _ = w.set_focus();
             });
-            // Forward các tham số/link deep-link nhận từ instance thứ hai về cửa sổ chính
-            let mut deep_links = Vec::new();
-            for arg in args {
-                if arg.starts_with("forgestore://") {
-                    deep_links.push(arg);
-                }
-            }
-            if !deep_links.is_empty() {
-                let _ = app.emit("deep-link://new-url", deep_links);
-            }
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())

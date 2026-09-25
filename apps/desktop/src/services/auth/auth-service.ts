@@ -33,7 +33,6 @@ export class AuthService {
     if (isTauri() && !this.isListening) {
       try {
         const { onOpenUrl, getCurrent } = await import('@tauri-apps/plugin-deep-link');
-        const { listen } = await import('@tauri-apps/api/event');
 
         // Bắt deep link khi app mở nguội (cold start)
         try {
@@ -49,23 +48,11 @@ export class AuthService {
           console.warn('[AuthService] Lỗi khi đọc getCurrent deep-link:', coldErr);
         }
 
-        // Lắng nghe deep link từ plugin deep-link khi app đang chạy
+        // Lắng nghe deep link từ plugin deep-link khi app đang chạy (single-instance tự động chuyển tiếp)
         this.unlistenDeepLink = await onOpenUrl(async (urls: string[]) => {
           for (const url of urls) {
             if (url.startsWith('forgestore://auth')) {
               await this.handleDeepLinkUrl(url);
-            }
-          }
-        });
-
-        // Lắng nghe thêm sự kiện forward từ single-instance nếu có
-        await listen<string[]>('deep-link://new-url', async (event) => {
-          const urls = event.payload;
-          if (Array.isArray(urls)) {
-            for (const url of urls) {
-              if (url.startsWith('forgestore://auth')) {
-                await this.handleDeepLinkUrl(url);
-              }
             }
           }
         });
