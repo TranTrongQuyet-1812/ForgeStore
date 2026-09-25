@@ -1,0 +1,213 @@
+/**
+ * Type-Safe API Client cho ForgeStore Desktop Client.
+ *
+ * Tính năng chính (P3-03.1 & P3-03.2):
+ * 1. Tự động đính kèm `Authorization: Bearer <accessToken>` từ bộ nhớ RAM.
+ * 2. Cơ chế Single-Flight 401 Interceptor:
+ *    - Khi gặp lỗi 401, tự động gọi `/auth/refresh` ĐÚNG MỘT LẦN.
+ *    - Các request khác đến trong lúc đang refresh sẽ được xếp hàng (Promise Queue), không bắn bão request lên server.
+ *    - Sau khi refresh thành công: Cập nhật accessToken trong RAM, xoay vòng refreshToken (nếu có) vào Windows Credential Manager, và tự động gửi lại toàn bộ request trong hàng đợi.
+ *    - Nếu refresh thất bại: Hủy phiên, dọn sạch token và gọi logout callback.
+ */
+
+import { tokenStorage } from '../auth/token-storage';
+import type { AuthRefreshResponseDto } from '@forgestore/types';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public data: unknown,
+  ) {
+    super(`API Error ${status}: ${statusText}`);
+    this.name = 'ApiError';
+  }
+}
+
+export type LogoutListener = () => void;
+export type TokenRefreshListener = (newAccessToken: string) => void;
+
+export class ApiClient {
+  private baseUrl: string;
+  private refreshPromise: Promise<string> | null = null;
+  private logoutListeners: Set<LogoutListener> = new Set();
+  private tokenRefreshListeners: Set<TokenRefreshListener> = new Set();
+
+  constructor(baseUrl?: string) {
+    this.baseUrl =
+      baseUrl ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
+      'http://localhost:3000';
+    // Đảm bảo không có trailing slash
+    this.baseUrl = this.baseUrl.replace(/\/$/, '');
+  }
+
+  public onLogout(listener: LogoutListener): () => void {
+    this.logoutListeners.add(listener);
+    return () => this.logoutListeners.delete(listener);
+  }
+
+  public onTokenRefresh(listener: TokenRefreshListener): () => void {
+    this.tokenRefreshListeners.add(listener);
+    return () => this.tokenRefreshListeners.delete(listener);
+  }
+
+  private notifyLogout(): void {
+    this.logoutListeners.forEach((fn) => fn());
+  }
+
+  private notifyTokenRefresh(newToken: string): void {
+    this.tokenRefreshListeners.forEach((fn) => fn(newToken));
+  }
+
+  /**
+   * Thực hiện quy trình làm mới token duy nhất 1 lần (Single-Flight Token Refresh)
+   */
+  private async executeTokenRefresh(): Promise<string> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = (async () => {
+      try {
+        const refreshToken = await tokenStorage.getRefreshToken();
+        if (!refreshToken) {
+          throw new Error('Không tìm thấy Refresh Token trong Windows Credential Manager');
+        }
+
+        const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new ApiError(response.status, response.statusText, errData);
+        }
+
+        const data: AuthRefreshResponseDto = await response.json();
+        const newAccessToken = data.accessToken;
+
+        // Cập nhật RAM access token
+        tokenStorage.setAccessToken(newAccessToken);
+
+        // Nếu server cấp refreshToken mới qua cơ chế Token Rotation, lưu ngay vào Windows Credential Manager
+        if (data.refreshToken) {
+          await tokenStorage.setRefreshToken(data.refreshToken);
+        }
+
+        this.notifyTokenRefresh(newAccessToken);
+        return newAccessToken;
+      } catch (error) {
+        // Refresh thất bại (hết hạn hoặc bị thu hồi) -> Dọn dẹp sạch token và đăng xuất
+        await tokenStorage.clearAllTokens();
+        this.notifyLogout();
+        throw error;
+      } finally {
+        this.refreshPromise = null;
+      }
+    })();
+
+    return this.refreshPromise;
+  }
+
+  /**
+   * Core request function với retry tự động khi gặp 401
+   */
+  public async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    isRetry = false,
+  ): Promise<T> {
+    const url = endpoint.startsWith('http')
+      ? endpoint
+      : `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const accessToken = tokenStorage.getAccessToken();
+    if (accessToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    // Xử lý khi nhận 401 Unauthorized
+    if (response.status === 401) {
+      // Nếu chính endpoint /auth/refresh bị 401 hoặc request này đã là retry một lần rồi thì không retry nữa
+      if (endpoint.includes('/auth/refresh') || isRetry) {
+        await tokenStorage.clearAllTokens();
+        this.notifyLogout();
+        const errData = await response.json().catch(() => ({}));
+        throw new ApiError(response.status, response.statusText, errData);
+      }
+
+      // Chờ kết quả refresh duy nhất (các request khác sẽ cùng đợi promise này)
+      const newAccessToken = await this.executeTokenRefresh();
+
+      // Gửi lại request ban đầu với Access Token mới
+      const retryHeaders = new Headers(options.headers || {});
+      retryHeaders.set('Authorization', `Bearer ${newAccessToken}`);
+      if (!retryHeaders.has('Content-Type') && !(options.body instanceof FormData)) {
+        retryHeaders.set('Content-Type', 'application/json');
+      }
+
+      return await this.request<T>(
+        endpoint,
+        {
+          ...options,
+          headers: retryHeaders,
+        },
+        true, // Đánh dấu đã retry
+      );
+    }
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new ApiError(response.status, response.statusText, errData);
+    }
+
+    // Nếu không có content (204 No Content)
+    if (response.status === 204) {
+      return null as unknown as T;
+    }
+
+    return (await response.json()) as T;
+  }
+
+  public get<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  }
+
+  public post<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: body instanceof FormData ? body : JSON.stringify(body),
+    });
+  }
+
+  public patch<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: body instanceof FormData ? body : JSON.stringify(body),
+    });
+  }
+
+  public delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+}
+
+// Singleton instance dùng cho toàn app
+export const apiClient = new ApiClient();

@@ -42,7 +42,7 @@ export const AppLayout: React.FC = () => {
         <Sidebar />
 
         {/* Vùng cuộn nội dung chính */}
-        <main className="flex-1 h-full overflow-y-auto bg-canvas transition-colors duration-200">
+        <main className="flex-1 h-full overflow-y-auto ambient-canvas transition-colors duration-200">
           {renderContent()}
         </main>
       </div>

@@ -20,26 +20,38 @@ export const FavoritesPage: React.FC = () => {
           app={{
             id: 'obsidian',
             tenApp: 'Obsidian',
+            repoHandle: 'obsidianmd/obsidian-releases',
             tacGia: 'obsidianmd',
             moTaNgan:
               'Ứng dụng ghi chú kiến thức cá nhân dạng mạng lưới (Second Brain), hỗ trợ Markdown và bảo mật offline.',
             soSaoGithub: 112000,
-            phienBanMoiNhat: '1.5.8',
+            phienBanMoiNhat: 'v1.5.8',
+            kichThuocFile: '72.4 MB',
+            dinhDangFile: ['EXE', 'MSI'],
+            kienTruc: ['x64', 'ARM64'],
             diemUyTin: 98,
             danhMucChinh: 'Văn phòng',
+            giayPhep: 'Proprietary / FOSS Sync',
+            isVerifiedFoss: true,
           }}
         />
         <AppCard
           app={{
             id: 'newpipe',
             tenApp: 'NewPipe',
+            repoHandle: 'TeamNewPipe/NewPipe',
             tacGia: 'TeamNewPipe',
             moTaNgan:
               'Trình phát đa phương tiện tự do nhẹ nhàng, tôn trọng quyền riêng tư và không quảng cáo.',
             soSaoGithub: 32500,
-            phienBanMoiNhat: '0.27.0',
+            phienBanMoiNhat: 'v0.27.0',
+            kichThuocFile: '11.8 MB',
+            dinhDangFile: ['APK'],
+            kienTruc: ['Universal', 'ARM64'],
             diemUyTin: 92,
             danhMucChinh: 'Đa phương tiện',
+            giayPhep: 'GPL-3.0',
+            isVerifiedFoss: true,
           }}
         />
       </div>

@@ -5,35 +5,72 @@
 @tailwind utilities;
 
 :root {
-  /* Bảng màu Trắng ngà sữa (Light Mode sau này) - Tuyệt đối không trắng toát #FFFFFF gây chói */
+  /* Bảng màu Trắng ngà sữa (Light Mode) - Ấm cúng, dịu mắt, không trắng toát #FFFFFF */
   --color-bg-canvas: #F8F7F4;
   --color-bg-surface: #FFFFFF;
   --color-bg-surface-elevated: #FFFFFF;
-  --color-bg-surface-hover: #F3F1EC;
-  --color-border-subtle: #E5E3DC;
+  --color-bg-surface-hover: #F2EFE9;
+  --color-border-subtle: #E2DFD6;
   --color-border-active: #CBD5E1;
   --color-text-primary: #1E293B;
   --color-text-secondary: #475569;
-  --color-text-muted: #94A3B8;
+  --color-text-muted: #8E9BAE;
+  --card-specular: rgba(255, 255, 255, 0.8);
+  --ambient-glow: rgba(249, 115, 22, 0.03);
 }
 
 .dark {
-  /* Bảng màu Dark Mode dịu mắt - Than chì #0B0F19, tuyệt đối không đen kịt #000000 chống lóa */
+  /* Bảng màu Dark Mode than chì dịu mắt - Nền #0B0F19, tuyệt đối không đen kịt #000000 chống lóa */
   --color-bg-canvas: #0B0F19;
-  --color-bg-surface: #151E2E;
-  --color-bg-surface-elevated: #1E293B;
-  --color-bg-surface-hover: #1D2A40;
-  --color-border-subtle: #1E293B;
-  --color-border-active: #334155;
+  --color-bg-surface: #131B2B;
+  --color-bg-surface-elevated: #1A2438;
+  --color-bg-surface-hover: #1E2B42;
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-active: rgba(255, 255, 255, 0.14);
   --color-text-primary: #F1F5F9;
   --color-text-secondary: #94A3B8;
   --color-text-muted: #64748B;
+  --card-specular: rgba(255, 255, 255, 0.06);
+  --ambient-glow: rgba(249, 115, 22, 0.06);
 }
 
-/* Custom Scrollbar thanh mảnh, hòa vào nền */
+@layer utilities {
+  /* Lớp bề mặt Tactile với viền sáng Specular Rim Light 1px (Linear / Raycast Style) */
+  .tactile-card {
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .tactile-card:hover {
+    border-color: var(--color-border-active);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 8px 28px -4px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .tactile-card:active {
+    transform: scale(0.99);
+  }
+
+  .tactile-elevated {
+    background-color: var(--color-bg-surface-elevated);
+    border: 1px solid var(--color-border-active);
+    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 16px 36px -6px rgba(0, 0, 0, 0.6);
+  }
+
+  .ambient-canvas {
+    background-color: var(--color-bg-canvas);
+    background-image: 
+      radial-gradient(ellipse 60% 40% at 50% -10%, var(--ambient-glow), transparent 70%),
+      radial-gradient(ellipse 40% 30% at 85% 15%, rgba(6, 182, 212, 0.04), transparent 60%);
+  }
+}
+
+/* Custom Scrollbar thanh mảnh */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -41,12 +78,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-subtle);
+  background: rgba(148, 163, 184, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-active);
+  background: rgba(148, 163, 184, 0.4);
 }
 
 /* Font số tabular chống rung giật giao diện */
