@@ -49,7 +49,10 @@ export class StoreService {
    * Lấy chi tiết toàn diện của một ứng dụng (cho trang Chi tiết / App Detail)
    */
   async layChiTietApp(maUngDung: string): Promise<UngDungChiTietDto> {
-    return apiClient.get<UngDungChiTietDto>(`/apps/${encodeURIComponent(maUngDung)}`);
+    const endpoint = maUngDung.includes('/')
+      ? `/apps/${maUngDung.split('/').map(encodeURIComponent).join('/')}`
+      : `/apps/${encodeURIComponent(maUngDung)}`;
+    return apiClient.get<UngDungChiTietDto>(endpoint);
   }
 
   /**
