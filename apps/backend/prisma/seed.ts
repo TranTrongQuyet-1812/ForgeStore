@@ -74,7 +74,8 @@ async function main() {
       console.info(
         `\n⏳ [${thanhCong + thatBai + 1}/${SEED_REPOS.length}] Đang đồng bộ repo sống: [${slug}]...`,
       );
-      const appRecord = await appsService.dongBoRepo(slug);
+      const [owner, repo] = slug.split('/');
+      const appRecord = await appsService.dongBoRepo(owner!, repo!);
 
       // Cập nhật trạng thái xác minh & nổi bật
       await prisma.ungDung.update({

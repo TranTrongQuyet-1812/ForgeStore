@@ -10,6 +10,8 @@ interface MockRedis {
   del: MockFn;
   getdel: MockFn;
   ping: MockFn;
+  incrby: MockFn;
+  expire: MockFn;
 }
 
 describe('CacheService (Resilience & Atomic GETDEL)', () => {
@@ -23,6 +25,8 @@ describe('CacheService (Resilience & Atomic GETDEL)', () => {
       del: vi.fn(),
       getdel: vi.fn(),
       ping: vi.fn().mockResolvedValue('PONG'),
+      incrby: vi.fn(),
+      expire: vi.fn(),
     };
 
     service = new CacheService(mockRedis as unknown as Redis);
@@ -97,6 +101,28 @@ describe('CacheService (Resilience & Atomic GETDEL)', () => {
       // Key mới nhất vẫn còn nguyên
       expect(await service.get('bulk:key:6')).toEqual({ index: 6 });
       expect(await service.get('bulk:key:1005')).toEqual({ index: 1005 });
+    });
+  });
+
+  describe('tangSo (Atomic INCRBY & Fallback)', () => {
+    it('tăng số nguyên tử qua Redis incrby thành công và đặt expire khi vừa tạo', async () => {
+      mockRedis.incrby.mockResolvedValue(100);
+      mockRedis.expire.mockResolvedValue(1);
+
+      const val = await service.tangSo('test:counter', 100, 3600);
+      expect(val).toBe(100);
+      expect(mockRedis.incrby).toHaveBeenCalledWith('test:counter', 100);
+      expect(mockRedis.expire).toHaveBeenCalledWith('test:counter', 3600);
+    });
+
+    it('fallback In-Memory tăng số nguyên tử khi Redis lỗi', async () => {
+      mockRedis.incrby.mockRejectedValue(new Error('Redis is down'));
+
+      const v1 = await service.tangSo('test:mem_counter', 50, 3600);
+      expect(v1).toBe(50);
+
+      const v2 = await service.tangSo('test:mem_counter', 30, 3600);
+      expect(v2).toBe(80);
     });
   });
 });

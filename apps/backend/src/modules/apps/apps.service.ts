@@ -830,12 +830,6 @@ export class AppsService {
           if (resJev.luaChon && resJev.luaChon !== 'KHONG_FILE_NAO_PHU_HOP') {
             const selected = ambiguousFiles.find((f) => f.maTep === resJev.luaChon);
             if (selected) {
-              const primaryAbi = abis[0] || 'arm64-v8a';
-              const inferredChip = this.chuyenDoiAbiSangEnum(primaryAbi);
-              await this.prisma.tepCaiDat.update({
-                where: { maTep: selected.maTep },
-                data: { kienTrucChip: inferredChip },
-              });
               return this.dongGoiResponseAsset(selected, 'JEV', resJev.doTinCay);
             }
           }

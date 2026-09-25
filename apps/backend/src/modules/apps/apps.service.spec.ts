@@ -745,7 +745,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.nguonQuyetDinh).toBe('LUAT');
     });
 
-    it('Thiết bị Android: tên file mơ hồ (KHONG_XAC_DINH), gọi Jev Choice thành công và cập nhật kiến trúc chip vào CSDL', async () => {
+    it('Thiết bị Android: tên file mơ hồ (KHONG_XAC_DINH), gọi Jev Choice thành công để chọn tệp phù hợp', async () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
       mockPrisma.banPhatHanh.findMany.mockResolvedValue([
         {
@@ -770,10 +770,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.nguonQuyetDinh).toBe('JEV');
       expect(res.doTinCay).toBe(0.92);
       expect(mockJevClientService.hoiChoice).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.tepCaiDat.update).toHaveBeenCalledWith({
-        where: { maTep: 'file-ambiguous' },
-        data: { kienTrucChip: KienTrucChip.ARM64_V8A },
-      });
+      expect(mockPrisma.tepCaiDat.update).not.toHaveBeenCalled();
     });
 
     it('Thiết bị Android: không có APK nào phù hợp ném NotFoundException với mã KHONG_CO_FILE_PHU_HOP', async () => {

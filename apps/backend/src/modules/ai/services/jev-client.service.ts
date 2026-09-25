@@ -147,10 +147,8 @@ export class JevClientService {
           const thangHienTai = new Date().toISOString().slice(0, 7);
           const redisKey = `fs:jev:usage:${thangHienTai}`;
           this.cacheService
-            .lay<number>(redisKey)
-            .then(async (cur) => {
-              const tongMoi = (cur || 0) + inTokens;
-              await this.cacheService.dat(redisKey, tongMoi, 86400 * 35);
+            .tangSo(redisKey, inTokens, 86400 * 35)
+            .then((tongMoi) => {
               if (tongMoi > this.CANH_BAO_TOKEN) {
                 this.logger.warn(
                   `⚠️ [Jev Quota Warning] Tổng token Jev đã dùng trong tháng [${thangHienTai}]: ${tongMoi} tokens (vượt 80% ngân sách 5$/tháng ~ 119M tokens)`,

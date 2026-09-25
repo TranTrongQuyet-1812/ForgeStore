@@ -152,6 +152,42 @@ export class CacheService {
   }
 
   /**
+   * Tăng giá trị số nguyên tử (Atomic INCRBY) kèm TTL.
+   * Dùng cho bộ đếm token Jev và rate limit counters.
+   */
+  async tangSo(key: string, amount: number = 1, ttlSeconds?: number): Promise<number> {
+    try {
+      const newVal = await this.redisClient.incrby(key, amount);
+      if (ttlSeconds && ttlSeconds > 0 && newVal === amount) {
+        await this.redisClient.expire(key, ttlSeconds);
+      }
+      return newVal;
+    } catch (error) {
+      this.logger.warn(
+        `Lỗi INCRBY key [${key}], chuyển sang In-Memory Fallback: ${(error as Error).message}`,
+      );
+    }
+
+    // In-Memory Fallback (Atomic trong Node.js single-threaded event loop)
+    const memEntry = this.memoryFallback.get(key);
+    let cur = 0;
+    if (memEntry && memEntry.expiresAt > Date.now()) {
+      try {
+        cur = parseInt(JSON.parse(memEntry.data), 10) || 0;
+      } catch {
+        cur = 0;
+      }
+    }
+    const newVal = cur + amount;
+    const effectiveTtl = ttlSeconds !== undefined ? ttlSeconds : 3600;
+    this.memoryFallback.set(key, {
+      data: JSON.stringify(newVal),
+      expiresAt: Date.now() + effectiveTtl * 1000,
+    });
+    return newVal;
+  }
+
+  /**
    * Xóa một hoặc nhiều Key khỏi Cache.
    */
   async del(keys: string | string[]): Promise<void> {
