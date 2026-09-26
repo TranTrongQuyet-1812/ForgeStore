@@ -33,4 +33,20 @@ export class GhiNhanCaiDatDto {
   @IsOptional()
   @IsString({ message: 'Đường dẫn thư mục phải là chuỗi ký tự' })
   duongDanThuMuc?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tên khóa Registry Windows lưu thông tin gỡ cài đặt (cho Windows EXE/MSI)',
+    example: 'Notepad++',
+  })
+  @IsOptional()
+  @IsString({ message: 'Khóa Registry phải là chuỗi ký tự' })
+  khoaRegistry?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tên hiển thị trong Registry Windows (DisplayName)',
+    example: 'Notepad++ (64-bit x64)',
+  })
+  @IsOptional()
+  @IsString({ message: 'Tên hiển thị Registry phải là chuỗi ký tự' })
+  tenHienThiRegistry?: string;
 }

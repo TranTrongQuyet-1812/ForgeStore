@@ -72,3 +72,30 @@ export const TrangThaiThamDinhJev = {
   CHUA_THAM_DINH: 'CHUA_THAM_DINH',
 } as const;
 export type TrangThaiThamDinhJev = (typeof TrangThaiThamDinhJev)[keyof typeof TrangThaiThamDinhJev];
+
+export const NhomCachCai = {
+  WINGET: 'WINGET',
+  SCOOP: 'SCOOP',
+  PIP: 'PIP',
+  CONDA: 'CONDA',
+  NPM: 'NPM',
+  CARGO: 'CARGO',
+  GO: 'GO',
+  DOCKER: 'DOCKER',
+  NGUON: 'NGUON',
+} as const;
+export type NhomCachCai = (typeof NhomCachCai)[keyof typeof NhomCachCai];
+
+export const HeDieuHanhCli = {
+  WINDOWS: 'WINDOWS',
+  LINUX_MAC: 'LINUX_MAC',
+  DUNG_CHUNG: 'DUNG_CHUNG',
+} as const;
+export type HeDieuHanhCli = (typeof HeDieuHanhCli)[keyof typeof HeDieuHanhCli];
+
+export const PhanCungYeuCau = {
+  CPU: 'CPU',
+  GPU_NVIDIA: 'GPU_NVIDIA',
+  KHONG_RO: 'KHONG_RO',
+} as const;
+export type PhanCungYeuCau = (typeof PhanCungYeuCau)[keyof typeof PhanCungYeuCau];

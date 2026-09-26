@@ -176,6 +176,8 @@ export class DevicesService {
         phienBanHienTai: item.phienBanHienTai,
         maTepDaCai: item.maTepDaCai,
         duongDanThuMuc: item.duongDanThuMuc,
+        khoaRegistry: item.khoaRegistry ?? null,
+        tenHienThiRegistry: item.tenHienThiRegistry ?? null,
         ngayCaiDat: item.ngayCaiDat.toISOString(),
         ngayCapNhatCuoi: item.ngayCapNhatCuoi.toISOString(),
         coBanMoi,
@@ -208,6 +210,8 @@ export class DevicesService {
       phienBanHienTai: string;
       maTepDaCai?: string;
       duongDanThuMuc?: string;
+      khoaRegistry?: string;
+      tenHienThiRegistry?: string;
     },
   ) {
     await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
@@ -236,11 +240,16 @@ export class DevicesService {
         phienBanHienTai: dto.phienBanHienTai,
         maTepDaCai: dto.maTepDaCai || null,
         duongDanThuMuc: dto.duongDanThuMuc || null,
+        khoaRegistry: dto.khoaRegistry || null,
+        tenHienThiRegistry: dto.tenHienThiRegistry || null,
       },
       update: {
         phienBanHienTai: dto.phienBanHienTai,
         maTepDaCai: dto.maTepDaCai || null,
         duongDanThuMuc: dto.duongDanThuMuc || null,
+        khoaRegistry: dto.khoaRegistry !== undefined ? dto.khoaRegistry || null : undefined,
+        tenHienThiRegistry:
+          dto.tenHienThiRegistry !== undefined ? dto.tenHienThiRegistry || null : undefined,
         ngayCapNhatCuoi: new Date(),
       },
     });

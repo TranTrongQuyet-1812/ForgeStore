@@ -195,6 +195,8 @@ describe('DevicesService', () => {
             phienBanHienTai: '1.2.0',
             maTepDaCai: 'tep-1',
             duongDanThuMuc: null,
+            khoaRegistry: 'Notepad++',
+            tenHienThiRegistry: 'Notepad++ (64-bit x64)',
             ngayCaiDat: new Date('2026-09-01'),
             ngayCapNhatCuoi: new Date('2026-09-01'),
             ungDung: {
@@ -221,6 +223,8 @@ describe('DevicesService', () => {
         expect(result).toHaveLength(1);
         expect(result[0].maUngDung).toBe(maUngDung);
         expect(result[0].phienBanHienTai).toBe('1.2.0');
+        expect(result[0].khoaRegistry).toBe('Notepad++');
+        expect(result[0].tenHienThiRegistry).toBe('Notepad++ (64-bit x64)');
         expect(result[0].coBanMoi).toBe(true);
         expect(result[0].phienBanMoiNhat).toBe('v1.2.3');
       });
@@ -238,7 +242,7 @@ describe('DevicesService', () => {
         ).rejects.toThrow(NotFoundException);
       });
 
-      it('ghi nhận cài đặt thành công qua upsert và tăng soLuotTai cho tệp cài đặt', async () => {
+      it('ghi nhận cài đặt thành công qua upsert kèm khoaRegistry và tăng soLuotTai cho tệp cài đặt', async () => {
         mockPrisma.ungDung.findUnique.mockResolvedValue({
           maUngDung,
           tenRepoDayDu: 'rustdesk/rustdesk',
@@ -249,6 +253,8 @@ describe('DevicesService', () => {
           maUngDung,
           phienBanHienTai: '1.2.3',
           maTepDaCai: 'tep-1',
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
         });
         mockPrisma.tepCaiDat.update.mockResolvedValue({});
 
@@ -256,10 +262,23 @@ describe('DevicesService', () => {
           maUngDung,
           phienBanHienTai: '1.2.3',
           maTepDaCai: 'tep-1',
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
         });
 
         expect(res.phienBanHienTai).toBe('1.2.3');
-        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalled();
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              khoaRegistry: 'Notepad++',
+              tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+            }),
+            update: expect.objectContaining({
+              khoaRegistry: 'Notepad++',
+              tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+            }),
+          }),
+        );
         expect(mockPrisma.tepCaiDat.update).toHaveBeenCalledWith({
           where: { maTep: 'tep-1' },
           data: { soLuotTai: { increment: 1 } },

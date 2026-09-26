@@ -197,6 +197,7 @@ model PhanTichAI {
   soLanThuLai         Int                  @default(0) @map("so_lan_thu_lai") // Đếm số lần job thử tóm tắt lại (tối đa 3 lần)
   yeuToRuiRo          Json                 @default("[]") @map("yeu_to_rui_ro")
   quyenHanDaKiemTra   Json            @default("[]") @map("quyen_han_da_kiem_tra")
+  huongDanCaiDat      Json?           @map("huong_dan_cai_dat") // Hướng dẫn cài đặt qua dòng lệnh CLI (Giai đoạn 3)
   
   // Vector 768 chiều phục vụ tìm kiếm ý định tự nhiên với PostgreSQL pgvector
   vectorNguNghia      Unsupported("vector(768)")? @map("vector_ngu_nghia")
@@ -204,6 +205,7 @@ model PhanTichAI {
   thoiGianPhanTich    DateTime        @default(now()) @map("thoi_gian_phan_tich")
   ngayTao             DateTime        @default(now()) @map("ngay_tao")
   ngayCapNhat         DateTime        @updatedAt @map("ngay_cap_nhat")
+
 
   ungDung             UngDung         @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
 
@@ -286,6 +288,8 @@ model UngDungDaCai {
   phienBanHienTai   String            @map("phien_ban_hien_tai") // Bản đang chạy trên máy
   maTepDaCai        String?           @map("ma_tep_da_cai") @db.Uuid
   duongDanThuMuc    String?           @map("duong_dan_thu_muc") // Cho Windows Portable
+  khoaRegistry      String?           @map("khoa_registry") // Khóa Registry Windows lưu thông tin gỡ cài đặt (A4)
+  tenHienThiRegistry String?          @map("ten_hien_thi_registry") // Tên hiển thị Registry Windows (DisplayName)
   ngayCaiDat        DateTime          @default(now()) @map("ngay_cai_dat")
   ngayCapNhatCuoi   DateTime          @updatedAt @map("ngay_cap_nhat_cuoi")
 

@@ -25,8 +25,12 @@ export interface UngDungDaCaiDto {
   phienBanHienTai: string;
   maTepDaCai?: string | null;
   duongDanThuMuc?: string | null;
+  khoaRegistry?: string | null;
+  tenHienThiRegistry?: string | null;
   ngayCaiDat: string | Date;
   ngayCapNhatCuoi?: string | Date;
+  coBanMoi?: boolean;
+  phienBanMoiNhat?: string | null;
   ungDung?: UngDungTomTatDto;
 }
 
@@ -47,6 +51,8 @@ export interface GhiNhanCaiDatRequest {
   phienBanHienTai: string;
   maTepDaCai?: string;
   duongDanThuMuc?: string;
+  khoaRegistry?: string;
+  tenHienThiRegistry?: string;
 }
 
 /**
@@ -54,9 +60,17 @@ export interface GhiNhanCaiDatRequest {
  */
 export interface CheckUpdatesRequest {
   maThietBi: string;
-  danhSachCaiDat: Array<{
+  danhSachCaiDat?: Array<{
     maUngDung: string;
     phienBanHienTai: string;
+    tenGoiAndroid?: string;
+  }>;
+  /**
+   * Alias ungDung tương thích với Backend DTO (BE-02)
+   */
+  ungDung?: Array<{
+    maUngDung: string;
+    phienBan: string;
     tenGoiAndroid?: string;
   }>;
 }

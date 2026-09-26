@@ -100,6 +100,14 @@ async function main() {
       }
 
       thanhCong++;
+
+      // Giãn cách an toàn 4.5 giây giữa các app để đảm bảo không vượt ngưỡng 12 RPM của Gemini (AI1)
+      if (thanhCong + thatBai < SEED_REPOS.length) {
+        console.info(
+          `  ⏳ Giãn cách an toàn 4.5s trước app tiếp theo (Token Bucket Rate Limiting D-15 / AI1)...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+      }
     } catch (err: unknown) {
       thatBai++;
       console.error(`  ❌ Thất bại khi đồng bộ [${slug}]: ${(err as Error).message}`);

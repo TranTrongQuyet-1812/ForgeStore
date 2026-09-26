@@ -5,3 +5,4 @@ export * from './auth.dto.js';
 export * from './danh-gia.dto.js';
 export * from './repo.dto.js';
 export * from './tim-kiem.dto.js';
+export * from './huong-dan-cli.dto.js';
