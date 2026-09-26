@@ -110,4 +110,29 @@ describe('LibraryService (P3-12.2)', () => {
 
     expect(ok).toBe(false);
   });
+
+  it('cập nhật khóa registry thành công qua PATCH endpoint (DELIV-40.2)', async () => {
+    const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce({ success: true } as never);
+
+    const ok = await libraryService.capNhatKhoaRegistry('device-123', 'app-npp', {
+      khoaRegistry: 'Notepad++',
+      tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+    });
+
+    expect(patchSpy).toHaveBeenCalledWith('/devices/device-123/installed/app-npp/registry', {
+      khoaRegistry: 'Notepad++',
+      tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+    });
+    expect(ok).toBe(true);
+  });
+
+  it('trả về false khi cập nhật khóa registry gặp lỗi (DELIV-40.2)', async () => {
+    vi.spyOn(apiClient, 'patch').mockRejectedValueOnce(new Error('Network error'));
+
+    const ok = await libraryService.capNhatKhoaRegistry('device-123', 'app-npp', {
+      khoaRegistry: 'Notepad++',
+    });
+
+    expect(ok).toBe(false);
+  });
 });

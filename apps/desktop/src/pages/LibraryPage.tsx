@@ -71,12 +71,10 @@ export const LibraryPage: React.FC = () => {
         const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
         const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
 
-        // DELIV-39.3: Tự động lưu ngược lên backend nếu Library tìm thấy khóa Registry cho app cũ (chưa có khoaRegistry)
+        // DELIV-40.2: Tự động lưu ngược khóa Registry cho app cũ bằng endpoint riêng (không ghi đè maTepDaCai hay phienBanHienTai)
         if (maThietBi && !app.khoaRegistry && regInfo?.registry_key) {
           libraryService
-            .ghiNhanCaiDat(maThietBi, {
-              maUngDung: app.maUngDung,
-              phienBanHienTai: regInfo.display_version || app.phienBanHienTai || '1.0.0',
+            .capNhatKhoaRegistry(maThietBi, app.maUngDung, {
               khoaRegistry: regInfo.registry_key,
               tenHienThiRegistry: regInfo.display_name || undefined,
             })

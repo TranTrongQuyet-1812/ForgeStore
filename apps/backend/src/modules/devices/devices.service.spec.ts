@@ -19,6 +19,8 @@ describe('DevicesService', () => {
       },
       ungDungDaCai: {
         findMany: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(),
         upsert: vi.fn(),
         deleteMany: vi.fn(),
       },
@@ -343,6 +345,8 @@ describe('DevicesService', () => {
           expect.objectContaining({
             update: expect.objectContaining({
               phienBanHienTai: '8.6.1',
+              maTepDaCai: undefined,
+              duongDanThuMuc: undefined,
               khoaRegistry: undefined,
               tenHienThiRegistry: undefined,
             }),
@@ -375,6 +379,89 @@ describe('DevicesService', () => {
             }),
           }),
         );
+      });
+
+      it('bảo toàn tuyệt đối maTepDaCai và duongDanThuMuc khi client không gửi (undefined) trong nhánh update (DELIV-40.1 & DELIV-40.3)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'notepad-plus-plus/notepad-plus-plus',
+        });
+
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValue({
+          maBanGhi: 'rec-npp-existing',
+          maThietBi,
+          maUngDung,
+          phienBanHienTai: '8.6.0',
+          maTepDaCai: 'file-uuid-x64',
+          duongDanThuMuc: 'C:\\Program Files\\Notepad++',
+        });
+
+        // Client chỉ gửi maUngDung và phienBanHienTai (không gửi maTepDaCai)
+        await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung,
+          phienBanHienTai: '8.6.0',
+        });
+
+        // Prisma update PHẢI nhận maTepDaCai và duongDanThuMuc là undefined (không phải null)
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            update: expect.objectContaining({
+              maTepDaCai: undefined,
+              duongDanThuMuc: undefined,
+            }),
+          }),
+        );
+      });
+    });
+
+    describe('capNhatKhoaRegistry (DELIV-40.1 & DELIV-40.3)', () => {
+      it('ném NotFoundException nếu không tìm thấy bản ghi cài đặt của ứng dụng trên thiết bị', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue(null);
+
+        await expect(
+          service.capNhatKhoaRegistry(maNguoiDung, maThietBi, maUngDung, {
+            khoaRegistry: 'Notepad++',
+          }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('cập nhật thành công khoaRegistry và tenHienThiRegistry bảo toàn nguyên vẹn bản ghi cài đặt', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({
+          maBanGhi: 'rec-installed-1',
+          maThietBi,
+          maUngDung,
+          maTepDaCai: 'bfd17254-x64-installer',
+          duongDanThuMuc: null,
+          phienBanHienTai: '8.9.8.1',
+        });
+
+        mockPrisma.ungDungDaCai.update.mockResolvedValue({
+          maBanGhi: 'rec-installed-1',
+          maThietBi,
+          maUngDung,
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+          maTepDaCai: 'bfd17254-x64-installer',
+        });
+
+        const res = await service.capNhatKhoaRegistry(maNguoiDung, maThietBi, maUngDung, {
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+        });
+
+        expect(res.khoaRegistry).toBe('Notepad++');
+        expect(mockPrisma.ungDungDaCai.update).toHaveBeenCalledWith({
+          where: {
+            maThietBi_maUngDung: {
+              maThietBi,
+              maUngDung,
+            },
+          },
+          data: {
+            khoaRegistry: 'Notepad++',
+            tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+          },
+        });
       });
     });
 

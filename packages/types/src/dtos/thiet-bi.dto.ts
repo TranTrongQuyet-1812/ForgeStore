@@ -56,6 +56,14 @@ export interface GhiNhanCaiDatRequest {
 }
 
 /**
+ * Request cập nhật riêng thông tin Registry Windows cho ứng dụng đã cài đặt.
+ */
+export interface CapNhatKhoaRegistryRequest {
+  khoaRegistry: string;
+  tenHienThiRegistry?: string;
+}
+
+/**
  * Request kiểm tra danh sách bản cập nhật từ Client.
  */
 export interface CheckUpdatesRequest {

@@ -244,13 +244,16 @@ export class DevicesService {
         tenHienThiRegistry: dto.tenHienThiRegistry || null,
       },
       update: {
-        phienBanHienTai: dto.phienBanHienTai,
-        maTepDaCai: dto.maTepDaCai || null,
-        duongDanThuMuc: dto.duongDanThuMuc || null,
+        phienBanHienTai: dto.phienBanHienTai !== undefined ? dto.phienBanHienTai : undefined,
+        maTepDaCai: dto.maTepDaCai !== undefined ? dto.maTepDaCai || null : undefined,
+        duongDanThuMuc: dto.duongDanThuMuc !== undefined ? dto.duongDanThuMuc || null : undefined,
         khoaRegistry: dto.khoaRegistry !== undefined ? dto.khoaRegistry || null : undefined,
         tenHienThiRegistry:
           dto.tenHienThiRegistry !== undefined ? dto.tenHienThiRegistry || null : undefined,
-        ngayCapNhatCuoi: new Date(),
+        ngayCapNhatCuoi:
+          dto.phienBanHienTai !== undefined || dto.maTepDaCai !== undefined
+            ? new Date()
+            : undefined,
       },
     });
 
@@ -296,5 +299,46 @@ export class DevicesService {
       daGo: true,
       soLuong: xoa.count,
     };
+  }
+
+  /**
+   * Cập nhật riêng thông tin Registry Windows cho ứng dụng đã cài đặt (P2-51.4).
+   * Tuyệt đối không đụng vào maTepDaCai, duongDanThuMuc, phienBanHienTai, ngayCapNhatCuoi.
+   */
+  async capNhatKhoaRegistry(
+    maNguoiDung: string,
+    maThietBi: string,
+    maUngDung: string,
+    dto: { khoaRegistry: string; tenHienThiRegistry?: string },
+  ) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const tonTai = await this.prisma.ungDungDaCai.findUnique({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+    });
+
+    if (!tonTai) {
+      throw new NotFoundException(
+        `Không tìm thấy bản ghi cài đặt cho ứng dụng [${maUngDung}] trên thiết bị [${maThietBi}]`,
+      );
+    }
+
+    return await this.prisma.ungDungDaCai.update({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+      data: {
+        khoaRegistry: dto.khoaRegistry,
+        tenHienThiRegistry: dto.tenHienThiRegistry ?? null,
+      },
+    });
   }
 }

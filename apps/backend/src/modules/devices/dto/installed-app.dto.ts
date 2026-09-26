@@ -52,3 +52,23 @@ export class GhiNhanCaiDatDto {
   @MaxLength(255, { message: 'Tên hiển thị Registry không được vượt quá 255 ký tự' })
   tenHienThiRegistry?: string;
 }
+
+export class CapNhatKhoaRegistryDto {
+  @ApiProperty({
+    description: 'Tên khóa Registry Windows lưu thông tin gỡ cài đặt (cho Windows EXE/MSI)',
+    example: 'Notepad++',
+  })
+  @IsNotEmpty({ message: 'Khóa Registry không được để trống' })
+  @IsString({ message: 'Khóa Registry phải là chuỗi ký tự' })
+  @MaxLength(255, { message: 'Khóa Registry không được vượt quá 255 ký tự' })
+  khoaRegistry!: string;
+
+  @ApiPropertyOptional({
+    description: 'Tên hiển thị trong Registry Windows (DisplayName)',
+    example: 'Notepad++ (64-bit x64)',
+  })
+  @IsOptional()
+  @IsString({ message: 'Tên hiển thị Registry phải là chuỗi ký tự' })
+  @MaxLength(255, { message: 'Tên hiển thị Registry không được vượt quá 255 ký tự' })
+  tenHienThiRegistry?: string;
+}
