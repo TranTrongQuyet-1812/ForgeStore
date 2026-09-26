@@ -70,6 +70,21 @@ export const LibraryPage: React.FC = () => {
         const regKey = app.khoaRegistry || localApp?.registryKey;
         const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
         const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
+
+        // DELIV-39.3: Tự động lưu ngược lên backend nếu Library tìm thấy khóa Registry cho app cũ (chưa có khoaRegistry)
+        if (maThietBi && !app.khoaRegistry && regInfo?.registry_key) {
+          libraryService
+            .ghiNhanCaiDat(maThietBi, {
+              maUngDung: app.maUngDung,
+              phienBanHienTai: regInfo.display_version || app.phienBanHienTai || '1.0.0',
+              khoaRegistry: regInfo.registry_key,
+              tenHienThiRegistry: regInfo.display_name || undefined,
+            })
+            .catch((err) => {
+              console.warn('[LibraryPage] Không thể tự động lưu khóa registry lên backend:', err);
+            });
+        }
+
         return { maUngDung: app.maUngDung, regInfo };
       }),
     ).then((results) => {
@@ -85,7 +100,7 @@ export const LibraryPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [backendInstalledApps, caiDatMap]);
+  }, [backendInstalledApps, caiDatMap, maThietBi]);
 
   // 5. Danh sách ứng dụng đã cài đặt trên máy trạm hiện tại (Nguyên tắc 1, A3 & A4)
   const updatesMap = new Map(danhSachCapNhat.map((u) => [u.maUngDung, u]));

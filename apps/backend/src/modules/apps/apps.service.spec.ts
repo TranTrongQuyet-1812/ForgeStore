@@ -1657,5 +1657,26 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.huongDanCaiDat).toBeDefined();
       expect(res.huongDanCaiDat?.cachCai[0]?.nhom).toBe('PIP');
     });
+
+    it('không lưu marker khongCoHuongDan khi tải README bị lỗi hoặc AI gặp sự cố (DELIV-39.1)', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'test-app-id',
+        tenRepoDayDu: 'test/error-repo',
+        chuSoHuu: 'test',
+        tenKhoChua: 'error-repo',
+        danhSachPhatHanh: [],
+      });
+      mockPrisma.phanTichAI.findUnique.mockResolvedValueOnce({
+        maUngDung: 'test-app-id',
+        huongDanCaiDat: null,
+      });
+      // Giả lập lỗi tải README (ví dụ lỗi mạng / rate limit 403)
+      mockGithubService.layReadme.mockRejectedValueOnce(new Error('GitHub API rate limit 403'));
+
+      await service.phanTichUngDung('test-app-id');
+
+      // Khi tải README lỗi, KHÔNG ĐƯỢC update phanTichAI với khongCoHuongDan: true!
+      expect(mockPrisma.phanTichAI.update).not.toHaveBeenCalled();
+    });
   });
 });

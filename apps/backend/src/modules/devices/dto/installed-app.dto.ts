@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class GhiNhanCaiDatDto {
   @ApiProperty({
@@ -40,6 +40,7 @@ export class GhiNhanCaiDatDto {
   })
   @IsOptional()
   @IsString({ message: 'Khóa Registry phải là chuỗi ký tự' })
+  @MaxLength(255, { message: 'Khóa Registry không được vượt quá 255 ký tự' })
   khoaRegistry?: string;
 
   @ApiPropertyOptional({
@@ -48,5 +49,6 @@ export class GhiNhanCaiDatDto {
   })
   @IsOptional()
   @IsString({ message: 'Tên hiển thị Registry phải là chuỗi ký tự' })
+  @MaxLength(255, { message: 'Tên hiển thị Registry không được vượt quá 255 ký tự' })
   tenHienThiRegistry?: string;
 }

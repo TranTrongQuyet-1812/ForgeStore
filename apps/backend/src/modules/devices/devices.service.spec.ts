@@ -284,6 +284,98 @@ describe('DevicesService', () => {
           data: { soLuotTai: { increment: 1 } },
         });
       });
+
+      it('tạo mới bản ghi cài đặt lưu đúng khoaRegistry và tenHienThiRegistry (DELIV-39.2)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'notepad-plus-plus/notepad-plus-plus',
+        });
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValue({
+          maBanGhi: 'rec-new-npp',
+          maThietBi,
+          maUngDung,
+          phienBanHienTai: '8.6.0',
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+        });
+
+        await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung,
+          phienBanHienTai: '8.6.0',
+          khoaRegistry: 'Notepad++',
+          tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+        });
+
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              maThietBi,
+              maUngDung,
+              phienBanHienTai: '8.6.0',
+              khoaRegistry: 'Notepad++',
+              tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+            }),
+          }),
+        );
+      });
+
+      it('cập nhật bản ghi cài đặt bảo toàn khoaRegistry cũ khi client không gửi trường này (undefined) và cập nhật khi client gửi lên (DELIV-39.2)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'notepad-plus-plus/notepad-plus-plus',
+        });
+
+        // 1. Khi client không gửi khoaRegistry (ví dụ client Android gửi cập nhật) -> update giữ undefined để Prisma không ghi đè null
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValueOnce({
+          maBanGhi: 'rec-npp',
+          maThietBi,
+          maUngDung,
+          phienBanHienTai: '8.6.1',
+          khoaRegistry: 'Notepad++',
+        });
+
+        await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung,
+          phienBanHienTai: '8.6.1',
+        });
+
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            update: expect.objectContaining({
+              phienBanHienTai: '8.6.1',
+              khoaRegistry: undefined,
+              tenHienThiRegistry: undefined,
+            }),
+          }),
+        );
+
+        // 2. Khi client gửi khoaRegistry mới -> update cập nhật đúng giá trị mới
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValueOnce({
+          maBanGhi: 'rec-npp',
+          maThietBi,
+          maUngDung,
+          phienBanHienTai: '8.6.2',
+          khoaRegistry: 'Notepad++_v8.6',
+          tenHienThiRegistry: 'Notepad++ (x64)',
+        });
+
+        await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung,
+          phienBanHienTai: '8.6.2',
+          khoaRegistry: 'Notepad++_v8.6',
+          tenHienThiRegistry: 'Notepad++ (x64)',
+        });
+
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            update: expect.objectContaining({
+              phienBanHienTai: '8.6.2',
+              khoaRegistry: 'Notepad++_v8.6',
+              tenHienThiRegistry: 'Notepad++ (x64)',
+            }),
+          }),
+        );
+      });
     });
 
     describe('goCaiDat (P2-51.3)', () => {

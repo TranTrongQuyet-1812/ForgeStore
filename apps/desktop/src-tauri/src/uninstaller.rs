@@ -561,4 +561,24 @@ mod tests {
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("không hợp lệ hoặc rỗng"));
     }
+
+    #[test]
+    fn test_chay_go_cai_dat_registry_an_toan_khoa_sai_tu_choi() {
+        // DELIV-39.2: Khóa registry không tồn tại trong Windows Registry hoặc không hợp lệ
+        // Phải từ chối ngay lập tức với CẢNH BÁO BẢO MẬT, tuyệt đối KHÔNG rơi xuống dò mờ
+        let res = chay_go_cai_dat_registry_an_toan(
+            "FakeAppThatDoesNotExist",
+            Some("C:\\FakePath\\uninstall.exe"),
+            Some("FakeNonExistentRegistryKey12345"),
+        );
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(
+            err.contains("CẢNH BÁO BẢO MẬT") && err.contains("không tồn tại trong Windows Registry"),
+            "Lỗi trả về phải là cảnh báo từ chối do khóa không tồn tại, thực tế nhận: {}",
+            err
+        );
+    }
 }
+
+
