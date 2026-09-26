@@ -104,6 +104,79 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       expect(info?.trangThai).toBe('LOI');
       expect(info?.thongDiepLoi).toContain('LỖI_XAC_MINH_SHA256');
     });
+
+    it('khôi phục từ storage và tự động reset các tác vụ DANG_TAI/XAC_MINH về DA_HUY mà không bị lỗi TDZ', async () => {
+      const storageMap = new Map<string, string>();
+      const mockLocalStorage = {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          storageMap.set(k, v);
+        },
+        removeItem: (k: string) => {
+          storageMap.delete(k);
+        },
+        clear: () => {
+          storageMap.clear();
+        },
+      };
+
+      const originalWindow = (globalThis as unknown as { window?: unknown }).window;
+      (globalThis as unknown as { window: unknown }).window = {
+        localStorage: mockLocalStorage,
+      };
+
+      const mockStorageData = {
+        state: {
+          caiDatMap: {
+            'stuck-download-app': {
+              maUngDung: 'stuck-download-app',
+              tenApp: 'Stuck App',
+              trangThai: 'DANG_TAI',
+              phanTram: 42,
+              tocDoBps: 1024000,
+              daTaiBytes: 42000000,
+              tongBytes: 100000000,
+              thoiGianCapNhat: Date.now(),
+            },
+            'already-installed-app': {
+              maUngDung: 'already-installed-app',
+              tenApp: 'Installed App',
+              trangThai: 'DA_CAI_DAT',
+              phanTram: 100,
+              duongDanThuMuc: 'D:\\Apps\\Portable',
+              thoiGianCapNhat: Date.now(),
+            },
+          },
+        },
+        version: 0,
+      };
+
+      try {
+        mockLocalStorage.setItem('forgestore_install_tasks', JSON.stringify(mockStorageData));
+
+        await useInstallStore.persist.rehydrate();
+
+        expect(useInstallStore.persist.hasHydrated()).toBe(true);
+        const stuckApp = useInstallStore.getState().layThongTinApp('stuck-download-app');
+        expect(stuckApp).toBeDefined();
+        expect(stuckApp?.trangThai).toBe('DA_HUY');
+        expect(stuckApp?.phanTram).toBe(0);
+        expect(stuckApp?.tocDoBps).toBe(0);
+        expect(stuckApp?.thongDiepLoi).toContain('Tiến trình tải bị gián đoạn do ứng dụng đã đóng.');
+
+        // Đảm bảo app đã cài đặt vẫn giữ nguyên trạng thái và đường dẫn thư mục
+        const installedApp = useInstallStore.getState().layThongTinApp('already-installed-app');
+        expect(installedApp).toBeDefined();
+        expect(installedApp?.trangThai).toBe('DA_CAI_DAT');
+        expect(installedApp?.duongDanThuMuc).toBe('D:\\Apps\\Portable');
+      } finally {
+        if (originalWindow === undefined) {
+          delete (globalThis as unknown as { window?: unknown }).window;
+        } else {
+          (globalThis as unknown as { window: unknown }).window = originalWindow;
+        }
+      }
+    });
   });
 
   describe('Registry & Native Uninstaller (A4)', () => {

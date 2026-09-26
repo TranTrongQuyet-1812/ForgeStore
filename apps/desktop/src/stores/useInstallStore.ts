@@ -246,28 +246,35 @@ export const useInstallStore = create<InstallState>()(
           ),
         ),
       }),
-      onRehydrateStorage: () => (state) => {
-        // FE-R7-01: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
-        if (state && state.caiDatMap) {
-          const next = { ...state.caiDatMap };
-          let changed = false;
-          for (const [id, item] of Object.entries(next)) {
-            if (['DANG_TAI', 'XAC_MINH', 'DANG_CAI_DAT'].includes(item.trangThai)) {
-              next[id] = {
-                ...item,
-                trangThai: 'DA_HUY',
-                phanTram: 0,
-                tocDoBps: 0,
-                thongDiepLoi: 'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
-              };
-              changed = true;
-            }
-          }
-          if (changed) {
-            // EC-03: Sử dụng useInstallStore.setState để kích hoạt reactivity đồng bộ tới toàn bộ subscribers
-            useInstallStore.setState({ caiDatMap: next });
+      merge: (persistedState, currentState) => {
+        // FE-R7-01 / EC-03: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
+        // Sửa trực tiếp trên persistedState trước khi gộp vào store, triệt tiêu lỗi TDZ useInstallStore.setState
+        const typed = persistedState as Partial<InstallState> | undefined;
+        if (!typed || !typed.caiDatMap) {
+          return {
+            ...currentState,
+            ...(typed || {}),
+          };
+        }
+
+        const next = { ...typed.caiDatMap };
+        for (const [id, item] of Object.entries(next)) {
+          if (['DANG_TAI', 'XAC_MINH', 'DANG_CAI_DAT'].includes(item.trangThai)) {
+            next[id] = {
+              ...item,
+              trangThai: 'DA_HUY',
+              phanTram: 0,
+              tocDoBps: 0,
+              thongDiepLoi: 'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
+            };
           }
         }
+
+        return {
+          ...currentState,
+          ...typed,
+          caiDatMap: next,
+        };
       },
     },
   ),
