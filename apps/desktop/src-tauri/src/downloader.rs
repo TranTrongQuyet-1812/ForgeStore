@@ -133,16 +133,23 @@ pub async fn thuc_thi_tai_tep<R: tauri::Runtime>(
     let client = reqwest::Client::builder()
         .user_agent("ForgeStore-Desktop/0.1.0")
         .redirect(reqwest::redirect::Policy::limited(10))
+        .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Không thể khởi tạo HTTP client: {}", e))?;
 
-    // P3-08.6: Kiểm tra resume nếu file .part đã tồn tại
+    // P3-08.6 & SEC-V3-04: Kiểm tra resume nếu file .part đã tồn tại
+    // CHỈ cho phép resume Range khi CÓ sha256_du_kien để đối soát toàn vẹn sau khi tải xong.
+    // Nếu KHÔNG có hash đối chiếu, xóa file .part cũ và tải lại từ byte 0 để chống ghép nối file hỏng nếu asset thay đổi.
     let mut existing_len = 0u64;
     let mut hasher = Sha256::new();
 
     if part_path.exists() {
-        if let Ok(meta) = tokio::fs::metadata(&part_path).await {
-            existing_len = meta.len();
+        if sha256_du_kien.is_some() {
+            if let Ok(meta) = tokio::fs::metadata(&part_path).await {
+                existing_len = meta.len();
+            }
+        } else {
+            let _ = tokio::fs::remove_file(&part_path).await;
         }
     }
 
