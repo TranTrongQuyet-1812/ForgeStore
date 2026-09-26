@@ -298,26 +298,44 @@ pub fn phan_tich_uninstall_string(raw: &str) -> (String, String) {
         return (String::new(), String::new());
     }
 
-    // Trường hợp 1: Bắt đầu bằng dấu ngoặc kép "C:\Path\To\uninstall.exe" ...
-    if trimmed.starts_with('"') {
+    let (mut exe, mut args) = if trimmed.starts_with('"') {
         if let Some(second_quote_idx) = trimmed[1..].find('"') {
-            let exe = &trimmed[1..=second_quote_idx];
-            let args = trimmed[second_quote_idx + 2..].trim();
-            return (exe.to_string(), args.to_string());
-        }
-    }
-
-    // Trường hợp 2: Lệnh msiexec /I{...} hoặc MsiExec.exe /X{...}
-    let lower = trimmed.to_lowercase();
-    if lower.starts_with("msiexec.exe") || lower.starts_with("msiexec ") {
-        let rest = if lower.starts_with("msiexec.exe") {
-            trimmed[11..].trim()
+            let e = &trimmed[1..=second_quote_idx];
+            let a = trimmed[second_quote_idx + 2..].trim();
+            (e.to_string(), a.to_string())
         } else {
-            trimmed[7..].trim()
-        };
-        // SEC-R7-05 & DELIV-44.2: Nếu tham số chứa /I hoặc /i (cài đặt), đổi thành /X (gỡ bỏ) kể cả khi có cờ /quiet, /qn
-        // Kiểm tra chặt chẽ ký tự tiếp theo sau cờ /i để tránh match nhầm các cờ khác (như /ignore)
-        let mut args = rest.to_string();
+            (trimmed.to_string(), String::new())
+        }
+    } else {
+        let lower = trimmed.to_lowercase();
+        if lower.starts_with("msiexec.exe") || lower.starts_with("msiexec ") {
+            let rest = if lower.starts_with("msiexec.exe") {
+                trimmed[11..].trim()
+            } else {
+                trimmed[7..].trim()
+            };
+            ("msiexec.exe".to_string(), rest.to_string())
+        } else if let Some(exe_idx) = lower.rfind(".exe") {
+            let exe_end = exe_idx + 4;
+            (
+                trimmed[..exe_end].trim().to_string(),
+                trimmed[exe_end..].trim().to_string(),
+            )
+        } else {
+            (trimmed.to_string(), String::new())
+        }
+    };
+
+    // SEC-R7-05, DELIV-44.2 & SEC-R8-02: Chuẩn hóa cờ MSI /i -> /X cho TẤT CẢ các trường hợp gọi msiexec
+    // (kể cả có nháy kép "msiexec.exe", hoặc đường dẫn đầy đủ "C:\Windows\System32\msiexec.exe")
+    let exe_file_name = std::path::Path::new(&exe)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if exe_file_name == "msiexec.exe" || exe_file_name == "msiexec" {
+        exe = "msiexec.exe".to_string();
         if args.starts_with("/I") || args.starts_with("/i") {
             let next_char = args.chars().nth(2);
             if next_char.map_or(true, |c| c == '{' || c == ' ' || c == '"' || c == '\t') {
@@ -329,20 +347,9 @@ pub fn phan_tich_uninstall_string(raw: &str) -> (String, String) {
                 args = format!("{} /X{}", &args[..idx], &args[idx + 3..]);
             }
         }
-        return ("msiexec.exe".to_string(), args);
     }
 
-    // Trường hợp 3: Đường dẫn không có dấu nháy kép nhưng có khoảng trắng
-    // Kiểm tra vị trí cuối cùng kết thúc bằng .exe (SEC-05: dùng rfind để tránh lỗi thư mục chứa cụm .exe)
-    if let Some(exe_idx) = lower.rfind(".exe") {
-        let exe_end = exe_idx + 4;
-        let exe = trimmed[..exe_end].trim();
-        let args = trimmed[exe_end..].trim();
-        return (exe.to_string(), args.to_string());
-    }
-
-    // Mặc định
-    (trimmed.to_string(), String::new())
+    (exe, args)
 }
 
 /// Chạy bộ gỡ cài đặt chính chủ của phần mềm qua ShellExecuteExW xin quyền Admin (A4, SEC-06)
@@ -467,10 +474,16 @@ pub fn kiem_tra_ten_app_khop_registry(
         if b.len() < 3 {
             return false;
         }
-        norm_disp == *b
-            || (!norm_k.is_empty() && norm_k == *b)
-            || norm_disp.contains(b)
-            || (!norm_k.is_empty() && norm_k.contains(b))
+        // Khớp hoàn toàn cho phép từ 3 ký tự (git, vlc...)
+        let exact_match = norm_disp == *b || (!norm_k.is_empty() && norm_k == *b);
+        if exact_match {
+            return true;
+        }
+        // SEC-R8-04: Khớp chứa (contains) BẮT BUỘC >= 4 ký tự để tránh match nhầm từ khóa ngắn vào phần mềm hệ thống
+        if b.len() >= 4 {
+            return norm_disp.contains(b) || (!norm_k.is_empty() && norm_k.contains(b));
+        }
+        false
     })
 }
 
@@ -661,7 +674,42 @@ mod tests {
         assert_eq!(exe, "msiexec.exe");
         assert_eq!(args, "/ignore /qn");
     }
+
+    #[test]
+    fn test_phan_tich_uninstall_string_msiexec_co_nhay_kep_duong_dan_day_du() {
+        // SEC-R8-02: Chuỗi UninstallString MSI có dấu nháy kép và đường dẫn tuyệt đối phải đổi /i thành /X
+        let raw = r#""C:\Windows\System32\msiexec.exe" /i{12345678-ABCD-1234-ABCD-1234567890AB} /qn"#;
+        let (exe, args) = phan_tich_uninstall_string(raw);
+        assert_eq!(exe, "msiexec.exe");
+        assert_eq!(args, "/X{12345678-ABCD-1234-ABCD-1234567890AB} /qn");
+    }
+
+    #[test]
+    fn test_phan_tich_uninstall_string_msiexec_nhay_kep_don_gian() {
+        // SEC-R8-02: Chuỗi UninstallString "msiexec.exe" /I{GUID} phải đổi thành /X
+        let raw = r#""msiexec.exe" /I{12345678-ABCD-1234-ABCD-1234567890AB}"#;
+        let (exe, args) = phan_tich_uninstall_string(raw);
+        assert_eq!(exe, "msiexec.exe");
+        assert_eq!(args, "/X{12345678-ABCD-1234-ABCD-1234567890AB}");
+    }
+
+    #[test]
+    fn test_kiem_tra_ten_app_khop_registry_contains_tu_khoa_ngan_3_ky_tu_tu_choi() {
+        // SEC-R8-04: Từ khóa 3 ký tự (git) không được match chứa (contains) vào phần mềm không liên quan (logitech)
+        assert!(!kiem_tra_ten_app_khop_registry(
+            "git",
+            "Logitech G HUB",
+            Some("Logitech.GHUB")
+        ));
+        // Nhưng exact match 3 ký tự (git) thì vẫn khớp chính xác
+        assert!(kiem_tra_ten_app_khop_registry(
+            "git",
+            "Git",
+            Some("Git")
+        ));
+    }
 }
+
 
 
 

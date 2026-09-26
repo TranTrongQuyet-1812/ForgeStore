@@ -8,7 +8,7 @@ use std::os::windows::ffi::OsStrExt;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
+use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
 #[cfg(target_os = "windows")]
@@ -125,7 +125,16 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
         let h_process = sei.hProcess;
         if !h_process.is_null() {
             unsafe {
-                WaitForSingleObject(h_process, INFINITE);
+                // SEC-R8-03: Đặt timeout bảo vệ 45 phút cho bộ cài đặt lớn, tránh khóa luồng Tokio vĩnh viễn nếu installer bị treo
+                const TIMEOUT_INSTALL_MS: u32 = 45 * 60 * 1000;
+                const WAIT_TIMEOUT_VAL: u32 = 258;
+
+                let wait_res = WaitForSingleObject(h_process, TIMEOUT_INSTALL_MS);
+                if wait_res == WAIT_TIMEOUT_VAL {
+                    CloseHandle(h_process);
+                    return Err("TIEN_TRINH_TREO: Quá trình cài đặt .exe vượt quá thời gian cho phép (45 phút).".to_string());
+                }
+
                 let mut exit_code: u32 = 0;
                 GetExitCodeProcess(h_process, &mut exit_code);
                 CloseHandle(h_process);
@@ -538,13 +547,14 @@ pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -
 /// Kiểm tra nghiêm ngặt: Đường dẫn bắt buộc phải tồn tại và là thư mục (is_dir).
 /// Tuyệt đối từ chối nếu là tệp tin để ngăn chặn tấn công thực thi mã tùy ý từ Webview.
 pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
-    // SEC-R6-03 & SEC-R7-06: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) và NT Object Manager device path (\??\ hoặc \\?\)
-    // để chống rò rỉ băm NetNTLMv2 qua SMB và bypass kiểm tra thiết bị DOS
+    // SEC-R6-03, SEC-R7-06 & SEC-R8-05: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) và NT Object Manager device path (\??\ hoặc \\?\)
+    // Chuẩn hóa trim() để tránh bypass bằng khoảng trắng dẫn đầu, chống rò rỉ băm NetNTLMv2 qua SMB
     let path_str = duong_dan.to_string_lossy();
-    if path_str.starts_with(r"\\")
-        || path_str.starts_with("//")
-        || path_str.starts_with(r"\??\")
-        || path_str.starts_with(r"\\?\")
+    let trimmed = path_str.trim();
+    if trimmed.starts_with(r"\\")
+        || trimmed.starts_with("//")
+        || trimmed.starts_with(r"\??\")
+        || trimmed.starts_with(r"\\?\")
     {
         return Err("BẢO MẬT: Không được phép mở đường dẫn mạng UNC hoặc thiết bị NT.".to_string());
     }
@@ -695,4 +705,13 @@ mod tests {
         let res = kiem_tra_thu_muc_an_toan(&temp);
         assert!(res.is_ok());
     }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_unc_co_khoang_trang_dau_tu_choi() {
+        // SEC-R8-05: Đường dẫn UNC có khoảng trắng dẫn đầu vẫn phải bị từ chối
+        let res = mo_thu_muc_he_thong(Path::new("  \\\\attacker\\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC"));
+    }
 }
+

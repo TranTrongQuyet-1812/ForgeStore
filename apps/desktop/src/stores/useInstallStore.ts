@@ -264,7 +264,8 @@ export const useInstallStore = create<InstallState>()(
             }
           }
           if (changed) {
-            state.caiDatMap = next;
+            // EC-03: Sử dụng useInstallStore.setState để kích hoạt reactivity đồng bộ tới toàn bộ subscribers
+            useInstallStore.setState({ caiDatMap: next });
           }
         }
       },

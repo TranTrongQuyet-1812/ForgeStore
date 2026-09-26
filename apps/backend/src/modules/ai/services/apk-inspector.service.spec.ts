@@ -151,5 +151,54 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
     expect(vi.mocked(global.fetch).mock.calls[1][0]).toBe(hop1Url);
     expect(vi.mocked(global.fetch).mock.calls[2][0]).toBe(hop2Url);
   });
+
+  it('SEC-R8-01: Chặn AndroidManifest có compressedSize vượt trần an toàn chống OOM DoS', async () => {
+    // Tạo 64KB buffer chứa EOCD và Central Directory có entry AndroidManifest với compressedSize = 10MB (> 512KB)
+    const totalSize = 1000000;
+    const tailSize = 65536;
+    const tailStart = totalSize - tailSize;
+    const tailBuf = Buffer.alloc(tailSize);
+
+    const eocdOffset = tailSize - 22;
+    tailBuf.writeUInt32LE(0x06054b50, eocdOffset); // EOCD signature
+    tailBuf.writeUInt32LE(500, eocdOffset + 12); // cdSize = 500
+    const cdOffset = totalSize - 5000;
+    tailBuf.writeUInt32LE(cdOffset, eocdOffset + 16); // cdOffset trong tail
+
+    const cdStartInTail = cdOffset - tailStart;
+    tailBuf.writeUInt32LE(0x02014b50, cdStartInTail); // CD entry signature
+    tailBuf.writeUInt16LE(8, cdStartInTail + 10); // compressionMethod = 8
+    tailBuf.writeUInt32LE(10 * 1024 * 1024, cdStartInTail + 20); // compressedSize = 10MB (> 512KB)
+    const fileName = 'AndroidManifest.xml';
+    tailBuf.writeUInt16LE(fileName.length, cdStartInTail + 28);
+    tailBuf.writeUInt16LE(0, cdStartInTail + 30); // extraLen
+    tailBuf.writeUInt16LE(0, cdStartInTail + 32); // commentLen
+    tailBuf.writeUInt32LE(0, cdStartInTail + 42); // localHeaderOffset
+    tailBuf.write(fileName, cdStartInTail + 46);
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-length': String(totalSize) }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 206,
+        headers: new Headers(),
+        arrayBuffer: async () => tailBuf.buffer,
+      });
+
+    const res = await service.docQuyenApkTuUrl(
+      'https://github.com/owner/repo/releases/download/v1.0/test.apk',
+    );
+
+    expect(res.thanhCong).toBe(false);
+    expect(res.lyDoThatBai).toContain('vượt quá giới hạn an toàn');
+    // Không bao giờ gửi request thứ 3 để tải 10MB nén
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
 });
+
 

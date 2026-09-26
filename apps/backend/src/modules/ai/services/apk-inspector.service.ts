@@ -297,6 +297,18 @@ export class ApkInspectorService {
       }
 
       // 6. Tải Local Header và Compressed Data của AndroidManifest.xml
+      // SEC-R8-01: Kiểm tra kích thước nén của AndroidManifest.xml không vượt quá giới hạn an toàn (512KB)
+      // Chống Unbounded Range Request gây cạn kiệt bộ nhớ (OOM DoS)
+      if (manifestEntry.compressedSize > this.GIOI_HAN_BYTE_TOI_DA) {
+        return {
+          thanhCong: false,
+          permissions: [],
+          coAccessibilityService: false,
+          soByteDaTai,
+          lyDoThatBai: `Kích thước AndroidManifest nén (${manifestEntry.compressedSize} bytes) vượt quá giới hạn an toàn (${this.GIOI_HAN_BYTE_TOI_DA} bytes).`,
+        };
+      }
+
       const manifestFetchSize = 30 + 1024 + manifestEntry.compressedSize; // 30 bytes header + buffer extra field
       // SEC-R7-02: Bổ sung redirect: 'manual' chặn Blind SSRF chaining
       const manifestRes = await fetch(finalUrl, {
@@ -339,9 +351,22 @@ export class ApkInspectorService {
       );
 
       // 7. Giải nén (Inflate) nếu là Deflate (P2-35.3)
+      // SEC-R8-01: Bổ sung maxOutputLength 2MB và bọc try/catch chống Decompression Bomb (Zip Bomb DoS)
       let decompressedAxml: Buffer;
       if (manifestEntry.compressionMethod === 8) {
-        decompressedAxml = zlib.inflateRawSync(compressedData);
+        try {
+          decompressedAxml = zlib.inflateRawSync(compressedData, {
+            maxOutputLength: 2 * 1024 * 1024,
+          });
+        } catch (zlibErr) {
+          return {
+            thanhCong: false,
+            permissions: [],
+            coAccessibilityService: false,
+            soByteDaTai,
+            lyDoThatBai: `Lỗi giải nén AndroidManifest hoặc vượt trần dung lượng (Zip Bomb Protection): ${(zlibErr as Error).message}`,
+          };
+        }
       } else {
         decompressedAxml = compressedData;
       }

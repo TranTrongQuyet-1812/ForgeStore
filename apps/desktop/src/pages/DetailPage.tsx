@@ -364,26 +364,30 @@ export const DetailPage: React.FC = () => {
     };
   }, []);
 
-  // Sao chép mã băm SHA-256 kèm hiệu ứng Checkmark Pop
+  // Sao chép mã băm SHA-256 kèm hiệu ứng Checkmark Pop (FE-R7-07 & EC-04)
   const handleCopySha = (sha?: string | null, fileId?: string) => {
     if (!sha) return;
     navigator.clipboard
       .writeText(sha)
+      .then(() => {
+        setCopiedSha(fileId || sha);
+        if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
+        copyShaTimerRef.current = setTimeout(() => setCopiedSha(null), 2000);
+      })
       .catch((err) => console.warn('[DetailPage] Không thể sao chép SHA-256:', err));
-    setCopiedSha(fileId || sha);
-    if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
-    copyShaTimerRef.current = setTimeout(() => setCopiedSha(null), 2000);
   };
 
-  // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3 & FE-V3-05)
+  // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3, FE-V3-05 & EC-04)
   const handleCopyCommand = (lenh: string, id: string) => {
     if (!lenh) return;
     navigator.clipboard
       .writeText(lenh)
+      .then(() => {
+        setCopiedCommandId(id);
+        if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
+        copyCommandTimerRef.current = setTimeout(() => setCopiedCommandId(null), 2000);
+      })
       .catch((err) => console.warn('[DetailPage] Không thể sao chép lệnh:', err));
-    setCopiedCommandId(id);
-    if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
-    copyCommandTimerRef.current = setTimeout(() => setCopiedCommandId(null), 2000);
   };
 
   // Phân tích các tệp cài đặt của bản phát hành mới nhất
