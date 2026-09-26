@@ -13,7 +13,7 @@ import { authService } from '../services/auth/auth-service';
 
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
-  const { caiDatMap, goCaiDatLocal, moApp } = useInstallStore();
+  const { caiDatMap, goCaiDatLocal } = useInstallStore();
   const { soLuongBanCapNhat, danhSachCapNhat, dangKiemTra, kiemTraCapNhat } = useUpdaterStore();
   const { user, isAuthenticated, maThietBi } = useAuthStore();
   const queryClient = useQueryClient();
@@ -159,7 +159,39 @@ export const LibraryPage: React.FC = () => {
     app.tenApp.toLowerCase().includes(searchFilter.trim().toLowerCase()),
   );
 
-  // Xử lý mở app
+  // Trích xuất thư mục cài đặt từ chuỗi gỡ cài đặt (uninstall_string) khi install_location rỗng (FE-R6-01)
+  const trichXuatThuMucCaiDatTuUninstallString = (cmd?: string | null): string | null => {
+    if (!cmd || !cmd.trim()) return null;
+    const trimmed = cmd.trim();
+    // Bỏ qua msiexec vì nó là bộ gỡ của Windows Installer nằm trong System32
+    if (/^msiexec(?:\.exe)?/i.test(trimmed)) return null;
+
+    // Tách đường dẫn file uninstaller .exe
+    let exePath = '';
+    if (trimmed.startsWith('"')) {
+      const closing = trimmed.indexOf('"', 1);
+      if (closing !== -1) {
+        exePath = trimmed.slice(1, closing);
+      }
+    } else {
+      const parts = trimmed.split(' ');
+      exePath = parts[0] || '';
+    }
+
+    if (exePath.toLowerCase().endsWith('.exe')) {
+      const lastSlash = Math.max(exePath.lastIndexOf('\\'), exePath.lastIndexOf('/'));
+      if (lastSlash > 0) {
+        const parentDir = exePath.slice(0, lastSlash);
+        // Tránh trỏ vào System32 hoặc Temp
+        if (!/system32|temp/i.test(parentDir)) {
+          return parentDir;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Xử lý mở app (FE-R6-01: Triệt tiêu im lặng, fallback mở thư mục hoặc thông báo hướng dẫn)
   const handleOpenApp = (app: {
     maUngDung: string;
     duongDanThucThi?: string;
@@ -169,13 +201,37 @@ export const LibraryPage: React.FC = () => {
   }) => {
     if (app.duongDanThucThi) {
       installService.moUngDung(app.duongDanThucThi);
-    } else if (app.regInfo?.install_location) {
-      installService.moThuMuc(app.regInfo.install_location);
-    } else if (app.duongDanThuMuc) {
-      installService.moThuMuc(app.duongDanThuMuc);
-    } else {
-      moApp(app.maUngDung);
+      return;
     }
+
+    if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
+      installService.moThuMuc(app.regInfo.install_location.trim());
+      return;
+    }
+
+    if (app.duongDanThuMuc && app.duongDanThuMuc.trim()) {
+      installService.moThuMuc(app.duongDanThuMuc.trim());
+      return;
+    }
+
+    // Fallback thông minh: Thử suy luận thư mục cài đặt từ UninstallString
+    const inferredDir = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
+    if (inferredDir) {
+      installService.moThuMuc(inferredDir);
+      return;
+    }
+
+    // Nếu là app giả lập trong RAM thì thử moApp
+    const localApp = caiDatMap[app.maUngDung];
+    if (localApp?.duongDanThucThi) {
+      installService.moUngDung(localApp.duongDanThucThi);
+      return;
+    }
+
+    // Nếu hoàn toàn không thể định vị file/folder thực thi: Thông báo rõ ràng cho người dùng
+    alert(
+      `Ứng dụng "${app.tenApp}" đã được cài đặt vào hệ thống Windows.\n\nBạn có thể khởi chạy trực tiếp từ Start Menu hoặc lối tắt trên Desktop!`,
+    );
   };
 
   // Xử lý gỡ cài đặt thật và đồng bộ danh sách (A4)

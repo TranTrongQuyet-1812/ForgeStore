@@ -174,5 +174,25 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       vi.doUnmock('@tauri-apps/plugin-opener');
       vi.restoreAllMocks();
     });
+
+    it('moThuMuc bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await installService.moThuMuc('');
+      await installService.moThuMuc('   ');
+      await installService.moThuMuc(null);
+      await installService.moThuMuc(undefined);
+      expect(warnSpy).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
+
+    it('moUngDung bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await installService.moUngDung('');
+      await installService.moUngDung('   ');
+      await installService.moUngDung(null);
+      await installService.moUngDung(undefined);
+      expect(warnSpy).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
   });
 });

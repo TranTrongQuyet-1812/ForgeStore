@@ -54,37 +54,47 @@ export class InstallService {
   /**
    * Mở ứng dụng đã cài đặt qua đường dẫn thực thi (.exe)
    */
-  async moUngDung(duongDanThucThi: string, thuMucChoPhep?: string): Promise<void> {
+  async moUngDung(duongDanThucThi?: string | null, thuMucChoPhep?: string): Promise<void> {
+    if (!duongDanThucThi || !duongDanThucThi.trim()) {
+      console.warn('[InstallService] moUngDung bị bỏ qua vì đường dẫn rỗng');
+      return;
+    }
+    const cleanPath = duongDanThucThi.trim();
     if (this.isTauriEnv()) {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke<void>('mo_ung_dung', {
-        duongDanThucThi,
+        duongDanThucThi: cleanPath,
         thuMucChoPhep: thuMucChoPhep || null,
       });
     } else {
-      console.info(`[WebDev Preview] Giả lập mở ứng dụng tại: ${duongDanThucThi}`);
+      console.info(`[WebDev Preview] Giả lập mở ứng dụng tại: ${cleanPath}`);
     }
   }
 
   /**
    * Mở thư mục chứa bản portable trong File Explorer (A1, TC-09, SEC-02)
    */
-  async moThuMuc(duongDanThuMuc: string): Promise<void> {
+  async moThuMuc(duongDanThuMuc?: string | null): Promise<void> {
+    if (!duongDanThuMuc || !duongDanThuMuc.trim()) {
+      console.warn('[InstallService] moThuMuc bị bỏ qua vì đường dẫn rỗng');
+      return;
+    }
+    const cleanPath = duongDanThuMuc.trim();
     if (this.isTauriEnv()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('mo_thu_muc', { duongDan: duongDanThuMuc });
+        await invoke('mo_thu_muc', { duongDan: cleanPath });
       } catch (err) {
         console.warn('Lỗi khi mở thư mục qua Tauri command, thử lại bằng revealItemInDir:', err);
         try {
           const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
-          await revealItemInDir(duongDanThuMuc);
+          await revealItemInDir(cleanPath);
         } catch (revealErr) {
           console.error('Không thể mở thư mục qua File Explorer:', revealErr);
         }
       }
     } else {
-      console.info(`[WebDev Preview] Giả lập mở thư mục tại: ${duongDanThuMuc}`);
+      console.info(`[WebDev Preview] Giả lập mở thư mục tại: ${cleanPath}`);
     }
   }
 

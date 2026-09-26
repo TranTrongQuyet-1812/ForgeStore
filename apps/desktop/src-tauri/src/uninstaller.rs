@@ -362,16 +362,19 @@ pub fn chay_go_cai_dat_registry(uninstall_string: &str) -> Result<bool, String> 
             None
         };
 
-        // SEC-V3-06: Trích xuất thư mục cha làm lpDirectory để phòng chống DLL Hijacking
-        let work_dir_wide: Option<Vec<u16>> = std::path::Path::new(&exe_path)
+        // SEC-V3-06 & SEC-R6-06: Trích xuất thư mục cha làm lpDirectory để phòng chống DLL Hijacking.
+        // Đối với msiexec.exe hoặc file không có parent path, gán tường minh C:\Windows\System32
+        let default_sys32 = std::path::Path::new("C:\\Windows\\System32");
+        let work_dir_path = std::path::Path::new(&exe_path)
             .parent()
             .and_then(|p| if p.as_os_str().is_empty() { None } else { Some(p) })
-            .map(|p| {
-                p.as_os_str()
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect()
-            });
+            .unwrap_or(default_sys32);
+
+        let work_dir_wide: Vec<u16> = work_dir_path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
         // SEC-06: Sử dụng verb "runas" để luôn yêu cầu quyền Quản trị viên (UAC) rõ ràng
         let verb_wide: Vec<u16> = OsStr::new("runas")
@@ -387,9 +390,7 @@ pub fn chay_go_cai_dat_registry(uninstall_string: &str) -> Result<bool, String> 
         if let Some(ref a) = args_wide {
             sei.lpParameters = a.as_ptr();
         }
-        if let Some(ref d) = work_dir_wide {
-            sei.lpDirectory = d.as_ptr();
-        }
+        sei.lpDirectory = work_dir_wide.as_ptr();
         sei.nShow = SW_SHOW as i32;
 
         let success = unsafe { ShellExecuteExW(&mut sei) };
@@ -461,9 +462,18 @@ pub fn chay_go_cai_dat_registry_an_toan(
             for app in &tat_ca_ung_dung {
                 if let Some(ref k) = app.registry_key {
                     if k.eq_ignore_ascii_case(trimmed_key) {
-                        if let Some(ref reg_str) = app.uninstall_string {
-                            chuoi_hop_le = Some(reg_str.clone());
-                            break;
+                        // SEC-R6-02: Bắt buộc đối soát tên ten_app với display_name hoặc registry_key để chống IPC Spoofing
+                        let norm_disp = chuan_hoa_ten(&app.display_name);
+                        let norm_k = chuan_hoa_ten(k);
+                        let hop_le_ten = norm_disp == norm_app
+                            || norm_disp.contains(&norm_app)
+                            || norm_app.contains(&norm_disp)
+                            || norm_k.contains(&norm_app);
+                        if hop_le_ten {
+                            if let Some(ref reg_str) = app.uninstall_string {
+                                chuoi_hop_le = Some(reg_str.clone());
+                                break;
+                            }
                         }
                     }
                 }

@@ -304,6 +304,15 @@ pub fn kiem_tra_tep_thuc_thi_an_toan(
         return Err(format!("Tệp không tồn tại: {}", duong_dan_tep.display()));
     }
 
+    // SEC-R6-01: Bắt buộc phần mở rộng phải là .exe để ngăn ngừa chạy file script (.bat, .cmd, .ps1, .vbs)
+    let is_exe = duong_dan_tep
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
+    if !is_exe {
+        return Err("BẢO MẬT: Chỉ cho phép khởi chạy tệp thực thi định dạng .exe.".to_string());
+    }
+
     let canonical = duong_dan_tep
         .canonicalize()
         .map_err(|e| format!("Không thể giải quyết đường dẫn tệp: {}", e))?;
@@ -515,6 +524,12 @@ pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -
 /// Kiểm tra nghiêm ngặt: Đường dẫn bắt buộc phải tồn tại và là thư mục (is_dir).
 /// Tuyệt đối từ chối nếu là tệp tin để ngăn chặn tấn công thực thi mã tùy ý từ Webview.
 pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
+    // SEC-R6-03: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) để chống rò rỉ băm NetNTLM qua SMB
+    let path_str = duong_dan.to_string_lossy();
+    if path_str.starts_with(r"\\") || path_str.starts_with("//") {
+        return Err("BẢO MẬT: Không được phép mở đường dẫn mạng UNC.".to_string());
+    }
+
     if !duong_dan.exists() {
         return Err(format!("Đường dẫn thư mục không tồn tại: {}", duong_dan.display()));
     }
@@ -541,6 +556,26 @@ pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_unc_tu_choi() {
+        let res = mo_thu_muc_he_thong(Path::new(r"\\attacker-ip\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC"));
+    }
+
+    #[test]
+    fn test_kiem_tra_tep_thuc_thi_an_toan_duoi_khong_phai_exe() {
+        let temp_dir = std::env::temp_dir();
+        let bat_file = temp_dir.join("forgestore_test_evil.bat");
+        let _ = std::fs::File::create(&bat_file);
+
+        let res = kiem_tra_tep_thuc_thi_an_toan(&bat_file, Some(&temp_dir));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("định dạng .exe"));
+
+        let _ = std::fs::remove_file(&bat_file);
+    }
 
     #[test]
     fn test_mo_thu_muc_he_thong_khong_ton_tai() {

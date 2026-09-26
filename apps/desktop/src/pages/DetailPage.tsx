@@ -481,6 +481,9 @@ export const DetailPage: React.FC = () => {
       } else {
         if (installInfo?.duongDanThucThi) {
           moApp(appKey);
+        } else {
+          // FE-R6-03: Nếu đã cài nhưng không có đường dẫn trong RAM, dẫn sang Thư viện để quản lý/mở
+          navigateTo('library');
         }
         return;
       }
@@ -1412,7 +1415,9 @@ export const DetailPage: React.FC = () => {
                     ) : (
                       <>
                         <Check className="w-4 h-4 stroke-[3]" />
-                        <span>{installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Đã Cài Đặt'}</span>
+                        <span>
+                          {installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Xem trong Thư Viện'}
+                        </span>
                       </>
                     )
                   ) : effectiveStatus === 'LOI' ? (
@@ -1459,10 +1464,35 @@ export const DetailPage: React.FC = () => {
                 </button>
               )}
 
+              {/* Nút chạy lại bộ cài cho EXE/MSI (FE-R6-03) */}
+              {!isZipTab && effectiveStatus === 'DA_CAI_DAT' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAsset) return;
+                    batDauCaiDat({
+                      maUngDung: appKey,
+                      tenApp: appDetail?.tenKhoChua || 'App',
+                      url: selectedAsset.duongDanTaiVe,
+                      tenTep: selectedAsset.tenTep,
+                      loaiTep: selectedAsset.dinhDangTep?.toString() || selectedFormat,
+                      sha256DuKien: selectedAsset.maBamSha256 || undefined,
+                      phienBan: latestRelease?.tenPhienBan,
+                      maTep: selectedAsset.maTep,
+                    });
+                  }}
+                  className="btn-tactile text-[11px] font-mono text-muted hover:text-accent-forge flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Chạy lại bộ cài đặt (.exe/.msi)</span>
+                </button>
+              )}
+
               {/* Chú thích cho app cài qua EXE/MSI đã xong */}
               {!isZipTab && effectiveStatus === 'DA_CAI_DAT' && !installInfo?.duongDanThucThi && (
                 <p className="text-[11px] text-muted text-center leading-normal">
-                  Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Start Menu hoặc Desktop.
+                  Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Thư viện, Start Menu hoặc
+                  Desktop.
                 </p>
               )}
 

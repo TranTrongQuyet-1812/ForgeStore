@@ -966,11 +966,11 @@ export class AppsService {
       throw new NotFoundException(`Không tìm thấy ứng dụng với định danh: ${cleanId}`);
     }
 
-    if (!app.phanTichAI) {
-      // Lazy AI (P2-31.3): Chạy nền non-blocking không bắt request chi tiết app phải chờ
+    // Lazy AI & CLI Backfill (P2-31.3 & BE-R6-01): Chạy nền non-blocking nếu chưa phân tích AI hoặc chưa có hướng dẫn CLI
+    if (!app.phanTichAI || app.phanTichAI.huongDanCaiDat === null) {
       this.phanTichUngDung(app.maUngDung).catch((err: unknown) => {
         this.logger.warn(
-          `Phân tích AI nền cho [${app.tenRepoDayDu}] thất bại: ${(err as Error).message}`,
+          `Bổ sung phân tích AI / CLI nền cho [${app.tenRepoDayDu}] thất bại: ${(err as Error).message}`,
         );
       });
     }

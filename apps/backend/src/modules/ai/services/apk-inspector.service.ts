@@ -60,11 +60,57 @@ export class ApkInspectorService {
 
     try {
       // 1. Gửi HEAD request lấy Content-Length và xác nhận Accept-Ranges (P2-35.1)
-      const headRes = await fetch(apkDownloadUrl, {
+      // SEC-R6-05: Dùng redirect: 'manual' để kiểm tra Location header trước khi gửi request tiếp theo chống Blind SSRF
+      let targetUrl = apkDownloadUrl;
+      let headRes = await fetch(targetUrl, {
         method: 'HEAD',
-        redirect: 'follow',
+        redirect: 'manual',
         signal: AbortSignal.timeout(this.TIMEOUT_MS),
       });
+
+      // Nếu gặp chuyển hướng (301, 302, 307, 308), thẩm định whitelist trước khi gửi hop tiếp theo
+      if ([301, 302, 307, 308].includes(headRes.status)) {
+        const location = headRes.headers.get('location');
+        if (!location) {
+          return {
+            thanhCong: false,
+            permissions: [],
+            coAccessibilityService: false,
+            soByteDaTai: 0,
+            lyDoThatBai: 'Redirect không có Location header hợp lệ.',
+          };
+        }
+        let resolvedLocation: string;
+        try {
+          resolvedLocation = new URL(location, targetUrl).toString();
+        } catch {
+          return {
+            thanhCong: false,
+            permissions: [],
+            coAccessibilityService: false,
+            soByteDaTai: 0,
+            lyDoThatBai: 'Redirect Location header có định dạng URL không hợp lệ.',
+          };
+        }
+
+        if (!this.kiemTraUrlHopLe(resolvedLocation)) {
+          return {
+            thanhCong: false,
+            permissions: [],
+            coAccessibilityService: false,
+            soByteDaTai: 0,
+            lyDoThatBai:
+              'Redirect URL tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
+          };
+        }
+
+        targetUrl = resolvedLocation;
+        headRes = await fetch(targetUrl, {
+          method: 'HEAD',
+          redirect: 'manual',
+          signal: AbortSignal.timeout(this.TIMEOUT_MS),
+        });
+      }
 
       if (!headRes.ok) {
         return {
@@ -76,17 +122,7 @@ export class ApkInspectorService {
         };
       }
 
-      const finalUrl = headRes.url || apkDownloadUrl;
-      // SEC-V3-02: Kiểm tra tiếp hostname sau khi theo dõi redirect
-      if (!this.kiemTraUrlHopLe(finalUrl)) {
-        return {
-          thanhCong: false,
-          permissions: [],
-          coAccessibilityService: false,
-          soByteDaTai: 0,
-          lyDoThatBai: 'Redirect URL tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
-        };
-      }
+      const finalUrl = targetUrl;
       const contentLengthHeader = headRes.headers.get('content-length');
       if (!contentLengthHeader) {
         return {

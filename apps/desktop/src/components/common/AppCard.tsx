@@ -42,8 +42,17 @@ export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
 
   return (
     <div
+      role="article"
+      tabIndex={0}
+      aria-label={`Ứng dụng ${app.tenApp}`}
       onClick={() => openAppDetail(app.id)}
-      className={`tactile-card group relative flex flex-col justify-between p-4 rounded-xl cursor-pointer select-none ${staggerClass}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openAppDetail(app.id);
+        }
+      }}
+      className={`tactile-card group relative flex flex-col justify-between p-4 rounded-xl cursor-pointer select-none focus-visible:ring-2 focus-visible:ring-accent-forge outline-none ${staggerClass}`}
     >
       <div>
         {/* Phần đầu: Icon, Tên, Repo Handle, Giấy phép, Sao */}
