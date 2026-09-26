@@ -232,6 +232,16 @@ export const DetailPage: React.FC = () => {
   const [activeCliMethodIndex, setActiveCliMethodIndex] = useState<number>(0);
   const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
 
+  // Reset trạng thái cục bộ khi chuyển sang xem ứng dụng khác (tránh rò rỉ customZipDir/modal giữa các app)
+  useEffect(() => {
+    setCustomZipDir(null);
+    setSelectedAssetId(null);
+    setIsSafetyModalOpen(false);
+    setShowAllVersions(false);
+    setActiveCliMethodIndex(0);
+    setLoiYeuThich(null);
+  }, [appId]);
+
   // Cấu hình thư mục lưu bản portable từ trang Cài đặt (A1)
   const { thuMucPortable, chonThuMucQuaDialog } = useSettingsStore();
   const targetPortableDir = customZipDir || thuMucPortable || undefined;
