@@ -345,7 +345,30 @@ export function kiemTraLenhNguyenVan(lenh: string, rawReadme: string): boolean {
   // 1. Lệnh 1 dòng: Phải khớp nguyên vẹn với một dòng lệnh trong README
   if (lenhLines.length === 1) {
     const target = lenhLines[0];
-    return readmeLines.some((rLine) => rLine === target);
+    if (readmeLines.some((rLine) => rLine === target)) {
+      return true;
+    }
+    // ARCH-04: Hỗ trợ trường hợp README bẻ dòng bằng \ nhưng lệnh đã được nối liền mạch (vẫn so khớp nguyên dòng)
+    const rawReadmeLines = normalizedReadme.split('\n');
+    const joinedReadmeLines: string[] = [];
+    let cur = '';
+    for (const r of rawReadmeLines) {
+      const trimmed = r.trim();
+      if (!cur) {
+        cur = trimmed;
+      } else {
+        cur += ' ' + trimmed;
+      }
+      if (cur.endsWith('\\')) {
+        cur = cur.slice(0, -1).trim();
+      } else {
+        joinedReadmeLines.push(chuanHoaDongLenh(cur));
+        cur = '';
+      }
+    }
+    if (cur) joinedReadmeLines.push(chuanHoaDongLenh(cur));
+
+    return joinedReadmeLines.some((rLine) => rLine === target);
   }
 
   // 2. Lệnh nhiều dòng: Toàn bộ các dòng phải xuất hiện liên tiếp và khớp nguyên vẹn từng dòng
@@ -472,10 +495,36 @@ export function bocTachHuongDanTuCodeBlocks(
 
   while ((match = codeBlockRegex.exec(rawInstallSection)) !== null) {
     const blockContent = match[1]?.trim() || '';
-    const lines = blockContent
+    // ARCH-04: Nối các dòng có ký tự ngắt dòng (\, ^, `) để không cắt cụt câu lệnh
+    const rawLines = blockContent
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith('#'));
+
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const rawLine of rawLines) {
+      if (!currentLine) {
+        currentLine = rawLine;
+      } else {
+        currentLine += ' ' + rawLine;
+      }
+
+      if (
+        currentLine.endsWith('\\') ||
+        currentLine.endsWith('^') ||
+        currentLine.endsWith('`')
+      ) {
+        currentLine = currentLine.slice(0, -1).trim();
+      } else {
+        lines.push(currentLine);
+        currentLine = '';
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
 
     for (const line of lines) {
       const nhom = nhanDienNhomLenh(line);

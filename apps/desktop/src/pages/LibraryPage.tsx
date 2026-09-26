@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Library, RefreshCw, Play, Trash2, Download, Search, Laptop, Compass } from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
@@ -25,6 +25,7 @@ export const LibraryPage: React.FC = () => {
   );
   const [isCheckingRegistry, setIsCheckingRegistry] = useState(false);
   const [isUninstallingId, setIsUninstallingId] = useState<string | null>(null);
+  const syncedRegistryKeysRef = useRef<Set<string>>(new Set());
 
   // 1. Lấy thông tin thiết bị máy trạm
   useEffect(() => {
@@ -72,14 +73,22 @@ export const LibraryPage: React.FC = () => {
         const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
         const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
 
-        // DELIV-40.2: Tự động lưu ngược khóa Registry cho app cũ bằng endpoint riêng (không ghi đè maTepDaCai hay phienBanHienTai)
-        if (maThietBi && !app.khoaRegistry && regInfo?.registry_key) {
+        // DELIV-40.2 & FE-R7-03: Tự động lưu ngược khóa Registry cho app cũ bằng endpoint riêng
+        // Dùng syncedRegistryKeysRef để tránh spam PUT request khi chuyển tab
+        if (
+          maThietBi &&
+          !app.khoaRegistry &&
+          regInfo?.registry_key &&
+          !syncedRegistryKeysRef.current.has(app.maUngDung)
+        ) {
+          syncedRegistryKeysRef.current.add(app.maUngDung);
           libraryService
             .capNhatKhoaRegistry(maThietBi, app.maUngDung, {
               khoaRegistry: regInfo.registry_key,
               tenHienThiRegistry: regInfo.display_name || undefined,
             })
             .catch((err) => {
+              syncedRegistryKeysRef.current.delete(app.maUngDung);
               console.warn('[LibraryPage] Không thể tự động lưu khóa registry lên backend:', err);
             });
         }
@@ -174,8 +183,15 @@ export const LibraryPage: React.FC = () => {
         exePath = trimmed.slice(1, closing);
       }
     } else {
-      const parts = trimmed.split(' ');
-      exePath = parts[0] || '';
+      // FE-R7-04: Khớp vị trí .exe cuối cùng thay vì split khoảng trắng để xử lý đường dẫn không có nháy nhưng có khoảng trắng
+      const lower = trimmed.toLowerCase();
+      const exeIdx = lower.lastIndexOf('.exe');
+      if (exeIdx !== -1) {
+        exePath = trimmed.slice(0, exeIdx + 4).trim();
+      } else {
+        const parts = trimmed.split(' ');
+        exePath = parts[0] || '';
+      }
     }
 
     if (exePath.toLowerCase().endsWith('.exe')) {

@@ -233,16 +233,40 @@ export const useInstallStore = create<InstallState>()(
       name: 'forgestore_install_tasks',
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
-        // Chỉ lưu các tiến trình đang thực thi tạm thời, TUYỆT ĐỐI KHÔNG lưu DA_CAI_DAT vào localStorage (A3)
+        // FE-R7-02: Giữ các tiến trình tải dở dang và bản Portable ZIP đã cài (có duongDanThuMuc)
+        // để khi mở lại app người dùng vẫn có thể bấm "Mở Thư Mục Portable"
         caiDatMap: Object.fromEntries(
           Object.entries(state.caiDatMap).filter(
             ([_, v]) =>
               v.trangThai === 'DANG_TAI' ||
               v.trangThai === 'XAC_MINH' ||
-              v.trangThai === 'DANG_CAI_DAT',
+              v.trangThai === 'DANG_CAI_DAT' ||
+              (v.trangThai === 'DA_CAI_DAT' && !!v.duongDanThuMuc),
           ),
         ),
       }),
+      onRehydrateStorage: () => (state) => {
+        // FE-R7-01: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
+        if (state && state.caiDatMap) {
+          const next = { ...state.caiDatMap };
+          let changed = false;
+          for (const [id, item] of Object.entries(next)) {
+            if (['DANG_TAI', 'XAC_MINH', 'DANG_CAI_DAT'].includes(item.trangThai)) {
+              next[id] = {
+                ...item,
+                trangThai: 'DA_HUY',
+                phanTram: 0,
+                tocDoBps: 0,
+                thongDiepLoi: 'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
+              };
+              changed = true;
+            }
+          }
+          if (changed) {
+            state.caiDatMap = next;
+          }
+        }
+      },
     },
   ),
 );

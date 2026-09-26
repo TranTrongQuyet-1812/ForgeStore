@@ -149,8 +149,10 @@ export class ApkInspectorService {
       const tailSize = Math.min(65536, totalSize);
       const tailStart = totalSize - tailSize;
 
+      // SEC-R7-02: Bổ sung redirect: 'manual' chặn Blind SSRF chaining trên Range GET
       const tailRes = await fetch(finalUrl, {
         headers: { Range: `bytes=${tailStart}-${totalSize - 1}` },
+        redirect: 'manual',
         signal: AbortSignal.timeout(this.TIMEOUT_MS),
       });
 
@@ -212,10 +214,21 @@ export class ApkInspectorService {
           };
         }
 
+        // SEC-R7-02: Bổ sung redirect: 'manual' chặn Blind SSRF chaining
         const cdRes = await fetch(finalUrl, {
           headers: { Range: `bytes=${cdOffset}-${cdOffset + cdSize - 1}` },
+          redirect: 'manual',
           signal: AbortSignal.timeout(this.TIMEOUT_MS),
         });
+        if (cdRes.status !== 206) {
+          return {
+            thanhCong: false,
+            permissions: [],
+            coAccessibilityService: false,
+            soByteDaTai,
+            lyDoThatBai: `Server không hỗ trợ HTTP Range Request cho Central Directory (mã ${cdRes.status})`,
+          };
+        }
         cdBuf = Buffer.from(await cdRes.arrayBuffer());
         soByteDaTai += cdBuf.length;
       }
@@ -267,12 +280,24 @@ export class ApkInspectorService {
 
       // 6. Tải Local Header và Compressed Data của AndroidManifest.xml
       const manifestFetchSize = 30 + 1024 + manifestEntry.compressedSize; // 30 bytes header + buffer extra field
+      // SEC-R7-02: Bổ sung redirect: 'manual' chặn Blind SSRF chaining
       const manifestRes = await fetch(finalUrl, {
         headers: {
           Range: `bytes=${manifestEntry.localHeaderOffset}-${manifestEntry.localHeaderOffset + manifestFetchSize - 1}`,
         },
+        redirect: 'manual',
         signal: AbortSignal.timeout(this.TIMEOUT_MS),
       });
+
+      if (manifestRes.status !== 206) {
+        return {
+          thanhCong: false,
+          permissions: [],
+          coAccessibilityService: false,
+          soByteDaTai,
+          lyDoThatBai: `Server không hỗ trợ HTTP Range Request cho AndroidManifest (mã ${manifestRes.status})`,
+        };
+      }
 
       const manifestLocalBuf = Buffer.from(await manifestRes.arrayBuffer());
       soByteDaTai += manifestLocalBuf.length;

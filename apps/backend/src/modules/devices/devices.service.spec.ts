@@ -29,6 +29,7 @@ describe('DevicesService', () => {
         update: vi.fn(),
       },
       tepCaiDat: {
+        findFirst: vi.fn().mockResolvedValue({ maTep: 'tep-uuid-1' }),
         update: vi.fn(),
       },
     };

@@ -503,8 +503,8 @@ export const ExplorePage: React.FC = () => {
                       : timeWindow === 'week'
                         ? 'trong 7 ngày qua'
                         : 'trong 30 ngày qua'
-                  }${activeCategory !== 'Tất cả' ? ` thuộc danh mục "${activeCategory}"` : ''}. Ông hãy thử chọn khung thời gian hoặc danh mục khác nhé!`
-                : `Không tìm thấy ứng dụng Windows nào thuộc danh mục "${activeCategory}". Ông hãy thử chọn danh mục khác nhé!`}
+                  }${activeCategory !== 'Tất cả' ? ` thuộc danh mục "${activeCategory}"` : ''}. Bạn hãy thử chọn khung thời gian hoặc danh mục khác nhé!`
+                : `Không tìm thấy ứng dụng Windows nào thuộc danh mục "${activeCategory}". Bạn hãy thử chọn danh mục khác nhé!`}
             </p>
             {activeSort === 'trending' ? (
               <div className="flex items-center gap-2 mt-2">

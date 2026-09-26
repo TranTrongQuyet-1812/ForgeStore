@@ -98,6 +98,18 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
         sei.lpFile = path_wide.as_ptr();
         sei.nShow = SW_SHOW as i32;
 
+        // SEC-R7-07: Gán thư mục làm việc an toàn cho bộ cài EXE chống DLL Hijacking
+        let default_sys32 = std::path::Path::new(r"C:\Windows\System32");
+        let work_dir_path = safe_path
+            .parent()
+            .and_then(|p| if p.as_os_str().is_empty() { None } else { Some(p) })
+            .unwrap_or(default_sys32);
+        let work_dir_wide: Vec<u16> = OsStr::new(work_dir_path.as_os_str())
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        sei.lpDirectory = work_dir_wide.as_ptr();
+
         let success = unsafe { ShellExecuteExW(&mut sei) };
         if success == 0 {
             let err_code = unsafe { GetLastError() };
@@ -180,6 +192,7 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
     #[cfg(target_os = "windows")]
     {
         let mut child = Command::new("msiexec.exe")
+            .current_dir(r"C:\Windows\System32")
             .arg("/i")
             .arg(&safe_path)
             .spawn()
@@ -304,18 +317,19 @@ pub fn kiem_tra_tep_thuc_thi_an_toan(
         return Err(format!("Tệp không tồn tại: {}", duong_dan_tep.display()));
     }
 
-    // SEC-R6-01: Bắt buộc phần mở rộng phải là .exe để ngăn ngừa chạy file script (.bat, .cmd, .ps1, .vbs)
-    let is_exe = duong_dan_tep
+    let canonical = duong_dan_tep
+        .canonicalize()
+        .map_err(|e| format!("Không thể giải quyết đường dẫn tệp: {}", e))?;
+
+    // SEC-R6-01 & SEC-R7-01: Bắt buộc phần mở rộng TRÊN ĐƯỜNG DẪN THỰC TẾ (CANONICAL) phải là .exe
+    // Ngăn chặn kỹ thuật tạo symlink app.exe -> payload.bat để qua mặt bộ lọc trước khi canonicalize!
+    let is_exe = canonical
         .extension()
         .and_then(|ext| ext.to_str())
         .map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
     if !is_exe {
         return Err("BẢO MẬT: Chỉ cho phép khởi chạy tệp thực thi định dạng .exe.".to_string());
     }
-
-    let canonical = duong_dan_tep
-        .canonicalize()
-        .map_err(|e| format!("Không thể giải quyết đường dẫn tệp: {}", e))?;
 
     let base_dir = std::env::var("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -524,10 +538,15 @@ pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -
 /// Kiểm tra nghiêm ngặt: Đường dẫn bắt buộc phải tồn tại và là thư mục (is_dir).
 /// Tuyệt đối từ chối nếu là tệp tin để ngăn chặn tấn công thực thi mã tùy ý từ Webview.
 pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
-    // SEC-R6-03: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) để chống rò rỉ băm NetNTLM qua SMB
+    // SEC-R6-03 & SEC-R7-06: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) và NT Object Manager device path (\??\ hoặc \\?\)
+    // để chống rò rỉ băm NetNTLMv2 qua SMB và bypass kiểm tra thiết bị DOS
     let path_str = duong_dan.to_string_lossy();
-    if path_str.starts_with(r"\\") || path_str.starts_with("//") {
-        return Err("BẢO MẬT: Không được phép mở đường dẫn mạng UNC.".to_string());
+    if path_str.starts_with(r"\\")
+        || path_str.starts_with("//")
+        || path_str.starts_with(r"\??\")
+        || path_str.starts_with(r"\\?\")
+    {
+        return Err("BẢO MẬT: Không được phép mở đường dẫn mạng UNC hoặc thiết bị NT.".to_string());
     }
 
     if !duong_dan.exists() {
@@ -562,6 +581,13 @@ mod tests {
         let res = mo_thu_muc_he_thong(Path::new(r"\\attacker-ip\share"));
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("đường dẫn mạng UNC"));
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_nt_device_path_tu_choi() {
+        let res = mo_thu_muc_he_thong(Path::new(r"\??\UNC\attacker-ip\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC hoặc thiết bị NT"));
     }
 
     #[test]

@@ -257,18 +257,28 @@ export class DevicesService {
       },
     });
 
-    // Tăng số lượt tải của tệp cài đặt nếu có
+    // Tăng số lượt tải của tệp cài đặt nếu có (SEC-R7-09: chỉ tăng nếu tệp thuộc ứng dụng đang ghi nhận)
     if (dto.maTepDaCai) {
-      await this.prisma.tepCaiDat
-        .update({
-          where: { maTep: dto.maTepDaCai },
-          data: { soLuotTai: { increment: 1 } },
-        })
-        .catch((err) => {
-          this.logger.warn(
-            `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
-          );
-        });
+      const tepThuocApp = await this.prisma.tepCaiDat.findFirst({
+        where: {
+          maTep: dto.maTepDaCai,
+          banPhatHanh: { maUngDung: dto.maUngDung },
+        },
+        select: { maTep: true },
+      });
+
+      if (tepThuocApp) {
+        await this.prisma.tepCaiDat
+          .update({
+            where: { maTep: dto.maTepDaCai },
+            data: { soLuotTai: { increment: 1 } },
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
+            );
+          });
+      }
     }
 
     this.logger.log(

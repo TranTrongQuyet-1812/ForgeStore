@@ -315,12 +315,13 @@ pub fn phan_tich_uninstall_string(raw: &str) -> (String, String) {
         } else {
             trimmed[7..].trim()
         };
-        // Nếu tham số là /I hoặc /i (cài đặt), đổi thành /X (gỡ bỏ)
-        let args = if rest.starts_with("/I") || rest.starts_with("/i") {
-            format!("/X{}", &rest[2..])
-        } else {
-            rest.to_string()
-        };
+        // SEC-R7-05: Nếu tham số chứa /I hoặc /i (cài đặt), đổi thành /X (gỡ bỏ) kể cả khi có cờ /quiet, /qn
+        let mut args = rest.to_string();
+        if args.starts_with("/I") || args.starts_with("/i") {
+            args = format!("/X{}", &args[2..]);
+        } else if let Some(idx) = args.to_lowercase().find(" /i") {
+            args = format!("{} /X{}", &args[..idx], &args[idx + 3..]);
+        }
         return ("msiexec.exe".to_string(), args);
     }
 
@@ -462,13 +463,13 @@ pub fn chay_go_cai_dat_registry_an_toan(
             for app in &tat_ca_ung_dung {
                 if let Some(ref k) = app.registry_key {
                     if k.eq_ignore_ascii_case(trimmed_key) {
-                        // SEC-R6-02: Bắt buộc đối soát tên ten_app với display_name hoặc registry_key để chống IPC Spoofing
+                        // SEC-R6-02 & SEC-R7-03: Bắt buộc đối soát tên ten_app với display_name hoặc registry_key để chống IPC Spoofing
+                        // Tuyệt đối KHÔNG dùng match nghịch norm_app.contains(&norm_disp)
                         let norm_disp = chuan_hoa_ten(&app.display_name);
                         let norm_k = chuan_hoa_ten(k);
                         let hop_le_ten = norm_disp == norm_app
-                            || norm_disp.contains(&norm_app)
-                            || norm_app.contains(&norm_disp)
-                            || norm_k.contains(&norm_app);
+                            || (norm_app.len() >= 3 && norm_disp.contains(&norm_app))
+                            || (norm_app.len() >= 3 && norm_k.contains(&norm_app));
                         if hop_le_ten {
                             if let Some(ref reg_str) = app.uninstall_string {
                                 chuoi_hop_le = Some(reg_str.clone());
@@ -546,6 +547,14 @@ mod tests {
         let (exe, args) = phan_tich_uninstall_string(raw);
         assert_eq!(exe, "msiexec.exe");
         assert_eq!(args, "/X{12345-ABCD-6789}");
+    }
+
+    #[test]
+    fn test_phan_tich_uninstall_string_msiexec_co_co_quiet() {
+        let raw = "msiexec.exe /quiet /I{12345-ABCD-6789}";
+        let (exe, args) = phan_tich_uninstall_string(raw);
+        assert_eq!(exe, "msiexec.exe");
+        assert_eq!(args, "/quiet /X{12345-ABCD-6789}");
     }
 
     #[test]

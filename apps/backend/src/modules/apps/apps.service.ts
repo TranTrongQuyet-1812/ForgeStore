@@ -110,6 +110,9 @@ export class AppsService {
   public readonly CACHE_KEY_DETAIL = 'fs:apps:detail:';
   public readonly CACHE_TTL = 3600; // 1 giờ
 
+  // ARCH-02: Single-Flight in-flight map ngăn chặn bão request AI phân tích đồng thời
+  private readonly inFlightPhanTichMap = new Map<string, Promise<void>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
@@ -1357,10 +1360,17 @@ export class AppsService {
    * Bọc trong withLock("fs:ai:<id>") đảm bảo 10 request đồng thời chỉ chạy AI 1 lần.
    */
   async phanTichUngDung(maUngDung: string): Promise<void> {
-    const lockKey = `fs:ai:${maUngDung}`;
+    // ARCH-02: Single-Flight pattern ngăn chặn request đồng thời kích hoạt nhiều job AI
+    const existingPromise = this.inFlightPhanTichMap.get(maUngDung);
+    if (existingPromise) {
+      return existingPromise;
+    }
 
-    try {
-      await this.cacheService.withLock(lockKey, 60000, async () => {
+    const task = (async () => {
+      const lockKey = `fs:ai:${maUngDung}`;
+
+      try {
+        await this.cacheService.withLock(lockKey, 60000, async () => {
         // Double-check xem đã có ai phân tích xong chưa
         const existing = await this.prisma.phanTichAI.findUnique({
           where: { maUngDung },
@@ -1404,11 +1414,23 @@ export class AppsService {
             );
           }
 
-          // CHỈ xử lý nếu lấy README thành công và có nội dung README
-          if (fetchReadmeLoi || !readme) {
+          // CHỈ xử lý nếu lấy README thành công
+          if (fetchReadmeLoi) {
             this.logger.warn(
-              `Bỏ qua đánh dấu CLI cho [${app.tenRepoDayDu}] do lỗi tải README hoặc README rỗng, giữ null cho lần sau thử lại.`,
+              `Bỏ qua đánh dấu CLI cho [${app.tenRepoDayDu}] do lỗi tải README, giữ null cho lần sau thử lại.`,
             );
+            return;
+          }
+
+          if (!readme) {
+            // Repo thật sự không có README trên GitHub -> đánh dấu khongCoHuongDan để dừng vòng lặp ngầm
+            await this.prisma.phanTichAI.update({
+              where: { maUngDung },
+              data: {
+                huongDanCaiDat: { khongCoHuongDan: true, cachCai: [] } as unknown as Prisma.InputJsonValue,
+              },
+            });
+            this.logger.log(`ℹ️ [${app.tenRepoDayDu}] không có README trên GitHub, đã đánh dấu khongCoHuongDan`);
             return;
           }
 
@@ -1710,7 +1732,9 @@ export class AppsService {
           }
         }
 
-        // 8. Làm sạch cache chi tiết app
+        // 8. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
+        await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
+        await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`);
         await this.cacheService.del([
           `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,
           `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
@@ -1720,7 +1744,15 @@ export class AppsService {
     } catch (err: unknown) {
       this.logger.error(`Lỗi phân tích AI cho ứng dụng [${maUngDung}]: ${(err as Error).message}`);
     }
+  })();
+
+  this.inFlightPhanTichMap.set(maUngDung, task);
+  try {
+    await task;
+  } finally {
+    this.inFlightPhanTichMap.delete(maUngDung);
   }
+}
 
   /**
    * Prewarm phân tích Dual-AI cho các ứng dụng (P2-31.5, phục vụ demo P6-07).

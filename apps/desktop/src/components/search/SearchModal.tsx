@@ -57,10 +57,13 @@ export const SearchModal: React.FC = () => {
     };
   }, []);
 
-  // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play (EC-05: Hỗ trợ cả full URL và định dạng rút gọn owner/repo)
+  // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play (EC-05 & FE-R7-05)
   const trimmedQuery = query.trim();
   const isGithubFullUrl = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(trimmedQuery);
-  const isGithubShortRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmedQuery);
+  const EXCLUDED_TECH_TERMS = ['c/c++', 'tcp/ip', 'i/o', 'ci/cd', '24/7', 'p2p'];
+  const isGithubShortRepo =
+    /^[a-zA-Z0-9_.-]{2,}\/[a-zA-Z0-9_.-]{2,}$/.test(trimmedQuery) &&
+    !EXCLUDED_TECH_TERMS.includes(trimmedQuery.toLowerCase());
   const isGithubUrl = isGithubFullUrl || isGithubShortRepo;
 
   // Debounce 300ms gọi API tìm kiếm (P3-07.1)

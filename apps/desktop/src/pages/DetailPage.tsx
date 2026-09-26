@@ -367,7 +367,9 @@ export const DetailPage: React.FC = () => {
   // Sao chép mã băm SHA-256 kèm hiệu ứng Checkmark Pop
   const handleCopySha = (sha?: string | null, fileId?: string) => {
     if (!sha) return;
-    navigator.clipboard.writeText(sha);
+    navigator.clipboard
+      .writeText(sha)
+      .catch((err) => console.warn('[DetailPage] Không thể sao chép SHA-256:', err));
     setCopiedSha(fileId || sha);
     if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
     copyShaTimerRef.current = setTimeout(() => setCopiedSha(null), 2000);
@@ -376,7 +378,9 @@ export const DetailPage: React.FC = () => {
   // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3 & FE-V3-05)
   const handleCopyCommand = (lenh: string, id: string) => {
     if (!lenh) return;
-    navigator.clipboard.writeText(lenh);
+    navigator.clipboard
+      .writeText(lenh)
+      .catch((err) => console.warn('[DetailPage] Không thể sao chép lệnh:', err));
     setCopiedCommandId(id);
     if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
     copyCommandTimerRef.current = setTimeout(() => setCopiedCommandId(null), 2000);
