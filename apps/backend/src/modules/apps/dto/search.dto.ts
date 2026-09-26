@@ -25,11 +25,17 @@ export class SearchQueryDto {
   q!: string;
 
   @ApiPropertyOptional({
-    description: 'Lọc theo nền tảng hỗ trợ',
+    description: 'Lọc theo nền tảng hỗ trợ (case-insensitive: windows, android, da_nen_tang)',
     enum: NenTangHoTro,
-    example: NenTangHoTro.ANDROID,
+    example: NenTangHoTro.WINDOWS,
   })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    const upper = value.toUpperCase().trim();
+    if (upper === 'ALL' || upper === 'TAT_CA') return NenTangHoTro.DA_NEN_TANG;
+    return upper;
+  })
   @IsEnum(NenTangHoTro, {
     message: 'Nền tảng phải là ANDROID, WINDOWS hoặc DA_NEN_TANG',
   })

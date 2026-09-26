@@ -16,11 +16,23 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
       headers: new Headers(),
     });
 
-    const res = await service.docQuyenApkTuUrl('https://example.com/notfound.apk');
+    const res = await service.docQuyenApkTuUrl(
+      'https://github.com/owner/repo/releases/download/v1.0/notfound.apk',
+    );
 
     expect(res.thanhCong).toBe(false);
     expect(res.permissions).toEqual([]);
     expect(res.lyDoThatBai).toContain('HTTP HEAD trả mã lỗi 404');
+  });
+
+  it('SEC-V3-02: Chặn đứng URL không thuộc whitelist GitHub để chống SSRF', async () => {
+    const res = await service.docQuyenApkTuUrl('https://evil.com/malware.apk');
+    expect(res.thanhCong).toBe(false);
+    expect(res.lyDoThatBai).toContain('SSRF Protection');
+
+    const resLocal = await service.docQuyenApkTuUrl('http://169.254.169.254/latest/meta-data/');
+    expect(resLocal.thanhCong).toBe(false);
+    expect(resLocal.lyDoThatBai).toContain('SSRF Protection');
   });
 
   it('Trả về thanhCong: false khi server không trả Content-Length', async () => {
@@ -29,7 +41,9 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
       headers: new Headers(), // Không có content-length
     });
 
-    const res = await service.docQuyenApkTuUrl('https://example.com/test.apk');
+    const res = await service.docQuyenApkTuUrl(
+      'https://github.com/owner/repo/releases/download/v1.0/test.apk',
+    );
 
     expect(res.thanhCong).toBe(false);
     expect(res.lyDoThatBai).toContain('Server không trả Content-Length');
@@ -41,7 +55,7 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
       .mockResolvedValueOnce({
         ok: true,
         headers: new Headers({ 'content-length': '1048576' }),
-        url: 'https://example.com/test.apk',
+        url: 'https://github.com/owner/repo/releases/download/v1.0/test.apk',
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -49,7 +63,9 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
         headers: new Headers(),
       });
 
-    const res = await service.docQuyenApkTuUrl('https://example.com/test.apk');
+    const res = await service.docQuyenApkTuUrl(
+      'https://github.com/owner/repo/releases/download/v1.0/test.apk',
+    );
 
     expect(res.thanhCong).toBe(false);
     expect(res.lyDoThatBai).toContain('không hỗ trợ HTTP Range Request');

@@ -14,7 +14,8 @@ export const DANH_MUC_CHUAN = [
 
 export type DanhMucChuan = (typeof DANH_MUC_CHUAN)[number];
 
-// Bảng từ khóa ánh xạ từ GitHub Topics và mô tả sang danh mục
+// Bảng từ khóa ánh xạ từ GitHub Topics và mô tả sang danh mục chuẩn hóa (N2)
+// Mỗi từ khóa chỉ thuộc duy nhất MỘT danh mục. Đã bỏ 'windows', 'android', phân tách 'editor'.
 const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
   'Bảo mật & Quyền riêng tư': [
     'security',
@@ -45,13 +46,19 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'streaming',
     'image',
     'photo',
-    'editor',
+    'video-editor',
+    'image-editor',
+    'audio-editor',
+    'photo-editor',
     'graphics',
     'converter',
     'camera',
     'recorder',
     'screen-recorder',
     'obs',
+    'jellyfin',
+    'plex',
+    'media-player',
   ],
   'Năng suất & Văn phòng': [
     'productivity',
@@ -62,8 +69,8 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'document',
     'pdf',
     'obsidian',
-    'editor',
-    'text-editor',
+    'markdown-editor',
+    'note-editor',
     'task',
     'todo',
     'calendar',
@@ -89,6 +96,10 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'database',
     'devtools',
     'debugger',
+    'code-editor',
+    'text-editor',
+    'source-code-editor',
+    'source-editor',
   ],
   'Mạng & Giao tiếp': [
     'network',
@@ -98,6 +109,9 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'p2p',
     'peer-to-peer',
     'torrent',
+    'bittorrent',
+    'torrent-client',
+    'media-server',
     'file-sharing',
     'localsend',
     'sync',
@@ -117,7 +131,7 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'arcade',
     'entertainment',
     'steam',
-    'launcher',
+    'game-launcher',
   ],
   'Học tập & Giáo dục': [
     'education',
@@ -130,6 +144,8 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'tachiyomi',
     'ebook',
     'dictionary',
+    'anki',
+    'flashcards',
   ],
   'Tiện ích hệ thống': [
     'utility',
@@ -137,13 +153,11 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
     'tool',
     'tools',
     'system',
-    'windows',
-    'android',
     'helper',
     'manager',
     'cleaner',
     'tweaks',
-    'launcher',
+    'app-launcher',
     '7zip',
     'compression',
     'archive',
@@ -151,26 +165,88 @@ const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
 };
 
 /**
+ * Bảng ghi đè danh mục thủ công cho các kho lưu trữ phổ biến (N2).
+ */
+export const BANG_DANH_MUC_THU_CONG: Record<string, DanhMucChuan> = {
+  'notepad-plus-plus/notepad-plus-plus': 'Lập trình & Phát triển',
+  'qbittorrent/qbittorrent': 'Mạng & Giao tiếp',
+  'transmission/transmission': 'Mạng & Giao tiếp',
+  'jellyfin/jellyfin': 'Đa phương tiện',
+  'jellyfin/jellyfin-android': 'Đa phương tiện',
+  'localsend/localsend': 'Mạng & Giao tiếp',
+  'rustdesk/rustdesk': 'Mạng & Giao tiếp',
+  'keepassxreboot/keepassxc': 'Bảo mật & Quyền riêng tư',
+  'koreader/koreader': 'Học tập & Giáo dục',
+  'ankidroid/ankidroid': 'Học tập & Giáo dục',
+  'obsidianmd/obsidian-releases': 'Năng suất & Văn phòng',
+  'bleachbit/bleachbit': 'Tiện ích hệ thống',
+  'videolan/vlc': 'Đa phương tiện',
+  'obsproject/obs-studio': 'Đa phương tiện',
+  'retroarch/retroarch': 'Trò chơi & Giải trí',
+  'libretro/retroarch': 'Trò chơi & Giải trí',
+  'termux/termux-app': 'Lập trình & Phát triển',
+  '7-zip/7-zip': 'Tiện ích hệ thống',
+  'ip7z/7zip': 'Tiện ích hệ thống',
+  'syncthing/syncthing': 'Mạng & Giao tiếp',
+  'syncthing/syncthing-android': 'Mạng & Giao tiếp',
+};
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Kiểm tra một topic có khớp từ khóa hay không theo nguyên tắc khớp nguyên từ (N2).
+ * - Topic trùng khớp tuyệt đối: 'cli' === 'cli'
+ * - Hoặc topic ghép bằng dấu gạch ngang/gạch dưới chứa từ khóa nguyên vẹn: 'cli-tool' -> ['cli', 'tool'] khớp 'cli'.
+ * - KHÔNG khớp chuỗi con vô nghĩa: 'client' KHÔNG khớp 'cli'.
+ */
+function kiemTraTopicKhop(topic: string, keyword: string): boolean {
+  if (topic === keyword) {
+    return true;
+  }
+  if (keyword.includes('-')) {
+    return topic === keyword;
+  }
+  const parts = topic.split(/[-_]/);
+  return parts.includes(keyword);
+}
+
+/**
  * Hàm thuần ánh xạ từ topics và mô tả của GitHub repository sang danh mục chuẩn ForgeStore.
  *
  * @param topics Danh sách topics từ GitHub Repo (VD: ['remote-desktop', 'rust', 'p2p'])
  * @param moTa Mô tả ngắn bằng tiếng Anh của Repo (nếu có)
+ * @param tenRepo Tên đầy đủ dạng owner/repo (nếu có để tra cứu ghi đè thủ công)
  * @returns Danh mục chuẩn tiếng Việt
  */
-export function anhXaDanhMuc(topics: string[] = [], moTa?: string | null): DanhMucChuan {
+export function anhXaDanhMuc(
+  topics: string[] = [],
+  moTa?: string | null,
+  tenRepo?: string | null,
+): DanhMucChuan {
+  // 1. Kiểm tra bảng ghi đè thủ công cho các repo nổi tiếng (N2)
+  if (tenRepo) {
+    const cleanRepo = tenRepo.toLowerCase().trim();
+    if (BANG_DANH_MUC_THU_CONG[cleanRepo]) {
+      return BANG_DANH_MUC_THU_CONG[cleanRepo];
+    }
+  }
+
   const normalizedTopics = (topics || []).map((t) => t.toLowerCase().trim());
   const normalizedDesc = (moTa || '').toLowerCase();
 
   // Đếm điểm phù hợp cho từng danh mục
-  const scores: Record<DanhMucChuan, number> = {
-    'Bảo mật & Quyền riêng tư': 0,
-    'Đa phương tiện': 0,
-    'Năng suất & Văn phòng': 0,
-    'Lập trình & Phát triển': 0,
-    'Mạng & Giao tiếp': 0,
-    'Trò chơi & Giải trí': 0,
-    'Học tập & Giáo dục': 0,
-    'Tiện ích hệ thống': 0,
+  // Phân tách điểm Topic và điểm Mô tả để giải quyết hòa điểm (N2)
+  const scores: Record<DanhMucChuan, { total: number; topic: number }> = {
+    'Bảo mật & Quyền riêng tư': { total: 0, topic: 0 },
+    'Đa phương tiện': { total: 0, topic: 0 },
+    'Năng suất & Văn phòng': { total: 0, topic: 0 },
+    'Lập trình & Phát triển': { total: 0, topic: 0 },
+    'Mạng & Giao tiếp': { total: 0, topic: 0 },
+    'Trò chơi & Giải trí': { total: 0, topic: 0 },
+    'Học tập & Giáo dục': { total: 0, topic: 0 },
+    'Tiện ích hệ thống': { total: 0, topic: 0 },
   };
 
   for (const [danhMuc, keywords] of Object.entries(TU_KHOA_DANH_MUC) as [
@@ -178,24 +254,40 @@ export function anhXaDanhMuc(topics: string[] = [], moTa?: string | null): DanhM
     string[],
   ][]) {
     for (const kw of keywords) {
-      // Topic khớp tuyệt đối hoặc chứa từ khóa: +3 điểm
-      if (normalizedTopics.some((t) => t === kw || t.includes(kw))) {
-        scores[danhMuc] += 3;
+      const isCompound = kw.includes('-');
+      // 1. Topic khớp theo nguyên từ: topic ghép +4 điểm, topic đơn +3 điểm
+      if (normalizedTopics.some((t) => kiemTraTopicKhop(t, kw))) {
+        const p = isCompound ? 4 : 3;
+        scores[danhMuc].total += p;
+        scores[danhMuc].topic += p;
       }
-      // Mô tả chứa từ khóa: +1 điểm
-      if (normalizedDesc && normalizedDesc.includes(kw)) {
-        scores[danhMuc] += 1;
+
+      // 2. Mô tả khớp theo ranh giới từ \b: mô tả ghép +2 điểm, mô tả đơn +1 điểm
+      if (normalizedDesc) {
+        const regex = new RegExp(`\\b${escapeRegExp(kw)}\\b`, 'i');
+        if (regex.test(normalizedDesc)) {
+          scores[danhMuc].total += isCompound ? 2 : 1;
+        }
       }
     }
   }
 
   // Tìm danh mục có điểm cao nhất
+  // Khi hòa điểm, ưu tiên danh mục có điểm topic cao hơn (N2)
   let maxScore = 0;
+  let maxTopicScore = 0;
   let bestCategory: DanhMucChuan = 'Tiện ích hệ thống';
 
-  for (const [danhMuc, score] of Object.entries(scores) as [DanhMucChuan, number][]) {
-    if (score > maxScore) {
-      maxScore = score;
+  for (const [danhMuc, sc] of Object.entries(scores) as [
+    DanhMucChuan,
+    { total: number; topic: number },
+  ][]) {
+    if (sc.total > maxScore) {
+      maxScore = sc.total;
+      maxTopicScore = sc.topic;
+      bestCategory = danhMuc;
+    } else if (sc.total === maxScore && sc.total > 0 && sc.topic > maxTopicScore) {
+      maxTopicScore = sc.topic;
       bestCategory = danhMuc;
     }
   }

@@ -167,9 +167,9 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
   ) {
     kienTruc = KienTrucChip.ARM64_V8A;
   }
-  // B. ARM 32-bit (Android 32-bit đời cũ)
+  // B. ARM 32-bit (Android 32-bit đời cũ) - V3: Bổ sung nhãn arm đứng một mình
   else if (
-    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32)(?:[-_.]|$)/i.test(lowerName) ||
+    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32|arm)(?:[-_.]|$)/i.test(lowerName) ||
     lowerName.includes('armeabi-v7a') ||
     lowerName.includes('armeabi') ||
     lowerName.includes('armv7') ||
@@ -228,5 +228,175 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
     dinhDang,
     kienTruc,
     boQua: false,
+  };
+}
+
+export interface ThongTinDiemUuTien {
+  diem: number;
+  hopMay: boolean;
+  laCli: boolean;
+  laDebug: boolean;
+  laPhu: boolean;
+}
+
+/**
+ * Kiểm tra xem tên tệp có chứa nhãn kiến trúc rõ ràng hay không.
+ */
+export function coNhanKienTrucRoRang(tenTep: string): boolean {
+  const lower = tenTep.toLowerCase();
+  return (
+    /(?:^|[-_.])(x86_64|x86-64|x64|amd64|win64|x86|i386|i686|win32|ia32|arm64-v8a|arm64|aarch64|arm-64|armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32|arm)(?:[-_.]|$)/i.test(
+      lower,
+    ) ||
+    lower.includes('x86_64') ||
+    lower.includes('amd64') ||
+    lower.includes('-x64') ||
+    lower.includes('_x64') ||
+    lower.includes('win64') ||
+    lower.includes('win32')
+  );
+}
+
+/**
+ * V1: Hậu xử lý kiến trúc các tệp trong cùng một bản phát hành theo ngữ cảnh (Context-Aware Architecture Resolution).
+ *
+ * Nếu trong cùng bản phát hành đã có tệp ghi rõ x64/amd64/win64/x86_64:
+ * Các tệp Windows không ghi nhãn kiến trúc (ví dụ npp.8.9.8.1.Installer.exe hay portable.zip)
+ * sẽ được gán là X86 (thay vì mặc định X86_64).
+ * Chỉ khi cả bản phát hành không có tệp nào ghi kiến trúc thì mới giữ mặc định X86_64.
+ */
+export function hauXuLyKienTrucBanPhatHanh<
+  T extends { tenTep: string; dinhDang?: DinhDangTep | null; kienTruc: KienTrucChip },
+>(assets: T[]): T[] {
+  if (!assets || assets.length === 0) return assets;
+
+  // Kiểm tra xem trong các tệp Windows có tệp nào ghi rõ x64 không
+  const coFileX64RoRang = assets.some((a) => {
+    const isWindows =
+      a.dinhDang === DinhDangTep.EXE ||
+      a.dinhDang === DinhDangTep.MSI ||
+      a.dinhDang === DinhDangTep.ZIP_PORTABLE;
+    if (!isWindows) return false;
+    const lower = a.tenTep.toLowerCase();
+    return (
+      /(?:^|[-_.])(x86_64|x86-64|x64|amd64|win64)(?:[-_.]|$)/i.test(lower) ||
+      lower.includes('x86_64') ||
+      lower.includes('amd64') ||
+      lower.includes('-x64') ||
+      lower.includes('_x64') ||
+      lower.includes('win64')
+    );
+  });
+
+  return assets.map((asset) => {
+    const isWindows =
+      asset.dinhDang === DinhDangTep.EXE ||
+      asset.dinhDang === DinhDangTep.MSI ||
+      asset.dinhDang === DinhDangTep.ZIP_PORTABLE;
+
+    if (isWindows && coFileX64RoRang && !coNhanKienTrucRoRang(asset.tenTep)) {
+      // Tệp không ghi rõ kiến trúc trong khi đã có file x64 riêng -> gán X86 (32-bit)
+      return {
+        ...asset,
+        kienTruc: KienTrucChip.X86,
+      };
+    }
+    return asset;
+  });
+}
+
+/**
+ * V2 + K2: Tính điểm ưu tiên cho từng tệp cài đặt và kiểm tra độ tương thích với máy khách.
+ *
+ * @param tenTep Tên tệp cài đặt (VD: LocalSend-1.18.2-windows-x86-64.exe)
+ * @param dinhDang Định dạng tệp
+ * @param kienTruc Kiến trúc chip của tệp
+ * @param targetArch Kiến trúc CPU của máy khách (x86_64, aarch64, arm64-v8a...)
+ */
+export function tinhDiemUuTienTep(
+  tenTep: string,
+  _dinhDang: DinhDangTep,
+  kienTruc: KienTrucChip,
+  targetArch?: string | null,
+): ThongTinDiemUuTien {
+  const lower = tenTep.toLowerCase();
+
+  // Chỉ giữ regex có ranh giới từ rõ ràng để không khớp nhầm vào các từ như "client", "click"
+  const laCli = /(?:^|[-_.])cli(?:[-_.]|$)/i.test(lower);
+  const laDebug = /(?:^|[-_.])debug(?:[-_.]|$)/i.test(lower);
+  const laUnsigned = /(?:^|[-_.])unsigned(?:[-_.]|$)/i.test(lower);
+  const laParallel = /(?:^|[-_.])parallel(?:[-_.]|$)/i.test(lower);
+  const laSymbols = /(?:^|[-_.])(symbols|pdb|nominify)(?:[-_.]|$)/i.test(lower);
+  const laPhu =
+    laCli ||
+    laDebug ||
+    laUnsigned ||
+    laParallel ||
+    laSymbols ||
+    /(?:^|[-_.])(amazon|play|legacy|english)(?:[-_.]|$)/i.test(lower);
+
+  let diem = 100;
+
+  // 1. Cộng điểm bộ cài chính quy
+  if (/(?:^|[-_.])(setup|installer)(?:[-_.]|$)/i.test(lower)) {
+    diem += 30;
+  }
+  if (/(?:^|[-_.])(release|signed)(?:[-_.]|$)/i.test(lower)) {
+    diem += 20;
+  }
+
+  // 2. Trừ mạnh các biến thể phụ / rác / cli / debug
+  if (laCli) diem -= 200;
+  if (laDebug) diem -= 200;
+  if (laUnsigned) diem -= 150;
+  if (laParallel) diem -= 150;
+  if (laSymbols) diem -= 200;
+  if (/(?:^|[-_.])(amazon|play|legacy|english)(?:[-_.]|$)/i.test(lower)) {
+    diem -= 30;
+  }
+
+  // 3. Đánh giá độ tương thích kiến trúc với máy khách (K2)
+  let hopMay = true;
+  const archNorm = targetArch ? targetArch.toLowerCase().trim() : 'x86_64'; // Mặc định PC là x86_64
+
+  const isClientX64 = archNorm === 'x86_64' || archNorm === 'x64' || archNorm === 'amd64';
+  const isClientArm64 = archNorm === 'aarch64' || archNorm === 'arm64' || archNorm === 'arm64-v8a';
+
+  if (isClientX64) {
+    if (kienTruc === KienTrucChip.X86_64) {
+      diem += 100;
+      hopMay = true;
+    } else if (kienTruc === KienTrucChip.DUNG_CHUNG) {
+      diem += 70;
+      hopMay = true;
+    } else if (kienTruc === KienTrucChip.X86) {
+      diem += 40; // 32-bit chạy qua WoW64
+      hopMay = true;
+    } else if (kienTruc === KienTrucChip.ARM64_V8A || kienTruc === KienTrucChip.ARMEABI_V7A) {
+      diem -= 120; // ARM trên máy x64
+      hopMay = false;
+    }
+  } else if (isClientArm64) {
+    if (kienTruc === KienTrucChip.ARM64_V8A) {
+      diem += 100;
+      hopMay = true;
+    } else if (kienTruc === KienTrucChip.DUNG_CHUNG) {
+      diem += 70;
+      hopMay = true;
+    } else if (kienTruc === KienTrucChip.ARMEABI_V7A) {
+      diem += 40;
+      hopMay = true;
+    } else {
+      diem -= 80;
+      hopMay = false;
+    }
+  }
+
+  return {
+    diem,
+    hopMay,
+    laCli,
+    laDebug,
+    laPhu,
   };
 }

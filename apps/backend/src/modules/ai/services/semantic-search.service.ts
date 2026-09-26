@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
 export interface KetQuaTimKiemNguNghia {
   maUngDung: string;
@@ -12,6 +14,8 @@ export interface KetQuaTimKiemNguNghia {
   soSaoGithub: number;
   danhMucChinh: string;
   nenTangHoTro: string;
+  daXacMinh: boolean;
+  ngayCapNhat: Date | string;
   khauHieuTiengViet: string | null;
   diemUyTin: number | null;
   mucDoAnToan: string | null;
@@ -27,6 +31,8 @@ interface RawSearchResult {
   soSaoGithub: number;
   danhMucChinh: string;
   nenTangHoTro: string;
+  daXacMinh: boolean;
+  ngayCapNhat: Date;
   khauHieuTiengViet: string | null;
   diemUyTin: number | null;
   mucDoAnToan: string | null;
@@ -43,6 +49,7 @@ export class SemanticSearchService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly rateLimiter: LlmRateLimiterService,
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     this.embeddingModel =
@@ -106,6 +113,14 @@ export class SemanticSearchService {
       throw new Error('Văn bản đầu vào sinh embedding không được để trống.');
     }
 
+    // Kiểm tra Token Bucket cho Gemini Embedding (80 RPM) (AI1)
+    const token = await this.rateLimiter.layToken('gemini_embedding', 3000);
+    if (!token.chapNhan) {
+      throw new Error(
+        `Gemini Embedding đã chạm trần Rate Limit (${token.capacity} RPM). Vui lòng thử lại sau.`,
+      );
+    }
+
     try {
       const response = await this.client.models.embedContent({
         model: this.embeddingModel,
@@ -152,12 +167,32 @@ export class SemanticSearchService {
   }
 
   /**
-   * Tìm kiếm ứng dụng bằng ý định tự nhiên / ngữ nghĩa với pgvector (P2-36.3).
+   * Tìm kiếm ứng dụng bằng ý định tự nhiên / ngữ nghĩa với pgvector (P2-36.3, AI2).
+   * Lọc theo platform và chỉ trả app có file cài hợp lệ (L1, AI2).
    * Sử dụng toán tử khoảng cách cosine `<=>` được tăng tốc bởi chỉ mục HNSW `idx_phan_tich_ai_vector` (D-16).
    */
-  async timKiemNguNghia(cauTruyVan: string, gioiHan = 20): Promise<KetQuaTimKiemNguNghia[]> {
+  async timKiemNguNghia(
+    cauTruyVan: string,
+    gioiHan = 20,
+    platform?: string,
+  ): Promise<KetQuaTimKiemNguNghia[]> {
     const vector = await this.sinhEmbedding(cauTruyVan);
     const vectorStr = `[${vector.join(',')}]`;
+
+    const plat = platform ? platform.toUpperCase() : undefined;
+    let platformCondition = Prisma.empty;
+
+    if (plat === 'WINDOWS') {
+      // BE-V3-02: Lọc trực tiếp theo nen_tang_ho_tro và trang_thai = 'HOAT_DONG' đã có B-tree index,
+      // loại bỏ subquery EXISTS tương quan gây suy giảm hiệu năng duyệt đồ thị HNSW
+      platformCondition = Prisma.sql`
+        AND u."nen_tang_ho_tro" IN ('WINDOWS', 'DA_NEN_TANG')
+      `;
+    } else if (plat === 'ANDROID') {
+      platformCondition = Prisma.sql`
+        AND u."nen_tang_ho_tro" IN ('ANDROID', 'DA_NEN_TANG')
+      `;
+    }
 
     const ketQua = await this.prisma.$queryRaw<RawSearchResult[]>`
       SELECT 
@@ -169,6 +204,8 @@ export class SemanticSearchService {
         u."so_sao_github" AS "soSaoGithub",
         u."danh_muc_chinh" AS "danhMucChinh",
         u."nen_tang_ho_tro" AS "nenTangHoTro",
+        u."da_xac_minh" AS "daXacMinh",
+        u."dong_bo_lan_cuoi" AS "ngayCapNhat",
         pa."khau_hieu_tieng_viet" AS "khauHieuTiengViet",
         pa."diem_uy_tin" AS "diemUyTin",
         pa."muc_do_an_toan" AS "mucDoAnToan",
@@ -176,6 +213,8 @@ export class SemanticSearchService {
       FROM "phan_tich_ai" pa
       JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
       WHERE pa."vector_ngu_nghia" IS NOT NULL
+        AND u."trang_thai" = 'HOAT_DONG'
+        ${platformCondition}
       ORDER BY pa."vector_ngu_nghia" <=> ${vectorStr}::vector ASC
       LIMIT ${gioiHan}
     `;
@@ -189,6 +228,8 @@ export class SemanticSearchService {
       soSaoGithub: row.soSaoGithub,
       danhMucChinh: row.danhMucChinh,
       nenTangHoTro: row.nenTangHoTro,
+      daXacMinh: row.daXacMinh,
+      ngayCapNhat: row.ngayCapNhat,
       khauHieuTiengViet: row.khauHieuTiengViet,
       diemUyTin: row.diemUyTin,
       mucDoAnToan: row.mucDoAnToan,

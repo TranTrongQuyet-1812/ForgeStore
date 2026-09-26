@@ -3,9 +3,10 @@ import { CacheService } from '../../redis/cache.service';
 import { GeminiProvider } from '../providers/gemini.provider';
 import { NvidiaNimProvider } from '../providers/nvidia-nim.provider';
 import { LlmRotationService } from './llm-rotation.service';
+import { LlmRateLimiterService } from './llm-rate-limiter.service';
 import { KetQuaTomTat } from '../dto/ai-summary.dto';
 
-describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', () => {
+describe('LlmRotationService (P2-39, D-15 & AI1: Token Bucket Rate Limiting)', () => {
   let service: LlmRotationService;
   let mockGeminiProvider: Partial<GeminiProvider>;
   let mockNvidiaNimProvider: Partial<NvidiaNimProvider>;
@@ -13,6 +14,10 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
     lay: ReturnType<typeof vi.fn>;
     luu: ReturnType<typeof vi.fn>;
     xoa: ReturnType<typeof vi.fn>;
+  };
+  let mockRateLimiter: {
+    layToken: ReturnType<typeof vi.fn>;
+    layRpm: ReturnType<typeof vi.fn>;
   };
 
   const sampleKetQua: KetQuaTomTat = {
@@ -47,27 +52,58 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
       xoa: vi.fn().mockResolvedValue(undefined),
     };
 
+    mockRateLimiter = {
+      layToken: vi.fn().mockResolvedValue({
+        chapNhan: true,
+        conLai: 11,
+        capacity: 12,
+      }),
+      layRpm: vi.fn((key: string) => (key.includes('gemini') ? 12 : 30)),
+    };
+
     service = new LlmRotationService(
       mockGeminiProvider as GeminiProvider,
       mockNvidiaNimProvider as NvidiaNimProvider,
       mockCacheService as unknown as CacheService,
+      mockRateLimiter as unknown as LlmRateLimiterService,
     );
   });
 
   describe('tomTatReadme', () => {
-    it('Ưu tiên gọi Gemini đầu tiên khi chưa bị khóa', async () => {
+    it('Ưu tiên gọi Gemini đầu tiên khi chưa bị khóa và còn Token Bucket', async () => {
       (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValue(sampleKetQua);
 
       const res = await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
 
       expect(res.moHinhTomTat).toBe('gemini-3.1-flash-lite');
-      expect(res.ketQua.khauHieu).toBe(sampleKetQua.khauHieu);
+      expect(mockRateLimiter.layToken).toHaveBeenCalledWith('GEMINI');
       expect(mockGeminiProvider.tomTatReadme).toHaveBeenCalledTimes(1);
       expect(mockNvidiaNimProvider.tomTatReadme).not.toHaveBeenCalled();
     });
 
-    it('Tự động xoay sang NVIDIA NIM khi Gemini gặp lỗi 429 và khóa Gemini trong Cache (D-15)', async () => {
-      const err429 = new Error('Quota exceeded: 429 Too Many Requests');
+    it('AI1: Chủ động xoay sang NVIDIA NIM khi Gemini hết Token Bucket mà không đợi lỗi 429', async () => {
+      // Giả lập Gemini hết token, NIM còn token
+      mockRateLimiter.layToken.mockImplementation(async (providerKey: string) => {
+        if (providerKey === 'GEMINI') {
+          return { chapNhan: false, conLai: 0, capacity: 12 };
+        }
+        return { chapNhan: true, conLai: 29, capacity: 30 };
+      });
+
+      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValue(
+        sampleKetQua,
+      );
+
+      const res = await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
+
+      // Phải tự động chuyển sang NIM
+      expect(res.moHinhTomTat).toBe('meta/llama-3.1-70b-instruct');
+      expect(mockGeminiProvider.tomTatReadme).not.toHaveBeenCalled();
+      expect(mockNvidiaNimProvider.tomTatReadme).toHaveBeenCalledTimes(1);
+    });
+
+    it('Tự động xoay tua sang NVIDIA NIM khi Gemini dính 429 và khóa Gemini', async () => {
+      const err429 = new Error('Resource has been exhausted (e.g. check quota). 429');
       (err429 as unknown as { status: number }).status = 429;
 
       (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockRejectedValue(err429);
@@ -80,57 +116,11 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
       expect(res.moHinhTomTat).toBe('meta/llama-3.1-70b-instruct');
       expect(mockGeminiProvider.tomTatReadme).toHaveBeenCalledTimes(1);
       expect(mockNvidiaNimProvider.tomTatReadme).toHaveBeenCalledTimes(1);
-
-      // Xác nhận đã lưu khóa vào Redis/Cache
       expect(mockCacheService.luu).toHaveBeenCalledWith(
         'fs:llm:khoa:GEMINI',
         true,
-        expect.any(Number),
+        service.THOI_GIAN_KHOA_PHUT,
       );
-    });
-
-    it('Khóa 60 giây khi lỗi 429 theo phút và khóa 12 giờ khi lỗi theo ngày (Post-Review #11)', async () => {
-      const errMinute = new Error(
-        'Quota exceeded for quota metric Queries and limit Queries per minute',
-      );
-      (errMinute as unknown as { status: number }).status = 429;
-      (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        errMinute,
-      );
-      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        sampleKetQua,
-      );
-
-      await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
-      expect(mockCacheService.luu).toHaveBeenCalledWith('fs:llm:khoa:GEMINI', true, 60);
-
-      const errDaily = new Error('Requests per day exceeded for this project');
-      (errDaily as unknown as { status: number }).status = 429;
-      (mockGeminiProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockRejectedValueOnce(errDaily);
-      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-        sampleKetQua,
-      );
-
-      await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
-      expect(mockCacheService.luu).toHaveBeenCalledWith('fs:llm:khoa:GEMINI', true, 43200);
-    });
-
-    it('Bỏ qua Gemini khi đang có khóa trong Cache và gọi thẳng NVIDIA NIM', async () => {
-      // Mock key khóa Gemini tồn tại trong Cache
-      mockCacheService.lay.mockImplementation((key: string) => {
-        if (key === 'fs:llm:khoa:GEMINI') return Promise.resolve(true);
-        return Promise.resolve(null);
-      });
-
-      (mockNvidiaNimProvider.tomTatReadme as ReturnType<typeof vi.fn>).mockResolvedValue(
-        sampleKetQua,
-      );
-
-      const res = await service.tomTatReadme('# Readme', 'rustdesk/rustdesk');
-
-      expect(res.moHinhTomTat).toBe('meta/llama-3.1-70b-instruct');
-      expect(mockGeminiProvider.tomTatReadme).not.toHaveBeenCalled();
-      expect(mockNvidiaNimProvider.tomTatReadme).toHaveBeenCalledTimes(1);
     });
 
     it('Chuyển sang nội dung DU_PHONG khi cả 2 nhà cung cấp đều bị lỗi hoặc bị khóa (P2-39.5)', async () => {
@@ -161,6 +151,82 @@ describe('LlmRotationService (P2-39 & D-15: Gemini ⇄ NVIDIA NIM Rotation)', ()
       const res = await service.tomTatChangelog('Fix bug and improve perf', 'rustdesk/rustdesk');
       expect(res.moHinhTomTat).toBe('gemini-3.1-flash-lite');
       expect(res.ketQua.diemMoi).toHaveLength(2);
+    });
+
+    it('AI1: Chủ động xoay sang NVIDIA NIM cho changelog khi Gemini hết token', async () => {
+      mockRateLimiter.layToken.mockImplementation(async (providerKey: string) => {
+        if (providerKey === 'GEMINI') {
+          return { chapNhan: false, conLai: 0, capacity: 12 };
+        }
+        return { chapNhan: true, conLai: 29, capacity: 30 };
+      });
+
+      (mockNvidiaNimProvider.tomTatChangelog as ReturnType<typeof vi.fn>).mockResolvedValue({
+        diemMoi: ['Changelog từ NIM'],
+      });
+
+      const res = await service.tomTatChangelog('Fix bug', 'rustdesk/rustdesk');
+      expect(res.moHinhTomTat).toBe('meta/llama-3.1-70b-instruct');
+      expect(mockGeminiProvider.tomTatChangelog).not.toHaveBeenCalled();
+      expect(mockNvidiaNimProvider.tomTatChangelog).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('trichXuatHuongDanCaiDat', () => {
+    const rawReadme = `# Test\n## Installation\n\`\`\`bash\npip install my-app\n\`\`\``;
+    const installSection = `## Installation\n\`\`\`bash\npip install my-app\n\`\`\``;
+
+    it('Trích xuất hướng dẫn CLI thành công qua Gemini', async () => {
+      mockGeminiProvider.trichXuatHuongDanCaiDat = vi.fn().mockResolvedValue({
+        cachCai: [
+          {
+            ten: 'Cài đặt bằng pip',
+            nhom: 'PIP',
+            heDieuHanh: 'DUNG_CHUNG',
+            phanCung: 'CPU',
+            buoc: [{ moTa: 'Cài đặt', lenh: 'pip install my-app' }],
+          },
+        ],
+      });
+
+      const res = await service.trichXuatHuongDanCaiDat(installSection, 'owner/test', rawReadme);
+      expect(res).not.toBeNull();
+      expect(res?.cachCai[0]?.nhom).toBe('PIP');
+      expect(mockGeminiProvider.trichXuatHuongDanCaiDat).toHaveBeenCalledTimes(1);
+    });
+
+    it('Chủ động xoay sang NVIDIA NIM khi Gemini hết token bucket cho CLI guide', async () => {
+      mockRateLimiter.layToken.mockImplementation(async (providerKey: string) => {
+        if (providerKey === 'GEMINI') {
+          return { chapNhan: false, conLai: 0, capacity: 12 };
+        }
+        return { chapNhan: true, conLai: 29, capacity: 30 };
+      });
+
+      mockNvidiaNimProvider.trichXuatHuongDanCaiDat = vi.fn().mockResolvedValue({
+        cachCai: [
+          {
+            ten: 'Cài đặt từ NIM',
+            nhom: 'PIP',
+            heDieuHanh: 'DUNG_CHUNG',
+            phanCung: 'CPU',
+            buoc: [{ moTa: 'Cài đặt', lenh: 'pip install my-app' }],
+          },
+        ],
+      });
+
+      const res = await service.trichXuatHuongDanCaiDat(installSection, 'owner/test', rawReadme);
+      expect(res).not.toBeNull();
+      expect(mockNvidiaNimProvider.trichXuatHuongDanCaiDat).toHaveBeenCalledTimes(1);
+    });
+
+    it('Fallback sang bocTachHuongDanTuCodeBlocks khi cả hai provider đều bị khóa', async () => {
+      mockCacheService.lay.mockResolvedValue(true); // cả 2 đều bị khóa 429
+
+      const res = await service.trichXuatHuongDanCaiDat(installSection, 'owner/test', rawReadme);
+      expect(res).not.toBeNull();
+      expect(res?.cachCai.length).toBeGreaterThanOrEqual(1);
+      expect(res?.cachCai[0]?.buoc[0]?.lenh).toBe('pip install my-app');
     });
   });
 

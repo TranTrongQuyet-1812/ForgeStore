@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from 
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
+  DanhMucDto,
   ResolveAssetResponseDto,
   TrangKetQua,
   UngDungChiTietDto,
@@ -9,7 +10,7 @@ import {
 } from '@forgestore/types';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { AppsService } from './apps.service';
-import { QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
+import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
 import { ResolveAssetDto } from './dto/resolve-asset.dto';
 
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
@@ -18,6 +19,20 @@ import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 @Controller('apps')
 export class AppsController {
   constructor(private readonly appsService: AppsService) {}
+
+  @CongKhai()
+  @Get('categories')
+  @ApiOperation({
+    summary: 'Lấy danh sách danh mục có app khả dụng theo nền tảng (K3)',
+    description: 'Trả về danh mục và số lượng app thật trên nền tảng (windows/android).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách danh mục và số lượng app tương ứng',
+  })
+  async layDanhSachDanhMuc(@Query('platform') platform?: PlatformFilter): Promise<DanhMucDto[]> {
+    return this.appsService.layDanhSachDanhMuc(platform);
+  }
 
   @CongKhai()
   @Get()
@@ -74,9 +89,9 @@ export class AppsController {
   @CongKhai()
   @Get(':owner/:repo')
   @ApiOperation({
-    summary: 'Lấy chi tiết ứng dụng theo owner và repo slug (P2-24)',
+    summary: 'Lấy chi tiết ứng dụng theo owner và repo slug (P2-24, K1)',
     description:
-      'Ví dụ: /api/v1/apps/rustdesk/rustdesk. Tự động gắn cờ laYeuThich nếu đã đăng nhập.',
+      'Ví dụ: /api/v1/apps/rustdesk/rustdesk?platform=windows. Tự động lọc phiên bản theo platform và gắn cờ laYeuThich nếu đã đăng nhập.',
   })
   @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
   @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
@@ -87,17 +102,19 @@ export class AppsController {
   async layChiTietAppTheoSlug(
     @Param('owner') owner: string,
     @Param('repo') repo: string,
+    @Query('platform') platform?: PlatformFilter,
+    @Query('arch') arch?: string,
     @NguoiDungHienTai('maNguoiDung') userId?: string,
   ): Promise<UngDungChiTietDto> {
-    return this.appsService.layChiTietApp(`${owner}/${repo}`, userId);
+    return this.appsService.layChiTietApp(`${owner}/${repo}`, userId, platform, arch);
   }
 
   @CongKhai()
   @Get(':id')
   @ApiOperation({
-    summary: 'Lấy chi tiết ứng dụng theo UUID hoặc URL-encoded slug (P2-24)',
+    summary: 'Lấy chi tiết ứng dụng theo UUID hoặc URL-encoded slug (P2-24, K1)',
     description:
-      'Chấp nhận UUID của ứng dụng hoặc chuỗi owner/repo đã URL-encoded (VD: rustdesk%2Frustdesk). Tự động gắn cờ laYeuThich nếu đã đăng nhập.',
+      'Chấp nhận UUID của ứng dụng hoặc chuỗi owner/repo đã URL-encoded (VD: rustdesk%2Frustdesk?platform=windows). Tự động lọc phiên bản theo platform và gắn cờ laYeuThich nếu đã đăng nhập.',
   })
   @ApiParam({
     name: 'id',
@@ -110,8 +127,10 @@ export class AppsController {
   })
   async layChiTietApp(
     @Param('id') id: string,
+    @Query('platform') platform?: PlatformFilter,
+    @Query('arch') arch?: string,
     @NguoiDungHienTai('maNguoiDung') userId?: string,
   ): Promise<UngDungChiTietDto> {
-    return this.appsService.layChiTietApp(id, userId);
+    return this.appsService.layChiTietApp(id, userId, platform, arch);
   }
 }

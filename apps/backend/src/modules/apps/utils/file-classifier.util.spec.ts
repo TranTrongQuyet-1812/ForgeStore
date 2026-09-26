@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { phanLoaiTep } from './file-classifier.util';
+import { phanLoaiTep, hauXuLyKienTrucBanPhatHanh, tinhDiemUuTienTep } from './file-classifier.util';
 import { DinhDangTep, KienTrucChip } from '@forgestore/types';
 
 describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
@@ -231,5 +231,148 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
     expect(phanLoaiTep('').boQua).toBe(true);
     expect(phanLoaiTep('   ').boQua).toBe(true);
     expect(phanLoaiTep('no-extension-file').boQua).toBe(true);
+  });
+
+  describe('V3: Nhận diện kiến trúc ARM 32-bit đứng một mình (koreader)', () => {
+    it('nhận diện chính xác koreader-android-arm-v2026.07.1.apk là ARMEABI_V7A', () => {
+      const res = phanLoaiTep('koreader-android-arm-v2026.07.1.apk');
+      expect(res.boQua).toBe(false);
+      expect(res.dinhDang).toBe(DinhDangTep.APK);
+      expect(res.kienTruc).toBe(KienTrucChip.ARMEABI_V7A);
+    });
+
+    it('vẫn phân biệt chính xác arm64 không bị nuốt bởi arm', () => {
+      const res64 = phanLoaiTep('koreader-android-arm64-v2026.07.1.apk');
+      expect(res64.kienTruc).toBe(KienTrucChip.ARM64_V8A);
+    });
+  });
+
+  describe('V1: Hậu xử lý ngữ cảnh kiến trúc bản phát hành (Notepad++)', () => {
+    it('gán X86 cho file không ghi kiến trúc khi trong release đã có file x64 riêng', () => {
+      const nppAssets = [
+        {
+          tenTep: 'npp.8.9.8.1.Installer.x64.exe',
+          dinhDang: DinhDangTep.EXE,
+          kienTruc: KienTrucChip.X86_64,
+        },
+        {
+          tenTep: 'npp.8.9.8.1.Installer.exe',
+          dinhDang: DinhDangTep.EXE,
+          kienTruc: KienTrucChip.X86_64, // Trước hậu xử lý bị gán nhầm X86_64
+        },
+        {
+          tenTep: 'npp.8.9.8.1.portable.x64.zip',
+          dinhDang: DinhDangTep.ZIP_PORTABLE,
+          kienTruc: KienTrucChip.X86_64,
+        },
+        {
+          tenTep: 'npp.8.9.8.1.portable.zip',
+          dinhDang: DinhDangTep.ZIP_PORTABLE,
+          kienTruc: KienTrucChip.X86_64, // Trước hậu xử lý bị gán nhầm X86_64
+        },
+      ];
+
+      const processed = hauXuLyKienTrucBanPhatHanh(nppAssets);
+
+      // Bản có x64 giữ nguyên X86_64
+      expect(processed.find((a) => a.tenTep === 'npp.8.9.8.1.Installer.x64.exe')?.kienTruc).toBe(
+        KienTrucChip.X86_64,
+      );
+      expect(processed.find((a) => a.tenTep === 'npp.8.9.8.1.portable.x64.zip')?.kienTruc).toBe(
+        KienTrucChip.X86_64,
+      );
+
+      // Bản không ghi kiến trúc được chuyển thành X86 (32-bit)
+      expect(processed.find((a) => a.tenTep === 'npp.8.9.8.1.Installer.exe')?.kienTruc).toBe(
+        KienTrucChip.X86,
+      );
+      expect(processed.find((a) => a.tenTep === 'npp.8.9.8.1.portable.zip')?.kienTruc).toBe(
+        KienTrucChip.X86,
+      );
+    });
+
+    it('giữ nguyên X86_64 nếu cả bản phát hành không có file nào ghi kiến trúc', () => {
+      const genericAssets = [
+        {
+          tenTep: 'simple-app-setup.exe',
+          dinhDang: DinhDangTep.EXE,
+          kienTruc: KienTrucChip.X86_64,
+        },
+      ];
+
+      const processed = hauXuLyKienTrucBanPhatHanh(genericAssets);
+      expect(processed[0].kienTruc).toBe(KienTrucChip.X86_64);
+    });
+  });
+
+  describe('V2 + K2: Tính điểm ưu tiên và phân loại bộ cài (LocalSend & AnkiDroid)', () => {
+    it('ưu tiên bản release chính thức, trừ mạnh bản CLI và unsigned (LocalSend)', () => {
+      const diemChinhThuc = tinhDiemUuTienTep(
+        'LocalSend-1.18.2-windows-x86-64.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      const diemCli = tinhDiemUuTienTep(
+        'LocalSend-CLI-1.18.2-windows-x86-64.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      const diemUnsigned = tinhDiemUuTienTep(
+        'LocalSend-1.18.2-windows-x86-64-unsigned.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+
+      expect(diemChinhThuc.diem).toBeGreaterThan(diemUnsigned.diem);
+      expect(diemUnsigned.diem).toBeGreaterThan(diemCli.diem);
+      expect(diemCli.laCli).toBe(true);
+      expect(diemUnsigned.laPhu).toBe(true);
+      expect(diemChinhThuc.hopMay).toBe(true);
+    });
+
+    it('trên máy x64, bản ARM bị gắn cờ hopMay = false và điểm thấp hơn nhiều', () => {
+      const scoreX64 = tinhDiemUuTienTep(
+        'npp.8.9.8.1.Installer.x64.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      const scoreArm64 = tinhDiemUuTienTep(
+        'npp.8.9.8.1.Installer.arm64.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.ARM64_V8A,
+        'x86_64',
+      );
+
+      expect(scoreX64.hopMay).toBe(true);
+      expect(scoreArm64.hopMay).toBe(false);
+      expect(scoreX64.diem).toBeGreaterThan(scoreArm64.diem);
+    });
+
+    it('không đánh dấu nhầm tệp có chữ "client" thành CLI (Transmission & MQTT client)', () => {
+      const transmissionClient = tinhDiemUuTienTep(
+        'Transmission-Remote-client-setup-x64.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      const mqttClient = tinhDiemUuTienTep(
+        'mqtt-client_x64.msi',
+        DinhDangTep.MSI,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+
+      expect(transmissionClient.laCli).toBe(false);
+      expect(transmissionClient.laPhu).toBe(false);
+      expect(transmissionClient.diem).toBeGreaterThanOrEqual(100);
+
+      expect(mqttClient.laCli).toBe(false);
+      expect(mqttClient.laPhu).toBe(false);
+      expect(mqttClient.diem).toBeGreaterThanOrEqual(100);
+    });
   });
 });

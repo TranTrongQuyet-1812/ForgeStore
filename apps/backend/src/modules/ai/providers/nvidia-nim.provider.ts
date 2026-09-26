@@ -7,10 +7,14 @@ import {
   KetQuaTomTat,
   KetQuaTomTatSchema,
 } from '../dto/ai-summary.dto';
+import { HuongDanCaiDatAiSchema } from '../dto/cli-guide.dto';
 import { INhaCungCapTomTat, TenNhaCungCap } from '../interfaces/llm-provider.interface';
 import { taoPromptTomTatReadme } from '../prompts/readme-summary.prompt';
 import { taoPromptTomTatChangelog } from '../prompts/changelog-summary.prompt';
+import { taoPromptHuongDanCaiDat } from '../prompts/cli-guide.prompt';
 import { kiemTraTrichDanHopLe, lamSachReadme } from '../utils/readme-cleaner.util';
+import { locVaChuanHoaHuongDanCaiDat } from '../utils/cli-guide-extractor.util';
+import type { HuongDanCaiDatDto } from '@forgestore/types';
 
 @Injectable()
 export class NvidiaNimProvider implements INhaCungCapTomTat {
@@ -98,6 +102,38 @@ export class NvidiaNimProvider implements INhaCungCapTomTat {
     const rawJson = await this.goiNim(prompt);
     const parsed = JSON.parse(rawJson);
     return KetQuaChangelogSchema.parse(parsed);
+  }
+
+  /**
+   * Trích xuất hướng dẫn cài đặt qua dòng lệnh (CLI) bằng NVIDIA NIM (D-15 Fallback).
+   */
+  async trichXuatHuongDanCaiDat(
+    installSection: string,
+    repoName: string,
+    rawReadme: string,
+    duongDanReadmeGoc?: string,
+  ): Promise<HuongDanCaiDatDto | null> {
+    if (!this.client) {
+      throw new Error('NVIDIA_API_KEY không khả dụng.');
+    }
+
+    const prompt = taoPromptHuongDanCaiDat(repoName, installSection);
+
+    try {
+      const rawJson = await this.goiNim(prompt);
+      const parsed = JSON.parse(rawJson);
+      const validated = HuongDanCaiDatAiSchema.parse(parsed);
+
+      return locVaChuanHoaHuongDanCaiDat(validated, rawReadme, duongDanReadmeGoc);
+    } catch (err: unknown) {
+      if (this.laLoiRateLimit(err)) {
+        throw err;
+      }
+      this.logger.warn(
+        `Lỗi NVIDIA NIM bóc tách hướng dẫn CLI [${repoName}]: ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 
   /**

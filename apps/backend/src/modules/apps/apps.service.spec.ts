@@ -5,7 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GithubService } from '../github/github.service';
 import { CacheService } from '../redis/cache.service';
 import { AppsService } from './apps.service';
-import { AppSortOption, PlatformFilter, QueryAppsDto } from './dto/query-apps.dto';
+import {
+  AppSortOption,
+  PlatformFilter,
+  QueryAppsDto,
+  TimeWindowFilter,
+} from './dto/query-apps.dto';
 import { JevClientService } from '../ai/services/jev-client.service';
 import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
@@ -95,10 +100,12 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         findUnique: vi.fn(),
         count: vi.fn(),
         update: vi.fn(),
+        groupBy: vi.fn(),
       },
       phanTichAI: {
         findUnique: vi.fn(),
         upsert: vi.fn(),
+        update: vi.fn().mockResolvedValue({}),
       },
       banPhatHanh: {
         upsert: vi.fn(),
@@ -540,13 +547,94 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       mockPrisma.ungDung.findMany.mockResolvedValue([]);
       mockPrisma.ungDung.count.mockResolvedValue(0);
 
-      await service.layDanhSachApps({ limit: 100 });
+      const res = await service.layDanhSachApps({ limit: 100, sort: AppSortOption.STARS });
 
+      expect(res.kichThuocTrang).toBe(50);
       expect(mockPrisma.ungDung.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           take: 50, // Capped at 50 per P2-23.1
         }),
       );
+    });
+
+    it('B2: Lọc thật sự theo khung thời gian phát hành bản mới nhất (TODAY / WEEK)', async () => {
+      mockCacheService.lay.mockResolvedValue(null);
+
+      const now = new Date();
+      const appMoiHomNay = {
+        maUngDung: 'app-today',
+        tenRepoDayDu: 'org/today-app',
+        chuSoHuu: 'org',
+        tenKhoChua: 'today-app',
+        duongDanGithub: 'https://github.com/org/today-app',
+        duongDanIcon: null,
+        soSaoGithub: 100,
+        danhMucChinh: 'Tiện ích',
+        nenTangHoTro: NenTangHoTro.WINDOWS,
+        duocNoiBat: false,
+        daXacMinh: false,
+        tenGoiAndroid: null,
+        dongBoLanCuoi: now,
+        phanTichAI: null,
+        danhSachPhatHanh: [
+          {
+            tenPhienBan: '1.0.0',
+            ngayPhatHanh: new Date(now.getTime() - 4 * 60 * 60 * 1000), // 4 giờ trước
+            laBanThuNghiem: false,
+            danhSachTepCaiDat: [{ dinhDangTep: DinhDangTep.EXE }],
+          },
+        ],
+      };
+
+      const appCuBaTuan = {
+        maUngDung: 'app-old',
+        tenRepoDayDu: 'org/old-app',
+        chuSoHuu: 'org',
+        tenKhoChua: 'old-app',
+        duongDanGithub: 'https://github.com/org/old-app',
+        duongDanIcon: null,
+        soSaoGithub: 5000,
+        danhMucChinh: 'Tiện ích',
+        nenTangHoTro: NenTangHoTro.WINDOWS,
+        duocNoiBat: false,
+        daXacMinh: false,
+        tenGoiAndroid: null,
+        dongBoLanCuoi: now,
+        phanTichAI: null,
+        danhSachPhatHanh: [
+          {
+            tenPhienBan: '2.0.0',
+            ngayPhatHanh: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), // 20 ngày trước
+            laBanThuNghiem: false,
+            danhSachTepCaiDat: [{ dinhDangTep: DinhDangTep.EXE }],
+          },
+        ],
+      };
+
+      mockPrisma.ungDung.findMany.mockResolvedValue([appMoiHomNay, appCuBaTuan]);
+
+      // Khi lọc TODAY: chỉ appMoiHomNay thỏa mãn (trong vòng 1 ngày)
+      const resToday = await service.layDanhSachApps({
+        window: TimeWindowFilter.TODAY,
+        sort: AppSortOption.TRENDING,
+      });
+      expect(resToday.duLieu).toHaveLength(1);
+      expect(resToday.duLieu[0].maUngDung).toBe('app-today');
+
+      // Khi lọc WEEK: appCuBaTuan (20 ngày trước) vẫn bị loại bỏ
+      const resWeek = await service.layDanhSachApps({
+        window: TimeWindowFilter.WEEK,
+        sort: AppSortOption.TRENDING,
+      });
+      expect(resWeek.duLieu).toHaveLength(1);
+      expect(resWeek.duLieu[0].maUngDung).toBe('app-today');
+
+      // Khi lọc MONTH: cả 2 app đều thỏa mãn (trong vòng 30 ngày)
+      const resMonth = await service.layDanhSachApps({
+        window: TimeWindowFilter.MONTH,
+        sort: AppSortOption.TRENDING,
+      });
+      expect(resMonth.duLieu).toHaveLength(2);
     });
   });
 
@@ -963,6 +1051,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
         duocNoiBat: true,
         daXacMinh: true,
+        trangThai: 'HOAT_DONG',
         tenGoiAndroid: 'org.videolan.vlc',
         dongBoLanCuoi: new Date(),
         phanTichAI: {
@@ -1249,6 +1338,324 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('layDanhSachDanhMuc (K3)', () => {
+    it('trả về kết quả từ Cache nếu đã có', async () => {
+      const cached = [{ ten: 'Lập trình & Phát triển', soLuong: 5 }];
+      mockCacheService.lay.mockResolvedValueOnce(cached);
+
+      const result = await service.layDanhSachDanhMuc(PlatformFilter.WINDOWS);
+
+      expect(mockCacheService.lay).toHaveBeenCalledWith('fs:categories:windows');
+      expect(result).toEqual(cached);
+      expect(mockPrisma.ungDung.groupBy).not.toHaveBeenCalled();
+    });
+
+    it('truy vấn Prisma groupBy khi chưa có cache, lọc danh mục có app >= 1 và lưu cache', async () => {
+      mockCacheService.lay.mockResolvedValueOnce(null);
+      mockPrisma.ungDung.groupBy.mockResolvedValueOnce([
+        { danhMucChinh: 'Lập trình & Phát triển', _count: { _all: 6 } },
+        { danhMucChinh: 'Đa phương tiện', _count: { _all: 3 } },
+        { danhMucChinh: 'Học tập & Giáo dục', _count: { _all: 0 } }, // 0 app -> bị loại bỏ
+        { danhMucChinh: 'Tiện ích hệ thống', _count: { _all: 4 } },
+      ]);
+
+      const result = await service.layDanhSachDanhMuc(PlatformFilter.WINDOWS);
+
+      expect(mockPrisma.ungDung.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['danhMucChinh'],
+          where: expect.objectContaining({
+            trangThai: 'HOAT_DONG',
+            nenTangHoTro: { in: [NenTangHoTro.WINDOWS, NenTangHoTro.DA_NEN_TANG] },
+          }),
+        }),
+      );
+
+      // Kết quả phải lọc bỏ 'Học tập & Giáo dục' (0 app)
+      expect(result.some((r) => r.ten === 'Học tập & Giáo dục')).toBe(false);
+      // Kết quả phải giữ các danh mục có > 0 app
+      expect(result).toEqual(
+        expect.arrayContaining([
+          { ten: 'Tiện ích hệ thống', soLuong: 4 },
+          { ten: 'Đa phương tiện', soLuong: 3 },
+          { ten: 'Lập trình & Phát triển', soLuong: 6 },
+        ]),
+      );
+      // Lưu cache 300s
+      expect(mockCacheService.luu).toHaveBeenCalledWith(
+        'fs:categories:windows',
+        expect.any(Array),
+        300,
+      );
+    });
+  });
+
+  describe('Xử lý app không có file cài đặt (L1)', () => {
+    it('dongBoRepo gán trangThai = KHONG_CO_BAN_CAI khi repo không có file cài hợp lệ (VLC/RetroArch)', async () => {
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        name: 'vlc',
+        full_name: 'videolan/vlc',
+        owner: { login: 'videolan', avatar_url: 'https://example.com/vlc.png' },
+        html_url: 'https://github.com/videolan/vlc',
+        description: 'VLC media player official source code',
+        stargazers_count: 10000,
+        forks_count: 3000,
+        license: { name: 'GPL-2.0' },
+        language: 'C',
+        topics: ['multimedia', 'video', 'player'],
+      });
+
+      // Mock 0 releases hoặc releases không có asset
+      mockGithubService.layDanhSachRelease.mockResolvedValueOnce([]);
+
+      mockPrisma.ungDung.upsert.mockResolvedValueOnce({
+        maUngDung: 'vlc-uuid',
+        tenRepoDayDu: 'videolan/vlc',
+        trangThai: 'KHONG_CO_BAN_CAI',
+        nenTangHoTro: NenTangHoTro.WINDOWS,
+      });
+
+      vi.spyOn(service, 'layChiTietApp').mockResolvedValueOnce({
+        maUngDung: 'vlc-uuid',
+        tenRepoDayDu: 'videolan/vlc',
+        trangThai: 'KHONG_CO_BAN_CAI',
+      } as unknown as never);
+
+      await service.dongBoRepo('videolan', 'vlc');
+
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            trangThai: 'KHONG_CO_BAN_CAI',
+          }),
+          create: expect.objectContaining({
+            trangThai: 'KHONG_CO_BAN_CAI',
+          }),
+        }),
+      );
+    });
+
+    it('kiemDinhVaNapRepo ném BadRequestException và ghi nhật ký KHONG_CO_FILE_CAI_DAT khi repo trong DB có trangThai = KHONG_CO_BAN_CAI', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'retroarch-uuid',
+        tenRepoDayDu: 'libretro/retroarch',
+        trangThai: 'KHONG_CO_BAN_CAI',
+        danhSachPhatHanh: [],
+      });
+
+      await expect(
+        service.kiemDinhVaNapRepo({
+          urlRepo: 'https://github.com/libretro/retroarch',
+          nenTang: 'WINDOWS',
+          abis: ['x86_64'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockPrisma.nhatKyNapRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            trangThai: 'KHONG_CO_FILE_CAI_DAT',
+            maUngDungTaoRa: 'retroarch-uuid',
+          }),
+        }),
+      );
+    });
+
+    it('timKiemThongMinh luồng URL không đánh dấu daCoTrongStore khi repo trong DB có trangThai = KHONG_CO_BAN_CAI', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'vlc-uuid',
+        tenRepoDayDu: 'videolan/vlc',
+        trangThai: 'KHONG_CO_BAN_CAI',
+        danhSachPhatHanh: [],
+      });
+
+      const res = await service.timKiemThongMinh({
+        q: 'https://github.com/videolan/vlc',
+        limit: 10,
+        page: 1,
+      });
+
+      expect(res.loaiTruyVan).toBe('URL');
+      expect(res.duongDanUrl?.daCoTrongStore).toBe(false);
+    });
+
+    it('DELIV-33.3: layChiTietApp lọc huongDanCaiDat theo platform Windows (loại LINUX_MAC) và Android (trả null)', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValueOnce({
+        maUngDung: 'app-cli-1',
+        tenRepoDayDu: 'open-webui/open-webui',
+        chuSoHuu: 'open-webui',
+        tenKhoChua: 'open-webui',
+        duongDanGithub: 'https://github.com/open-webui/open-webui',
+        soSaoGithub: 45000,
+        soLuotFork: 5000,
+        danhMucChinh: 'Tiện ích hệ thống',
+        nenTangHoTro: 'WINDOWS',
+        duocNoiBat: false,
+        daXacMinh: true,
+        trangThai: 'KHONG_CO_BAN_CAI',
+        dongBoLanCuoi: new Date(),
+        ngayTao: new Date(),
+        danhSachPhatHanh: [],
+        phanTichAI: {
+          maPhanTich: 'pt-1',
+          maUngDung: 'app-cli-1',
+          khauHieuTiengViet: 'Giao diện web AI tự lưu trữ',
+          tomTatTinhNangVi: '- Tiện lợi',
+          diemUyTin: 85,
+          mucDoAnToan: 'AN_TOAN_CAO',
+          daThamDinhJev: true,
+          yeuToRuiRo: [],
+          quyenHanDaKiemTra: [],
+          thoiGianPhanTich: new Date(),
+          huongDanCaiDat: {
+            cachCai: [
+              {
+                ten: 'Cài đặt bằng pip',
+                nhom: 'PIP',
+                heDieuHanh: 'DUNG_CHUNG',
+                phanCung: 'CPU',
+                buoc: [{ moTa: 'Cài đặt', lenh: 'pip install open-webui' }],
+              },
+              {
+                ten: 'Cài trên Linux',
+                nhom: 'NGUON',
+                heDieuHanh: 'LINUX_MAC',
+                phanCung: 'CPU',
+                buoc: [{ moTa: 'Lệnh Linux', lenh: 'sudo apt install open-webui' }],
+              },
+            ],
+          },
+        },
+      });
+
+      // 1. Kiểm tra trên Windows: phải loại bỏ cách cài LINUX_MAC
+      const resWindows = await service.layChiTietApp('app-cli-1', undefined, 'windows');
+      expect(resWindows.huongDanCaiDat).toBeDefined();
+      expect(resWindows.huongDanCaiDat?.cachCai).toHaveLength(1);
+      expect(resWindows.huongDanCaiDat?.cachCai[0]?.nhom).toBe('PIP');
+
+      // 2. Kiểm tra trên Android: trả về null
+      mockPrisma.ungDung.findFirst.mockResolvedValueOnce({
+        maUngDung: 'app-cli-1',
+        tenRepoDayDu: 'open-webui/open-webui',
+        chuSoHuu: 'open-webui',
+        tenKhoChua: 'open-webui',
+        duongDanGithub: 'https://github.com/open-webui/open-webui',
+        soSaoGithub: 45000,
+        soLuotFork: 5000,
+        danhMucChinh: 'Tiện ích hệ thống',
+        nenTangHoTro: 'WINDOWS',
+        duocNoiBat: false,
+        daXacMinh: true,
+        trangThai: 'KHONG_CO_BAN_CAI',
+        dongBoLanCuoi: new Date(),
+        ngayTao: new Date(),
+        danhSachPhatHanh: [],
+        phanTichAI: {
+          maPhanTich: 'pt-1',
+          maUngDung: 'app-cli-1',
+          khauHieuTiengViet: 'Giao diện web AI tự lưu trữ',
+          tomTatTinhNangVi: '- Tiện lợi',
+          diemUyTin: 85,
+          mucDoAnToan: 'AN_TOAN_CAO',
+          daThamDinhJev: true,
+          yeuToRuiRo: [],
+          quyenHanDaKiemTra: [],
+          thoiGianPhanTich: new Date(),
+          huongDanCaiDat: {
+            cachCai: [
+              {
+                ten: 'Cài đặt bằng pip',
+                nhom: 'PIP',
+                heDieuHanh: 'DUNG_CHUNG',
+                phanCung: 'CPU',
+                buoc: [{ moTa: 'Cài đặt', lenh: 'pip install open-webui' }],
+              },
+            ],
+          },
+        },
+      });
+
+      const resAndroid = await service.layChiTietApp('app-cli-1', undefined, 'android');
+      expect(resAndroid.huongDanCaiDat).toBeNull();
+    });
+
+    it('DELIV-33.3: kiemDinhVaNapRepo trả chiCoHuongDanCli = true khi repo không có file cài nhưng có hướng dẫn CLI', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'openwebui-uuid',
+        tenRepoDayDu: 'open-webui/open-webui',
+        trangThai: 'KHONG_CO_BAN_CAI',
+        danhSachPhatHanh: [],
+        phanTichAI: {
+          huongDanCaiDat: {
+            cachCai: [
+              {
+                ten: 'Cài bằng pip',
+                nhom: 'PIP',
+                heDieuHanh: 'DUNG_CHUNG',
+                phanCung: 'CPU',
+                buoc: [{ moTa: 'Cài đặt', lenh: 'pip install open-webui' }],
+              },
+            ],
+          },
+        },
+      });
+
+      // Mock layChiTietApp trả về appChiTiet có huongDanCaiDat
+      mockPrisma.ungDung.findFirst.mockResolvedValueOnce({
+        maUngDung: 'openwebui-uuid',
+        tenRepoDayDu: 'open-webui/open-webui',
+        chuSoHuu: 'open-webui',
+        tenKhoChua: 'open-webui',
+        duongDanGithub: 'https://github.com/open-webui/open-webui',
+        soSaoGithub: 45000,
+        soLuotFork: 5000,
+        danhMucChinh: 'Tiện ích hệ thống',
+        nenTangHoTro: 'WINDOWS',
+        duocNoiBat: false,
+        daXacMinh: true,
+        trangThai: 'KHONG_CO_BAN_CAI',
+        dongBoLanCuoi: new Date(),
+        ngayTao: new Date(),
+        danhSachPhatHanh: [],
+        phanTichAI: {
+          maPhanTich: 'pt-1',
+          maUngDung: 'openwebui-uuid',
+          khauHieuTiengViet: 'Giao diện web AI tự lưu trữ',
+          tomTatTinhNangVi: '- Tiện lợi',
+          diemUyTin: 85,
+          mucDoAnToan: 'AN_TOAN_CAO',
+          daThamDinhJev: true,
+          yeuToRuiRo: [],
+          quyenHanDaKiemTra: [],
+          thoiGianPhanTich: new Date(),
+          huongDanCaiDat: {
+            cachCai: [
+              {
+                ten: 'Cài bằng pip',
+                nhom: 'PIP',
+                heDieuHanh: 'DUNG_CHUNG',
+                phanCung: 'CPU',
+                buoc: [{ moTa: 'Cài đặt', lenh: 'pip install open-webui' }],
+              },
+            ],
+          },
+        },
+      });
+
+      const res = await service.kiemDinhVaNapRepo({
+        urlRepo: 'https://github.com/open-webui/open-webui',
+        nenTang: 'WINDOWS',
+        abis: ['x86_64'],
+      });
+
+      expect(res.trangThai).toBe('THANH_CONG');
+      expect(res.chiCoHuongDanCli).toBe(true);
+      expect(res.huongDanCaiDat).toBeDefined();
+      expect(res.huongDanCaiDat?.cachCai[0]?.nhom).toBe('PIP');
     });
   });
 });

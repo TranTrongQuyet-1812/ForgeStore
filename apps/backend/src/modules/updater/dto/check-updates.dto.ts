@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
 
 export class AppVersionCheckItemDto {
   @ApiPropertyOptional({
@@ -19,13 +27,23 @@ export class AppVersionCheckItemDto {
   @IsString({ message: 'Tên gói Android phải là chuỗi ký tự' })
   tenGoiAndroid?: string;
 
-  @ApiProperty({
-    description: 'Phiên bản hiện tại đang cài đặt trên thiết bị',
+  @ApiPropertyOptional({
+    description: 'Phiên bản hiện tại đang cài đặt trên thiết bị (phienBan)',
     example: '1.2.0',
   })
+  @ValidateIf((o: AppVersionCheckItemDto) => !o.phienBanHienTai)
   @IsNotEmpty({ message: 'Phiên bản hiện tại không được để trống' })
   @IsString({ message: 'Phiên bản hiện tại phải là chuỗi ký tự' })
-  phienBan!: string;
+  phienBan?: string;
+
+  @ApiPropertyOptional({
+    description: 'Phiên bản hiện tại theo chuẩn @forgestore/types (phienBanHienTai)',
+    example: '1.2.0',
+  })
+  @ValidateIf((o: AppVersionCheckItemDto) => !o.phienBan)
+  @IsNotEmpty({ message: 'Phiên bản hiện tại không được để trống' })
+  @IsString({ message: 'Phiên bản hiện tại phải là chuỗi ký tự' })
+  phienBanHienTai?: string;
 }
 
 export class CheckUpdatesDto {
@@ -47,4 +65,15 @@ export class CheckUpdatesDto {
   @ValidateNested({ each: true })
   @Type(() => AppVersionCheckItemDto)
   ungDung?: AppVersionCheckItemDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Danh sách các ứng dụng cần kiểm tra phiên bản theo chuẩn @forgestore/types (danhSachCaiDat).',
+    type: [AppVersionCheckItemDto],
+  })
+  @IsOptional()
+  @IsArray({ message: 'Danh sách ứng dụng phải là mảng' })
+  @ValidateNested({ each: true })
+  @Type(() => AppVersionCheckItemDto)
+  danhSachCaiDat?: AppVersionCheckItemDto[];
 }

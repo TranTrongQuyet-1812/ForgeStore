@@ -19,12 +19,44 @@ export class ApkInspectorService {
   private readonly GIOI_HAN_BYTE_TOI_DA = 512 * 1024;
   private readonly TIMEOUT_MS = 10000;
 
+  private readonly ALLOWED_HOSTS = [
+    'github.com',
+    'objects.githubusercontent.com',
+    'github-releases.githubusercontent.com',
+    'raw.githubusercontent.com',
+  ];
+
+  /**
+   * Kiểm tra URL tải APK có thuộc hostname GitHub hợp lệ không (SEC-V3-02: Chống SSRF)
+   */
+  private kiemTraUrlHopLe(urlStr: string): boolean {
+    try {
+      const u = new URL(urlStr);
+      if (u.protocol !== 'https:') return false;
+      const host = u.hostname.toLowerCase();
+      return this.ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Đọc danh sách quyền và Package Name từ APK qua HTTP Range Request (P2-35).
    * Chỉ tải phần EOCD, Central Directory và AndroidManifest.xml (thường < 200KB).
    */
   async docQuyenApkTuUrl(apkDownloadUrl: string): Promise<KetQuaDocApk> {
     let soByteDaTai = 0;
+
+    // SEC-V3-02: Chống SSRF - Kiểm tra URL tải có thuộc máy chủ GitHub được phép không
+    if (!this.kiemTraUrlHopLe(apkDownloadUrl)) {
+      return {
+        thanhCong: false,
+        permissions: [],
+        coAccessibilityService: false,
+        soByteDaTai: 0,
+        lyDoThatBai: 'Đường dẫn tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
+      };
+    }
 
     try {
       // 1. Gửi HEAD request lấy Content-Length và xác nhận Accept-Ranges (P2-35.1)
@@ -45,6 +77,16 @@ export class ApkInspectorService {
       }
 
       const finalUrl = headRes.url || apkDownloadUrl;
+      // SEC-V3-02: Kiểm tra tiếp hostname sau khi theo dõi redirect
+      if (!this.kiemTraUrlHopLe(finalUrl)) {
+        return {
+          thanhCong: false,
+          permissions: [],
+          coAccessibilityService: false,
+          soByteDaTai: 0,
+          lyDoThatBai: 'Redirect URL tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
+        };
+      }
       const contentLengthHeader = headRes.headers.get('content-length');
       if (!contentLengthHeader) {
         return {

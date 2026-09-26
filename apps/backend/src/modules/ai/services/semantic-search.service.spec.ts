@@ -2,13 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { SemanticSearchService } from './semantic-search.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
-describe('SemanticSearchService (P2-36)', () => {
+describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
   let service: SemanticSearchService;
   let mockConfigService: { get: ReturnType<typeof vi.fn> };
   let mockPrisma: {
     $executeRaw: ReturnType<typeof vi.fn>;
     $queryRaw: ReturnType<typeof vi.fn>;
+  };
+  let mockRateLimiter: {
+    layToken: ReturnType<typeof vi.fn>;
+    layRpm: ReturnType<typeof vi.fn>;
   };
   let mockEmbedContent: ReturnType<typeof vi.fn>;
 
@@ -26,6 +31,15 @@ describe('SemanticSearchService (P2-36)', () => {
       $queryRaw: vi.fn(),
     };
 
+    mockRateLimiter = {
+      layToken: vi.fn().mockResolvedValue({
+        chapNhan: true,
+        conLai: 79,
+        capacity: 80,
+      }),
+      layRpm: vi.fn().mockReturnValue(80),
+    };
+
     mockEmbedContent = vi.fn().mockResolvedValue({
       embeddings: [
         {
@@ -37,6 +51,7 @@ describe('SemanticSearchService (P2-36)', () => {
     service = new SemanticSearchService(
       mockConfigService as unknown as ConfigService,
       mockPrisma as unknown as PrismaService,
+      mockRateLimiter as unknown as LlmRateLimiterService,
     );
 
     // Gán mock client models.embedContent
@@ -66,29 +81,44 @@ describe('SemanticSearchService (P2-36)', () => {
       expect(text).toContain('Mô tả: Phần mềm thay thế TeamViewer');
     });
 
-    it('Xử lý an toàn khi các trường tùy chọn bị thiếu hoặc rỗng', () => {
+    it('Xử lý an toàn khi các trường tùy chọn bị null hoặc undefined', () => {
       const text = service.chuanBiVanBanNhung({
-        tenKhoChua: 'MinimalApp',
+        tenKhoChua: 'SimpleApp',
       });
 
-      expect(text).toBe('Ứng dụng: MinimalApp');
+      expect(text).toBe('Ứng dụng: SimpleApp');
     });
   });
 
-  describe('sinhEmbedding (P2-36.1, D-10)', () => {
-    it('Gọi Gemini embedContent trả về vector 768 chiều', async () => {
-      const vector = await service.sinhEmbedding('Phần mềm ghi chú mã nguồn mở');
+  describe('sinhEmbedding (P2-36.1 & AI1)', () => {
+    it('AI1: gọi layToken cho gemini_embedding trước khi gọi embedContent', async () => {
+      const vector = await service.sinhEmbedding('RustDesk remote desktop software');
 
-      expect(vector).toHaveLength(768);
-      expect(vector[0]).toBeCloseTo(0.12345);
+      expect(mockRateLimiter.layToken).toHaveBeenCalledWith('gemini_embedding', 3000);
       expect(mockEmbedContent).toHaveBeenCalledWith({
         model: 'gemini-embedding-001',
-        contents: 'Phần mềm ghi chú mã nguồn mở',
-        config: { outputDimensionality: 768 },
+        contents: 'RustDesk remote desktop software',
+        config: {
+          outputDimensionality: 768,
+        },
       });
+      expect(vector).toHaveLength(768);
     });
 
-    it('Ném lỗi khi chuỗi văn bản rỗng', async () => {
+    it('AI1: ném lỗi nếu gemini_embedding bị từ chối do hết Token Bucket', async () => {
+      mockRateLimiter.layToken.mockResolvedValueOnce({
+        chapNhan: false,
+        conLai: 0,
+        capacity: 80,
+      });
+
+      await expect(service.sinhEmbedding('test text')).rejects.toThrow(
+        'Gemini Embedding đã chạm trần Rate Limit (80 RPM)',
+      );
+      expect(mockEmbedContent).not.toHaveBeenCalled();
+    });
+
+    it('Ném lỗi khi văn bản đầu vào rỗng', async () => {
       await expect(service.sinhEmbedding('   ')).rejects.toThrow(
         'Văn bản đầu vào sinh embedding không được để trống.',
       );

@@ -13,6 +13,12 @@ export enum AppSortOption {
   TRENDING = 'trending',
 }
 
+export enum TimeWindowFilter {
+  TODAY = 'today',
+  WEEK = 'week',
+  MONTH = 'month',
+}
+
 export class QueryAppsDto {
   @ApiPropertyOptional({
     enum: PlatformFilter,
@@ -20,9 +26,12 @@ export class QueryAppsDto {
     example: 'windows',
   })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.toLowerCase().trim() : value,
-  )
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    const lower = value.toLowerCase().trim();
+    if (lower === 'all' || lower === 'tat_ca') return undefined;
+    return lower;
+  })
   @IsEnum(PlatformFilter, {
     message: 'Nền tảng phải là "android" hoặc "windows"',
   })
@@ -86,6 +95,20 @@ export class QueryAppsDto {
   })
   @IsBoolean({ message: 'featured phải là kiểu boolean (true/false)' })
   featured?: boolean;
+
+  @ApiPropertyOptional({
+    enum: TimeWindowFilter,
+    description: 'Lọc hoặc tính điểm theo khung thời gian (today, week, month) (B2)',
+    example: 'week',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toLowerCase().trim() : value,
+  )
+  @IsEnum(TimeWindowFilter, {
+    message: 'Khung thời gian phải là "today", "week" hoặc "month"',
+  })
+  window?: TimeWindowFilter;
 }
 
 export class SyncRepoDto {
