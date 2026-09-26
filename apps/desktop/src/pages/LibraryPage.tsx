@@ -66,7 +66,8 @@ export const LibraryPage: React.FC = () => {
     Promise.all(
       backendInstalledApps.map(async (app) => {
         const ten = app.ungDung?.tenKhoChua || app.ungDung?.tenRepoDayDu || app.maUngDung;
-        const localApp = caiDatMap[app.maUngDung];
+        const currentCaiDatMap = useInstallStore.getState().caiDatMap;
+        const localApp = currentCaiDatMap[app.maUngDung];
         const regKey = app.khoaRegistry || localApp?.registryKey;
         const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
         const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
@@ -98,7 +99,7 @@ export const LibraryPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [backendInstalledApps, caiDatMap, maThietBi]);
+  }, [backendInstalledApps, maThietBi]);
 
   // 5. Danh sách ứng dụng đã cài đặt trên máy trạm hiện tại (Nguyên tắc 1, A3 & A4)
   const updatesMap = new Map(danhSachCapNhat.map((u) => [u.maUngDung, u]));
@@ -159,9 +160,19 @@ export const LibraryPage: React.FC = () => {
   );
 
   // Xử lý mở app
-  const handleOpenApp = (app: { maUngDung: string; duongDanThucThi?: string; tenApp: string }) => {
+  const handleOpenApp = (app: {
+    maUngDung: string;
+    duongDanThucThi?: string;
+    tenApp: string;
+    duongDanThuMuc?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }) => {
     if (app.duongDanThucThi) {
       installService.moUngDung(app.duongDanThucThi);
+    } else if (app.regInfo?.install_location) {
+      installService.moThuMuc(app.regInfo.install_location);
+    } else if (app.duongDanThuMuc) {
+      installService.moThuMuc(app.duongDanThuMuc);
     } else {
       moApp(app.maUngDung);
     }
@@ -183,12 +194,17 @@ export const LibraryPage: React.FC = () => {
           `Phần mềm "${app.tenApp}" đã được gỡ cài đặt bên ngoài Windows.\n\nBạn có muốn dọn bản ghi này khỏi Thư viện của máy?`,
         )
       ) {
-        goCaiDatLocal(app.maUngDung);
-        if (maThietBi) {
-          await libraryService.goCaiDat(maThietBi, app.maUngDung);
-          queryClient.invalidateQueries({
-            queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
-          });
+        try {
+          setIsUninstallingId(app.maUngDung);
+          goCaiDatLocal(app.maUngDung);
+          if (maThietBi) {
+            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            queryClient.invalidateQueries({
+              queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+            });
+          }
+        } finally {
+          setIsUninstallingId(null);
         }
       }
       return;
@@ -240,12 +256,17 @@ export const LibraryPage: React.FC = () => {
           `Không tìm thấy lệnh gỡ cài đặt trong Registry Windows cho "${app.tenApp}". Bạn có muốn xóa phần mềm này khỏi danh sách quản lý?`,
         )
       ) {
-        goCaiDatLocal(app.maUngDung);
-        if (maThietBi) {
-          await libraryService.goCaiDat(maThietBi, app.maUngDung);
-          queryClient.invalidateQueries({
-            queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
-          });
+        try {
+          setIsUninstallingId(app.maUngDung);
+          goCaiDatLocal(app.maUngDung);
+          if (maThietBi) {
+            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            queryClient.invalidateQueries({
+              queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+            });
+          }
+        } finally {
+          setIsUninstallingId(null);
         }
       }
     }
