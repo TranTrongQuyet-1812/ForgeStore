@@ -119,4 +119,60 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       expect(res).toBe(true);
     });
   });
+
+  describe('Safe Folder Opener (A1, TC-09, SEC-02)', () => {
+    it('moThuMuc chạy fallback an toàn trong môi trường Web dev', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\Notepad++');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WebDev Preview] Giả lập mở thư mục tại: D:\\ForgeStore_Apps\\Notepad++',
+        ),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('moThuMuc gọi native mo_thu_muc trong môi trường Tauri', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockResolvedValue(undefined);
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\PortableApp');
+      expect(mockInvoke).toHaveBeenCalledWith('mo_thu_muc', {
+        duongDan: 'D:\\ForgeStore_Apps\\PortableApp',
+      });
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.restoreAllMocks();
+    });
+
+    it('moThuMuc fallback sang revealItemInDir nếu mo_thu_muc native lỗi', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockRejectedValue(new Error('Lỗi invoke'));
+      const mockReveal = vi.fn().mockResolvedValue(undefined);
+
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+      vi.doMock('@tauri-apps/plugin-opener', () => ({
+        revealItemInDir: mockReveal,
+      }));
+
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\FallbackDir');
+      expect(mockInvoke).toHaveBeenCalled();
+      expect(mockReveal).toHaveBeenCalledWith('D:\\ForgeStore_Apps\\FallbackDir');
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.doUnmock('@tauri-apps/plugin-opener');
+      vi.restoreAllMocks();
+    });
+  });
 });

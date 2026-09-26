@@ -250,6 +250,12 @@ fn lay_thu_muc_tai_ve_cmd() -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+/// Mở thư mục an toàn trong Windows File Explorer (A1, TC-09, SEC-02)
+#[tauri::command]
+fn mo_thu_muc(duong_dan: String) -> Result<(), String> {
+    installer::mo_thu_muc_he_thong(Path::new(&duong_dan))
+}
+
 /// Kiểm tra xem ứng dụng đã được cài đặt thật trong Registry Windows hay chưa (A4, Vấn đề 1)
 #[tauri::command]
 fn kiem_tra_ung_dung_da_cai_registry(
@@ -316,6 +322,7 @@ pub fn run() {
             mo_ung_dung,
             lay_thu_muc_tai_ve_cmd,
             chon_thu_muc,
+            mo_thu_muc,
             kiem_tra_ung_dung_da_cai_registry,
             go_cai_dat_ung_dung_qua_registry
         ])

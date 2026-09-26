@@ -511,9 +511,56 @@ pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -
     }
 }
 
+/// Mở thư mục an toàn trong Windows File Explorer (A1, TC-09)
+/// Kiểm tra nghiêm ngặt: Đường dẫn bắt buộc phải tồn tại và là thư mục (is_dir).
+/// Tuyệt đối từ chối nếu là tệp tin để ngăn chặn tấn công thực thi mã tùy ý từ Webview.
+pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
+    if !duong_dan.exists() {
+        return Err(format!("Đường dẫn thư mục không tồn tại: {}", duong_dan.display()));
+    }
+
+    if !duong_dan.is_dir() {
+        return Err(format!("BẢO MẬT: Đường dẫn '{}' không phải là thư mục. Thao tác bị từ chối!", duong_dan.display()));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(duong_dan)
+            .spawn()
+            .map_err(|e| format!("Không thể khởi chạy Windows File Explorer: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_khong_ton_tai() {
+        let res = mo_thu_muc_he_thong(Path::new("C:\\invalid\\nonexistent_dir_12345"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không tồn tại"));
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_la_tep_tin_tu_choi() {
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("forgestore_test_not_a_dir.tmp");
+        let _ = std::fs::File::create(&temp_file);
+
+        let res = mo_thu_muc_he_thong(&temp_file);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không phải là thư mục"));
+
+        let _ = std::fs::remove_file(&temp_file);
+    }
 
     #[test]
     fn test_lay_thu_muc_cai_dat_app() {

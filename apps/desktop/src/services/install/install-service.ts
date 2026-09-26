@@ -67,15 +67,21 @@ export class InstallService {
   }
 
   /**
-   * Mở thư mục chứa bản portable trong File Explorer (A1)
+   * Mở thư mục chứa bản portable trong File Explorer (A1, TC-09, SEC-02)
    */
   async moThuMuc(duongDanThuMuc: string): Promise<void> {
     if (this.isTauriEnv()) {
       try {
-        const { openPath } = await import('@tauri-apps/plugin-opener');
-        await openPath(duongDanThuMuc);
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('mo_thu_muc', { duongDan: duongDanThuMuc });
       } catch (err) {
-        console.error('Lỗi khi mở thư mục qua opener:', err);
+        console.warn('Lỗi khi mở thư mục qua Tauri command, thử lại bằng revealItemInDir:', err);
+        try {
+          const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+          await revealItemInDir(duongDanThuMuc);
+        } catch (revealErr) {
+          console.error('Không thể mở thư mục qua File Explorer:', revealErr);
+        }
       }
     } else {
       console.info(`[WebDev Preview] Giả lập mở thư mục tại: ${duongDanThuMuc}`);
