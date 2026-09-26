@@ -119,13 +119,15 @@ export const useInstallStore = create<InstallState>()(
           });
 
           if (res.thanh_cong) {
+            const isPortableZip = params.loaiTep?.toUpperCase().includes('ZIP');
+
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_CAI_DAT',
               loaiTep: params.loaiTep,
               phanTram: 100,
               tocDoBps: 0,
               duongDanThucThi: res.duong_dan_thuc_thi ?? undefined,
-              duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
+              duongDanThuMuc: isPortableZip ? (res.duong_dan_cai_dat ?? undefined) : undefined,
               registryKey: res.thong_tin_registry?.registry_key ?? undefined,
               registryDisplayName: res.thong_tin_registry?.display_name ?? undefined,
               registryPublisher: res.thong_tin_registry?.publisher ?? undefined,
@@ -134,7 +136,6 @@ export const useInstallStore = create<InstallState>()(
 
             // Ghi nhận cài đặt lên Backend nếu là file cài đặt hệ thống EXE/MSI (P3-10.3 & A1 & A3)
             // Tuyệt đối KHÔNG ghi nhận bản ZIP portable vào Thư viện máy (Nguyên tắc 3 & A1)
-            const isPortableZip = params.loaiTep?.toUpperCase().includes('ZIP');
             if (!isPortableZip) {
               try {
                 const maThietBi = useAuthStore.getState().maThietBi;
@@ -143,7 +144,7 @@ export const useInstallStore = create<InstallState>()(
                     maUngDung,
                     phienBanHienTai: params.phienBan || '0.0.0',
                     maTepDaCai: params.maTep,
-                    duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
+                    duongDanThuMuc: undefined, // DELIV-44.3: Bản EXE/MSI không lưu duongDanThuMuc (lấy từ registry)
                     khoaRegistry: res.thong_tin_registry?.registry_key ?? undefined,
                     tenHienThiRegistry: res.thong_tin_registry?.display_name ?? undefined,
                   });

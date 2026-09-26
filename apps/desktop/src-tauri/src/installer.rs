@@ -138,7 +138,7 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                         thanh_cong: true,
                         loai_cai_dat: "EXE".to_string(),
                         thong_diep: "Đã cài đặt phần mềm (.exe) thành công.".to_string(),
-                        duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                        duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
                         duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
                         thong_tin_registry,
                     })
@@ -157,7 +157,7 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                 thanh_cong: true,
                 loai_cai_dat: "EXE".to_string(),
                 thong_diep: "Đã khởi chạy bộ cài đặt .exe.".to_string(),
-                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
                 duong_dan_thuc_thi: None,
                 thong_tin_registry,
             })
@@ -212,7 +212,7 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                     thanh_cong: true,
                     loai_cai_dat: "MSI".to_string(),
                     thong_diep: "Đã hoàn tất cài đặt Windows Installer (.msi) thành công.".to_string(),
-                    duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                    duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
                     duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
                     thong_tin_registry,
                 })
@@ -226,7 +226,7 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                     thanh_cong: true,
                     loai_cai_dat: "MSI".to_string(),
                     thong_diep: "Cài đặt thành công nhưng hệ thống yêu cầu khởi động lại máy để hoàn tất.".to_string(),
-                    duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+                    duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
                     duong_dan_thuc_thi: None,
                     thong_tin_registry,
                 })
@@ -559,7 +559,11 @@ pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer")
+        // DELIV-44.3: Sử dụng đường dẫn tuyệt đối C:\Windows\explorer.exe thay vì lệnh explorer chung
+        let explorer_path = std::env::var("WINDIR")
+            .map(|w| format!("{}\\explorer.exe", w))
+            .unwrap_or_else(|_| r"C:\Windows\explorer.exe".to_string());
+        std::process::Command::new(explorer_path)
             .arg(duong_dan)
             .spawn()
             .map_err(|e| format!("Không thể khởi chạy Windows File Explorer: {}", e))?;

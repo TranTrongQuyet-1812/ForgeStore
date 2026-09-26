@@ -22,6 +22,7 @@ export class ApkInspectorService {
   private readonly ALLOWED_HOSTS = [
     'github.com',
     'objects.githubusercontent.com',
+    'release-assets.githubusercontent.com',
     'github-releases.githubusercontent.com',
     'raw.githubusercontent.com',
   ];
@@ -34,6 +35,8 @@ export class ApkInspectorService {
       const u = new URL(urlStr);
       if (u.protocol !== 'https:') return false;
       const host = u.hostname.toLowerCase();
+      if (host === 'github.com' || host.endsWith('.github.com')) return true;
+      if (host === 'githubusercontent.com' || host.endsWith('.githubusercontent.com')) return true;
       return this.ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
     } catch {
       return false;
@@ -61,55 +64,70 @@ export class ApkInspectorService {
     try {
       // 1. Gửi HEAD request lấy Content-Length và xác nhận Accept-Ranges (P2-35.1)
       // SEC-R6-05: Dùng redirect: 'manual' để kiểm tra Location header trước khi gửi request tiếp theo chống Blind SSRF
+      // SEC-R6-05 & DELIV-44.1: Xử lý chuỗi chuyển hướng (multi-hop redirects tối đa 5 lần), thẩm định whitelist trước mỗi hop chống Blind SSRF
       let targetUrl = apkDownloadUrl;
-      let headRes = await fetch(targetUrl, {
-        method: 'HEAD',
-        redirect: 'manual',
-        signal: AbortSignal.timeout(this.TIMEOUT_MS),
-      });
+      let headRes: Response;
+      let redirectCount = 0;
+      const MAX_REDIRECTS = 5;
 
-      // Nếu gặp chuyển hướng (301, 302, 307, 308), thẩm định whitelist trước khi gửi hop tiếp theo
-      if ([301, 302, 307, 308].includes(headRes.status)) {
-        const location = headRes.headers.get('location');
-        if (!location) {
-          return {
-            thanhCong: false,
-            permissions: [],
-            coAccessibilityService: false,
-            soByteDaTai: 0,
-            lyDoThatBai: 'Redirect không có Location header hợp lệ.',
-          };
-        }
-        let resolvedLocation: string;
-        try {
-          resolvedLocation = new URL(location, targetUrl).toString();
-        } catch {
-          return {
-            thanhCong: false,
-            permissions: [],
-            coAccessibilityService: false,
-            soByteDaTai: 0,
-            lyDoThatBai: 'Redirect Location header có định dạng URL không hợp lệ.',
-          };
-        }
-
-        if (!this.kiemTraUrlHopLe(resolvedLocation)) {
-          return {
-            thanhCong: false,
-            permissions: [],
-            coAccessibilityService: false,
-            soByteDaTai: 0,
-            lyDoThatBai:
-              'Redirect URL tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
-          };
-        }
-
-        targetUrl = resolvedLocation;
+      while (true) {
         headRes = await fetch(targetUrl, {
           method: 'HEAD',
           redirect: 'manual',
           signal: AbortSignal.timeout(this.TIMEOUT_MS),
         });
+
+        if ([301, 302, 307, 308].includes(headRes.status)) {
+          redirectCount++;
+          if (redirectCount > MAX_REDIRECTS) {
+            return {
+              thanhCong: false,
+              permissions: [],
+              coAccessibilityService: false,
+              soByteDaTai: 0,
+              lyDoThatBai: 'Vượt quá số lần chuyển hướng tối đa (chống redirect loop).',
+            };
+          }
+
+          const location = headRes.headers.get('location');
+          if (!location) {
+            return {
+              thanhCong: false,
+              permissions: [],
+              coAccessibilityService: false,
+              soByteDaTai: 0,
+              lyDoThatBai: 'Redirect không có Location header hợp lệ.',
+            };
+          }
+          let resolvedLocation: string;
+          try {
+            resolvedLocation = new URL(location, targetUrl).toString();
+          } catch {
+            return {
+              thanhCong: false,
+              permissions: [],
+              coAccessibilityService: false,
+              soByteDaTai: 0,
+              lyDoThatBai: 'Redirect Location header có định dạng URL không hợp lệ.',
+            };
+          }
+
+          if (!this.kiemTraUrlHopLe(resolvedLocation)) {
+            return {
+              thanhCong: false,
+              permissions: [],
+              coAccessibilityService: false,
+              soByteDaTai: 0,
+              lyDoThatBai:
+                'Redirect URL tải APK không thuộc máy chủ GitHub hợp lệ (SSRF Protection).',
+            };
+          }
+
+          targetUrl = resolvedLocation;
+          continue;
+        }
+
+        break;
       }
 
       if (!headRes.ok) {

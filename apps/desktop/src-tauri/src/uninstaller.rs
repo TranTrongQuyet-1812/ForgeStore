@@ -315,12 +315,19 @@ pub fn phan_tich_uninstall_string(raw: &str) -> (String, String) {
         } else {
             trimmed[7..].trim()
         };
-        // SEC-R7-05: Nếu tham số chứa /I hoặc /i (cài đặt), đổi thành /X (gỡ bỏ) kể cả khi có cờ /quiet, /qn
+        // SEC-R7-05 & DELIV-44.2: Nếu tham số chứa /I hoặc /i (cài đặt), đổi thành /X (gỡ bỏ) kể cả khi có cờ /quiet, /qn
+        // Kiểm tra chặt chẽ ký tự tiếp theo sau cờ /i để tránh match nhầm các cờ khác (như /ignore)
         let mut args = rest.to_string();
         if args.starts_with("/I") || args.starts_with("/i") {
-            args = format!("/X{}", &args[2..]);
+            let next_char = args.chars().nth(2);
+            if next_char.map_or(true, |c| c == '{' || c == ' ' || c == '"' || c == '\t') {
+                args = format!("/X{}", &args[2..]);
+            }
         } else if let Some(idx) = args.to_lowercase().find(" /i") {
-            args = format!("{} /X{}", &args[..idx], &args[idx + 3..]);
+            let next_char = args.chars().nth(idx + 3);
+            if next_char.map_or(true, |c| c == '{' || c == ' ' || c == '"' || c == '\t') {
+                args = format!("{} /X{}", &args[..idx], &args[idx + 3..]);
+            }
         }
         return ("msiexec.exe".to_string(), args);
     }
@@ -445,6 +452,28 @@ pub fn chay_go_cai_dat_registry(uninstall_string: &str) -> Result<bool, String> 
     }
 }
 
+/// Kiểm tra xem tên app hoặc repo handle có khớp với display_name hoặc registry_key của phần mềm không (DELIV-44.2)
+/// Sử dụng các biến thể từ `sinh_bien_the_ten_tim_kiem` để đảm bảo "Hiện ra được thì gỡ được"
+pub fn kiem_tra_ten_app_khop_registry(
+    ten_app: &str,
+    display_name: &str,
+    registry_key: Option<&str>,
+) -> bool {
+    let cac_bien_the = sinh_bien_the_ten_tim_kiem(ten_app);
+    let norm_disp = chuan_hoa_ten(display_name);
+    let norm_k = registry_key.map(chuan_hoa_ten).unwrap_or_default();
+
+    cac_bien_the.iter().any(|b| {
+        if b.len() < 3 {
+            return false;
+        }
+        norm_disp == *b
+            || (!norm_k.is_empty() && norm_k == *b)
+            || norm_disp.contains(b)
+            || (!norm_k.is_empty() && norm_k.contains(b))
+    })
+}
+
 /// Xác thực chuỗi uninstall_string hoặc registry_key với Registry thực tế và chạy gỡ cài đặt an toàn (SEC-01)
 pub fn chay_go_cai_dat_registry_an_toan(
     ten_app: &str,
@@ -454,7 +483,6 @@ pub fn chay_go_cai_dat_registry_an_toan(
     let tat_ca_ung_dung = quet_tat_ca_ung_dung_registry();
 
     let mut chuoi_hop_le: Option<String> = None;
-    let norm_app = chuan_hoa_ten(ten_app);
 
     // 1. Ưu tiên cao nhất: Tìm chính xác theo registry_key đã xác định
     if let Some(key) = registry_key {
@@ -463,14 +491,9 @@ pub fn chay_go_cai_dat_registry_an_toan(
             for app in &tat_ca_ung_dung {
                 if let Some(ref k) = app.registry_key {
                     if k.eq_ignore_ascii_case(trimmed_key) {
-                        // SEC-R6-02 & SEC-R7-03: Bắt buộc đối soát tên ten_app với display_name hoặc registry_key để chống IPC Spoofing
-                        // Tuyệt đối KHÔNG dùng match nghịch norm_app.contains(&norm_disp)
-                        let norm_disp = chuan_hoa_ten(&app.display_name);
-                        let norm_k = chuan_hoa_ten(k);
-                        let hop_le_ten = norm_disp == norm_app
-                            || (norm_app.len() >= 3 && norm_disp.contains(&norm_app))
-                            || (norm_app.len() >= 3 && norm_k.contains(&norm_app));
-                        if hop_le_ten {
+                        // SEC-R6-02, SEC-R7-03 & DELIV-44.2: Đối soát tên ten_app bằng các biến thể từ sinh_bien_the_ten_tim_kiem
+                        // Đảm bảo "Hiện ra được thì gỡ được" (Notepad++, Obsidian, Termux...) mà vẫn ngăn chặn IPC spoofing
+                        if kiem_tra_ten_app_khop_registry(ten_app, &app.display_name, Some(k)) {
                             if let Some(ref reg_str) = app.uninstall_string {
                                 chuoi_hop_le = Some(reg_str.clone());
                                 break;
@@ -483,7 +506,7 @@ pub fn chay_go_cai_dat_registry_an_toan(
     }
 
     // 2. Nếu không tìm thấy qua registry_key (hoặc không truyền), kiểm tra client_str có trong Registry thật không
-    // và bắt buộc ứng dụng trong Registry phải khớp tên app (SEC-VULN-02 & SEC-V3-03)
+    // và bắt buộc ứng dụng trong Registry phải khớp tên app (SEC-VULN-02 & DELIV-44.2)
     if chuoi_hop_le.is_none() {
         if let Some(client_str) = uninstall_string {
             let client_trimmed = client_str.trim();
@@ -491,12 +514,11 @@ pub fn chay_go_cai_dat_registry_an_toan(
                 for app in &tat_ca_ung_dung {
                     if let Some(ref reg_str) = app.uninstall_string {
                         if reg_str.trim().eq_ignore_ascii_case(client_trimmed) {
-                            let norm_disp = chuan_hoa_ten(&app.display_name);
-                            // SEC-V3-03: Chỉ chấp nhận nếu display_name trùng khớp hoặc chứa tên app (khi display_name dài hơn)
-                            // Tuyệt đối KHÔNG dùng match nghịch norm_app.contains(&norm_disp) để chống IPC spoofing
-                            if norm_disp == norm_app
-                                || (norm_app.len() >= 3 && norm_disp.contains(&norm_app))
-                            {
+                            if kiem_tra_ten_app_khop_registry(
+                                ten_app,
+                                &app.display_name,
+                                app.registry_key.as_deref(),
+                            ) {
                                 chuoi_hop_le = Some(reg_str.clone());
                                 break;
                             }
@@ -598,6 +620,48 @@ mod tests {
             err
         );
     }
+
+    #[test]
+    fn test_kiem_tra_ten_app_khop_registry_du_lieu_that_notepad_plus_plus() {
+        // DELIV-44.2: Dữ liệu thật Notepad++ trên máy người dùng
+        // repo: notepad-plus-plus, DisplayName: Notepad++ (64-bit x64), registry_key: Notepad++
+        assert!(kiem_tra_ten_app_khop_registry(
+            "notepad-plus-plus",
+            "Notepad++ (64-bit x64)",
+            Some("Notepad++")
+        ));
+    }
+
+    #[test]
+    fn test_kiem_tra_ten_app_khop_registry_du_lieu_that_obsidian() {
+        // DELIV-44.2: Dữ liệu thật Obsidian trên máy người dùng
+        // repo: obsidian-releases, DisplayName: Obsidian, registry_key: Obsidian
+        assert!(kiem_tra_ten_app_khop_registry(
+            "obsidian-releases",
+            "Obsidian",
+            Some("Obsidian")
+        ));
+    }
+
+    #[test]
+    fn test_kiem_tra_ten_app_khop_registry_spoof_tu_choi() {
+        // DELIV-44.2: Chống IPC spoofing - app lạ không được mạo danh phần mềm hệ thống
+        assert!(!kiem_tra_ten_app_khop_registry(
+            "notepad-plus-plus",
+            "Microsoft Office 365 ProPlus",
+            Some("Office16.PROPLUS")
+        ));
+    }
+
+    #[test]
+    fn test_phan_tich_uninstall_string_msiexec_khong_doi_nham_co_khac() {
+        // DELIV-44.2: Cờ bắt đầu bằng /i nhưng không phải /i cài đặt (như /ignore) không bị đổi thành /X
+        let raw = "msiexec.exe /ignore /qn";
+        let (exe, args) = phan_tich_uninstall_string(raw);
+        assert_eq!(exe, "msiexec.exe");
+        assert_eq!(args, "/ignore /qn");
+    }
 }
+
 
 
