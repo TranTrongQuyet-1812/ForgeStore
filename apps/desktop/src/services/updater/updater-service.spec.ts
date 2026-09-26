@@ -50,6 +50,10 @@ describe('UpdaterService & useUpdaterStore (P3-12.3)', () => {
           { maUngDung: 'app-obsidian', phienBanHienTai: '1.5.8' },
           { maUngDung: 'app-rustdesk', phienBanHienTai: '1.3.1' },
         ],
+        ungDung: [
+          { maUngDung: 'app-obsidian', phienBan: '1.5.8' },
+          { maUngDung: 'app-rustdesk', phienBan: '1.3.1' },
+        ],
       });
       expect(res.danhSachCapNhat).toHaveLength(2);
       expect(res.danhSachCapNhat[0].coBanCapNhat).toBe(true);

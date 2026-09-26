@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -25,19 +25,192 @@ import {
   Info,
   X,
   Loader2,
+  FolderOpen,
+  Terminal,
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useInstallStore } from '../stores/useInstallStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
+import { installService } from '../services/install/install-service';
 import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
+import { libraryService } from '../services/library/library-service';
 import { ApiError } from '../services/api/api-client';
+
+/**
+ * Thuật toán chọn tệp cài đặt tối ưu cho máy tính Windows (P3-FIX)
+ * Ưu tiên:
+ * 1. Bản x64 / x86_64 rõ ràng (tên tệp hoặc kienTrucChip === 'X86_64').
+ * 2. Bản trung tính / Universal ('DUNG_CHUNG', hoặc không ghi kiến trúc, không chứa 'arm').
+ * 3. Bản 32-bit x86 (tương thích qua WoW64 trên Windows x64).
+ * 4. Bản ARM64 (ưu tiên thấp nhất khi chạy trên máy x64).
+ */
+export function timTepCaiDatToiUu<
+  T extends { tenTep: string; dinhDangTep?: string | null; kienTrucChip?: string | null },
+>(assets: T[], format: string, preferredArch: 'x64' | 'arm64' = 'x64'): T | undefined {
+  if (!assets || assets.length === 0) return undefined;
+
+  const fmtUpper = format.toUpperCase();
+  const filtered = assets.filter((a) => {
+    const assetFmt = (a.dinhDangTep || '').toString().toUpperCase();
+    if (assetFmt === fmtUpper) return true;
+    if (fmtUpper === 'EXE' && a.tenTep.toLowerCase().endsWith('.exe')) return true;
+    if (fmtUpper === 'MSI' && a.tenTep.toLowerCase().endsWith('.msi')) return true;
+    if (
+      (fmtUpper === 'ZIP' || fmtUpper === 'ZIP_PORTABLE') &&
+      a.tenTep.toLowerCase().endsWith('.zip')
+    )
+      return true;
+    return false;
+  });
+
+  const candidates = filtered.length > 0 ? filtered : assets;
+
+  const scoreAsset = (asset: T): number => {
+    const ten = asset.tenTep.toLowerCase();
+    const chip = (asset.kienTrucChip || '').toString().toUpperCase();
+
+    const isArm = ten.includes('arm64') || ten.includes('aarch64') || chip.includes('ARM64');
+    const isExplicitX64 =
+      ten.includes('x64') ||
+      ten.includes('x86_64') ||
+      ten.includes('amd64') ||
+      ten.includes('win64') ||
+      chip === 'X86_64';
+    const isExplicitX86 =
+      ten.includes('x86') || ten.includes('win32') || ten.includes('ia32') || chip === 'X86';
+
+    // FE-V3-04: Trừ điểm nặng đối với các tệp dành riêng cho Linux, macOS, Android
+    // hoặc tệp mã nguồn đính kèm (source code zip), tránh chọn nhầm tệp Linux/macOS zip cho máy Windows
+    const isNonWindows =
+      ten.includes('linux') ||
+      ten.includes('darwin') ||
+      ten.includes('macos') ||
+      ten.includes('osx') ||
+      ten.includes('ubuntu') ||
+      ten.includes('debian') ||
+      ten.includes('android');
+
+    const isSourceCode =
+      ten.includes('source') ||
+      ten.startsWith('src-') ||
+      ten.endsWith('-src.zip') ||
+      ten === 'source.zip';
+
+    if (isNonWindows || isSourceCode) {
+      return 0; // Đưa về 0 điểm tuyệt đối
+    }
+
+    if (preferredArch === 'x64') {
+      if (isExplicitX64 && !isArm) {
+        // Tên chứa rõ ràng x64/amd64 được ưu tiên hàng đầu
+        return ten.includes('x64') || ten.includes('amd64') ? 110 : 100;
+      }
+      if (!isArm && !isExplicitX86) {
+        // Bản trung tính / Universal / không ghi kiến trúc
+        return 70;
+      }
+      if (isExplicitX86 && !isArm) {
+        // Bản 32-bit (chạy qua WoW64)
+        return 40;
+      }
+      // Bản ARM trên máy x64
+      return 10;
+    } else {
+      // Máy ARM
+      if (isArm) return 110;
+      if (!isExplicitX64 && !isExplicitX86) return 70;
+      return 30;
+    }
+  };
+
+  const sorted = [...candidates].sort((a, b) => scoreAsset(b) - scoreAsset(a));
+  return sorted[0];
+}
+
+/**
+ * Tính trạng thái hiệu lực của nút Cài đặt theo định dạng (A2, A3, FE-01, FE-V3-03)
+ * - Tab ZIP: Luôn tải độc lập, không bị khóa bởi bản EXE/MSI đã cài trên máy.
+ * - Tab EXE/MSI: Nguồn chân lý từ server theo thiết bị (isInstalledOnDevice) hoặc vừa cài xong.
+ * - FE-V3-03: Phân lập Task Slot: Tab ZIP và Tab EXE chỉ nhận tiến trình tải/xác minh/cài đặt
+ *   nếu loại tệp đang xử lý trùng khớp với Tab định dạng đang xem.
+ */
+export function tinhTrangThaiHieuLuc(params: {
+  selectedFormat: string;
+  isInstalledOnDevice: boolean;
+  localStatus: string;
+  installedFileType?: string;
+  hasExtractedDir?: boolean;
+}): string {
+  const isZipTab =
+    params.selectedFormat.toUpperCase() === 'ZIP' ||
+    params.selectedFormat.toUpperCase() === 'ZIP_PORTABLE';
+
+  const isZipFile = params.installedFileType?.toUpperCase().includes('ZIP');
+  const isProgress =
+    params.localStatus === 'DANG_TAI' ||
+    params.localStatus === 'XAC_MINH' ||
+    params.localStatus === 'DANG_CAI_DAT';
+
+  if (isZipTab) {
+    // FE-V3-03: Tab ZIP chỉ hiển thị tiến trình nếu tệp đang tải/cài là ZIP
+    if (isProgress) {
+      if (params.installedFileType === undefined || isZipFile) {
+        return params.localStatus;
+      }
+      // Tiến trình thuộc về bản EXE/MSI, Tab ZIP giữ trạng thái sẵn sàng
+      return 'CHUA_CAI';
+    }
+    // FE-01: Tab ZIP chỉ coi là DA_CAI_DAT khi tệp cài đặt thực sự là ZIP hoặc đã có thư mục giải nén
+    if (params.localStatus === 'DA_CAI_DAT') {
+      if (isZipFile || params.hasExtractedDir) {
+        return 'DA_CAI_DAT';
+      }
+      return 'CHUA_CAI';
+    }
+    if (params.localStatus === 'LOI') {
+      return isZipFile ? 'LOI' : 'CHUA_CAI';
+    }
+    if (params.localStatus === 'DA_HUY') {
+      return isZipFile ? 'DA_HUY' : 'CHUA_CAI';
+    }
+    return 'CHUA_CAI';
+  } else {
+    // Tab EXE / MSI:
+    // FE-V3-03 & FE-EC-02: Tab EXE chỉ hiển thị tiến trình nếu tệp đang tải/cài KHÔNG phải là ZIP
+    if (isProgress) {
+      if (params.installedFileType === undefined || !isZipFile) {
+        return params.localStatus;
+      }
+      // Tiến trình thuộc về bản ZIP, Tab EXE hiển thị theo trạng thái đã cài hoặc sẵn sàng
+      return params.isInstalledOnDevice ? 'DA_CAI_DAT' : 'CHUA_CAI';
+    }
+    if (params.localStatus === 'DA_HUY' && !isZipFile) {
+      return 'DA_HUY';
+    }
+    if (params.localStatus === 'LOI' && !isZipFile) {
+      return 'LOI';
+    }
+    if (params.isInstalledOnDevice) {
+      return 'DA_CAI_DAT';
+    }
+    // FIX EC-01: Chỉ nhận DA_CAI_DAT từ localStatus nếu phiên cài vừa rồi KHÔNG phải là ZIP Portable
+    if (params.localStatus === 'DA_CAI_DAT') {
+      if (!isZipFile) {
+        return 'DA_CAI_DAT';
+      }
+      return 'CHUA_CAI';
+    }
+    return !isZipFile ? params.localStatus : 'CHUA_CAI';
+  }
+}
 
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo } = useNavStore();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, maThietBi } = useAuthStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
   // Cờ `laYeuThich` trong chi tiết app phụ thuộc người đang đăng nhập, nên khóa cache phải gắn với
   // người dùng. Nếu không, bản tải lúc chưa có token (laYeuThich rỗng) bị giữ lại sau khi đăng nhập.
@@ -51,9 +224,17 @@ export const DetailPage: React.FC = () => {
   const [isTogglingFavorite, setIsTogglingFavorite] = useState<boolean>(false);
   const [loiYeuThich, setLoiYeuThich] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<string>('EXE');
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
   const [showAllVersions, setShowAllVersions] = useState<boolean>(false);
+  const [customZipDir, setCustomZipDir] = useState<string | null>(null);
+  const [activeCliMethodIndex, setActiveCliMethodIndex] = useState<number>(0);
+  const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
+
+  // Cấu hình thư mục lưu bản portable từ trang Cài đặt (A1)
+  const { thuMucPortable, chonThuMucQuaDialog } = useSettingsStore();
+  const targetPortableDir = customZipDir || thuMucPortable || undefined;
 
   // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
   const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
@@ -87,6 +268,15 @@ export const DetailPage: React.FC = () => {
     queryFn: () => favoritesService.layDanhSachYeuThich(1, 50),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
+  });
+
+  // Nạp danh sách ứng dụng đã cài đặt trên thiết bị hiện tại từ server (A3)
+  const { data: installedAppsOnDevice = [] } = useQuery({
+    queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+    queryFn: () =>
+      maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
+    enabled: Boolean(isAuthenticated && maThietBi),
+    staleTime: 1000 * 60 * 2,
   });
 
   // Đồng bộ trạng thái yêu thích từ backend hoặc danh sách user-favorites
@@ -163,24 +353,52 @@ export const DetailPage: React.FC = () => {
     return stars.toString();
   };
 
+  // FE-V3-05: Quản lý timer trạng thái "Đã chép" bằng useRef chống race condition và memory leak
+  const copyShaTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const copyCommandTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
+      if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
+    };
+  }, []);
+
   // Sao chép mã băm SHA-256 kèm hiệu ứng Checkmark Pop
   const handleCopySha = (sha?: string | null, fileId?: string) => {
     if (!sha) return;
     navigator.clipboard.writeText(sha);
     setCopiedSha(fileId || sha);
-    setTimeout(() => setCopiedSha(null), 2000);
+    if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
+    copyShaTimerRef.current = setTimeout(() => setCopiedSha(null), 2000);
+  };
+
+  // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3 & FE-V3-05)
+  const handleCopyCommand = (lenh: string, id: string) => {
+    if (!lenh) return;
+    navigator.clipboard.writeText(lenh);
+    setCopiedCommandId(id);
+    if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
+    copyCommandTimerRef.current = setTimeout(() => setCopiedCommandId(null), 2000);
   };
 
   // Phân tích các tệp cài đặt của bản phát hành mới nhất
   const latestRelease = appDetail?.banPhatHanhMoiNhat || appDetail?.danhSachBanPhatHanh?.[0];
   const allAssets = latestRelease?.danhSachTepCaiDat || [];
 
-  // Lọc tệp cài đặt phù hợp với Windows
+  // Lọc tệp cài đặt phù hợp với Windows (FE-EC-01: Chỉ nhận bản tương thích Windows, không fallback về allAssets)
   const windowsAssets = allAssets.filter((f) => {
     const ext = f.tenTep.toLowerCase();
     return ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip');
   });
-  const displayAssets = windowsAssets.length > 0 ? windowsAssets : allAssets;
+  const displayAssets = windowsAssets;
+  const coFileCaiDat = displayAssets.length > 0;
+
+  // Hướng dẫn cài đặt qua dòng lệnh CLI (DELIV-33.3)
+  const huongDanCli = appDetail?.huongDanCaiDat || appDetail?.phanTichAi?.huongDanCaiDat || null;
+  const coHuongDanCli = Boolean(
+    huongDanCli && huongDanCli.cachCai && huongDanCli.cachCai.length > 0,
+  );
 
   // Danh sách các định dạng tệp thực tế có sẵn
   const availableFormats = Array.from(
@@ -191,29 +409,86 @@ export const DetailPage: React.FC = () => {
   useEffect(() => {
     if (availableFormats.length > 0 && !availableFormats.includes(selectedFormat)) {
       setSelectedFormat(availableFormats[0]);
+      setSelectedAssetId(null);
     }
   }, [availableFormats, selectedFormat]);
 
-  const selectedAsset =
-    displayAssets.find((a) => a.dinhDangTep?.toString() === selectedFormat) || displayAssets[0];
+  // Thuật toán chọn tệp tối ưu cho Windows x64 (P3-FIX)
+  const optimalAsset = useMemo(
+    () => timTepCaiDatToiUu(displayAssets, selectedFormat, 'x64'),
+    [displayAssets, selectedFormat],
+  );
+
+  // Lựa chọn hiện tại: ưu tiên tệp người dùng click chọn thủ công, nếu không thì lấy tệp tối ưu
+  const selectedAsset = useMemo(() => {
+    if (selectedAssetId) {
+      const found = displayAssets.find((a) => a.maTep === selectedAssetId);
+      if (found) return found;
+    }
+    return optimalAsset || displayAssets[0];
+  }, [selectedAssetId, displayAssets, optimalAsset]);
+
+  // Cảnh báo nếu tệp đang chọn không tương thích với máy x64
+  const isChipIncompatible = useMemo(() => {
+    if (!selectedAsset) return false;
+    const chip = (selectedAsset.kienTrucChip || '').toString().toUpperCase();
+    const ten = selectedAsset.tenTep.toLowerCase();
+    return ten.includes('arm64') || ten.includes('aarch64') || chip.includes('ARM64');
+  }, [selectedAsset]);
+
+  // Kiểm tra xem ứng dụng này đã được cài trên chính máy trạm hiện tại hay chưa (Nguyên tắc 1 & A3)
+  const isInstalledOnDevice = useMemo(() => {
+    if (!isAuthenticated || !maThietBi) return false;
+    return installedAppsOnDevice.some(
+      (item) =>
+        item.maUngDung === appDetail?.maUngDung ||
+        item.ungDung?.tenRepoDayDu === appId ||
+        item.ungDung?.tenKhoChua === appId,
+    );
+  }, [installedAppsOnDevice, isAuthenticated, maThietBi, appDetail?.maUngDung, appId]);
+
+  // Xác định định dạng tệp đang chọn có phải bản nén Portable .zip không
+  const isZipTab =
+    selectedFormat.toUpperCase() === 'ZIP' || selectedFormat.toUpperCase() === 'ZIP_PORTABLE';
 
   // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11)
   const appKey = appDetail?.maUngDung || appId;
   const installInfo = caiDatMap[appKey];
-  const currentStatus = installInfo?.trangThai || 'CHUA_CAI';
+  const localStatus = installInfo?.trangThai || 'CHUA_CAI';
 
-  // Xử lý nút cài đặt
+  const effectiveStatus = useMemo(
+    () =>
+      tinhTrangThaiHieuLuc({
+        selectedFormat,
+        isInstalledOnDevice,
+        localStatus,
+        installedFileType: installInfo?.loaiTep,
+        hasExtractedDir: Boolean(installInfo?.duongDanThuMuc),
+      }),
+    [selectedFormat, isInstalledOnDevice, localStatus, installInfo],
+  );
+
+  // Xử lý nút cài đặt / tải portable
   const handleInstallClick = () => {
-    if (currentStatus === 'DA_CAI_DAT') {
-      if (installInfo?.duongDanThucThi) {
-        moApp(appKey);
+    if (effectiveStatus === 'DA_CAI_DAT') {
+      if (isZipTab) {
+        if (installInfo?.duongDanThuMuc) {
+          installService.moThuMuc(installInfo.duongDanThuMuc);
+        } else if (installInfo?.duongDanThucThi) {
+          installService.moUngDung(installInfo.duongDanThucThi);
+        }
+        return;
+      } else {
+        if (installInfo?.duongDanThucThi) {
+          moApp(appKey);
+        }
+        return;
       }
-      return;
     }
     if (
-      currentStatus === 'DANG_TAI' ||
-      currentStatus === 'XAC_MINH' ||
-      currentStatus === 'DANG_CAI_DAT'
+      effectiveStatus === 'DANG_TAI' ||
+      effectiveStatus === 'XAC_MINH' ||
+      effectiveStatus === 'DANG_CAI_DAT'
     ) {
       return;
     }
@@ -232,6 +507,7 @@ export const DetailPage: React.FC = () => {
       sha256DuKien: selectedAsset.maBamSha256 || undefined,
       phienBan: latestRelease?.tenPhienBan,
       maTep: selectedAsset.maTep,
+      thuMucDich: isZipTab ? targetPortableDir : undefined,
     });
   };
 
@@ -488,64 +764,70 @@ export const DetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Bảng Các Tệp Cài Đặt & Checksum SHA-256 (P3-06.4) */}
-          <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-border/50 pb-3 flex-wrap gap-2">
-              <div>
-                <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
-                  <FileArchive className="w-4 h-4 text-accent-forge" />
-                  <span>
-                    BẢN PHÁT HÀNH {latestRelease?.tenPhienBan || 'MỚI NHẤT'}
-                    {latestRelease?.laBanThuNghiem && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 ml-2">
-                        Pre-release
-                      </span>
-                    )}
-                  </span>
-                </h3>
-                <p className="text-[11px] text-muted font-mono mt-0.5">
-                  Phát hành:{' '}
-                  {latestRelease?.ngayPhatHanh
-                    ? new Date(latestRelease.ngayPhatHanh).toLocaleDateString('vi-VN')
-                    : 'Gần đây'}{' '}
-                  • {displayAssets.length} tệp cài đặt khả dụng
-                </p>
+          {/* Bảng Các Tệp Cài Đặt & Checksum SHA-256 (P3-06.4) - Chỉ hiển thị khi có tệp cài đặt */}
+          {coFileCaiDat && (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-border/50 pb-3 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
+                    <FileArchive className="w-4 h-4 text-accent-forge" />
+                    <span>
+                      BẢN PHÁT HÀNH {latestRelease?.tenPhienBan || 'MỚI NHẤT'}
+                      {latestRelease?.laBanThuNghiem && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 ml-2">
+                          Pre-release
+                        </span>
+                      )}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-muted font-mono mt-0.5">
+                    Phát hành:{' '}
+                    {latestRelease?.ngayPhatHanh
+                      ? new Date(latestRelease.ngayPhatHanh).toLocaleDateString('vi-VN')
+                      : 'Gần đây'}{' '}
+                    • {displayAssets.length} tệp cài đặt khả dụng
+                  </p>
+                </div>
+
+                {appDetail.duongDanGithub && (
+                  <a
+                    href={`${appDetail.duongDanGithub}/releases`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-tactile text-xs font-mono text-accent-ai hover:underline flex items-center gap-1"
+                  >
+                    <span>GitHub Releases</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
 
-              {appDetail.duongDanGithub && (
-                <a
-                  href={`${appDetail.duongDanGithub}/releases`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-tactile text-xs font-mono text-accent-ai hover:underline flex items-center gap-1"
-                >
-                  <span>GitHub Releases</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-            </div>
-
-            {/* Danh sách tệp cài đặt */}
-            <div className="flex flex-col gap-2.5">
-              {displayAssets.length > 0 ? (
-                displayAssets.map((asset) => {
+              {/* Danh sách tệp cài đặt */}
+              <div className="flex flex-col gap-2.5">
+                {displayAssets.map((asset) => {
                   const isCopied = copiedSha === asset.maTep || copiedSha === asset.maBamSha256;
                   const isSelected = selectedAsset?.maTep === asset.maTep;
 
                   return (
                     <div
                       key={asset.maTep}
-                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors ${
+                      onClick={() => {
+                        setSelectedAssetId(asset.maTep);
+                        if (asset.dinhDangTep) {
+                          setSelectedFormat(asset.dinhDangTep.toString());
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-surface-elevated/80 border-accent-forge/40 shadow-sm'
-                          : 'bg-surface-elevated/40 border-border/50 hover:border-border'
+                          ? 'bg-surface-elevated/90 border-accent-forge/60 shadow-md ring-1 ring-accent-forge/30'
+                          : 'bg-surface-elevated/40 border-border/50 hover:border-border hover:bg-surface-elevated/60'
                       }`}
                     >
                       <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex items-center gap-2 font-mono text-xs font-bold text-primary truncate">
                           <span className="truncate">{asset.tenTep}</span>
                           {isSelected && (
-                            <span className="px-1.5 py-0.2 rounded bg-accent-forge/15 text-accent-forge text-[10px] shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-accent-forge/15 text-accent-forge text-[10px] shrink-0 font-bold border border-accent-forge/30">
                               ĐANG CHỌN
                             </span>
                           )}
@@ -561,7 +843,10 @@ export const DetailPage: React.FC = () => {
                           </span>
                           {asset.maBamSha256 && (
                             <button
-                              onClick={() => handleCopySha(asset.maBamSha256, asset.maTep)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopySha(asset.maBamSha256, asset.maTep);
+                              }}
                               title="Sao chép toàn bộ mã băm SHA-256"
                               className="text-accent-ai hover:text-primary flex items-center gap-1 btn-tactile"
                             >
@@ -586,20 +871,215 @@ export const DetailPage: React.FC = () => {
                         <span className="text-xs font-mono text-secondary">
                           {formatBytes(asset.dungLuongBytes)}
                         </span>
-                        <span className="text-xs font-mono text-emerald-400 font-semibold uppercase">
+                        <span
+                          className={`text-xs font-mono font-semibold uppercase px-2 py-0.5 rounded ${
+                            (asset.kienTrucChip || '').toString().includes('ARM')
+                              ? 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                              : 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
+                          }`}
+                        >
                           {asset.kienTrucChip || 'x64'}
                         </span>
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div className="p-4 rounded-xl bg-surface-elevated/30 border border-border/40 text-center text-xs text-muted">
-                  Không tìm thấy tệp cài đặt đính kèm cho bản phát hành này.
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Khối Hướng Dẫn Cài Đặt Qua Dòng Lệnh CLI (DELIV-33.3) */}
+          {coHuongDanCli && huongDanCli && (
+            <div
+              id="cli-guide-section"
+              className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-border/80"
+            >
+              <div className="flex items-center justify-between border-b border-border/50 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-5 h-5 text-accent-forge" />
+                  <h3 className="text-sm font-bold font-display text-primary uppercase tracking-wider">
+                    HƯỚNG DẪN CÀI ĐẶT QUA DÒNG LỆNH (CLI)
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                    <Check className="w-3 h-3 stroke-[3]" />
+                    Trích xuất nguyên văn
+                  </span>
+                </div>
+                {huongDanCli.coRuiRoCao && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Chứa lệnh rủi ro cao
+                  </span>
+                )}
+              </div>
+
+              {/* Tabs chọn phương thức cài đặt */}
+              {huongDanCli.cachCai.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
+                  {huongDanCli.cachCai.map((cach, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveCliMethodIndex(idx)}
+                      className={`btn-tactile px-3.5 py-1.5 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all ${
+                        activeCliMethodIndex === idx
+                          ? 'bg-accent-forge text-white border-accent-forge shadow-sm font-bold'
+                          : 'bg-surface-elevated/70 text-secondary border-border/70 hover:text-primary hover:bg-surface-elevated'
+                      }`}
+                    >
+                      {cach.nhom} • {cach.ten}
+                    </button>
+                  ))}
                 </div>
               )}
+
+              {/* Phương thức được chọn */}
+              {(() => {
+                const currentMethod =
+                  huongDanCli.cachCai[activeCliMethodIndex] || huongDanCli.cachCai[0];
+                if (!currentMethod) return null;
+
+                return (
+                  <div className="flex flex-col gap-4">
+                    {/* Thông tin phương thức & Yêu cầu tiên quyết */}
+                    <div className="p-3.5 rounded-xl bg-surface-elevated/40 border border-border/50 flex flex-col gap-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold font-display text-primary">
+                            {currentMethod.ten}
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-accent-forge font-bold uppercase">
+                            {currentMethod.nhom}
+                          </span>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-muted">
+                            Hệ điều hành: {currentMethod.heDieuHanh}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Yêu cầu môi trường */}
+                      {currentMethod.yeuCau && currentMethod.yeuCau.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[11px] font-mono text-muted">
+                          <span className="text-secondary font-medium">Yêu cầu môi trường:</span>
+                          {currentMethod.yeuCau.map((yc, ycIdx) => (
+                            <span
+                              key={ycIdx}
+                              className="px-2 py-0.5 rounded bg-surface border border-border text-primary text-[10px]"
+                            >
+                              {yc}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Danh sách các bước lệnh */}
+                    <div className="flex flex-col gap-3">
+                      {currentMethod.buoc.map((buoc, bIdx) => {
+                        const stepId = `cli-${activeCliMethodIndex}-${bIdx}`;
+                        const isCopied = copiedCommandId === stepId;
+
+                        return (
+                          <div
+                            key={bIdx}
+                            className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
+                              buoc.ruiRoCao
+                                ? 'bg-rose-500/5 border-rose-500/30'
+                                : 'bg-surface-elevated/30 border-border/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-primary flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-[10px] font-mono font-bold text-accent-forge shrink-0">
+                                  {bIdx + 1}
+                                </span>
+                                <span>{buoc.moTa}</span>
+                              </span>
+
+                              {buoc.ruiRoCao && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30 flex items-center gap-1 shrink-0">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Lệnh rủi ro cao
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Khối dòng lệnh nguyên văn */}
+                            <div className="relative group rounded-xl bg-slate-950 border border-slate-800 overflow-hidden shadow-inner">
+                              <pre className="p-3.5 pr-28 text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed select-text font-medium">
+                                <code>{buoc.lenh}</code>
+                              </pre>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyCommand(buoc.lenh, stepId)}
+                                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm"
+                                title="Sao chép câu lệnh này vào Clipboard"
+                              >
+                                {isCopied ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
+                                    <span className="text-emerald-400 font-semibold">Đã chép</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Chép lệnh</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Cảnh báo rủi ro cao */}
+                            {buoc.ruiRoCao && (
+                              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-mono flex items-start gap-2 leading-relaxed">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  <span className="font-bold">Lưu ý bảo mật:</span>{' '}
+                                  {buoc.canhBaoRuiRo ||
+                                    'Lệnh này thực thi trực tiếp script từ internet hoặc yêu cầu quyền hạn quản trị cao nhất. Hãy kiểm tra kỹ trước khi chạy.'}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Banner an toàn hiển thị & README gốc */}
+                    <div className="p-3.5 rounded-xl bg-surface-elevated/60 border border-border/60 text-xs text-muted flex items-start sm:items-center justify-between gap-3 leading-relaxed flex-col sm:flex-row">
+                      <div className="flex items-start gap-2">
+                        <Shield className="w-4 h-4 text-accent-forge shrink-0 mt-0.5" />
+                        <span>
+                          <strong className="text-primary">An toàn hiển thị:</strong> ForgeStore chỉ
+                          bóc tách câu lệnh nguyên văn từ README gốc của tác giả và không tự động
+                          thực thi. Bạn hãy mở Terminal / PowerShell cá nhân để chạy các lệnh trên.
+                        </span>
+                      </div>
+                      {huongDanCli.duongDanReadmeGoc && (
+                        <a
+                          href={huongDanCli.duongDanReadmeGoc}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-tactile text-accent-ai hover:underline text-xs font-mono shrink-0 flex items-center gap-1 ml-auto"
+                        >
+                          <span>Xem README gốc</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-          </div>
+          )}
+
+          {/* Trường hợp không có cả tệp cài đặt lẫn hướng dẫn CLI */}
+          {!coFileCaiDat && !coHuongDanCli && (
+            <div className="tactile-card p-6 rounded-2xl border border-border/50 text-center text-xs text-muted">
+              Ứng dụng này hiện chưa có tệp cài đặt phù hợp với Windows (.exe, .msi, .zip) và chưa
+              có hướng dẫn cài đặt dòng lệnh.
+            </div>
+          )}
 
           {/* Lịch Sử Các Bản Phát Hành (P3-06.4) */}
           {appDetail.danhSachBanPhatHanh && appDetail.danhSachBanPhatHanh.length > 1 && (
@@ -659,157 +1139,376 @@ export const DetailPage: React.FC = () => {
 
         {/* === CỘT PHỤ (32% - 4 CỘT TRÊN LG, STICKY SIDEBAR) === */}
         <div className="lg:col-span-4 flex flex-col gap-6 sticky top-4">
-          {/* Card Hành Động Cài Đặt Nổi Bật (P3-06.1) */}
-          <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-border shadow-xl">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
-              <button
-                onClick={handleToggleFavorite}
-                disabled={isTogglingFavorite}
-                className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
-                  isFavorited
-                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
-                    : 'bg-surface-elevated border-border text-muted hover:text-primary'
-                } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
-                title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
-              >
-                {isTogglingFavorite ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
-                ) : (
-                  <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
-                )}
-              </button>
-            </div>
-            {loiYeuThich && (
-              <p role="alert" className="-mt-3 text-[11px] text-rose-400">
-                {loiYeuThich}
-              </p>
-            )}
-
-            {/* Bộ chọn định dạng tệp có sẵn */}
-            {availableFormats.length > 0 && (
-              <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border text-xs font-mono font-medium">
-                {availableFormats.map((fmt) => (
-                  <button
-                    key={fmt}
-                    onClick={() => setSelectedFormat(fmt)}
-                    className={`btn-tactile py-1.5 rounded-lg uppercase transition-all ${
-                      selectedFormat === fmt
-                        ? 'bg-accent-forge text-white shadow-sm font-bold'
-                        : 'text-muted hover:text-primary'
-                    }`}
-                  >
-                    .{fmt.toLowerCase()}
-                  </button>
-                ))}
+          {/* Card Hành Động Cài Đặt Nổi Bật (P3-06.1 & DELIV-33.3) */}
+          {!coFileCaiDat && coHuongDanCli && huongDanCli ? (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-accent-forge/30 bg-accent-forge/5 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-accent-forge font-mono font-bold text-xs">
+                  <Terminal className="w-4 h-4" />
+                  <span>PHÂN PHỐI QUA DÒNG LỆNH (CLI)</span>
+                </div>
+                <button
+                  onClick={handleToggleFavorite}
+                  disabled={isTogglingFavorite}
+                  className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                    isFavorited
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                      : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                  } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                  title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
+                >
+                  {isTogglingFavorite ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                  ) : (
+                    <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                  )}
+                </button>
               </div>
-            )}
-
-            {/* Nút Cài Đặt Đa Trạng Thái (P3-11) */}
-            <button
-              onClick={handleInstallClick}
-              disabled={currentStatus === 'XAC_MINH' || currentStatus === 'DANG_CAI_DAT'}
-              className={`btn-tactile relative overflow-hidden w-full h-12 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all duration-150 ${
-                currentStatus === 'DA_CAI_DAT'
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
-                  : currentStatus === 'XAC_MINH'
-                    ? 'bg-amber-600 text-white cursor-wait'
-                    : currentStatus === 'DANG_CAI_DAT'
-                      ? 'bg-blue-600 text-white cursor-wait'
-                      : currentStatus === 'DANG_TAI'
-                        ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-default px-3'
-                        : currentStatus === 'LOI'
-                          ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40'
-                          : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/40'
-              }`}
-            >
-              {currentStatus === 'DANG_TAI' && (
-                <div
-                  className="absolute left-0 top-0 bottom-0 bg-accent-forge/25 transition-all duration-150"
-                  style={{ width: `${installInfo?.phanTram ?? 0}%` }}
-                />
+              {loiYeuThich && (
+                <p role="alert" className="-mt-3 text-[11px] text-rose-400">
+                  {loiYeuThich}
+                </p>
               )}
 
-              <div className="relative z-10 w-full flex items-center justify-center gap-2 font-mono">
-                {currentStatus === 'DANG_TAI' ? (
-                  <>
-                    <Download className="w-4 h-4 animate-bounce text-accent-forge shrink-0" />
-                    <span className="font-tnum">Đang tải {installInfo?.phanTram ?? 0}%</span>
-                    {(installInfo?.tocDoBps ?? 0) > 0 && (
-                      <span className="text-[11px] text-muted font-tnum hidden sm:inline">
-                        ({formatBytes(installInfo?.tocDoBps)}/s)
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        huyCaiDat(appKey);
-                      }}
-                      className="btn-tactile ml-auto px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-mono flex items-center gap-1 border border-rose-500/30"
-                      title="Hủy tải tệp"
-                    >
-                      <X className="w-3 h-3" />
-                      <span>Huỷ</span>
-                    </button>
-                  </>
-                ) : currentStatus === 'XAC_MINH' ? (
-                  <>
-                    <ShieldCheck className="w-4 h-4 animate-pulse text-amber-200" />
-                    <span>Xác minh SHA-256...</span>
-                  </>
-                ) : currentStatus === 'DANG_CAI_DAT' ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
-                    <span>Đang cài đặt...</span>
-                  </>
-                ) : currentStatus === 'DA_CAI_DAT' ? (
-                  <>
-                    <Check className="w-4 h-4 stroke-[3]" />
-                    <span>{installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Đã Cài Đặt'}</span>
-                  </>
-                ) : currentStatus === 'LOI' ? (
-                  <>
-                    <AlertCircle className="w-4 h-4" />
-                    <span>Lỗi – Thử Lại</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    <span>Cài Đặt 1-Click ({formatBytes(selectedAsset?.dungLuongBytes)})</span>
-                  </>
-                )}
-              </div>
-            </button>
-
-            {/* Chú thích cho app cài qua EXE/MSI đã xong */}
-            {currentStatus === 'DA_CAI_DAT' && !installInfo?.duongDanThucThi && (
-              <p className="text-[11px] text-muted text-center leading-normal">
-                Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Start Menu hoặc Desktop.
+              <p className="text-xs text-secondary leading-relaxed">
+                Ứng dụng này không có bộ cài đồ họa (.exe, .msi) mà được triển khai qua các công cụ
+                dòng lệnh (như pip, docker, npm, winget...).
               </p>
-            )}
 
-            {/* Thông báo hủy tiến trình (P3-08.5) */}
-            {currentStatus === 'DA_HUY' && (
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 font-mono flex items-center gap-2 animate-fade-in">
-                <X className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>Đã hủy tiến trình tải/cài đặt. Tệp tạm đã được dọn sạch.</span>
+              <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border/80 flex flex-col gap-1.5 text-xs font-mono">
+                <div className="flex justify-between text-muted">
+                  <span>Số cách cài khả dụng:</span>
+                  <span className="text-primary font-bold">
+                    {huongDanCli.cachCai.length} phương thức
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted">
+                  <span>Cách cài ưu tiên:</span>
+                  <span className="text-accent-forge font-bold">
+                    {huongDanCli.cachCai[0]?.nhom || 'CLI'}
+                  </span>
+                </div>
               </div>
-            )}
 
-            {/* Thông báo lỗi nếu xảy ra (P3-09.2) */}
-            {currentStatus === 'LOI' && installInfo?.thongDiepLoi && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 font-mono flex items-start gap-2 leading-relaxed">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div className="flex-1 break-words">{installInfo.thongDiepLoi}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  document
+                    .getElementById('cli-guide-section')
+                    ?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40"
+              >
+                <Terminal className="w-4 h-4" />
+                <span>Xem Hướng Dẫn Cài Đặt CLI</span>
+              </button>
+
+              <div className="flex items-center justify-center gap-2 text-[11px] text-muted text-center leading-normal">
+                <Shield className="w-3.5 h-3.5 text-accent-forge shrink-0" />
+                <span>Lệnh nguyên văn từ README, không tự động chạy trên máy</span>
               </div>
-            )}
-
-            <div className="flex items-center justify-center gap-2 text-[11px] text-muted">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Đã kiểm định mã độc & tính toàn vẹn SHA-256</span>
             </div>
-          </div>
+          ) : !coFileCaiDat && !coHuongDanCli ? (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4 border border-border shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-muted uppercase">Trạng thái phát hành</span>
+                <button
+                  onClick={handleToggleFavorite}
+                  disabled={isTogglingFavorite}
+                  className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                    isFavorited
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                      : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                  } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                  title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
+                >
+                  {isTogglingFavorite ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                  ) : (
+                    <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                  )}
+                </button>
+              </div>
+              <div className="p-4 rounded-xl bg-surface-elevated/50 border border-border/50 text-center flex flex-col items-center gap-2">
+                <AlertCircle className="w-6 h-6 text-muted" />
+                <span className="text-xs font-semibold text-primary">
+                  Chưa có bản cài cho Windows
+                </span>
+                <p className="text-[11px] text-muted leading-relaxed">
+                  Repository này hiện chưa phát hành gói cài đặt (.exe, .msi, .zip) tương thích với
+                  máy tính Windows.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled
+                className="w-full h-12 rounded-xl bg-surface-elevated border border-border text-muted font-display font-bold text-xs flex items-center justify-center cursor-not-allowed opacity-60"
+              >
+                Chưa hỗ trợ cài đặt
+              </button>
+            </div>
+          ) : (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-border shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
+                <button
+                  onClick={handleToggleFavorite}
+                  disabled={isTogglingFavorite}
+                  className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                    isFavorited
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                      : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                  } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                  title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
+                >
+                  {isTogglingFavorite ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                  ) : (
+                    <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                  )}
+                </button>
+              </div>
+              {loiYeuThich && (
+                <p role="alert" className="-mt-3 text-[11px] text-rose-400">
+                  {loiYeuThich}
+                </p>
+              )}
+
+              {/* Bộ chọn định dạng tệp có sẵn */}
+              {availableFormats.length > 0 && (
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border text-xs font-mono font-medium">
+                  {availableFormats.map((fmt) => (
+                    <button
+                      key={fmt}
+                      onClick={() => {
+                        setSelectedFormat(fmt);
+                        setSelectedAssetId(null);
+                      }}
+                      className={`btn-tactile py-1.5 rounded-lg uppercase transition-all ${
+                        selectedFormat === fmt
+                          ? 'bg-accent-forge text-white shadow-sm font-bold'
+                          : 'text-muted hover:text-primary'
+                      }`}
+                    >
+                      .{fmt.toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Hiển thị & tùy chọn thư mục giải nén cho bản Portable (A1) */}
+              {isZipTab && (
+                <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border flex items-center justify-between gap-2.5 text-xs font-mono">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] text-muted uppercase block">
+                      Thư mục giải nén:
+                    </span>
+                    <div
+                      className="font-mono text-[11px] text-primary truncate font-medium mt-0.5"
+                      title={customZipDir || thuMucPortable || '%LOCALAPPDATA%\\ForgeStore\\apps'}
+                    >
+                      {customZipDir ||
+                        thuMucPortable ||
+                        '%LOCALAPPDATA%\\ForgeStore\\apps (Mặc định)'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const picked = await chonThuMucQuaDialog();
+                      if (picked) {
+                        setCustomZipDir(picked);
+                      }
+                    }}
+                    className="btn-tactile px-2.5 py-1 rounded-lg bg-surface border border-border text-muted hover:text-primary text-[11px] font-mono shrink-0 flex items-center gap-1 shadow-sm"
+                    title="Chọn thư mục khác cho bản portable này"
+                  >
+                    <FolderOpen className="w-3 h-3" />
+                    <span>Đổi</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Cảnh báo không tương thích kiến trúc CPU (P3-FIX) */}
+              {isChipIncompatible && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 font-mono flex items-start gap-2 animate-fade-in leading-relaxed">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="font-bold">Lưu ý kiến trúc chip:</span> Tệp đang chọn (
+                    {selectedAsset?.tenTep}) dành cho hệ máy ARM64. Máy tính Windows của bạn là
+                    x64/AMD64, vui lòng cân nhắc chọn bản x64 để ứng dụng chạy ổn định.
+                  </div>
+                </div>
+              )}
+
+              {/* Nút Cài Đặt Đa Trạng Thái (P3-11 & A2 & A3) */}
+              <button
+                onClick={handleInstallClick}
+                disabled={effectiveStatus === 'XAC_MINH' || effectiveStatus === 'DANG_CAI_DAT'}
+                className={`btn-tactile relative overflow-hidden w-full h-12 rounded-xl font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all duration-150 ${
+                  effectiveStatus === 'DA_CAI_DAT'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+                    : effectiveStatus === 'XAC_MINH'
+                      ? 'bg-amber-600 text-white cursor-wait'
+                      : effectiveStatus === 'DANG_CAI_DAT'
+                        ? 'bg-blue-600 text-white cursor-wait'
+                        : effectiveStatus === 'DANG_TAI'
+                          ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-default px-3'
+                          : effectiveStatus === 'LOI'
+                            ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40'
+                            : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/40'
+                }`}
+              >
+                {effectiveStatus === 'DANG_TAI' && (
+                  <div
+                    className="absolute left-0 top-0 bottom-0 bg-accent-forge/25 transition-all duration-150"
+                    style={{ width: `${installInfo?.phanTram ?? 0}%` }}
+                  />
+                )}
+
+                <div className="relative z-10 w-full flex items-center justify-center gap-2 font-mono">
+                  {effectiveStatus === 'DANG_TAI' ? (
+                    <>
+                      <Download className="w-4 h-4 animate-bounce text-accent-forge shrink-0" />
+                      <span className="font-tnum">Đang tải {installInfo?.phanTram ?? 0}%</span>
+                      {(installInfo?.tocDoBps ?? 0) > 0 && (
+                        <span className="text-[11px] text-muted font-tnum hidden sm:inline">
+                          ({formatBytes(installInfo?.tocDoBps)}/s)
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          huyCaiDat(appKey);
+                        }}
+                        className="btn-tactile ml-auto px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-mono flex items-center gap-1 border border-rose-500/30"
+                        title="Hủy tải tệp"
+                      >
+                        <X className="w-3 h-3" />
+                        <span>Huỷ</span>
+                      </button>
+                    </>
+                  ) : effectiveStatus === 'XAC_MINH' ? (
+                    <>
+                      <ShieldCheck className="w-4 h-4 animate-pulse text-amber-200" />
+                      <span>Xác minh SHA-256...</span>
+                    </>
+                  ) : effectiveStatus === 'DANG_CAI_DAT' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-200" />
+                      <span>{isZipTab ? 'Đang giải nén portable...' : 'Đang cài đặt...'}</span>
+                    </>
+                  ) : effectiveStatus === 'DA_CAI_DAT' ? (
+                    isZipTab ? (
+                      <>
+                        <FolderOpen className="w-4 h-4 text-emerald-200" />
+                        <span>
+                          {installInfo?.duongDanThuMuc
+                            ? 'Mở Thư Mục Portable'
+                            : 'Đã Giải Nén Portable'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>{installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Đã Cài Đặt'}</span>
+                      </>
+                    )
+                  ) : effectiveStatus === 'LOI' ? (
+                    <>
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Lỗi – Thử Lại</span>
+                    </>
+                  ) : isZipTab ? (
+                    <>
+                      <FileArchive className="w-4 h-4" />
+                      <span>Tải Bản Portable ({formatBytes(selectedAsset?.dungLuongBytes)})</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Cài Đặt 1-Click ({formatBytes(selectedAsset?.dungLuongBytes)})</span>
+                    </>
+                  )}
+                </div>
+              </button>
+
+              {/* Nút tải lại hoặc chú thích cho bản portable */}
+              {isZipTab && effectiveStatus === 'DA_CAI_DAT' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAsset) return;
+                    batDauCaiDat({
+                      maUngDung: appKey,
+                      tenApp: appDetail?.tenKhoChua || 'App',
+                      url: selectedAsset.duongDanTaiVe,
+                      tenTep: selectedAsset.tenTep,
+                      loaiTep: selectedAsset.dinhDangTep?.toString() || selectedFormat,
+                      sha256DuKien: selectedAsset.maBamSha256 || undefined,
+                      phienBan: latestRelease?.tenPhienBan,
+                      maTep: selectedAsset.maTep,
+                      thuMucDich: isZipTab ? targetPortableDir : undefined,
+                    });
+                  }}
+                  className="btn-tactile text-[11px] font-mono text-muted hover:text-primary flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Tải hoặc giải nén lại bản này</span>
+                </button>
+              )}
+
+              {/* Chú thích cho app cài qua EXE/MSI đã xong */}
+              {!isZipTab && effectiveStatus === 'DA_CAI_DAT' && !installInfo?.duongDanThucThi && (
+                <p className="text-[11px] text-muted text-center leading-normal">
+                  Ứng dụng đã cài đặt vào hệ thống. Bạn có thể mở từ Start Menu hoặc Desktop.
+                </p>
+              )}
+
+              {/* Thông báo hủy tiến trình (P3-08.5 & P3-FIX) */}
+              {effectiveStatus === 'DA_HUY' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 font-mono flex items-start gap-2 animate-fade-in leading-relaxed">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span className="font-bold">Đã hủy:</span>{' '}
+                    {installInfo?.thongDiepLoi ||
+                      'Tiến trình đã dừng lại hoặc bị từ chối cấp quyền. Tệp tạm đã được dọn sạch.'}
+                  </div>
+                </div>
+              )}
+
+              {/* Thông báo lỗi nếu xảy ra (P3-09.2) */}
+              {effectiveStatus === 'LOI' && installInfo?.thongDiepLoi && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 font-mono flex items-start gap-2 leading-relaxed">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 break-words">{installInfo.thongDiepLoi}</div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-center gap-2 text-[11px] text-muted">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Đã kiểm định mã độc & tính toàn vẹn SHA-256</span>
+              </div>
+
+              {/* EC-04: Gợi ý phương thức CLI khi app có cả bản nhị phân lẫn CLI */}
+              {coHuongDanCli && huongDanCli && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    document
+                      .getElementById('cli-guide-section')
+                      ?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="btn-tactile text-[11px] font-mono text-muted hover:text-accent-forge flex items-center justify-center gap-1.5 transition-colors pt-2 border-t border-border/50"
+                  title="Cuộn tới phần hướng dẫn cài đặt qua dòng lệnh"
+                >
+                  <Terminal className="w-3.5 h-3.5 text-accent-forge" />
+                  <span>Hoặc cài qua dòng lệnh CLI ({huongDanCli.cachCai[0]?.nhom || 'CLI'})</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Jev AI Trust Score Gauge & Thẩm Định Chi Tiết (P3-06.3) */}
           <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">

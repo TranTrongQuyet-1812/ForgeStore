@@ -52,7 +52,18 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       sort: 'stars',
     });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/apps?sort=stars');
+    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=stars');
+  });
+
+  it('layDanhSachApps đính kèm window khi có tham số window', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ duLieu: [] });
+
+    await service.layDanhSachApps({
+      sort: 'trending',
+      window: 'week',
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=trending&window=week');
   });
 
   it('layAppsNoiBat gọi endpoint với featured=true và limit=10', async () => {
@@ -81,7 +92,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     });
 
     const items = await service.layAppsNoiBat();
-    expect(apiClient.get).toHaveBeenCalledWith('/apps?limit=10&featured=true');
+    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&limit=10&featured=true');
     expect(items).toHaveLength(1);
     expect(items[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
   });
@@ -91,13 +102,15 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockDetail);
 
     const result = await service.layChiTietApp('uuid-123');
-    expect(apiClient.get).toHaveBeenCalledWith('/apps/uuid-123');
+    expect(apiClient.get).toHaveBeenCalledWith('/apps/uuid-123?platform=windows&arch=x86_64');
     expect(result).toEqual(mockDetail);
 
     // Kiểm tra gọi qua slug owner/repo
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockDetail);
     await service.layChiTietApp('rustdesk/rustdesk');
-    expect(apiClient.get).toHaveBeenCalledWith('/apps/rustdesk/rustdesk');
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/apps/rustdesk/rustdesk?platform=windows&arch=x86_64',
+    );
   });
 
   it('mapDtoToAppCard chuyển đổi UngDungTomTatDto sang AppCardData chính xác', () => {
@@ -330,5 +343,17 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       abis: ['X86_64'],
     });
     expect(result.trangThai).toBe('THANH_CONG');
+  });
+
+  it('layDanhSachDanhMuc gọi GET /categories?platform=windows mặc định', async () => {
+    const mockCategories = [
+      { ten: 'Lập trình & Phát triển', soLuong: 5 },
+      { ten: 'Tiện ích hệ thống', soLuong: 4 },
+    ];
+    vi.mocked(apiClient.get).mockResolvedValueOnce(mockCategories);
+
+    const result = await service.layDanhSachDanhMuc();
+    expect(apiClient.get).toHaveBeenCalledWith('/categories?platform=windows');
+    expect(result).toEqual(mockCategories);
   });
 });

@@ -58,6 +58,7 @@ export interface KetQuaCaiDatRust {
   thong_diep: string;
   duong_dan_cai_dat?: string | null;
   duong_dan_thuc_thi?: string | null;
+  thong_tin_registry?: ThongTinUngDungRegistry | null;
 }
 
 /**
@@ -72,6 +73,7 @@ export interface ThamSoCaiDat {
   sha256DuKien?: string;
   phienBan?: string;
   maTep?: string;
+  thuMucDich?: string;
 }
 
 /**
@@ -80,6 +82,7 @@ export interface ThamSoCaiDat {
 export interface ThongTinCaiDatApp {
   maUngDung: string;
   tenApp: string;
+  loaiTep?: string;
   trangThai: TrangThaiCaiDat;
   phanTram: number;
   tocDoBps: number;
@@ -87,5 +90,22 @@ export interface ThongTinCaiDatApp {
   tongBytes: number;
   thongDiepLoi?: string;
   duongDanThucThi?: string;
+  duongDanThuMuc?: string;
   thoiGianCapNhat: number;
+  registryKey?: string;
+  registryDisplayName?: string;
+  registryPublisher?: string;
+  registryDisplayVersion?: string;
+}
+
+/**
+ * Thông tin ứng dụng quét được từ Windows Registry (A4)
+ */
+export interface ThongTinUngDungRegistry {
+  display_name: string;
+  display_version?: string | null;
+  publisher?: string | null;
+  uninstall_string?: string | null;
+  install_location?: string | null;
+  registry_key?: string | null;
 }

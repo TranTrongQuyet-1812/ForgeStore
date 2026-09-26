@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { installService } from '../services/install/install-service';
 import { libraryService } from '../services/library/library-service';
+import { queryClient } from '../services/api/query-client';
+import { apiClient } from '../services/api/api-client';
 import { useAuthStore } from './useAuthStore';
 import type {
   ThamSoCaiDat,
@@ -39,6 +41,9 @@ const safeMemoryStorage = {
   },
 };
 
+// Dọn dẹp key cũ không còn được phép lưu trữ trạng thái cài đặt vĩnh viễn (A3)
+safeMemoryStorage.removeItem('forgestore_installed_apps');
+
 interface InstallState {
   caiDatMap: Record<string, ThongTinCaiDatApp>;
 
@@ -47,6 +52,7 @@ interface InstallState {
   huyCaiDat: (maUngDung: string) => Promise<void>;
   moApp: (maUngDung: string) => Promise<void>;
   goCaiDatLocal: (maUngDung: string) => void;
+  xoaTrangThaiTam: () => void;
   capNhatTrangThai: (maUngDung: string, partial: Partial<ThongTinCaiDatApp>) => void;
   layThongTinApp: (maUngDung: string) => ThongTinCaiDatApp | undefined;
 }
@@ -92,6 +98,7 @@ export const useInstallStore = create<InstallState>()(
         // Khởi tạo trạng thái đang tải
         get().capNhatTrangThai(maUngDung, {
           tenApp,
+          loaiTep: params.loaiTep,
           trangThai: 'DANG_TAI',
           phanTram: 0,
           tocDoBps: 0,
@@ -114,27 +121,41 @@ export const useInstallStore = create<InstallState>()(
           if (res.thanh_cong) {
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_CAI_DAT',
+              loaiTep: params.loaiTep,
               phanTram: 100,
               tocDoBps: 0,
               duongDanThucThi: res.duong_dan_thuc_thi ?? undefined,
+              duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
+              registryKey: res.thong_tin_registry?.registry_key ?? undefined,
+              registryDisplayName: res.thong_tin_registry?.display_name ?? undefined,
+              registryPublisher: res.thong_tin_registry?.publisher ?? undefined,
+              registryDisplayVersion: res.thong_tin_registry?.display_version ?? undefined,
             });
 
-            // Ghi nhận cài đặt lên Backend nếu có thể (P3-10.3 & P3-12.2 & Điểm 1, 6)
-            try {
-              const maThietBi = useAuthStore.getState().maThietBi;
-              if (maThietBi) {
-                await libraryService.ghiNhanCaiDat(maThietBi, {
-                  maUngDung,
-                  phienBanHienTai: params.phienBan || '0.0.0',
-                  maTepDaCai: params.maTep,
-                  duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
-                });
+            // Ghi nhận cài đặt lên Backend nếu là file cài đặt hệ thống EXE/MSI (P3-10.3 & A1 & A3)
+            // Tuyệt đối KHÔNG ghi nhận bản ZIP portable vào Thư viện máy (Nguyên tắc 3 & A1)
+            const isPortableZip = params.loaiTep?.toUpperCase().includes('ZIP');
+            if (!isPortableZip) {
+              try {
+                const maThietBi = useAuthStore.getState().maThietBi;
+                if (maThietBi) {
+                  await libraryService.ghiNhanCaiDat(maThietBi, {
+                    maUngDung,
+                    phienBanHienTai: params.phienBan || '0.0.0',
+                    maTepDaCai: params.maTep,
+                    duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
+                    khoaRegistry: res.thong_tin_registry?.registry_key ?? undefined,
+                    tenHienThiRegistry: res.thong_tin_registry?.display_name ?? undefined,
+                  });
+                  // Cập nhật tức thì cả trang Chi tiết và trang Thư viện qua server query (A3)
+                  queryClient.invalidateQueries({ queryKey: ['device-installed-apps'] });
+                }
+              } catch (syncErr) {
+                console.warn(
+                  '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
+                  syncErr,
+                );
               }
-            } catch (syncErr) {
-              console.warn(
-                '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
-                syncErr,
-              );
             }
 
             return true;
@@ -153,13 +174,20 @@ export const useInstallStore = create<InstallState>()(
                 ? err
                 : 'Lỗi không xác định khi tải và cài đặt';
 
-          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI
-          if (errMsg.includes('DA_HUY')) {
+          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI (P3-FIX)
+          if (
+            errMsg.includes('DA_HUY') ||
+            errMsg.includes('NGUOI_DUNG_HUY') ||
+            errMsg.includes('1223') ||
+            errMsg.includes('1602') ||
+            errMsg.toLowerCase().includes('từ chối') ||
+            errMsg.toLowerCase().includes('đã hủy')
+          ) {
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_HUY',
               phanTram: 0,
               tocDoBps: 0,
-              thongDiepLoi: undefined,
+              thongDiepLoi: 'Đã hủy tiến trình cài đặt hoặc từ chối cấp quyền Quản trị viên (UAC).',
             });
           } else {
             get().capNhatTrangThai(maUngDung, {
@@ -188,6 +216,10 @@ export const useInstallStore = create<InstallState>()(
         });
       },
 
+      xoaTrangThaiTam: () => {
+        set({ caiDatMap: {} });
+      },
+
       moApp: async (maUngDung) => {
         const appInfo = get().caiDatMap[maUngDung];
         if (appInfo?.duongDanThucThi) {
@@ -198,14 +230,24 @@ export const useInstallStore = create<InstallState>()(
       },
     }),
     {
-      name: 'forgestore_installed_apps',
+      name: 'forgestore_install_tasks',
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
-        // Chỉ lưu vĩnh viễn các app đã cài đặt thành công
+        // Chỉ lưu các tiến trình đang thực thi tạm thời, TUYỆT ĐỐI KHÔNG lưu DA_CAI_DAT vào localStorage (A3)
         caiDatMap: Object.fromEntries(
-          Object.entries(state.caiDatMap).filter(([_, v]) => v.trangThai === 'DA_CAI_DAT'),
+          Object.entries(state.caiDatMap).filter(
+            ([_, v]) =>
+              v.trangThai === 'DANG_TAI' ||
+              v.trangThai === 'XAC_MINH' ||
+              v.trangThai === 'DANG_CAI_DAT',
+          ),
         ),
       }),
     },
   ),
 );
+
+// Tự động dọn sạch các trạng thái tạm khi người dùng đăng xuất (A3)
+apiClient.onLogout(() => {
+  useInstallStore.getState().xoaTrangThaiTam();
+});

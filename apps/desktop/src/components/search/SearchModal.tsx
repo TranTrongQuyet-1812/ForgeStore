@@ -28,12 +28,17 @@ export const SearchModal: React.FC = () => {
   const [inspectSuccess, setInspectSuccess] = useState<InspectRepoResponseDto | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Tự động focus vào input khi mở modal và reset trạng thái khi đóng
+  // Tự động focus vào input khi mở modal và reset trạng thái khi đóng (EC-06: Dọn timer 800ms)
   useEffect(() => {
     if (isSearchModalOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
     } else {
+      if (autoCloseTimerRef.current) {
+        clearTimeout(autoCloseTimerRef.current);
+        autoCloseTimerRef.current = null;
+      }
       setQuery('');
       setSearchResult(null);
       setSelectedIndex(-1);
@@ -43,8 +48,20 @@ export const SearchModal: React.FC = () => {
     }
   }, [isSearchModalOpen]);
 
-  // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play
-  const isGithubUrl = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(query.trim());
+  // Dọn dẹp timer khi component unmount
+  useEffect(() => {
+    return () => {
+      if (autoCloseTimerRef.current) {
+        clearTimeout(autoCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play (EC-05: Hỗ trợ cả full URL và định dạng rút gọn owner/repo)
+  const trimmedQuery = query.trim();
+  const isGithubFullUrl = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(trimmedQuery);
+  const isGithubShortRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmedQuery);
+  const isGithubUrl = isGithubFullUrl || isGithubShortRepo;
 
   // Debounce 300ms gọi API tìm kiếm (P3-07.1)
   useEffect(() => {
@@ -76,8 +93,9 @@ export const SearchModal: React.FC = () => {
   }, [query]);
 
   // Xử lý nạp và kiểm định repo Paste & Play (P3-07.2)
-  const handleInspectRepo = async (urlToInspect: string) => {
-    if (!urlToInspect || isInspecting) return;
+  const handleInspectRepo = async (rawUrl: string) => {
+    if (!rawUrl || isInspecting) return;
+    const urlToInspect = rawUrl.startsWith('http') ? rawUrl : `https://github.com/${rawUrl}`;
     setIsInspecting(true);
     setInspectError(null);
     setInspectSuccess(null);
@@ -86,8 +104,11 @@ export const SearchModal: React.FC = () => {
       const res = await storeService.kiemDinhRepo(urlToInspect);
       if (res.trangThai === 'THANH_CONG' && res.ungDung) {
         setInspectSuccess(res);
-        // Tự động chuyển trang sau 800ms
-        setTimeout(() => {
+        // Tự động chuyển trang sau 800ms (EC-06: Quản lý timer chống rò rỉ)
+        if (autoCloseTimerRef.current) {
+          clearTimeout(autoCloseTimerRef.current);
+        }
+        autoCloseTimerRef.current = setTimeout(() => {
           openAppDetail(res.ungDung!.tenRepoDayDu || res.ungDung!.maUngDung);
           setSearchModalOpen(false);
         }, 800);
@@ -142,8 +163,50 @@ export const SearchModal: React.FC = () => {
         }
       } else if (items.length > 0 && selectedIndex >= 0 && selectedIndex < items.length) {
         const selectedApp = items[selectedIndex];
-        openAppDetail(selectedApp.tenRepoDayDu || selectedApp.maUngDung);
-        setSearchModalOpen(false);
+        if (selectedApp.chuaThamDinh || searchResult?.nguonKetQua === 'GITHUB') {
+          handleInspectRepo(selectedApp.duongDanGithub || selectedApp.tenRepoDayDu);
+        } else {
+          openAppDetail(selectedApp.tenRepoDayDu || selectedApp.maUngDung);
+          setSearchModalOpen(false);
+        }
+      }
+    }
+  };
+
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // FE-V3-02: Focus Trap tuần hoàn tiêu điểm bàn phím (Tab / Shift+Tab) bên trong Modal theo WCAG 2.1
+  const handleModalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setSearchModalOpen(false);
+      return;
+    }
+
+    if (e.key === 'Tab') {
+      if (!modalRef.current) return;
+      const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+
+      if (e.shiftKey) {
+        if (
+          document.activeElement === first ||
+          !modalRef.current.contains(document.activeElement)
+        ) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     }
   };
@@ -156,6 +219,11 @@ export const SearchModal: React.FC = () => {
       onClick={() => setSearchModalOpen(false)}
     >
       <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tìm kiếm ứng dụng"
+        onKeyDown={handleModalKeyDown}
         className="tactile-card w-full max-w-2xl rounded-2xl bg-surface border border-border shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -165,6 +233,8 @@ export const SearchModal: React.FC = () => {
           <input
             ref={inputRef}
             type="text"
+            role="searchbox"
+            aria-label="Tìm kiếm theo tên app, ý định AI hoặc dán link GitHub"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -221,8 +291,17 @@ export const SearchModal: React.FC = () => {
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>
-                    Thẩm định hoàn tất! Đang chuyển sang trang cài đặt của{' '}
-                    <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                    {inspectSuccess.chiCoHuongDanCli ? (
+                      <>
+                        Repository phân phối qua hướng dẫn dòng lệnh (CLI). Đang mở trang chi tiết
+                        của <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                      </>
+                    ) : (
+                      <>
+                        Thẩm định hoàn tất! Đang chuyển sang trang cài đặt của{' '}
+                        <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                      </>
+                    )}
                   </span>
                 </div>
               )}
@@ -277,18 +356,63 @@ export const SearchModal: React.FC = () => {
                 </div>
               )}
 
+              {/* Banner trạng thái thẩm định khi kích hoạt từ danh sách */}
+              {(isInspecting || inspectError || inspectSuccess) && (
+                <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-2">
+                  {inspectError && (
+                    <div className="text-rose-400 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{inspectError}</span>
+                    </div>
+                  )}
+                  {inspectSuccess && (
+                    <div className="text-emerald-400 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>
+                        {inspectSuccess.chiCoHuongDanCli ? (
+                          <>
+                            Repository phân phối qua hướng dẫn CLI. Đang mở trang chi tiết của{' '}
+                            <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                          </>
+                        ) : (
+                          <>
+                            Thẩm định hoàn tất! Đang mở trang chi tiết của{' '}
+                            <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {isInspecting && (
+                    <div className="text-accent-forge text-xs flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Đang kết nối GitHub và thẩm định gói cài đặt...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Danh sách ứng dụng tìm thấy */}
               {searchResult?.duLieu && searchResult.duLieu.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
                   {searchResult.duLieu.map((app, idx) => {
                     const isSelected = selectedIndex === idx;
+                    const isFromGithub = Boolean(
+                      app.chuaThamDinh || searchResult?.nguonKetQua === 'GITHUB',
+                    );
 
                     return (
                       <div
                         key={app.maUngDung}
                         onClick={() => {
-                          openAppDetail(app.tenRepoDayDu || app.maUngDung);
-                          setSearchModalOpen(false);
+                          if (isFromGithub) {
+                            handleInspectRepo(
+                              app.duongDanGithub || `https://github.com/${app.tenRepoDayDu}`,
+                            );
+                          } else {
+                            openAppDetail(app.tenRepoDayDu || app.maUngDung);
+                            setSearchModalOpen(false);
+                          }
                         }}
                         onMouseEnter={() => setSelectedIndex(idx)}
                         className={`btn-tactile p-3 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${
@@ -317,13 +441,21 @@ export const SearchModal: React.FC = () => {
                               <h4 className="text-xs font-bold text-primary font-display truncate">
                                 {app.tenKhoChua}
                               </h4>
-                              <span className="text-[10px] font-mono text-muted truncate">
-                                {app.tenRepoDayDu}
-                              </span>
+                              {isFromGithub ? (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30 shrink-0">
+                                  Từ GitHub
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono text-muted truncate">
+                                  {app.tenRepoDayDu}
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-secondary truncate">
                               {app.khauHieuTiengViet ||
-                                `${app.danhMucChinh} • Cập nhật ${app.phienBanMoiNhat || 'mới'}`}
+                                (isFromGithub
+                                  ? 'Mã nguồn mở GitHub • Nhấn để thẩm định và nạp vào Store'
+                                  : `${app.danhMucChinh} • Cập nhật ${app.phienBanMoiNhat || 'mới'}`)}
                             </p>
                           </div>
                         </div>

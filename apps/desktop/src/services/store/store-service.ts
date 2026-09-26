@@ -1,5 +1,6 @@
 import { apiClient } from '../api/api-client';
 import type {
+  DanhMucDto,
   TrangKetQua,
   UngDungTomTatDto,
   UngDungChiTietDto,
@@ -8,10 +9,13 @@ import type {
 } from '@forgestore/types';
 import type { AppCardData } from '../../components/common/AppCard';
 
+export type TimeWindowFilter = 'today' | 'week' | 'month';
+
 export interface QueryAppsParams {
   platform?: 'android' | 'windows';
   category?: string;
   sort?: 'stars' | 'recent' | 'trending';
+  window?: TimeWindowFilter;
   page?: number;
   limit?: number;
   featured?: boolean;
@@ -26,11 +30,12 @@ export class StoreService {
    */
   async layDanhSachApps(params: QueryAppsParams = {}): Promise<TrangKetQua<UngDungTomTatDto>> {
     const query = new URLSearchParams();
-    if (params.platform) query.set('platform', params.platform);
+    query.set('platform', params.platform || 'windows');
     if (params.category && params.category !== 'Tất cả') {
       query.set('category', params.category);
     }
     if (params.sort) query.set('sort', params.sort);
+    if (params.window) query.set('window', params.window);
     if (params.page !== undefined) query.set('page', String(params.page));
     if (params.limit !== undefined) query.set('limit', String(params.limit));
     if (params.featured !== undefined) query.set('featured', String(params.featured));
@@ -52,12 +57,24 @@ export class StoreService {
   }
 
   /**
-   * Lấy chi tiết toàn diện của một ứng dụng (cho trang Chi tiết / App Detail)
+   * Lấy danh sách danh mục có app khả dụng theo nền tảng kèm số lượng app thật (K3)
    */
-  async layChiTietApp(maUngDung: string): Promise<UngDungChiTietDto> {
-    const endpoint = maUngDung.includes('/')
+  async layDanhSachDanhMuc(platform: 'windows' | 'android' = 'windows'): Promise<DanhMucDto[]> {
+    return apiClient.get<DanhMucDto[]>(`/categories?platform=${platform}`);
+  }
+
+  /**
+   * Lấy chi tiết toàn diện của một ứng dụng (cho trang Chi tiết / App Detail - K1)
+   */
+  async layChiTietApp(
+    maUngDung: string,
+    platform: 'windows' | 'android' = 'windows',
+    arch: string = 'x86_64',
+  ): Promise<UngDungChiTietDto> {
+    const basePath = maUngDung.includes('/')
       ? `/apps/${maUngDung.split('/').map(encodeURIComponent).join('/')}`
       : `/apps/${encodeURIComponent(maUngDung)}`;
+    const endpoint = `${basePath}?platform=${platform}&arch=${encodeURIComponent(arch)}`;
     return apiClient.get<UngDungChiTietDto>(endpoint);
   }
 

@@ -105,4 +105,18 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       expect(info?.thongDiepLoi).toContain('LỖI_XAC_MINH_SHA256');
     });
   });
+
+  describe('Registry & Native Uninstaller (A4)', () => {
+    it('kiemTraAppRegistry trả về null trong môi trường Web dev', async () => {
+      const res = await installService.kiemTraAppRegistry('Notepad++');
+      expect(res).toBeNull();
+    });
+
+    it('goCaiDatQuaRegistry trả về true trong môi trường Web dev fallback', async () => {
+      const res = await installService.goCaiDatQuaRegistry(
+        '"C:\\Program Files\\App\\uninstall.exe"',
+      );
+      expect(res).toBe(true);
+    });
+  });
 });
