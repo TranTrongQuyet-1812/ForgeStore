@@ -204,9 +204,9 @@ export class FavoritesService {
    */
   async layTapHopUngDungDaYeuThich(
     maNguoiDung: string,
-    danhSachMaUngDung: string[],
+    danhSachMaUngDung?: string[],
   ): Promise<Set<string>> {
-    if (!maNguoiDung || danhSachMaUngDung.length === 0) {
+    if (!maNguoiDung || (danhSachMaUngDung && danhSachMaUngDung.length === 0)) {
       return new Set<string>();
     }
 

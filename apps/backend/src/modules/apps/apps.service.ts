@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import {
   DinhDangTep,
   KienTrucChip,
@@ -25,6 +31,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
+import { FavoritesService } from '../favorites/favorites.service';
 import { JevClientService } from '../ai/services/jev-client.service';
 import { LlmRotationService, KetQuaTomTatKemModel } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
@@ -127,6 +134,7 @@ export class AppsService {
     private readonly apkInspectorService: ApkInspectorService,
     private readonly semanticSearchService: SemanticSearchService,
     private readonly searchTranslatorService: SearchTranslatorService,
+    @Optional() private readonly favoritesService?: FavoritesService,
   ) {}
 
   /**
@@ -677,6 +685,7 @@ export class AppsService {
               danhSachTepCaiDat: {
                 select: {
                   dinhDangTep: true,
+                  kienTrucChip: true,
                 },
               },
             },
@@ -914,9 +923,12 @@ export class AppsService {
 
   /**
    * Lấy tập hợp mã ứng dụng đã yêu thích của user từ Redis Cache (TTL 5 phút)
-   * Giảm thiểu truy vấn CSDL Supabase khi duyệt store hoặc xem chi tiết (L-12).
+   * Tái sử dụng qua FavoritesService để khử trùng lặp code (R-05).
    */
   private async layTapHopYeuThichCuaUser(userId: string): Promise<Set<string>> {
+    if (this.favoritesService) {
+      return await this.favoritesService.layTapHopUngDungDaYeuThich(userId);
+    }
     const cacheKey = `user:favs:${userId}`;
     const cached = await this.cacheService.lay<string[]>(cacheKey);
     if (cached) {
