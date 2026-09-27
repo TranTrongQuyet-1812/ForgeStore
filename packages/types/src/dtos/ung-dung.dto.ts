@@ -93,6 +93,9 @@ export interface UngDungTomTatDto {
   diemUyTin?: number | null; // 0 - 100
   mucDoAnToan?: MucDoUyTin | null;
   phienBanMoiNhat?: string | null;
+  dinhDangCoSan?: string[]; // Các định dạng tệp có thật trong bản mới nhất (L-03)
+  kienTrucCoSan?: string[]; // Các kiến trúc chip có thật trong bản mới nhất (L-03)
+  loaiGiayPhep?: string | null; // Giấy phép bản quyền thật từ kho mã (L-03)
   ngayCapNhat?: string | Date;
   chuaThamDinh?: boolean; // Cờ đánh dấu repo từ GitHub chưa thẩm định vào Store
 }
