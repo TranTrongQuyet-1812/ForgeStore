@@ -613,11 +613,11 @@ export const DetailPage: React.FC = () => {
 
   const scoreTheme = getScoreTheme(trustScore);
 
-  // L-09: Hiển thị đúng 3 trạng thái Jev từ CSDL
+  // L-09, R-03: Hiển thị đúng 3 trạng thái thẩm định quyền bằng ngôn ngữ đời thường (L-10)
   const getJevStatusText = (status?: string | null) => {
-    if (status === 'DA_THAM_DINH') return 'Jev: đã thẩm định quyền Android';
-    if (status === 'KHONG_CAN_THIET') return 'Jev: không áp dụng cho bản Windows';
-    return 'Jev: chưa thẩm định';
+    if (status === 'DA_THAM_DINH') return 'Đã kiểm tra quyền truy cập của ứng dụng';
+    if (status === 'KHONG_CAN_THIET') return 'Không cần kiểm tra quyền (bản Windows)';
+    return 'Chưa kiểm tra quyền truy cập';
   };
 
   // L-10: Tên nhãn định dạng thân thiện đời thường
@@ -1400,7 +1400,7 @@ export const DetailPage: React.FC = () => {
                   ) : effectiveStatus === 'XAC_MINH' ? (
                     <>
                       <ShieldCheck className="w-4 h-4 animate-pulse text-amber-200" />
-                      <span>Xác minh SHA-256...</span>
+                      <span>Đang kiểm tra file...</span>
                     </>
                   ) : effectiveStatus === 'DANG_CAI_DAT' ? (
                     <>
@@ -1531,7 +1531,7 @@ export const DetailPage: React.FC = () => {
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-muted">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Đã xác minh SHA-256 khớp với file gốc trên GitHub</span>
+                <span>✓ Đã xác minh file gốc</span>
               </div>
 
               {/* EC-04: Gợi ý phương thức CLI khi app có cả bản nhị phân lẫn CLI */}

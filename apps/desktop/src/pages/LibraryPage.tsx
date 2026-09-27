@@ -245,6 +245,35 @@ export const LibraryPage: React.FC = () => {
     return null;
   };
 
+  // R-01: Kiểm tra DisplayIcon có phải là ứng dụng hợp lệ hay không (loại bỏ uninstaller/setup/msiexec/Windows)
+  const laDisplayIconHopLe = (displayIcon?: string | null): boolean => {
+    if (!displayIcon || !displayIcon.trim()) return false;
+    let s = displayIcon.trim();
+    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    const commaIdx = s.lastIndexOf(',');
+    if (commaIdx !== -1) {
+      const after = s
+        .slice(commaIdx + 1)
+        .trim()
+        .replace(/"/g, '');
+      if (!isNaN(Number(after))) {
+        s = s.slice(0, commaIdx);
+      }
+    }
+    const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+    const lower = clean.toLowerCase();
+    if (!lower.endsWith('.exe')) return false;
+    if (lower.startsWith('c:\\windows\\') || lower.startsWith('c:/windows/')) return false;
+
+    const lastSlash = Math.max(lower.lastIndexOf('\\'), lower.lastIndexOf('/'));
+    const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
+    const tuKhoaCam = ['unins', 'uninst', 'uninstall', 'setup', 'install', 'update', 'msiexec'];
+    if (tuKhoaCam.some((kw) => fileName.includes(kw))) {
+      return false;
+    }
+    return true;
+  };
+
   // L-01: Lấy thư mục cài đặt thực tế để mở hoặc hiển thị (bỏ tiền tố \\?\)
   const layThuMucCaiDatThucTe = (app: {
     duongDanThuMuc?: string | null;
@@ -626,16 +655,18 @@ export const LibraryPage: React.FC = () => {
                       </button>
                     )}
 
-                    {/* Nút Mở Ứng Dụng (L-01) */}
-                    <button
-                      onClick={() => handleOpenApp(app)}
-                      disabled={isUninstallingId !== null}
-                      className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Khởi chạy ứng dụng"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-white" />
-                      <span>Mở Ứng Dụng</span>
-                    </button>
+                    {/* Nút Mở Ứng Dụng (L-01, R-01: Chỉ hiện khi có file thực thi hoặc DisplayIcon hợp lệ) */}
+                    {(app.duongDanThucThi || laDisplayIconHopLe(app.regInfo?.display_icon)) && (
+                      <button
+                        onClick={() => handleOpenApp(app)}
+                        disabled={isUninstallingId !== null}
+                        className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Khởi chạy ứng dụng"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-white" />
+                        <span>Mở Ứng Dụng</span>
+                      </button>
+                    )}
 
                     {/* Nút Mở Thư Mục Cài Đặt (L-01) */}
                     <button
@@ -679,8 +710,8 @@ export const LibraryPage: React.FC = () => {
             Chưa có ứng dụng nào được cài đặt trên máy này
           </h3>
           <p className="text-xs text-secondary max-w-md leading-relaxed">
-            Duyệt kho ForgeStore và chỉ với 1-Click Cài Đặt, phần mềm sẽ tự động tải, xác thực
-            SHA-256 nguyên tử và xuất hiện tại thư viện này.
+            Duyệt kho ForgeStore và chỉ với 1-Click Cài Đặt, phần mềm sẽ tự động tải, cài đặt an
+            toàn và xuất hiện tại thư viện này.
           </p>
           <button
             onClick={() => navigateTo('explore')}

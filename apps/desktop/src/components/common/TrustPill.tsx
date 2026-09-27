@@ -56,7 +56,11 @@ export const TrustPill: React.FC<TrustPillProps> = ({
       type="button"
       onClick={onClick}
       className={`inline-flex items-center font-mono font-bold rounded-full border transition-all duration-150 ${colorStyles} ${sizeStyles}`}
-      title={`Điểm uy tín Jev AI: ${score}/100 (${label})`}
+      title={
+        score !== null && score !== undefined
+          ? `Điểm uy tín: ${score}/100 (${label})`
+          : 'Điểm uy tín: Chưa đánh giá'
+      }
     >
       <Icon className="w-3.5 h-3.5" />
       <span className="font-tnum">{score}/100</span>

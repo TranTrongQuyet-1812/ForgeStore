@@ -560,12 +560,39 @@ pub fn chay_go_cai_dat_registry_an_toan(
     chay_go_cai_dat_registry(&final_uninstall_string)
 }
 
-/// Trích xuất đường dẫn file thực thi .exe từ chuỗi DisplayIcon trong Windows Registry (L-01)
+/// Kiểm tra tệp thực thi có phải là ứng dụng hợp lệ hay không (R-01)
+/// Loại bỏ các file có tên chứa unins, uninst, uninstall, setup, install, update, msiexec,
+/// và mọi file nằm dưới C:\Windows\ để tránh chạy nhầm bộ gỡ hoặc bộ cài đặt.
+pub fn la_tep_thuc_thi_app_hop_le(path: &std::path::Path) -> bool {
+    let path_str = path.to_string_lossy().to_ascii_lowercase();
+    // Chặn mọi file nằm dưới thư mục C:\Windows\ (hoặc c:/windows/)
+    if path_str.starts_with(r"c:\windows\") || path_str.starts_with("c:/windows/") {
+        return false;
+    }
+
+    if let Some(file_name) = path.file_name() {
+        let name_lower = file_name.to_string_lossy().to_ascii_lowercase();
+        let tu_khoa_cam = [
+            "unins", "uninst", "uninstall", "setup", "install", "update", "msiexec",
+        ];
+        for kw in tu_khoa_cam {
+            if name_lower.contains(kw) {
+                return false;
+            }
+        }
+        true
+    } else {
+        false
+    }
+}
+
+/// Trích xuất đường dẫn file thực thi .exe từ chuỗi DisplayIcon trong Windows Registry (L-01, R-01)
 /// Hỗ trợ các định dạng thực tế:
 /// - "C:\Program Files\Notepad++\notepad++.exe,0"
 /// - "C:\Program Files\Notepad++\notepad++.exe",0
 /// - C:\Program Files\DBeaver\dbeaver.exe
 /// - C:\Users\...\Obsidian.exe
+/// R-01: Tự động loại bỏ uninstaller, setup, update, msiexec và C:\Windows\
 pub fn trich_xuat_exe_tu_display_icon(display_icon_str: &str) -> Option<std::path::PathBuf> {
     let trimmed = display_icon_str.trim();
     if trimmed.is_empty() {
@@ -606,9 +633,9 @@ pub fn trich_xuat_exe_tu_display_icon(display_icon_str: &str) -> Option<std::pat
     }
 
     let path = std::path::PathBuf::from(clean_path);
-    // Bắt buộc phần mở rộng là .exe
+    // Bắt buộc phần mở rộng là .exe và phải là tệp thực thi hợp lệ (R-01)
     if let Some(ext) = path.extension() {
-        if ext.to_string_lossy().eq_ignore_ascii_case("exe") {
+        if ext.to_string_lossy().eq_ignore_ascii_case("exe") && la_tep_thuc_thi_app_hop_le(&path) {
             return Some(path);
         }
     }
@@ -667,7 +694,7 @@ pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Re
                     if loc_path.is_dir() {
                         if let Some(app_name) = ten_app {
                             let candidate = loc_path.join(format!("{}.exe", app_name));
-                            if candidate.is_file() {
+                            if candidate.is_file() && la_tep_thuc_thi_app_hop_le(&candidate) {
                                 exe_path_opt = Some(candidate);
                                 break;
                             }
@@ -677,21 +704,7 @@ pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Re
             }
         }
 
-        // Nếu chưa tìm thấy nhưng có ten_app, thử quét toàn bộ registry để tìm app
-        if exe_path_opt.is_none() {
-            if let Some(app_name) = ten_app {
-                let _all_apps = quet_tat_ca_ung_dung_registry();
-                if let Some(found) = tim_ung_dung_chinh_xac_registry(app_name, Some(clean_key), None) {
-                    if let Some(ref icon) = found.display_icon {
-                        if let Some(exe) = trich_xuat_exe_tu_display_icon(icon) {
-                            if exe.is_file() {
-                                exe_path_opt = Some(exe);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // R-01: Bỏ bước dò mờ theo tên (tim_ung_dung_chinh_xac_registry với ten_app), chỉ dùng đúng khoa_registry.
 
         let exe_path = match exe_path_opt {
             Some(p) => p,
@@ -923,6 +936,25 @@ mod tests {
         // Không phải tệp .exe thì từ chối (tránh dll hoặc ico)
         let dll_icon = r#"C:\Windows\System32\shell32.dll,22"#;
         assert_eq!(trich_xuat_exe_tu_display_icon(dll_icon), None);
+
+        // R-01: Kiểm tra loại bỏ DisplayIcon trỏ vào msiexec, uninstaller, setup, install, update
+        let msiexec_icon = r#"C:\Windows\system32\msiexec.exe,0"#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(msiexec_icon), None);
+
+        let uninstall_icon = r#""C:\Program Files\App\uninstall.exe""#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(uninstall_icon), None);
+
+        let unins000_icon = r#"C:\Program Files (x86)\Tool\unins000.exe"#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(unins000_icon), None);
+
+        let setup_icon = r#""C:\Program Files (x86)\App\setup.exe""#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(setup_icon), None);
+
+        let installer_icon = r#"D:\Games\installer.exe"#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(installer_icon), None);
+
+        let update_icon = r#"C:\Users\User\AppData\Local\App\update.exe"#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(update_icon), None);
     }
 }
 
