@@ -8,8 +8,16 @@ describe('DevicesService', () => {
   let service: DevicesService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockPrisma: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockCacheService: any;
 
   beforeEach(() => {
+    mockCacheService = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      del: vi.fn().mockResolvedValue(undefined),
+    };
+
     mockPrisma = {
       thietBi: {
         upsert: vi.fn(),
@@ -34,7 +42,7 @@ describe('DevicesService', () => {
       },
     };
 
-    service = new DevicesService(mockPrisma as unknown as PrismaService);
+    service = new DevicesService(mockPrisma as unknown as PrismaService, mockCacheService);
   });
 
   describe('dangKyThietBi', () => {
@@ -165,6 +173,7 @@ describe('DevicesService', () => {
         maThietBi,
         maNguoiDung,
         tenThietBi: 'Laptop Dell',
+        loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
       });
     });
 
@@ -230,6 +239,206 @@ describe('DevicesService', () => {
         expect(result[0].tenHienThiRegistry).toBe('Notepad++ (64-bit x64)');
         expect(result[0].coBanMoi).toBe(true);
         expect(result[0].phienBanMoiNhat).toBe('v1.2.3');
+      });
+
+      it('R-02: BleachBit v4.6.0 không bị báo có bản mới khi repo có pre-release v0.1.0', async () => {
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+          {
+            maBanGhi: 'rec-bleachbit',
+            maNguoiDung,
+            maUngDung: 'bleachbit',
+            maThietBi,
+            phienBanHienTai: 'v4.6.0',
+            maTepDaCai: 'tep-bb',
+            duongDanThuMuc: null,
+            khoaRegistry: 'BleachBit',
+            tenHienThiRegistry: 'BleachBit',
+            ngayCaiDat: new Date('2026-09-01'),
+            ngayCapNhatCuoi: new Date('2026-09-01'),
+            ungDung: {
+              maUngDung: 'bleachbit',
+              tenKhoChua: 'bleachbit',
+              tenRepoDayDu: 'bleachbit/bleachbit',
+              duongDanIcon: null,
+              soSaoGithub: 5000,
+              danhMucChinh: 'HE_THONG',
+              nenTangHoTro: 'TAT_CA',
+              daXacMinh: true,
+              phanTichAI: null,
+              danhSachPhatHanh: [
+                {
+                  maPhatHanh: 'rel-old',
+                  tenPhienBan: 'v0.1.0',
+                  ngayPhatHanh: new Date('2026-09-20'),
+                  laBanMoiNhat: true,
+                  laBanThuNghiem: false,
+                  danhSachTepCaiDat: [
+                    { maTep: 't1', tenTep: 'BleachBit-0.1.0-setup.exe', dinhDangTep: 'EXE' },
+                  ],
+                },
+              ],
+            },
+          },
+        ]);
+
+        const result = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].phienBanHienTai).toBe('v4.6.0');
+        expect(result[0].phienBanMoiNhat).toBe('v0.1.0');
+        // Không khuyên hạ cấp xuống v0.1.0
+        expect(result[0].coBanMoi).toBe(false);
+      });
+
+      it('R-02: Obsidian Windows không lấy bản phát hành chỉ có file Android và không báo bản mới', async () => {
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+          {
+            maBanGhi: 'rec-obsidian',
+            maNguoiDung,
+            maUngDung: 'obsidian',
+            maThietBi,
+            phienBanHienTai: '1.13.0',
+            maTepDaCai: 'tep-obsidian',
+            duongDanThuMuc: null,
+            khoaRegistry: 'Obsidian',
+            tenHienThiRegistry: 'Obsidian',
+            ngayCaiDat: new Date('2026-09-01'),
+            ngayCapNhatCuoi: new Date('2026-09-01'),
+            ungDung: {
+              maUngDung: 'obsidian',
+              tenKhoChua: 'obsidian-releases',
+              tenRepoDayDu: 'obsidianmd/obsidian-releases',
+              duongDanIcon: null,
+              soSaoGithub: 90000,
+              danhMucChinh: 'VAN_PHONG',
+              nenTangHoTro: 'TAT_CA',
+              daXacMinh: true,
+              phanTichAI: null,
+              danhSachPhatHanh: [
+                // Bản mới nhất về thời gian nhưng chỉ có file Android APK
+                {
+                  maPhatHanh: 'rel-apk-only',
+                  tenPhienBan: 'v1.13.8',
+                  ngayPhatHanh: new Date('2026-09-25'),
+                  laBanMoiNhat: true,
+                  laBanThuNghiem: false,
+                  danhSachTepCaiDat: [
+                    { maTep: 't-apk', tenTep: 'Obsidian.apk', dinhDangTep: 'APK' },
+                  ],
+                },
+                // Bản Windows hợp lệ
+                {
+                  maPhatHanh: 'rel-win',
+                  tenPhienBan: 'v1.13.0',
+                  ngayPhatHanh: new Date('2026-09-20'),
+                  laBanMoiNhat: false,
+                  laBanThuNghiem: false,
+                  danhSachTepCaiDat: [
+                    { maTep: 't-exe', tenTep: 'Obsidian-1.13.0.exe', dinhDangTep: 'EXE' },
+                  ],
+                },
+              ],
+            },
+          },
+        ]);
+
+        const result = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].phienBanHienTai).toBe('1.13.0');
+        // Phải chọn bản Windows v1.13.0 thay vì bản Android v1.13.8
+        expect(result[0].phienBanMoiNhat).toBe('v1.13.0');
+        expect(result[0].coBanMoi).toBe(false);
+      });
+
+      it('R-02: diemUyTin giữ nguyên null khi phanTichAI không có hoặc null, không gán sẵn 100', async () => {
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+          {
+            maBanGhi: 'rec-test',
+            maNguoiDung,
+            maUngDung: 'app-chua-danh-gia',
+            maThietBi,
+            phienBanHienTai: '1.0.0',
+            maTepDaCai: null,
+            duongDanThuMuc: null,
+            khoaRegistry: null,
+            tenHienThiRegistry: null,
+            ngayCaiDat: new Date('2026-09-01'),
+            ngayCapNhatCuoi: new Date('2026-09-01'),
+            ungDung: {
+              maUngDung: 'app-chua-danh-gia',
+              tenKhoChua: 'test-repo',
+              tenRepoDayDu: 'org/test-repo',
+              duongDanIcon: null,
+              soSaoGithub: 10,
+              danhMucChinh: 'KHAC',
+              nenTangHoTro: 'MAY_TINH_WINDOWS',
+              daXacMinh: false,
+              phanTichAI: null,
+              danhSachPhatHanh: [],
+            },
+          },
+        ]);
+
+        const result = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(result[0].ungDung.diemUyTin).toBeNull();
+      });
+
+      it('R-02: Cache Redis - trả về dữ liệu cache khi có cache hit và không gọi Prisma', async () => {
+        const cachedData = [{ maBanGhi: 'rec-from-cache', maUngDung: 'cached-app' }];
+        mockCacheService.get.mockResolvedValue(cachedData);
+
+        const result = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(result).toEqual(cachedData);
+        expect(mockCacheService.get).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
+        expect(mockPrisma.ungDungDaCai.findMany).not.toHaveBeenCalled();
+      });
+
+      it('R-02: Cache Redis - lưu dữ liệu vào cache với TTL 120s khi cache miss', async () => {
+        mockCacheService.get.mockResolvedValue(null);
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([]);
+
+        await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(mockCacheService.set).toHaveBeenCalledWith(
+          `device:installed:${maThietBi}`,
+          expect.any(Array),
+          120,
+        );
+      });
+
+      it('R-02: Cache Invalidation - xóa cache khi ghi nhận cài đặt, gỡ cài đặt, và cập nhật khóa registry', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung: 'app-test',
+          tenRepoDayDu: 'org/test',
+        });
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValue({});
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({ maBanGhi: 'rec-1' });
+        mockPrisma.ungDungDaCai.update.mockResolvedValue({});
+        mockPrisma.ungDungDaCai.deleteMany.mockResolvedValue({ count: 1 });
+
+        // Ghi nhận cài đặt
+        await service.ghiNhanCaiDat(maNguoiDung, maThietBi, {
+          maUngDung: 'app-test',
+          phienBanHienTai: '1.0.0',
+        });
+        expect(mockCacheService.del).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
+
+        mockCacheService.del.mockClear();
+
+        // Gỡ cài đặt
+        await service.goCaiDat(maNguoiDung, maThietBi, 'app-test');
+        expect(mockCacheService.del).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
+
+        mockCacheService.del.mockClear();
+
+        // Cập nhật registry
+        await service.capNhatKhoaRegistry(maNguoiDung, maThietBi, 'app-test', {
+          khoaRegistry: 'AppTest',
+        });
+        expect(mockCacheService.del).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
       });
     });
 
