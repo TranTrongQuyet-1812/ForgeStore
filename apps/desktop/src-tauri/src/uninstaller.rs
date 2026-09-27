@@ -600,34 +600,82 @@ pub fn la_thu_muc_windows(path_str: &str) -> bool {
     false
 }
 
-/// Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không (R-06)
+/// Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không (R-06, SEC-R9-02, SEC-R9-03)
+/// - Cấm đường dẫn mạng UNC (\\ hoặc //) chống rò rỉ băm NetNTLMv2
 /// - Cấm mọi thư mục nằm dưới thư mục Windows (%SystemRoot%, %windir%, C:\Windows)
-/// - Cấm thư mục ProgramData\Package Cache của các bộ cài đặt
-/// - Cấm các thư mục temp, system32, syswow64 theo đúng path segment (không chặn nhầm Tempest)
+/// - Cấm thư mục ProgramData\Package Cache của các bộ cài đặt (kể cả 8.3 short name packag~1)
+/// - Cấm các thư mục temp, system32, syswow64 theo đúng path segment (không chặn nhầm Tempest, xử lý trailing dot)
 /// - Cấm thư mục gốc như C:\ hoặc C:
 pub fn la_thu_muc_cai_dat_hop_le(path: &std::path::Path) -> bool {
     let s = path.to_string_lossy();
-    let normalized = s.replace('/', "\\");
-    let trimmed = normalized.trim().trim_matches('"').trim();
+    let trimmed = s.trim().trim_matches('"').trim();
 
     if trimmed.is_empty() {
         return false;
     }
 
+    // SEC-R9-03: Chặn đứng đường dẫn mạng UNC và NT Device Path chống rò rỉ NetNTLM hash qua SMB
+    if trimmed.starts_with(r"\\")
+        || trimmed.starts_with("//")
+        || trimmed.starts_with(r"\??\")
+        || trimmed.starts_with(r"\\?\")
+    {
+        return false;
+    }
+
+    // SEC-R9-02: Chuẩn hóa canonicalize nếu thư mục tồn tại để giải quyết symlink, relative traversal (..) và 8.3 short name
+    if let Ok(canon) = path.canonicalize() {
+        // Cấm ổ đĩa gốc (không có parent)
+        if canon.parent().is_none() {
+            return false;
+        }
+
+        // Chặn nếu nằm dưới thư mục Windows
+        if let Ok(windir) = std::env::var("WINDIR") {
+            if let Ok(canon_win) = std::path::PathBuf::from(windir).canonicalize() {
+                if canon.starts_with(&canon_win) {
+                    return false;
+                }
+            }
+        }
+        if let Ok(sysroot) = std::env::var("SystemRoot") {
+            if let Ok(canon_sys) = std::path::PathBuf::from(sysroot).canonicalize() {
+                if canon.starts_with(&canon_sys) {
+                    return false;
+                }
+            }
+        }
+
+        // Chặn nếu nằm dưới ProgramData\Package Cache
+        if let Ok(progdata) = std::env::var("ProgramData") {
+            let pkg_cache = std::path::PathBuf::from(progdata).join("Package Cache");
+            if let Ok(canon_pkg) = pkg_cache.canonicalize() {
+                if canon.starts_with(&canon_pkg) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    let normalized = trimmed.replace('/', "\\");
+
     // 1. Chặn thư mục nằm dưới thư mục Windows
-    if la_thu_muc_windows(trimmed) {
+    if la_thu_muc_windows(&normalized) {
         return false;
     }
 
-    // 2. Chặn Package Cache của Windows Installer / Visual Studio / burn engine
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.contains(r"programdata\package cache") || lower.contains(r"package cache") {
+    // 2. Chặn Package Cache của Windows Installer / Visual Studio / burn engine (kể cả 8.3 SFN packag~1)
+    let lower = normalized.to_ascii_lowercase();
+    if lower.contains(r"programdata\package cache")
+        || lower.contains(r"package cache")
+        || lower.contains("packag~1")
+    {
         return false;
     }
 
-    // 3. Chặn thư mục Temp, System32, SysWOW64 theo đúng từng phân đoạn đường dẫn (không chặn nhầm Tempest)
+    // 3. Chặn thư mục Temp, System32, SysWOW64 theo đúng từng phân đoạn đường dẫn (không chặn nhầm Tempest, loại bỏ trailing dot)
     for part in lower.split('\\') {
-        let p_clean = part.trim();
+        let p_clean = part.trim().trim_end_matches('.');
         if p_clean == "temp" || p_clean == "tmp" || p_clean == "system32" || p_clean == "syswow64" {
             return false;
         }
@@ -641,7 +689,7 @@ pub fn la_thu_muc_cai_dat_hop_le(path: &std::path::Path) -> bool {
     true
 }
 
-/// Tìm file thực thi chính của ứng dụng trong InstallLocation hoặc InstallLocation\bin (R-08)
+/// Tìm file thực thi chính của ứng dụng trong InstallLocation hoặc InstallLocation\bin (R-08, SEC-R9-01, SEC-R9-04)
 pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
     install_loc: &std::path::Path,
     ten_app: Option<&str>,
@@ -650,7 +698,13 @@ pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
         return None;
     }
 
-    let search_dirs = [install_loc.to_path_buf(), install_loc.join("bin")];
+    // SEC-R9-01: Canonicalize thư mục gốc cài đặt để làm mốc kiểm tra bao bọc (enclosure boundary)
+    let canon_install_loc = match install_loc.canonicalize() {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
+
+    let search_dirs = [canon_install_loc.clone(), canon_install_loc.join("bin")];
     let app_clean = ten_app.map(chuan_hoa_ten).unwrap_or_default();
 
     for dir in &search_dirs {
@@ -658,11 +712,26 @@ pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
             continue;
         }
 
-        // 1. Nếu có tên app, thử trực tiếp {ten_app}.exe
+        // 1. SEC-R9-01: Khử khuẩn ten_app chống Path Traversal (cấm / \ .. và chỉ lấy file_name)
         if let Some(app_name) = ten_app {
-            let direct = dir.join(format!("{}.exe", app_name));
-            if direct.is_file() && la_tep_thuc_thi_app_hop_le(&direct) {
-                return Some(direct);
+            let trimmed = app_name.trim();
+            if !trimmed.contains('/') && !trimmed.contains('\\') && !trimmed.contains("..") {
+                let safe_stem = std::path::Path::new(trimmed)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("");
+                if !safe_stem.is_empty() {
+                    let direct = dir.join(format!("{}.exe", safe_stem));
+                    if direct.is_file() {
+                        if let Ok(canon_direct) = direct.canonicalize() {
+                            if canon_direct.starts_with(&canon_install_loc)
+                                && la_tep_thuc_thi_app_hop_le(&canon_direct)
+                            {
+                                return Some(canon_direct);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -676,12 +745,23 @@ pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
                     let file_stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
                     let norm_stem = chuan_hoa_ten(file_stem);
 
-                    if !app_clean.is_empty()
-                        && (norm_stem == app_clean
-                            || norm_stem.contains(&app_clean)
-                            || app_clean.contains(&norm_stem))
-                    {
-                        return Some(p);
+                    // SEC-R9-04: Siết chặt so khớp: chuỗi ngắn < 4 ký tự phải khớp chính xác tuyệt đối
+                    if !app_clean.is_empty() {
+                        let is_match = if norm_stem == app_clean {
+                            true
+                        } else if norm_stem.len() >= 4 && app_clean.len() >= 4 {
+                            norm_stem.contains(&app_clean) || app_clean.contains(&norm_stem)
+                        } else {
+                            false
+                        };
+
+                        if is_match {
+                            if let Ok(canon_p) = p.canonicalize() {
+                                if canon_p.starts_with(&canon_install_loc) {
+                                    return Some(canon_p);
+                                }
+                            }
+                        }
                     }
 
                     valid_exes.push(p);
@@ -690,7 +770,12 @@ pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
 
             // Nếu trong thư mục con bin/ chỉ có đúng 1 file .exe hợp lệ, chọn file đó
             if dir.file_name().and_then(|f| f.to_str()) == Some("bin") && valid_exes.len() == 1 {
-                return Some(valid_exes.remove(0));
+                let bin_exe = valid_exes.remove(0);
+                if let Ok(canon_bin) = bin_exe.canonicalize() {
+                    if canon_bin.starts_with(&canon_install_loc) {
+                        return Some(canon_bin);
+                    }
+                }
             }
         }
     }
@@ -1130,5 +1215,40 @@ mod tests {
         // R-06: Chặn tệp thực thi trong Package Cache
         assert!(!la_tep_thuc_thi_app_hop_le(Path::new(r"C:\ProgramData\Package Cache\setup.exe")));
         assert!(!la_tep_thuc_thi_app_hop_le(Path::new(r"C:\ProgramData\Package Cache\{GUID}\app.exe")));
+    }
+
+    #[test]
+    fn test_la_thu_muc_cai_dat_hop_le_unc_va_83_sfn() {
+        // SEC-R9-03: Cấm tuyệt đối UNC path chống rò rỉ NetNTLMv2 hash
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"\\attacker-ip\share")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"//attacker-ip/share")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"\??\UNC\attacker-ip\share")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"\\?\UNC\attacker-ip\share")));
+
+        // SEC-R9-02: Cấm tên ngắn 8.3 SFN packag~1
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\ProgramData\PACKAG~1\{GUID}")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\packag~1")));
+
+        // SEC-R9-02: Cấm temp và system32 có trailing dot
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\temp.\app")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Windows\System32.")));
+    }
+
+    #[test]
+    fn test_tim_tep_thuc_thi_trong_thu_muc_cai_dat_path_traversal_tu_choi() {
+        let temp_dir = std::env::temp_dir().join("fs_test_traversal");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // SEC-R9-01: Thử payload Path Traversal trong ten_app
+        let traversal_result = tim_tep_thuc_thi_trong_thu_muc_cai_dat(&temp_dir, Some("../../Windows/System32/cmd"));
+        assert_eq!(traversal_result, None);
+
+        let slash_result = tim_tep_thuc_thi_trong_thu_muc_cai_dat(&temp_dir, Some("subdir/cmd"));
+        assert_eq!(slash_result, None);
+
+        let backslash_result = tim_tep_thuc_thi_trong_thu_muc_cai_dat(&temp_dir, Some(r"subdir\cmd"));
+        assert_eq!(backslash_result, None);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

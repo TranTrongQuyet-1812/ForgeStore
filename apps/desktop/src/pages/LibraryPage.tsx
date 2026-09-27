@@ -178,34 +178,45 @@ export const LibraryPage: React.FC = () => {
     app.tenApp.toLowerCase().includes(searchFilter.trim().toLowerCase()),
   );
 
-  // R-06: Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không
-  // - Chặn mọi thư mục nằm dưới C:\Windows\ (hoặc c:/windows/)
-  // - Chặn ProgramData\Package Cache
-  // - Chặn temp, tmp, system32, syswow64 theo từng segment (không chặn nhầm Tempest)
+  // R-06, SEC-R9-02, SEC-R9-03: Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không
+  // - Chặn đường dẫn mạng UNC (\\ hoặc //) chống rò rỉ NTLM
+  // - Chặn mọi thư mục nằm dưới Windows (kể cả ổ đĩa khác C:\)
+  // - Chặn ProgramData\Package Cache (kể cả 8.3 short name packag~1)
+  // - Chặn temp, tmp, system32, syswow64 theo từng segment (không chặn nhầm Tempest, xử lý trailing dot)
   // - Chặn ổ đĩa gốc C:\ hoặc C:
   const laThuMucCaiDatHopLe = (dir?: string | null): boolean => {
     if (!dir || !dir.trim()) return false;
     let s = dir.trim();
+
+    // SEC-R9-03: Chặn đường dẫn mạng UNC và NT Device Path chống rò rỉ NTLM hash
+    if (s.startsWith('\\\\') || s.startsWith('//') || s.startsWith('\\??\\') || s.startsWith('\\\\?\\')) {
+      return false;
+    }
+
     s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '').trim().replace(/^"/, '').replace(/"$/, '').trim();
     if (!s) return false;
 
     const normalized = s.replace(/\//g, '\\');
     const lower = normalized.toLowerCase();
 
-    // 1. Chặn thư mục nằm dưới Windows
-    if (lower.startsWith('c:\\windows\\') || lower === 'c:\\windows') {
+    // 1. Chặn thư mục nằm dưới Windows (kể cả trên ổ đĩa khác C)
+    if (lower.startsWith('c:\\windows\\') || lower === 'c:\\windows' || lower.includes(':\\windows\\')) {
       return false;
     }
 
-    // 2. Chặn Package Cache
-    if (lower.includes('programdata\\package cache') || lower.includes('package cache')) {
+    // 2. Chặn Package Cache (kể cả 8.3 SFN packag~1)
+    if (
+      lower.includes('programdata\\package cache') ||
+      lower.includes('package cache') ||
+      lower.includes('packag~1')
+    ) {
       return false;
     }
 
-    // 3. Chặn Temp, System32, SysWOW64 theo đúng phân đoạn (không chặn nhầm Tempest)
+    // 3. Chặn Temp, System32, SysWOW64 theo đúng phân đoạn (không chặn nhầm Tempest, loại bỏ trailing dot)
     const segments = lower.split('\\');
     for (const seg of segments) {
-      const cleanSeg = seg.trim();
+      const cleanSeg = seg.trim().replace(/\.+$/, '');
       if (cleanSeg === 'temp' || cleanSeg === 'tmp' || cleanSeg === 'system32' || cleanSeg === 'syswow64') {
         return false;
       }

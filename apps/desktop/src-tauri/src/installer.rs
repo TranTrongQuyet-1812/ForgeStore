@@ -98,13 +98,9 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
         sei.lpFile = path_wide.as_ptr();
         sei.nShow = SW_SHOW as i32;
 
-        // SEC-R7-07: Gán thư mục làm việc an toàn cho bộ cài EXE chống DLL Hijacking
+        // SEC-R9-07: Gán thư mục làm việc an toàn cố định C:\Windows\System32 cho bộ cài EXE chống DLL Hijacking từ thư mục downloads
         let default_sys32 = std::path::Path::new(r"C:\Windows\System32");
-        let work_dir_path = safe_path
-            .parent()
-            .and_then(|p| if p.as_os_str().is_empty() { None } else { Some(p) })
-            .unwrap_or(default_sys32);
-        let work_dir_wide: Vec<u16> = OsStr::new(work_dir_path.as_os_str())
+        let work_dir_wide: Vec<u16> = OsStr::new(default_sys32.as_os_str())
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
@@ -460,6 +456,10 @@ pub fn giai_nen_portable_zip(
         .map_err(|e| format!("Tệp không phải định dạng zip hợp lệ hoặc bị hỏng: {}", e))?;
 
     let mut potential_exe: Option<PathBuf> = None;
+    let mut total_uncompressed_bytes: u64 = 0;
+    // SEC-R9-05: Chống Zip Bomb DoS: Giới hạn tối đa 512MB mỗi file và 4GB toàn bộ gói nén
+    const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+    const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
     for i in 0..archive.len() {
         let mut zip_file = archive.by_index(i)
@@ -534,8 +534,25 @@ pub fn giai_nen_portable_zip(
                 return Err("CẢNH BÁO AN NINH: Tệp giải nén vượt ra ngoài thư mục an toàn!".to_string());
             }
 
-            std::io::copy(&mut zip_file, &mut outfile)
+            // SEC-R9-05: Đọc tối đa MAX_FILE_BYTES + 1 để phát hiện tệp vượt trần dung lượng an toàn (Zip Bomb DoS)
+            use std::io::Read;
+            let mut limited_reader = (&mut zip_file).take(MAX_FILE_BYTES + 1);
+            let bytes_written = std::io::copy(&mut limited_reader, &mut outfile)
                 .map_err(|e| format!("Lỗi khi ghi dữ liệu giải nén: {}", e))?;
+
+            if bytes_written > MAX_FILE_BYTES {
+                let _ = std::fs::remove_file(&outpath);
+                return Err(format!(
+                    "CẢNH BÁO AN NINH: Tệp nén '{}' vượt quá giới hạn an toàn 512MB (nghi vấn Zip Bomb)!",
+                    outpath.display()
+                ));
+            }
+
+            total_uncompressed_bytes = total_uncompressed_bytes.saturating_add(bytes_written);
+            if total_uncompressed_bytes > MAX_TOTAL_BYTES {
+                let _ = std::fs::remove_file(&outpath);
+                return Err("CẢNH BÁO AN NINH: Tổng dung lượng gói nén vượt quá giới hạn an toàn 4GB (nghi vấn Zip Bomb)!".to_string());
+            }
 
             // Ghi nhận file .exe tiềm năng để người dùng mở trực tiếp
             if let Some(ext) = outpath.extension() {
