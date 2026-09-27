@@ -181,7 +181,7 @@ async fn kiem_tra_sha256(
     })
 }
 
-/// Hộp thoại native chọn thư mục hệ thống (A1)
+/// Hộp thoại native chọn thư mục hệ thống (A1 & L-07)
 #[tauri::command]
 async fn chon_thu_muc(thu_muc_mac_dinh: Option<String>) -> Result<Option<String>, String> {
     tokio::task::spawn_blocking(move || {
@@ -192,7 +192,13 @@ async fn chon_thu_muc(thu_muc_mac_dinh: Option<String>) -> Result<Option<String>
             }
         }
         let folder = dialog.pick_folder();
-        Ok(folder.map(|p| p.to_string_lossy().to_string()))
+        if let Some(path) = folder {
+            // L-07: Kiểm tra thư mục an toàn và quyền ghi ngay khi người dùng chọn
+            let verified = installer::kiem_tra_thu_muc_an_toan_va_quyen_ghi(&path)?;
+            Ok(Some(verified.to_string_lossy().to_string()))
+        } else {
+            Ok(None)
+        }
     })
     .await
     .map_err(|e| format!("Lỗi khi mở hộp thoại chọn thư mục: {}", e))?
@@ -250,6 +256,18 @@ fn lay_thu_muc_tai_ve_cmd() -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+/// Lấy tổng dung lượng thư mục downloads theo bytes (L-05)
+#[tauri::command]
+fn lay_dung_luong_thu_muc_downloads() -> Result<u64, String> {
+    downloader::tinh_dung_luong_thu_muc_downloads()
+}
+
+/// Dọn dẹp toàn bộ tệp trong thư mục downloads, trả về số bytes đã dọn (L-05)
+#[tauri::command]
+fn don_dep_thu_muc_downloads() -> Result<u64, String> {
+    downloader::don_dep_thu_muc_downloads()
+}
+
 /// Mở thư mục an toàn trong Windows File Explorer (A1, TC-09, SEC-02)
 #[tauri::command]
 fn mo_thu_muc(duong_dan: String) -> Result<(), String> {
@@ -288,6 +306,12 @@ async fn go_cai_dat_ung_dung_qua_registry(
     .map_err(|e| format!("Lỗi khi chạy tiến trình gỡ cài đặt: {}", e))?
 }
 
+/// Mở ứng dụng native thông qua DisplayIcon hoặc thông tin Registry đã xác minh (L-01)
+#[tauri::command]
+fn mo_ung_dung_tu_registry(khoa_registry: String, ten_app: Option<String>) -> Result<(), String> {
+    uninstaller::mo_ung_dung_tu_registry(&khoa_registry, ten_app.as_deref())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let trinh_quan_ly_tai = Arc::new(TrinhQuanLyTai::new());
@@ -323,8 +347,11 @@ pub fn run() {
             lay_thu_muc_tai_ve_cmd,
             chon_thu_muc,
             mo_thu_muc,
+            lay_dung_luong_thu_muc_downloads,
+            don_dep_thu_muc_downloads,
             kiem_tra_ung_dung_da_cai_registry,
-            go_cai_dat_ung_dung_qua_registry
+            go_cai_dat_ung_dung_qua_registry,
+            mo_ung_dung_tu_registry
         ])
         .run(tauri::generate_context!())
         .expect("error while running forgestore desktop application");

@@ -19,6 +19,7 @@ pub struct ThongTinUngDungRegistry {
     pub uninstall_string: Option<String>,
     pub install_location: Option<String>,
     pub registry_key: Option<String>,
+    pub display_icon: Option<String>,
 }
 
 /// Chuẩn hóa chuỗi để so khớp tên app (bỏ ký tự đặc biệt, chuyển về chữ thường)
@@ -75,6 +76,7 @@ pub fn quet_tat_ca_ung_dung_registry() -> Vec<ThongTinUngDungRegistry> {
                         let publisher: Option<String> = sub.get_value("Publisher").ok();
                         let uninstall_string: Option<String> = sub.get_value("UninstallString").ok();
                         let install_location: Option<String> = sub.get_value("InstallLocation").ok();
+                        let display_icon: Option<String> = sub.get_value("DisplayIcon").ok();
 
                         danh_sach.push(ThongTinUngDungRegistry {
                             display_name,
@@ -83,6 +85,7 @@ pub fn quet_tat_ca_ung_dung_registry() -> Vec<ThongTinUngDungRegistry> {
                             uninstall_string,
                             install_location,
                             registry_key: Some(subkey_name),
+                            display_icon,
                         });
                     }
                 }
@@ -557,9 +560,177 @@ pub fn chay_go_cai_dat_registry_an_toan(
     chay_go_cai_dat_registry(&final_uninstall_string)
 }
 
+/// Trích xuất đường dẫn file thực thi .exe từ chuỗi DisplayIcon trong Windows Registry (L-01)
+/// Hỗ trợ các định dạng thực tế:
+/// - "C:\Program Files\Notepad++\notepad++.exe,0"
+/// - "C:\Program Files\Notepad++\notepad++.exe",0
+/// - C:\Program Files\DBeaver\dbeaver.exe
+/// - C:\Users\...\Obsidian.exe
+pub fn trich_xuat_exe_tu_display_icon(display_icon_str: &str) -> Option<std::path::PathBuf> {
+    let trimmed = display_icon_str.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Bỏ tiền tố \\?\ hoặc \??\ nếu có
+    let no_prefix = if let Some(stripped) = trimmed.strip_prefix(r"\\?\") {
+        stripped
+    } else if let Some(stripped) = trimmed.strip_prefix(r"\??\") {
+        stripped
+    } else {
+        trimmed
+    };
+
+    // Chuẩn hóa: nếu toàn bộ chuỗi được bọc trong cặp nháy kép `"..."`, bỏ cặp nháy ngoài cùng trước
+    let unquoted = if no_prefix.starts_with('"') && no_prefix.ends_with('"') && no_prefix.len() >= 2 {
+        &no_prefix[1..no_prefix.len() - 1]
+    } else {
+        no_prefix
+    };
+
+    // Tách bỏ chỉ số icon sau dấu phẩy (ví dụ: ,0 hoặc ,-101 hoặc ",0)
+    let candidate = if let Some(last_comma) = unquoted.rfind(',') {
+        let after_comma = unquoted[last_comma + 1..].trim().trim_matches('"').trim();
+        if after_comma.parse::<i32>().is_ok() {
+            &unquoted[..last_comma]
+        } else {
+            unquoted
+        }
+    } else {
+        unquoted
+    };
+
+    let clean_path = candidate.trim().trim_matches('"').trim();
+    if clean_path.is_empty() {
+        return None;
+    }
+
+    let path = std::path::PathBuf::from(clean_path);
+    // Bắt buộc phần mở rộng là .exe
+    if let Some(ext) = path.extension() {
+        if ext.to_string_lossy().eq_ignore_ascii_case("exe") {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+/// Mở ứng dụng đã cài đặt trên máy bằng cách đọc Registry (L-01)
+/// Tuyệt đối an toàn: Native Rust tự tra cứu Registry đã được Windows xác thực,
+/// trích xuất file .exe từ DisplayIcon, kiểm tra tồn tại và khởi chạy.
+pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+        use winreg::RegKey;
+        use std::process::Command;
+        use std::path::{Path, PathBuf};
+
+        let clean_key = khoa_registry.trim();
+        if clean_key.is_empty() {
+            return Err("Khóa registry không được để trống".to_string());
+        }
+
+        let roots = vec![
+            (
+                RegKey::predef(HKEY_LOCAL_MACHINE),
+                format!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", clean_key),
+            ),
+            (
+                RegKey::predef(HKEY_LOCAL_MACHINE),
+                format!("SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", clean_key),
+            ),
+            (
+                RegKey::predef(HKEY_CURRENT_USER),
+                format!("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", clean_key),
+            ),
+        ];
+
+        let mut exe_path_opt: Option<PathBuf> = None;
+
+        for (root, subkey_path) in roots {
+            if let Ok(sub) = root.open_subkey_with_flags(&subkey_path, KEY_READ) {
+                // 1. Thử lấy từ DisplayIcon
+                if let Ok(display_icon) = sub.get_value::<String, _>("DisplayIcon") {
+                    if let Some(exe) = trich_xuat_exe_tu_display_icon(&display_icon) {
+                        if exe.is_file() {
+                            exe_path_opt = Some(exe);
+                            break;
+                        }
+                    }
+                }
+
+                // 2. Thử lấy từ InstallLocation
+                if let Ok(install_loc) = sub.get_value::<String, _>("InstallLocation") {
+                    let loc_path = Path::new(install_loc.trim().trim_matches('"'));
+                    if loc_path.is_dir() {
+                        if let Some(app_name) = ten_app {
+                            let candidate = loc_path.join(format!("{}.exe", app_name));
+                            if candidate.is_file() {
+                                exe_path_opt = Some(candidate);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Nếu chưa tìm thấy nhưng có ten_app, thử quét toàn bộ registry để tìm app
+        if exe_path_opt.is_none() {
+            if let Some(app_name) = ten_app {
+                let _all_apps = quet_tat_ca_ung_dung_registry();
+                if let Some(found) = tim_ung_dung_chinh_xac_registry(app_name, Some(clean_key), None) {
+                    if let Some(ref icon) = found.display_icon {
+                        if let Some(exe) = trich_xuat_exe_tu_display_icon(icon) {
+                            if exe.is_file() {
+                                exe_path_opt = Some(exe);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let exe_path = match exe_path_opt {
+            Some(p) => p,
+            None => {
+                return Err(format!(
+                    "Không tìm thấy tệp thực thi .exe hợp lệ từ thông tin cài đặt của ứng dụng (khóa: '{}'). Bạn hãy mở trực tiếp từ Start Menu.",
+                    clean_key
+                ));
+            }
+        };
+
+        // Chặn đường dẫn mạng UNC chống rò rỉ NTLM
+        let exe_str = exe_path.to_string_lossy();
+        if exe_str.starts_with(r"\\") || exe_str.starts_with("//") {
+            return Err("Từ chối khởi chạy tệp thực thi từ đường dẫn mạng UNC.".to_string());
+        }
+
+        let parent_dir = exe_path.parent().unwrap_or_else(|| Path::new(r"C:\Windows\System32"));
+
+        Command::new(&exe_path)
+            .current_dir(parent_dir)
+            .spawn()
+            .map_err(|e| format!("Không thể khởi chạy ứng dụng '{}': {}", exe_path.display(), e))?;
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = khoa_registry;
+        let _ = ten_app;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_chuan_hoa_ten() {
@@ -707,6 +878,51 @@ mod tests {
             "Git",
             Some("Git")
         ));
+    }
+
+    #[test]
+    fn test_trich_xuat_exe_tu_display_icon_du_lieu_that() {
+        // L-01: Dữ liệu thật từ Windows Registry của Notepad++, DBeaver, Obsidian...
+        let npp_icon = r#""C:\Program Files\Notepad++\notepad++.exe,0""#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(npp_icon),
+            Some(PathBuf::from(r"C:\Program Files\Notepad++\notepad++.exe"))
+        );
+
+        let npp_icon_no_quotes = r#"C:\Program Files\Notepad++\notepad++.exe,0"#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(npp_icon_no_quotes),
+            Some(PathBuf::from(r"C:\Program Files\Notepad++\notepad++.exe"))
+        );
+
+        let dbeaver_icon = r#"C:\Program Files\DBeaver\dbeaver.exe"#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(dbeaver_icon),
+            Some(PathBuf::from(r"C:\Program Files\DBeaver\dbeaver.exe"))
+        );
+
+        let obsidian_icon = r#"C:\Users\TRANQUYET\AppData\Local\Programs\Obsidian\Obsidian.exe"#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(obsidian_icon),
+            Some(PathBuf::from(r"C:\Users\TRANQUYET\AppData\Local\Programs\Obsidian\Obsidian.exe"))
+        );
+
+        let negative_icon_index = r#""C:\Apps\Custom\tool.exe",-102"#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(negative_icon_index),
+            Some(PathBuf::from(r"C:\Apps\Custom\tool.exe"))
+        );
+
+        // Bỏ tiền tố \\?\ nếu có
+        let verbatim_icon = r#"\\?\C:\Program Files\App\app.exe,0"#;
+        assert_eq!(
+            trich_xuat_exe_tu_display_icon(verbatim_icon),
+            Some(PathBuf::from(r"C:\Program Files\App\app.exe"))
+        );
+
+        // Không phải tệp .exe thì từ chối (tránh dll hoặc ico)
+        let dll_icon = r#"C:\Windows\System32\shell32.dll,22"#;
+        assert_eq!(trich_xuat_exe_tu_display_icon(dll_icon), None);
     }
 }
 

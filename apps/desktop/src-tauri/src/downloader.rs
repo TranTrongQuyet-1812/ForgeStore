@@ -81,6 +81,42 @@ pub fn lay_thu_muc_tai_ve() -> Result<PathBuf, String> {
     Ok(download_dir)
 }
 
+/// Tính tổng dung lượng (bytes) của các tệp trong thư mục downloads (L-05)
+pub fn tinh_dung_luong_thu_muc_downloads() -> Result<u64, String> {
+    let dir = lay_thu_muc_tai_ve()?;
+    let mut tong_bytes = 0u64;
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    tong_bytes += meta.len();
+                }
+            }
+        }
+    }
+    Ok(tong_bytes)
+}
+
+/// Dọn dẹp toàn bộ tệp trong thư mục downloads, trả về số bytes đã giải phóng (L-05)
+pub fn don_dep_thu_muc_downloads() -> Result<u64, String> {
+    let dir = lay_thu_muc_tai_ve()?;
+    let mut da_giai_phong = 0u64;
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    let sz = meta.len();
+                    if std::fs::remove_file(&path).is_ok() {
+                        da_giai_phong += sz;
+                    }
+                }
+            }
+        }
+    }
+    Ok(da_giai_phong)
+}
+
 /// Kiểm tra tính toàn vẹn SHA-256 (P3-09)
 pub fn kiem_tra_sha256_noi_bo(
     calculated: &str,
@@ -411,5 +447,19 @@ mod tests {
 
         // Hủy lần 2 trả về false vì đã xóa khỏi map
         assert_eq!(ql.huy("test-id-1"), false);
+    }
+
+    #[test]
+    fn test_dung_luong_va_don_dep_downloads_l05() {
+        let dir = lay_thu_muc_tai_ve().unwrap();
+        let test_file = dir.join("test_l05_dummy.part");
+        std::fs::write(&test_file, b"ForgeStore test file 1234567890").unwrap();
+
+        let sz = tinh_dung_luong_thu_muc_downloads().unwrap();
+        assert!(sz >= 29);
+
+        let freed = don_dep_thu_muc_downloads().unwrap();
+        assert!(freed >= 29);
+        assert!(!test_file.exists());
     }
 }
