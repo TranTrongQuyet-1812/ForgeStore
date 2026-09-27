@@ -37,7 +37,11 @@ import {
   tinhDiemUuTienTep,
 } from './utils/file-classifier.util';
 import { anhXaDanhMuc, doanTenGoiAndroid, DANH_MUC_CHUAN } from './utils/category-mapper.util';
-import { locVaSapXepBanPhatHanh, layBanPhatHanhMoiNhat } from './utils/release-selector.util';
+import {
+  locVaSapXepBanPhatHanh,
+  layBanPhatHanhMoiNhat,
+  trichXuatDinhDangVaKienTruc,
+} from './utils/release-selector.util';
 import { phanLuongInput } from './utils/smart-input-dispatcher.util';
 import {
   trichMucCaiDat,
@@ -775,6 +779,7 @@ export class AppsService {
                 danhSachTepCaiDat: {
                   select: {
                     dinhDangTep: true,
+                    kienTrucChip: true,
                   },
                 },
               },
@@ -836,6 +841,7 @@ export class AppsService {
                   danhSachTepCaiDat: {
                     select: {
                       dinhDangTep: true,
+                      kienTrucChip: true,
                     },
                   },
                 },
@@ -850,9 +856,12 @@ export class AppsService {
       }
     }
 
-    // Chuẩn hóa định dạng UngDungTomTatDto (N1 + K1: phienBanMoiNhat theo platform và SemVer)
+    // Chuẩn hóa định dạng UngDungTomTatDto (N1 + K1 + L-03: dữ liệu thật cho định dạng, kiến trúc, giấy phép)
     const duLieu: UngDungTomTatDto[] = danhSach.map((app) => {
       const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, platform);
+      const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(
+        banMoiNhat?.danhSachTepCaiDat,
+      );
       return {
         maUngDung: app.maUngDung,
         tenRepoDayDu: app.tenRepoDayDu,
@@ -870,6 +879,9 @@ export class AppsService {
         diemUyTin: app.phanTichAI?.diemUyTin ?? null,
         mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
         phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
+        dinhDangCoSan,
+        kienTrucCoSan,
+        loaiGiayPhep: app.loaiGiayPhep || null,
         ngayCapNhat: app.dongBoLanCuoi.toISOString(),
       };
     });
@@ -885,18 +897,9 @@ export class AppsService {
     // Lưu vào Cache với TTL 1 giờ
     await this.cacheService.luu(cacheKey, result, this.CACHE_TTL);
 
-    // Nếu người dùng đã đăng nhập, nạp cờ daYeuThich vào danh sách (P2-50.4)
+    // Nếu người dùng đã đăng nhập, nạp cờ daYeuThich vào danh sách từ Redis Cache (P2-50.4, L-12)
     if (userId && result.duLieu.length > 0) {
-      const appIds = result.duLieu.map((a) => a.maUngDung);
-      const yeuThichs = await this.prisma.khoYeuThich.findMany({
-        where: {
-          maNguoiDung: userId,
-          maUngDung: { in: appIds },
-        },
-        select: { maUngDung: true },
-      });
-      const likedSet = new Set(yeuThichs.map((y) => y.maUngDung));
-
+      const likedSet = await this.layTapHopYeuThichCuaUser(userId);
       return {
         ...result,
         duLieu: result.duLieu.map((item) => ({
@@ -907,6 +910,25 @@ export class AppsService {
     }
 
     return result;
+  }
+
+  /**
+   * Lấy tập hợp mã ứng dụng đã yêu thích của user từ Redis Cache (TTL 5 phút)
+   * Giảm thiểu truy vấn CSDL Supabase khi duyệt store hoặc xem chi tiết (L-12).
+   */
+  private async layTapHopYeuThichCuaUser(userId: string): Promise<Set<string>> {
+    const cacheKey = `user:favs:${userId}`;
+    const cached = await this.cacheService.lay<string[]>(cacheKey);
+    if (cached) {
+      return new Set(cached);
+    }
+    const yeuThichs = await this.prisma.khoYeuThich.findMany({
+      where: { maNguoiDung: userId },
+      select: { maUngDung: true },
+    });
+    const ids = yeuThichs.map((y) => y.maUngDung);
+    await this.cacheService.luu(cacheKey, ids, 300);
+    return new Set(ids);
   }
 
   /**
@@ -929,18 +951,10 @@ export class AppsService {
     const cached = await this.cacheService.lay<UngDungChiTietDto>(cacheKey);
     if (cached) {
       if (userId) {
-        const daThich = await this.prisma.khoYeuThich.findUnique({
-          where: {
-            maNguoiDung_maUngDung: {
-              maNguoiDung: userId,
-              maUngDung: cached.maUngDung,
-            },
-          },
-          select: { maYeuThich: true },
-        });
+        const likedSet = await this.layTapHopYeuThichCuaUser(userId);
         return {
           ...cached,
-          laYeuThich: Boolean(daThich),
+          laYeuThich: likedSet.has(cached.maUngDung),
         };
       }
       return cached;
@@ -1102,18 +1116,10 @@ export class AppsService {
     }
 
     if (userId) {
-      const daThich = await this.prisma.khoYeuThich.findUnique({
-        where: {
-          maNguoiDung_maUngDung: {
-            maNguoiDung: userId,
-            maUngDung: app.maUngDung,
-          },
-        },
-        select: { maYeuThich: true },
-      });
+      const likedSet = await this.layTapHopYeuThichCuaUser(userId);
       return {
         ...result,
-        laYeuThich: Boolean(daThich),
+        laYeuThich: likedSet.has(app.maUngDung),
       };
     }
 
@@ -1371,38 +1377,147 @@ export class AppsService {
 
       try {
         await this.cacheService.withLock(lockKey, 60000, async () => {
-        // Double-check xem đã có ai phân tích xong chưa
-        const existing = await this.prisma.phanTichAI.findUnique({
-          where: { maUngDung },
-        });
+          // Double-check xem đã có ai phân tích xong chưa
+          const existing = await this.prisma.phanTichAI.findUnique({
+            where: { maUngDung },
+          });
 
-        // Nếu đã có phân tích AI và đã có hướng dẫn cài đặt CLI -> hoàn tất, không làm lại
-        if (existing && existing.huongDanCaiDat !== null && existing.huongDanCaiDat !== undefined) {
-          return;
-        }
+          // Nếu đã có phân tích AI và đã có hướng dẫn cài đặt CLI -> hoàn tất, không làm lại
+          if (
+            existing &&
+            existing.huongDanCaiDat !== null &&
+            existing.huongDanCaiDat !== undefined
+          ) {
+            return;
+          }
 
-        const app = await this.prisma.ungDung.findUnique({
-          where: { maUngDung },
-          include: {
-            danhSachPhatHanh: {
-              orderBy: { ngayPhatHanh: 'desc' },
-              take: 1,
-              include: { danhSachTepCaiDat: true },
+          const app = await this.prisma.ungDung.findUnique({
+            where: { maUngDung },
+            include: {
+              danhSachPhatHanh: {
+                orderBy: { ngayPhatHanh: 'desc' },
+                take: 1,
+                include: { danhSachTepCaiDat: true },
+              },
             },
-          },
-        });
+          });
 
-        if (!app) return;
+          if (!app) return;
 
-        const owner = app.chuSoHuu || app.tenRepoDayDu.split('/')[0] || '';
-        const repo = app.tenKhoChua || app.tenRepoDayDu.split('/')[1] || '';
+          const owner = app.chuSoHuu || app.tenRepoDayDu.split('/')[0] || '';
+          const repo = app.tenKhoChua || app.tenRepoDayDu.split('/')[1] || '';
 
-        // Trường hợp app đã có phân tích AI nhưng thiếu hướng dẫn CLI:
-        // Bổ sung hướng dẫn CLI mà không cần chạy lại toàn bộ quy trình AI
-        if (
-          existing &&
-          (existing.huongDanCaiDat === null || existing.huongDanCaiDat === undefined)
-        ) {
+          // Trường hợp app đã có phân tích AI nhưng thiếu hướng dẫn CLI:
+          // Bổ sung hướng dẫn CLI mà không cần chạy lại toàn bộ quy trình AI
+          if (
+            existing &&
+            (existing.huongDanCaiDat === null || existing.huongDanCaiDat === undefined)
+          ) {
+            let readme = '';
+            let fetchReadmeLoi = false;
+            try {
+              readme = (await this.githubService.layReadme(owner, repo)) || '';
+            } catch (err: unknown) {
+              fetchReadmeLoi = true;
+              this.logger.warn(
+                `Không lấy được README cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+              );
+            }
+
+            // CHỈ xử lý nếu lấy README thành công
+            if (fetchReadmeLoi) {
+              this.logger.warn(
+                `Bỏ qua đánh dấu CLI cho [${app.tenRepoDayDu}] do lỗi tải README, giữ null cho lần sau thử lại.`,
+              );
+              return;
+            }
+
+            if (!readme) {
+              // Repo thật sự không có README trên GitHub -> đánh dấu khongCoHuongDan để dừng vòng lặp ngầm
+              await this.prisma.phanTichAI.update({
+                where: { maUngDung },
+                data: {
+                  huongDanCaiDat: {
+                    khongCoHuongDan: true,
+                    cachCai: [],
+                  } as unknown as Prisma.InputJsonValue,
+                },
+              });
+              this.logger.log(
+                `ℹ️ [${app.tenRepoDayDu}] không có README trên GitHub, đã đánh dấu khongCoHuongDan`,
+              );
+              return;
+            }
+
+            let huongDanCaiDat: HuongDanCaiDatDto | null = null;
+            let aiBiLoi = false;
+            const installSection = trichMucCaiDat(readme);
+
+            if (installSection) {
+              try {
+                const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
+                const cacDinhDangHopLe: DinhDangTep[] = [
+                  DinhDangTep.EXE,
+                  DinhDangTep.MSI,
+                  DinhDangTep.ZIP_PORTABLE,
+                  DinhDangTep.APK,
+                ];
+                const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
+                  r.danhSachTepCaiDat.some((f) =>
+                    cacDinhDangHopLe.includes(f.dinhDangTep as DinhDangTep),
+                  ),
+                );
+
+                if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
+                  huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
+                    installSection,
+                    app.tenRepoDayDu,
+                    readme,
+                    readmeUrl,
+                  );
+                } else {
+                  huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
+                }
+              } catch (err: unknown) {
+                aiBiLoi = true;
+                this.logger.warn(
+                  `Lỗi bổ sung hướng dẫn CLI cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+                );
+              }
+            }
+
+            // NẾU AI hoặc bóc tách gặp lỗi (429, timeout, network error):
+            // Giữ NULL để lần sau thử lại, tuyệt đối KHÔNG lưu khongCoHuongDan: true!
+            if (aiBiLoi) {
+              this.logger.warn(
+                `AI gặp lỗi khi bóc tách CLI cho [${app.tenRepoDayDu}], giữ null để lần sau thử lại.`,
+              );
+              return;
+            }
+
+            // Chỉ lưu khi đã đọc được README thành công và xác nhận:
+            // 1. Có hướng dẫn CLI trích xuất thành công -> lưu huongDanCaiDat
+            // 2. Không có install section hoặc bóc tách thành công nhưng không có lệnh CLI -> lưu marker { khongCoHuongDan: true, cachCai: [] }
+            const giaTriLuu =
+              huongDanCaiDat && huongDanCaiDat.cachCai.length > 0
+                ? huongDanCaiDat
+                : { khongCoHuongDan: true, cachCai: [] };
+
+            await this.prisma.phanTichAI.update({
+              where: { maUngDung },
+              data: {
+                huongDanCaiDat: giaTriLuu as unknown as Prisma.InputJsonValue,
+              },
+            });
+            if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
+              this.logger.log(`✅ Đã cập nhật bổ sung hướng dẫn CLI cho app [${app.tenRepoDayDu}]`);
+            } else {
+              this.logger.log(`ℹ️ [${app.tenRepoDayDu}] không có hướng dẫn CLI, đã đánh dấu cache`);
+            }
+            return;
+          }
+
+          // 1. Lấy README từ GitHub
           let readme = '';
           let fetchReadmeLoi = false;
           try {
@@ -1414,345 +1529,255 @@ export class AppsService {
             );
           }
 
-          // CHỈ xử lý nếu lấy README thành công
-          if (fetchReadmeLoi) {
-            this.logger.warn(
-              `Bỏ qua đánh dấu CLI cho [${app.tenRepoDayDu}] do lỗi tải README, giữ null cho lần sau thử lại.`,
+          // 2. Tóm tắt README qua LLM Rotation (Gemini ⇄ NVIDIA NIM) (P2-30, P2-39)
+          let ketQuaTomTat: KetQuaTomTatKemModel;
+          try {
+            ketQuaTomTat = await this.llmRotationService.tomTatReadme(
+              readme,
+              repo,
+              app.moTaGocTiengAnh || undefined,
             );
-            return;
-          }
-
-          if (!readme) {
-            // Repo thật sự không có README trên GitHub -> đánh dấu khongCoHuongDan để dừng vòng lặp ngầm
-            await this.prisma.phanTichAI.update({
-              where: { maUngDung },
-              data: {
-                huongDanCaiDat: { khongCoHuongDan: true, cachCai: [] } as unknown as Prisma.InputJsonValue,
+          } catch (err: unknown) {
+            this.logger.error(
+              `Lỗi tóm tắt README [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+            );
+            ketQuaTomTat = {
+              ketQua: {
+                khauHieu: app.moTaGocTiengAnh?.slice(0, 80) || app.tenKhoChua,
+                tinhNang: [
+                  {
+                    tieuDe: app.tenKhoChua,
+                    moTa: app.moTaGocTiengAnh || 'Ứng dụng nguồn mở chất lượng cao',
+                    trichDan: app.moTaGocTiengAnh || app.tenKhoChua,
+                  },
+                ],
               },
-            });
-            this.logger.log(`ℹ️ [${app.tenRepoDayDu}] không có README trên GitHub, đã đánh dấu khongCoHuongDan`);
-            return;
+              moHinhTomTat: 'DU_PHONG',
+            };
           }
 
-          let huongDanCaiDat: HuongDanCaiDatDto | null = null;
-          let aiBiLoi = false;
-          const installSection = trichMucCaiDat(readme);
+          // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35)
+          let danhSachQuyen: string[] = [];
+          let coAccessibilityService = false;
+          const latestRelease = app.danhSachPhatHanh[0];
+          const apkFile = latestRelease?.danhSachTepCaiDat?.find(
+            (f) => f.dinhDangTep === DinhDangTep.APK,
+          );
 
-          if (installSection) {
+          if (apkFile && apkFile.duongDanTaiVe) {
             try {
-              const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
-              const cacDinhDangHopLe: DinhDangTep[] = [
-                DinhDangTep.EXE,
-                DinhDangTep.MSI,
-                DinhDangTep.ZIP_PORTABLE,
-                DinhDangTep.APK,
-              ];
-              const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
-                r.danhSachTepCaiDat.some((f) =>
-                  cacDinhDangHopLe.includes(f.dinhDangTep as DinhDangTep),
-                ),
-              );
-
-              if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
-                huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
-                  installSection,
-                  app.tenRepoDayDu,
-                  readme,
-                  readmeUrl,
-                );
-              } else {
-                huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
+              const kqApk = await this.apkInspectorService.docQuyenApkTuUrl(apkFile.duongDanTaiVe);
+              if (kqApk.thanhCong) {
+                danhSachQuyen = kqApk.permissions;
+                coAccessibilityService = kqApk.coAccessibilityService;
+                if (kqApk.packageName && !app.tenGoiAndroid) {
+                  await this.prisma.ungDung.update({
+                    where: { maUngDung },
+                    data: { tenGoiAndroid: kqApk.packageName },
+                  });
+                }
               }
             } catch (err: unknown) {
-              aiBiLoi = true;
               this.logger.warn(
-                `Lỗi bổ sung hướng dẫn CLI cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+                `Lỗi phân tích APK cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
               );
             }
           }
 
-          // NẾU AI hoặc bóc tách gặp lỗi (429, timeout, network error):
-          // Giữ NULL để lần sau thử lại, tuyệt đối KHÔNG lưu khongCoHuongDan: true!
-          if (aiBiLoi) {
-            this.logger.warn(
-              `AI gặp lỗi khi bóc tách CLI cho [${app.tenRepoDayDu}], giữ null để lần sau thử lại.`,
-            );
-            return;
-          }
+          // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
+          let daArchived = false;
+          let ngayPushCuoi = app.dongBoLanCuoi;
+          let soContributor = 1;
 
-          // Chỉ lưu khi đã đọc được README thành công và xác nhận:
-          // 1. Có hướng dẫn CLI trích xuất thành công -> lưu huongDanCaiDat
-          // 2. Không có install section hoặc bóc tách thành công nhưng không có lệnh CLI -> lưu marker { khongCoHuongDan: true, cachCai: [] }
-          const giaTriLuu =
-            huongDanCaiDat && huongDanCaiDat.cachCai.length > 0
-              ? huongDanCaiDat
-              : { khongCoHuongDan: true, cachCai: [] };
-
-          await this.prisma.phanTichAI.update({
-            where: { maUngDung },
-            data: {
-              huongDanCaiDat: giaTriLuu as unknown as Prisma.InputJsonValue,
-            },
-          });
-          if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
-            this.logger.log(`✅ Đã cập nhật bổ sung hướng dẫn CLI cho app [${app.tenRepoDayDu}]`);
-          } else {
-            this.logger.log(`ℹ️ [${app.tenRepoDayDu}] không có hướng dẫn CLI, đã đánh dấu cache`);
-          }
-          return;
-        }
-
-        // 1. Lấy README từ GitHub
-        let readme = '';
-        let fetchReadmeLoi = false;
-        try {
-          readme = (await this.githubService.layReadme(owner, repo)) || '';
-        } catch (err: unknown) {
-          fetchReadmeLoi = true;
-          this.logger.warn(
-            `Không lấy được README cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-          );
-        }
-
-        // 2. Tóm tắt README qua LLM Rotation (Gemini ⇄ NVIDIA NIM) (P2-30, P2-39)
-        let ketQuaTomTat: KetQuaTomTatKemModel;
-        try {
-          ketQuaTomTat = await this.llmRotationService.tomTatReadme(
-            readme,
-            repo,
-            app.moTaGocTiengAnh || undefined,
-          );
-        } catch (err: unknown) {
-          this.logger.error(`Lỗi tóm tắt README [${app.tenRepoDayDu}]: ${(err as Error).message}`);
-          ketQuaTomTat = {
-            ketQua: {
-              khauHieu: app.moTaGocTiengAnh?.slice(0, 80) || app.tenKhoChua,
-              tinhNang: [
-                {
-                  tieuDe: app.tenKhoChua,
-                  moTa: app.moTaGocTiengAnh || 'Ứng dụng nguồn mở chất lượng cao',
-                  trichDan: app.moTaGocTiengAnh || app.tenKhoChua,
-                },
-              ],
-            },
-            moHinhTomTat: 'DU_PHONG',
-          };
-        }
-
-        // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35)
-        let danhSachQuyen: string[] = [];
-        let coAccessibilityService = false;
-        const latestRelease = app.danhSachPhatHanh[0];
-        const apkFile = latestRelease?.danhSachTepCaiDat?.find(
-          (f) => f.dinhDangTep === DinhDangTep.APK,
-        );
-
-        if (apkFile && apkFile.duongDanTaiVe) {
           try {
-            const kqApk = await this.apkInspectorService.docQuyenApkTuUrl(apkFile.duongDanTaiVe);
-            if (kqApk.thanhCong) {
-              danhSachQuyen = kqApk.permissions;
-              coAccessibilityService = kqApk.coAccessibilityService;
-              if (kqApk.packageName && !app.tenGoiAndroid) {
-                await this.prisma.ungDung.update({
-                  where: { maUngDung },
-                  data: { tenGoiAndroid: kqApk.packageName },
-                });
+            const [repoInfo, contributorsCount] = await Promise.all([
+              this.githubService.layRepo(owner, repo),
+              this.githubService.laySoLuongContributor(owner, repo),
+            ]);
+
+            if (repoInfo) {
+              daArchived = Boolean(repoInfo.archived);
+              if (repoInfo.pushed_at) {
+                ngayPushCuoi = new Date(repoInfo.pushed_at);
               }
+            }
+
+            if (typeof contributorsCount === 'number' && contributorsCount > 0) {
+              soContributor = contributorsCount;
             }
           } catch (err: unknown) {
             this.logger.warn(
-              `Lỗi phân tích APK cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+              `Không lấy được thông tin repo/contributors sống cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
             );
           }
-        }
 
-        // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
-        let daArchived = false;
-        let ngayPushCuoi = app.dongBoLanCuoi;
-        let soContributor = 1;
+          const tinhNangTomTat = ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`);
 
-        try {
-          const [repoInfo, contributorsCount] = await Promise.all([
-            this.githubService.layRepo(owner, repo),
-            this.githubService.laySoLuongContributor(owner, repo),
-          ]);
-
-          if (repoInfo) {
-            daArchived = Boolean(repoInfo.archived);
-            if (repoInfo.pushed_at) {
-              ngayPushCuoi = new Date(repoInfo.pushed_at);
-            }
-          }
-
-          if (typeof contributorsCount === 'number' && contributorsCount > 0) {
-            soContributor = contributorsCount;
-          }
-        } catch (err: unknown) {
-          this.logger.warn(
-            `Không lấy được thông tin repo/contributors sống cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-          );
-        }
-
-        const tinhNangTomTat = ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`);
-
-        const trustScore = await this.trustScoreService.tinhTrustScore({
-          tenApp: app.tenKhoChua,
-          moTaApp: app.moTaGocTiengAnh || '',
-          topics: app.danhSachChuDe,
-          soSaoGithub: app.soSaoGithub,
-          soLuotFork: app.soLuotFork,
-          loaiGiayPhep: app.loaiGiayPhep,
-          daArchived,
-          ngayPushCuoi,
-          soContributor,
-          danhSachQuyenAndroid: danhSachQuyen,
-          coAccessibilityService,
-          tinhNangTomTat,
-        });
-
-        // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3)
-        let huongDanCaiDat: HuongDanCaiDatDto | null = null;
-        let aiCliBiLoi = false;
-        if (!fetchReadmeLoi && readme) {
-          const installSection = trichMucCaiDat(readme);
-          if (installSection) {
-            try {
-              const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
-                r.danhSachTepCaiDat.some((f) =>
-                  (
-                    [
-                      DinhDangTep.EXE,
-                      DinhDangTep.MSI,
-                      DinhDangTep.ZIP_PORTABLE,
-                      DinhDangTep.APK,
-                    ] as DinhDangTep[]
-                  ).includes(f.dinhDangTep),
-                ),
-              );
-
-              const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
-
-              // Repo không có bộ cài (L1) -> Ưu tiên gọi LLM bóc tách chi tiết có tiếng Việt
-              if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
-                huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
-                  installSection,
-                  app.tenRepoDayDu,
-                  readme,
-                  readmeUrl,
-                );
-              } else {
-                // Repo đã có bộ cài 1-chạm -> Bóc tách nhanh qua code blocks để tiết kiệm token
-                huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
-              }
-            } catch (err: unknown) {
-              aiCliBiLoi = true;
-              this.logger.warn(
-                `Lỗi bóc tách hướng dẫn CLI [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-              );
-            }
-          }
-        }
-
-        // 5. Lưu kết quả vào phan_tich_ai
-        const chuoiTinhNangVi = ketQuaTomTat.ketQua.tinhNang
-          .map((t) => `- **${t.tieuDe}**: ${t.moTa}`)
-          .join('\n');
-
-        let giaTriLuuCli: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput = Prisma.DbNull;
-        if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
-          giaTriLuuCli = huongDanCaiDat as unknown as Prisma.InputJsonValue;
-        } else if (!fetchReadmeLoi && readme && !aiCliBiLoi) {
-          // Chỉ đánh dấu khi đã đọc được README thành công và AI/bóc tách không bị lỗi
-          giaTriLuuCli = { khongCoHuongDan: true, cachCai: [] } as unknown as Prisma.InputJsonValue;
-        } else {
-          // Gặp lỗi tải README hoặc lỗi AI -> để null cho lần sau thử lại
-          giaTriLuuCli = Prisma.DbNull;
-        }
-
-        const phanTich = await this.prisma.phanTichAI.upsert({
-          where: { maUngDung },
-          create: {
-            maUngDung,
-            khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
-            tomTatTinhNangVi: chuoiTinhNangVi,
-            diemUyTin: trustScore.diemUyTin,
-            mucDoAnToan: trustScore.mucDoAnToan,
-            daThamDinhJev: trustScore.daThamDinhJev,
-            trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
-            yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
-            quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
-            moHinhTomTat: ketQuaTomTat.moHinhTomTat,
-            huongDanCaiDat: giaTriLuuCli,
-          },
-          update: {
-            khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
-            tomTatTinhNangVi: chuoiTinhNangVi,
-            diemUyTin: trustScore.diemUyTin,
-            mucDoAnToan: trustScore.mucDoAnToan,
-            daThamDinhJev: trustScore.daThamDinhJev,
-            trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
-            yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
-            quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
-            moHinhTomTat: ketQuaTomTat.moHinhTomTat,
-            huongDanCaiDat: giaTriLuuCli,
-          },
-        });
-
-        // 6. Sinh vector 768 chiều & lưu pgvector (P2-36)
-        try {
-          const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
-            tenKhoChua: app.tenKhoChua,
-            slogan: ketQuaTomTat.ketQua.khauHieu,
-            tinhNang: ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`),
+          const trustScore = await this.trustScoreService.tinhTrustScore({
+            tenApp: app.tenKhoChua,
+            moTaApp: app.moTaGocTiengAnh || '',
             topics: app.danhSachChuDe,
-            moTa: app.moTaGocTiengAnh,
+            soSaoGithub: app.soSaoGithub,
+            soLuotFork: app.soLuotFork,
+            loaiGiayPhep: app.loaiGiayPhep,
+            daArchived,
+            ngayPushCuoi,
+            soContributor,
+            danhSachQuyenAndroid: danhSachQuyen,
+            coAccessibilityService,
+            tinhNangTomTat,
           });
-          const vector = await this.semanticSearchService.sinhEmbedding(textEmbed);
-          await this.semanticSearchService.luuVectorNguNghia(phanTich.maPhanTich, vector);
-        } catch (err: unknown) {
-          this.logger.warn(`Lỗi sinh/lưu vector embedding: ${(err as Error).message}`);
-        }
 
-        // 7. Tóm tắt changelog nếu có release mới nhất (P2-34)
-        if (latestRelease && latestRelease.nhatKyThayDoiGoc && !latestRelease.tomTatNangCapVi) {
-          try {
-            const changelogRes = await this.llmRotationService.tomTatChangelog(
-              latestRelease.nhatKyThayDoiGoc,
-              app.tenKhoChua,
-            );
-            await this.prisma.banPhatHanh.update({
-              where: { maPhatHanh: latestRelease.maPhatHanh },
-              data: {
-                tomTatNangCapVi: changelogRes.ketQua.diemMoi.join('\n- '),
-              },
-            });
-          } catch (err: unknown) {
-            this.logger.warn(`Lỗi tóm tắt changelog: ${(err as Error).message}`);
+          // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3)
+          let huongDanCaiDat: HuongDanCaiDatDto | null = null;
+          let aiCliBiLoi = false;
+          if (!fetchReadmeLoi && readme) {
+            const installSection = trichMucCaiDat(readme);
+            if (installSection) {
+              try {
+                const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
+                  r.danhSachTepCaiDat.some((f) =>
+                    (
+                      [
+                        DinhDangTep.EXE,
+                        DinhDangTep.MSI,
+                        DinhDangTep.ZIP_PORTABLE,
+                        DinhDangTep.APK,
+                      ] as DinhDangTep[]
+                    ).includes(f.dinhDangTep),
+                  ),
+                );
+
+                const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
+
+                // Repo không có bộ cài (L1) -> Ưu tiên gọi LLM bóc tách chi tiết có tiếng Việt
+                if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
+                  huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
+                    installSection,
+                    app.tenRepoDayDu,
+                    readme,
+                    readmeUrl,
+                  );
+                } else {
+                  // Repo đã có bộ cài 1-chạm -> Bóc tách nhanh qua code blocks để tiết kiệm token
+                  huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
+                }
+              } catch (err: unknown) {
+                aiCliBiLoi = true;
+                this.logger.warn(
+                  `Lỗi bóc tách hướng dẫn CLI [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+                );
+              }
+            }
           }
-        }
 
-        // 8. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
-        await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
-        await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`);
-        await this.cacheService.del([
-          `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,
-          `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
-        ]);
-        this.logger.log(`Hoàn thành phân tích Dual-AI cho [${app.tenRepoDayDu}]`);
-      });
-    } catch (err: unknown) {
-      this.logger.error(`Lỗi phân tích AI cho ứng dụng [${maUngDung}]: ${(err as Error).message}`);
+          // 5. Lưu kết quả vào phan_tich_ai
+          const chuoiTinhNangVi = ketQuaTomTat.ketQua.tinhNang
+            .map((t) => `- **${t.tieuDe}**: ${t.moTa}`)
+            .join('\n');
+
+          let giaTriLuuCli: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
+            Prisma.DbNull;
+          if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
+            giaTriLuuCli = huongDanCaiDat as unknown as Prisma.InputJsonValue;
+          } else if (!fetchReadmeLoi && readme && !aiCliBiLoi) {
+            // Chỉ đánh dấu khi đã đọc được README thành công và AI/bóc tách không bị lỗi
+            giaTriLuuCli = {
+              khongCoHuongDan: true,
+              cachCai: [],
+            } as unknown as Prisma.InputJsonValue;
+          } else {
+            // Gặp lỗi tải README hoặc lỗi AI -> để null cho lần sau thử lại
+            giaTriLuuCli = Prisma.DbNull;
+          }
+
+          const phanTich = await this.prisma.phanTichAI.upsert({
+            where: { maUngDung },
+            create: {
+              maUngDung,
+              khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
+              tomTatTinhNangVi: chuoiTinhNangVi,
+              diemUyTin: trustScore.diemUyTin,
+              mucDoAnToan: trustScore.mucDoAnToan,
+              daThamDinhJev: trustScore.daThamDinhJev,
+              trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
+              yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
+              quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
+              moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+              huongDanCaiDat: giaTriLuuCli,
+            },
+            update: {
+              khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
+              tomTatTinhNangVi: chuoiTinhNangVi,
+              diemUyTin: trustScore.diemUyTin,
+              mucDoAnToan: trustScore.mucDoAnToan,
+              daThamDinhJev: trustScore.daThamDinhJev,
+              trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
+              yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
+              quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
+              moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+              huongDanCaiDat: giaTriLuuCli,
+            },
+          });
+
+          // 6. Sinh vector 768 chiều & lưu pgvector (P2-36)
+          try {
+            const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
+              tenKhoChua: app.tenKhoChua,
+              slogan: ketQuaTomTat.ketQua.khauHieu,
+              tinhNang: ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`),
+              topics: app.danhSachChuDe,
+              moTa: app.moTaGocTiengAnh,
+            });
+            const vector = await this.semanticSearchService.sinhEmbedding(textEmbed);
+            await this.semanticSearchService.luuVectorNguNghia(phanTich.maPhanTich, vector);
+          } catch (err: unknown) {
+            this.logger.warn(`Lỗi sinh/lưu vector embedding: ${(err as Error).message}`);
+          }
+
+          // 7. Tóm tắt changelog nếu có release mới nhất (P2-34)
+          if (latestRelease && latestRelease.nhatKyThayDoiGoc && !latestRelease.tomTatNangCapVi) {
+            try {
+              const changelogRes = await this.llmRotationService.tomTatChangelog(
+                latestRelease.nhatKyThayDoiGoc,
+                app.tenKhoChua,
+              );
+              await this.prisma.banPhatHanh.update({
+                where: { maPhatHanh: latestRelease.maPhatHanh },
+                data: {
+                  tomTatNangCapVi: changelogRes.ketQua.diemMoi.join('\n- '),
+                },
+              });
+            } catch (err: unknown) {
+              this.logger.warn(`Lỗi tóm tắt changelog: ${(err as Error).message}`);
+            }
+          }
+
+          // 8. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
+          await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
+          await this.cacheService.xoaTheoPrefix(
+            `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
+          );
+          await this.cacheService.del([
+            `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,
+            `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
+          ]);
+          this.logger.log(`Hoàn thành phân tích Dual-AI cho [${app.tenRepoDayDu}]`);
+        });
+      } catch (err: unknown) {
+        this.logger.error(
+          `Lỗi phân tích AI cho ứng dụng [${maUngDung}]: ${(err as Error).message}`,
+        );
+      }
+    })();
+
+    this.inFlightPhanTichMap.set(maUngDung, task);
+    try {
+      await task;
+    } finally {
+      this.inFlightPhanTichMap.delete(maUngDung);
     }
-  })();
-
-  this.inFlightPhanTichMap.set(maUngDung, task);
-  try {
-    await task;
-  } finally {
-    this.inFlightPhanTichMap.delete(maUngDung);
   }
-}
 
   /**
    * Prewarm phân tích Dual-AI cho các ứng dụng (P2-31.5, phục vụ demo P6-07).
@@ -1842,6 +1867,9 @@ export class AppsService {
       let res: TimKiemResponseDto;
       if (app && app.trangThai !== 'KHONG_CO_BAN_CAI') {
         const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, query.platform);
+        const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(
+          banMoiNhat?.danhSachTepCaiDat,
+        );
         const item: UngDungTomTatDto = {
           maUngDung: app.maUngDung,
           tenRepoDayDu: app.tenRepoDayDu,
@@ -1859,6 +1887,9 @@ export class AppsService {
           diemUyTin: app.phanTichAI?.diemUyTin ?? null,
           mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
           phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
+          dinhDangCoSan,
+          kienTrucCoSan,
+          loaiGiayPhep: app.loaiGiayPhep || null,
           ngayCapNhat: app.dongBoLanCuoi.toISOString(),
         };
 
@@ -1938,6 +1969,9 @@ export class AppsService {
       if (dbApps.length > 0) {
         const duLieu: UngDungTomTatDto[] = dbApps.map((app) => {
           const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, query.platform);
+          const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(
+            banMoiNhat?.danhSachTepCaiDat,
+          );
           return {
             maUngDung: app.maUngDung,
             tenRepoDayDu: app.tenRepoDayDu,
@@ -1955,6 +1989,9 @@ export class AppsService {
             diemUyTin: app.phanTichAI?.diemUyTin ?? null,
             mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
             phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
+            dinhDangCoSan,
+            kienTrucCoSan,
+            loaiGiayPhep: app.loaiGiayPhep || null,
             ngayCapNhat: app.dongBoLanCuoi.toISOString(),
           };
         });

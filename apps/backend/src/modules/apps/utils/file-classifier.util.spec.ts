@@ -374,5 +374,24 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
       expect(mqttClient.laPhu).toBe(false);
       expect(mqttClient.diem).toBeGreaterThanOrEqual(100);
     });
+
+    it('L-04: Phân biệt chính xác giữa ZIP portable và ZIP chứa installer (dữ liệu thật Flameshot)', () => {
+      // 1. Bản portable thật sự
+      const portable = phanLoaiTep('flameshot-15.0.0-portable-win64.zip');
+      expect(portable.boQua).toBe(false);
+      expect(portable.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+      expect(portable.kienTruc).toBe(KienTrucChip.X86_64);
+
+      // 2. Bản installer bị nén trong ZIP (bộ cài nén) -> PHẢI BỎ QUA không xếp vào ZIP_PORTABLE
+      const installerZip = phanLoaiTep('Flameshot-15.0.0-installer-win64.zip');
+      expect(installerZip.boQua).toBe(true);
+      expect(installerZip.dinhDang).toBeNull();
+      expect(installerZip.lyDoBoQua).toContain('installer/setup');
+
+      // 3. Bản setup nén trong ZIP -> BỎ QUA
+      const setupZip = phanLoaiTep('app-setup-windows-x64.zip');
+      expect(setupZip.boQua).toBe(true);
+      expect(setupZip.dinhDang).toBeNull();
+    });
   });
 });

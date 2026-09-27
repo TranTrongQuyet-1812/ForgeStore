@@ -200,5 +200,3 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
-
-

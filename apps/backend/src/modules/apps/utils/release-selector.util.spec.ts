@@ -4,6 +4,7 @@ import {
   chuanHoaNenTang,
   layBanPhatHanhMoiNhat,
   locVaSapXepBanPhatHanh,
+  trichXuatDinhDangVaKienTruc,
 } from './release-selector.util';
 
 describe('ReleaseSelectorUtil (N1 + K1)', () => {
@@ -167,6 +168,75 @@ describe('ReleaseSelectorUtil (N1 + K1)', () => {
 
       const latest = layBanPhatHanhMoiNhat(releases, 'windows');
       expect(latest?.tenPhienBan).toBe('v2.0.0-beta.2');
+    });
+  });
+
+  describe('L-03 Ca thực tế: Trích xuất định dạng và kiến trúc tệp thật', () => {
+    it('DBeaver 24.3.0: chỉ có EXE và ZIP (không có MSI), kiến trúc x64', () => {
+      const dbeaverAssets = [
+        {
+          tenTep: 'dbeaver-ce-24.3.0-x86_64-setup.exe',
+          dinhDangTep: DinhDangTep.EXE,
+          kienTrucChip: 'X86_64',
+        },
+        {
+          tenTep: 'dbeaver-ce-24.3.0-win32.win32.x86_64.zip',
+          dinhDangTep: DinhDangTep.ZIP_PORTABLE,
+          kienTrucChip: 'X86_64',
+        },
+      ];
+
+      const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(dbeaverAssets);
+      expect(dinhDangCoSan).toEqual(['EXE', 'ZIP']);
+      expect(dinhDangCoSan).not.toContain('MSI');
+      expect(kienTrucCoSan).toEqual(['x64']);
+    });
+
+    it('PowerToys v0.89.0: chỉ có EXE, hỗ trợ cả x64 và ARM64', () => {
+      const powerToysAssets = [
+        {
+          tenTep: 'PowerToysUserSetup-0.89.0-x64.exe',
+          dinhDangTep: DinhDangTep.EXE,
+          kienTrucChip: 'X86_64',
+        },
+        {
+          tenTep: 'PowerToysUserSetup-0.89.0-arm64.exe',
+          dinhDangTep: DinhDangTep.EXE,
+          kienTrucChip: 'ARM64_V8A',
+        },
+      ];
+
+      const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(powerToysAssets);
+      expect(dinhDangCoSan).toEqual(['EXE']);
+      expect(kienTrucCoSan).toEqual(['x64', 'ARM64']);
+    });
+
+    it('Cryptomator 1.14.2: có EXE và MSI, chỉ có x64 (không có ARM64)', () => {
+      const cryptomatorAssets = [
+        {
+          tenTep: 'Cryptomator-1.14.2-x64.exe',
+          dinhDangTep: DinhDangTep.EXE,
+          kienTrucChip: 'X86_64',
+        },
+        {
+          tenTep: 'Cryptomator-1.14.2-x64.msi',
+          dinhDangTep: DinhDangTep.MSI,
+          kienTrucChip: 'X86_64',
+        },
+      ];
+
+      const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(cryptomatorAssets);
+      expect(dinhDangCoSan).toEqual(['EXE', 'MSI']);
+      expect(kienTrucCoSan).toEqual(['x64']);
+      expect(kienTrucCoSan).not.toContain('ARM64');
+    });
+
+    it('Mảng tệp rỗng hoặc undefined: trả về mảng rỗng không bị lỗi', () => {
+      expect(trichXuatDinhDangVaKienTruc([])).toEqual({ dinhDangCoSan: [], kienTrucCoSan: [] });
+      expect(trichXuatDinhDangVaKienTruc(undefined)).toEqual({
+        dinhDangCoSan: [],
+        kienTrucCoSan: [],
+      });
     });
   });
 });

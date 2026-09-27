@@ -64,11 +64,30 @@ async function main() {
       const repo = parts[1] || '';
       const appRecord = await appsService.dongBoRepo(owner, repo);
 
-      // Cập nhật trạng thái xác minh & nổi bật
+      // Cập nhật trạng thái xác minh (L-09: kiểm tra tiêu chí OSI thật, không gán cứng true) & nổi bật
+      const OSI_LICENSES = [
+        'MIT',
+        'GPL',
+        'AGPL',
+        'LGPL',
+        'APACHE',
+        'BSD',
+        'MPL',
+        'EPL',
+        'ISC',
+        'ZLIB',
+        'UNLICENSE',
+        'CC0',
+      ];
+      const hasOsiLicense = appRecord.loaiGiayPhep
+        ? OSI_LICENSES.some((lic) => appRecord.loaiGiayPhep!.toUpperCase().includes(lic))
+        : false;
+      const isVerified = hasOsiLicense && !appRecord.moTaGocTiengAnh?.includes('[Archived]');
+
       await prisma.ungDung.update({
         where: { maUngDung: appRecord.maUngDung },
         data: {
-          daXacMinh: true,
+          daXacMinh: isVerified,
           duocNoiBat: FEATURED_REPOS.has(slug),
         },
       });

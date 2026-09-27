@@ -428,6 +428,7 @@ export class AuthService {
           `🚨 CẢNH BÁO BẢO MẬT: Phát hiện tái sử dụng Refresh Token cũ ngoài Grace Period tại phiên [${maPhien}]. Thu hồi phiên lập tức!`,
         );
         await this.prisma.phienDangNhap.delete({ where: { maPhien } });
+        await this.cacheService.del(`auth:session:${maPhien}`);
         throw new UnauthorizedException({
           maLoi: 'CHUA_XAC_THUC',
           thongBao:
@@ -452,9 +453,11 @@ export class AuthService {
       await this.prisma.phienDangNhap.delete({
         where: { maPhien },
       });
+      await this.cacheService.del(`auth:session:${maPhien}`);
       this.logger.log(`Đã hủy phiên làm việc [${maPhien}]`);
     } catch {
       // Bỏ qua nếu phiên đã bị xóa trước đó
+      await this.cacheService.del(`auth:session:${maPhien}`);
     }
   }
 
@@ -462,6 +465,15 @@ export class AuthService {
    * Đăng xuất trên toàn bộ thiết bị (Xóa toàn bộ PhienDangNhap của người dùng).
    */
   async dangXuatTatCa(maNguoiDung: string): Promise<void> {
+    try {
+      const phienList = await this.prisma.phienDangNhap.findMany({
+        where: { maNguoiDung },
+        select: { maPhien: true },
+      });
+      await Promise.all(phienList.map((p) => this.cacheService.del(`auth:session:${p.maPhien}`)));
+    } catch {
+      // Bỏ qua nếu lỗi đọc
+    }
     await this.prisma.phienDangNhap.deleteMany({
       where: { maNguoiDung },
     });

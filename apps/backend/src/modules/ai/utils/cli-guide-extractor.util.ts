@@ -511,11 +511,7 @@ export function bocTachHuongDanTuCodeBlocks(
         currentLine += ' ' + rawLine;
       }
 
-      if (
-        currentLine.endsWith('\\') ||
-        currentLine.endsWith('^') ||
-        currentLine.endsWith('`')
-      ) {
+      if (currentLine.endsWith('\\') || currentLine.endsWith('^') || currentLine.endsWith('`')) {
         currentLine = currentLine.slice(0, -1).trim();
       } else {
         lines.push(currentLine);

@@ -125,6 +125,18 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
   } else if (extension === '.exe') {
     dinhDang = DinhDangTep.EXE;
   } else if (extension === '.zip') {
+    // L-04: File .zip chứa "installer" hoặc "setup" (tách theo ranh giới từ) là bộ cài nén trong zip,
+    // KHÔNG được xếp vào ZIP_PORTABLE để tránh người dùng tải portable nhưng lại nhận được installer.
+    const isZippedInstaller = /(?:^|[-_.])(installer|setup)(?:[-_.]|$)/i.test(lowerName);
+    if (isZippedInstaller) {
+      return {
+        dinhDang: null,
+        kienTruc: KienTrucChip.KHONG_XAC_DINH,
+        boQua: true,
+        lyDoBoQua: 'Tệp ZIP chứa bộ cài đặt (installer/setup), không phải bản portable độc lập',
+      };
+    }
+
     // Tệp .zip chỉ được coi là bản cài Windows Portable nếu trong tên có chỉ thị Windows
     const hasWindowsIndicator =
       /(?:^|[-_.])(win|windows|win32|win64|portable|winstore)(?:[-_.]|$)/i.test(lowerName) ||

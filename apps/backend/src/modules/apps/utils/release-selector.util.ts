@@ -1,4 +1,4 @@
-import { DinhDangTep } from '@forgestore/types';
+import { DinhDangTep, KienTrucChip } from '@forgestore/types';
 import { soSanhPhienBan } from '../../updater/utils/version-comparator.util';
 
 export const DINH_DANG_WINDOWS: readonly DinhDangTep[] = [
@@ -179,4 +179,45 @@ export function layBanPhatHanhMoiNhat<
     chiGiuTepTheoNenTang: true,
   });
   return sorted[0] ?? null;
+}
+
+/**
+ * Trích xuất danh sách định dạng và kiến trúc chip thực tế từ các tệp cài đặt (L-03)
+ */
+export function trichXuatDinhDangVaKienTruc(
+  danhSachTep?: Array<{
+    dinhDangTep: DinhDangTep | string;
+    kienTrucChip?: KienTrucChip | string | null;
+  }>,
+): { dinhDangCoSan: string[]; kienTrucCoSan: string[] } {
+  if (!danhSachTep || danhSachTep.length === 0) {
+    return { dinhDangCoSan: [], kienTrucCoSan: [] };
+  }
+
+  const dinhDangSet = new Set<string>();
+  const kienTrucSet = new Set<string>();
+
+  for (const t of danhSachTep) {
+    const fmt = String(t.dinhDangTep).toUpperCase();
+    if (fmt === 'EXE') dinhDangSet.add('EXE');
+    else if (fmt === 'MSI') dinhDangSet.add('MSI');
+    else if (fmt === 'ZIP_PORTABLE' || fmt === 'ZIP') dinhDangSet.add('ZIP');
+    else if (fmt === 'APK') dinhDangSet.add('APK');
+
+    if (t.kienTrucChip) {
+      const arch = String(t.kienTrucChip).toUpperCase();
+      if (arch === 'X86_64') kienTrucSet.add('x64');
+      else if (arch === 'ARM64_V8A' || arch === 'ARM64') kienTrucSet.add('ARM64');
+      else if (arch === 'X86') kienTrucSet.add('x86');
+      else if (arch === 'DUNG_CHUNG' || arch === 'UNIVERSAL') kienTrucSet.add('Universal');
+    }
+  }
+
+  const THU_TU_DINH_DANG = ['EXE', 'MSI', 'ZIP', 'APK'];
+  const dinhDangCoSan = THU_TU_DINH_DANG.filter((d) => dinhDangSet.has(d));
+
+  const THU_TU_KIEN_TRUC = ['x64', 'ARM64', 'x86', 'Universal'];
+  const kienTrucCoSan = THU_TU_KIEN_TRUC.filter((k) => kienTrucSet.has(k));
+
+  return { dinhDangCoSan, kienTrucCoSan };
 }
