@@ -108,4 +108,5 @@ export interface ThongTinUngDungRegistry {
   uninstall_string?: string | null;
   install_location?: string | null;
   registry_key?: string | null;
+  display_icon?: string | null;
 }

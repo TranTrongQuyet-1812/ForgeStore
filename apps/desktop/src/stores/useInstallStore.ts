@@ -11,6 +11,9 @@ import type {
   TrangThaiCaiDat,
 } from '../services/install/install-types';
 
+export type { ThongTinCaiDatApp, ThamSoCaiDat, TrangThaiCaiDat };
+export type CaiDatTienTrinh = ThongTinCaiDatApp;
+
 const safeMemoryStorage = {
   getItem: (name: string): string | null => {
     try {
@@ -175,20 +178,25 @@ export const useInstallStore = create<InstallState>()(
                 ? err
                 : 'Lỗi không xác định khi tải và cài đặt';
 
-          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI (P3-FIX)
-          if (
+          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI (P3-FIX & L-09: Tách hủy tải vs từ chối UAC)
+          const currentTrangThai = get().caiDatMap[maUngDung]?.trangThai;
+          const isUacOrCancel =
             errMsg.includes('DA_HUY') ||
             errMsg.includes('NGUOI_DUNG_HUY') ||
             errMsg.includes('1223') ||
             errMsg.includes('1602') ||
             errMsg.toLowerCase().includes('từ chối') ||
-            errMsg.toLowerCase().includes('đã hủy')
-          ) {
+            errMsg.toLowerCase().includes('đã hủy');
+
+          if (isUacOrCancel) {
+            const isDownloading = currentTrangThai === 'DANG_TAI';
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_HUY',
               phanTram: 0,
               tocDoBps: 0,
-              thongDiepLoi: 'Đã hủy tiến trình cài đặt hoặc từ chối cấp quyền Quản trị viên (UAC).',
+              thongDiepLoi: isDownloading
+                ? 'Đã hủy tiến trình tải.'
+                : 'Đã hủy tiến trình cài đặt hoặc từ chối cấp quyền Quản trị viên (UAC).',
             });
           } else {
             get().capNhatTrangThai(maUngDung, {
@@ -201,11 +209,16 @@ export const useInstallStore = create<InstallState>()(
       },
 
       huyCaiDat: async (maUngDung) => {
+        const currentTrangThai = get().caiDatMap[maUngDung]?.trangThai;
         await installService.huyTai(maUngDung);
         get().capNhatTrangThai(maUngDung, {
           trangThai: 'DA_HUY',
           phanTram: 0,
           tocDoBps: 0,
+          thongDiepLoi:
+            currentTrangThai === 'DANG_TAI'
+              ? 'Đã hủy tiến trình tải.'
+              : 'Đã hủy tiến trình cài đặt.',
         });
       },
 
@@ -234,15 +247,14 @@ export const useInstallStore = create<InstallState>()(
       name: 'forgestore_install_tasks',
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
-        // FE-R7-02: Giữ các tiến trình tải dở dang và bản Portable ZIP đã cài (có duongDanThuMuc)
-        // để khi mở lại app người dùng vẫn có thể bấm "Mở Thư Mục Portable"
+        // L-08: Chỉ lưu các tiến trình dở dang để merge reset sang DA_HUY khi khởi động lại app.
+        // Bản Portable ZIP không lưu kẹt DA_CAI_DAT trong storage.
         caiDatMap: Object.fromEntries(
           Object.entries(state.caiDatMap).filter(
             ([_, v]) =>
               v.trangThai === 'DANG_TAI' ||
               v.trangThai === 'XAC_MINH' ||
-              v.trangThai === 'DANG_CAI_DAT' ||
-              (v.trangThai === 'DA_CAI_DAT' && !!v.duongDanThuMuc),
+              v.trangThai === 'DANG_CAI_DAT',
           ),
         ),
       }),

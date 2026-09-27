@@ -104,18 +104,12 @@ export class StoreService {
   }
 
   /**
-   * Ánh xạ từ UngDungTomTatDto (Backend) sang AppCardData (Desktop UI)
+   * Ánh xạ từ UngDungTomTatDto (Backend) sang AppCardData (Desktop UI) (L-03)
+   * Sử dụng 100% dữ liệu thật từ backend, triệt tiêu toàn bộ giá trị bịa đặt
    */
   mapDtoToAppCard(dto: UngDungTomTatDto): AppCardData {
     const parts = dto.tenRepoDayDu.split('/');
     const repoName = parts.length > 1 ? parts[1] : dto.tenKhoChua;
-
-    const dinhDangFile: string[] =
-      dto.nenTangHoTro === 'WINDOWS'
-        ? ['EXE', 'MSI']
-        : dto.nenTangHoTro === 'ANDROID'
-          ? ['APK']
-          : ['EXE', 'ZIP'];
 
     return {
       id: dto.maUngDung,
@@ -127,18 +121,19 @@ export class StoreService {
         'Ứng dụng mã nguồn mở chất lượng cao được đồng bộ trực tiếp từ GitHub.',
       iconUrl: dto.duongDanIcon,
       soSaoGithub: dto.soSaoGithub || 0,
-      phienBanMoiNhat: dto.phienBanMoiNhat || 'v1.0.0',
-      dinhDangFile,
-      kienTruc: ['x64', 'ARM64'],
-      diemUyTin: dto.diemUyTin ?? 92,
+      phienBanMoiNhat: dto.phienBanMoiNhat || undefined,
+      dinhDangFile:
+        dto.dinhDangCoSan && dto.dinhDangCoSan.length > 0 ? dto.dinhDangCoSan : undefined,
+      kienTruc: dto.kienTrucCoSan && dto.kienTrucCoSan.length > 0 ? dto.kienTrucCoSan : undefined,
+      diemUyTin: dto.diemUyTin ?? null,
       danhMucChinh: dto.danhMucChinh || 'Tiện ích hệ thống',
-      giayPhep: 'FOSS',
+      giayPhep: dto.loaiGiayPhep || undefined,
       isVerifiedFoss: dto.daXacMinh,
     };
   }
 
   /**
-   * Ánh xạ từ UngDungChiTietDto sang AppCardData
+   * Ánh xạ từ UngDungChiTietDto sang AppCardData (L-03)
    */
   mapChiTietToAppCard(dto: UngDungChiTietDto): AppCardData {
     const base = this.mapDtoToAppCard(dto);
@@ -149,7 +144,7 @@ export class StoreService {
         dto.khauHieuTiengViet ||
         dto.moTaGocTiengAnh ||
         base.moTaNgan,
-      giayPhep: dto.loaiGiayPhep || 'FOSS',
+      giayPhep: dto.loaiGiayPhep || base.giayPhep,
       diemUyTin: dto.phanTichAi?.diemUyTin ?? base.diemUyTin,
     };
   }

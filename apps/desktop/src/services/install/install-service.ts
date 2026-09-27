@@ -277,6 +277,25 @@ export class InstallService {
     // Web dev preview fallback
     return true;
   }
+
+  /**
+   * Khởi chạy ứng dụng native từ Registry qua DisplayIcon hoặc InstallLocation (L-01)
+   */
+  async moUngDungTuRegistry(khoaRegistry: string, tenApp?: string): Promise<boolean> {
+    if (!khoaRegistry || !khoaRegistry.trim()) {
+      return false;
+    }
+    if (this.isTauriEnv()) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('mo_ung_dung_tu_registry', {
+        khoaRegistry: khoaRegistry.trim(),
+        tenApp: tenApp || null,
+      });
+      return true;
+    }
+    // Web dev preview fallback
+    return true;
+  }
 }
 
 export const installService = new InstallService();

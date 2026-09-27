@@ -1,7 +1,8 @@
 import React from 'react';
-import { Star, Download, Check } from 'lucide-react';
+import { Star, Download, Check, Loader2 } from 'lucide-react';
 import { TrustPill } from './TrustPill';
 import { useNavStore } from '../../stores/useNavStore';
+import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 
 export interface AppCardData {
   id: string;
@@ -12,11 +13,11 @@ export interface AppCardData {
   iconUrl?: string | null;
   soSaoGithub: number;
   starDelta?: string; // ví dụ: +1.2k tuần này
-  phienBanMoiNhat: string;
+  phienBanMoiNhat?: string;
   kichThuocFile?: string; // ví dụ: 18.2 MB
   dinhDangFile?: string[]; // ví dụ: ['EXE', 'MSI']
   kienTruc?: string[]; // ví dụ: ['x64', 'ARM64']
-  diemUyTin: number;
+  diemUyTin?: number | null;
   danhMucChinh: string;
   giayPhep?: string; // ví dụ: GPL-3.0, MIT
   isVerifiedFoss?: boolean;
@@ -29,6 +30,8 @@ interface AppCardProps {
 
 export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
   const { openAppDetail } = useNavStore();
+  const { layTrangThaiCaiDat } = useDeviceInstalledApps();
+  const trangThaiCaiDat = layTrangThaiCaiDat(app.id, app.repoHandle);
 
   const formatStars = (stars: number) => {
     if (stars >= 1000) return `${(stars / 1000).toFixed(1)}k`;
@@ -97,8 +100,12 @@ export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
                   </span>
                 </>
               )}
-              <span className="text-muted">•</span>
-              <span className="text-[10px] text-muted font-mono">{app.phienBanMoiNhat}</span>
+              {app.phienBanMoiNhat && (
+                <>
+                  <span className="text-muted">•</span>
+                  <span className="text-[10px] text-muted font-mono">{app.phienBanMoiNhat}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -132,7 +139,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
         </div>
       </div>
 
-      {/* Chân card: Trust Pill & Nút Cài đặt */}
+      {/* Chân card: Trust Pill & Nút Cài đặt / Đã cài (L-02) */}
       <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
         <TrustPill score={app.diemUyTin} size="sm" />
 
@@ -141,10 +148,39 @@ export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
             e.stopPropagation();
             openAppDetail(app.id);
           }}
-          className="h-7 px-3 rounded-lg bg-surface-elevated group-hover:bg-accent-forge text-secondary group-hover:text-white border border-border group-hover:border-accent-forge text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 active:scale-95 shadow-sm"
+          className={`h-7 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all duration-150 active:scale-95 shadow-sm outline-none focus-visible:ring-2 ${
+            trangThaiCaiDat.trangThai === 'DA_CAI_DAT'
+              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 focus-visible:ring-emerald-400'
+              : trangThaiCaiDat.trangThai === 'DANG_TAI' ||
+                  trangThaiCaiDat.trangThai === 'XAC_MINH' ||
+                  trangThaiCaiDat.trangThai === 'DANG_CAI_DAT'
+                ? 'bg-accent-forge/20 text-accent-forge border border-accent-forge/40 focus-visible:ring-accent-forge'
+                : 'bg-surface-elevated group-hover:bg-accent-forge text-secondary group-hover:text-white border border-border group-hover:border-accent-forge focus-visible:ring-accent-forge'
+          }`}
+          title={
+            trangThaiCaiDat.trangThai === 'DA_CAI_DAT'
+              ? 'Ứng dụng đã được cài đặt trên máy này'
+              : 'Xem chi tiết và cài đặt'
+          }
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Cài đặt</span>
+          {trangThaiCaiDat.trangThai === 'DA_CAI_DAT' ? (
+            <>
+              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{trangThaiCaiDat.label}</span>
+            </>
+          ) : trangThaiCaiDat.trangThai === 'DANG_TAI' ||
+            trangThaiCaiDat.trangThai === 'XAC_MINH' ||
+            trangThaiCaiDat.trangThai === 'DANG_CAI_DAT' ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>{trangThaiCaiDat.label}</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-3.5 h-3.5" />
+              <span>{trangThaiCaiDat.label}</span>
+            </>
+          )}
         </button>
       </div>
     </div>

@@ -11,11 +11,13 @@ import {
   RefreshCw,
   AlertCircle,
   PackageOpen,
+  Loader2,
 } from 'lucide-react';
 import { AppCard, AppCardData } from '../components/common/AppCard';
 import { TrustPill } from '../components/common/TrustPill';
 import { useNavStore } from '../stores/useNavStore';
 import { storeService } from '../services/store/store-service';
+import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
 import type { UngDungTomTatDto } from '@forgestore/types';
 
 type SpotlightMode = 'trending' | 'curated' | 'security';
@@ -33,6 +35,7 @@ interface SpotlightConfig {
 
 export const ExplorePage: React.FC = () => {
   const { openAppDetail, selectedCategory, setSelectedCategory } = useNavStore();
+  const { layTrangThaiCaiDat } = useDeviceInstalledApps();
   const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
@@ -132,13 +135,14 @@ export const ExplorePage: React.FC = () => {
       featuredAppsList[1] ||
       featuredAppsList[0];
 
-    // App an toàn cao nhất (Jev AI 97-100)
-    const securityApp = featuredAppsList.find((a) => a.diemUyTin >= 97) || featuredAppsList[0];
+    // App uy tín cao nhất (Điểm uy tín >= 97)
+    const securityApp =
+      featuredAppsList.find((a) => (a.diemUyTin ?? 0) >= 97) || featuredAppsList[0];
 
     return {
       trending: {
         app: topStarApp,
-        badge: 'QUÁN QUÂN XU HƯỚNG GIT',
+        badge: 'ĐANG ĐƯỢC QUAN TÂM',
         badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge" />,
         subtitle: `Dẫn đầu cộng đồng FOSS (${((topStarApp.soSaoGithub || 0) / 1000).toFixed(0)}k sao)`,
         quote: `"${topStarApp.moTaNgan}"`,
@@ -154,9 +158,9 @@ export const ExplorePage: React.FC = () => {
       },
       security: {
         app: securityApp,
-        badge: `AN TOÀN TUYỆT ĐỐI • JEV AI ${securityApp.diemUyTin}/100`,
+        badge: `ĐIỂM UY TÍN CAO • ${securityApp.diemUyTin || 100}/100`,
         badgeIcon: <Shield className="w-3.5 h-3.5 text-emerald-400" />,
-        subtitle: 'Thẩm định an toàn tự động bởi Dual-AI & Jev Protocol',
+        subtitle: 'Đánh giá dựa trên lịch sử kho mã và tính minh bạch',
         quote: `"${securityApp.moTaNgan}"`,
         gradient: 'from-blue-600 to-cyan-600',
       },
@@ -194,7 +198,7 @@ export const ExplorePage: React.FC = () => {
                   }`}
                 >
                   <Flame className="w-3.5 h-3.5" />
-                  <span>🔥 Xu Hướng Git (#1)</span>
+                  <span>🔥 Đang được quan tâm</span>
                 </button>
 
                 <button
@@ -218,16 +222,15 @@ export const ExplorePage: React.FC = () => {
                   }`}
                 >
                   <Shield className="w-3.5 h-3.5" />
-                  <span>🛡️ An Toàn Tuyệt Đối</span>
+                  <span>🛡️ Điểm uy tín cao</span>
                 </button>
               </div>
 
               <span className="text-xs font-mono text-muted">
-                {spotlightMode === 'trending' &&
-                  'Dữ liệu đo lường tốc độ tăng sao Git trực tiếp từ GitHub'}
+                {spotlightMode === 'trending' && 'Ứng dụng được cộng đồng quan tâm nhiều nhất'}
                 {spotlightMode === 'curated' &&
-                  'Tuyển chọn biên tập: FOSS chất lượng cao, chuẩn Windows'}
-                {spotlightMode === 'security' && 'Thẩm định bảo mật tự động bởi Jev AI Protocol'}
+                  'Tuyển chọn chất lượng: mã nguồn mở, hoạt động ổn định'}
+                {spotlightMode === 'security' && 'Ứng dụng đạt điểm uy tín cao nhất từ kho mã'}
               </span>
             </div>
 
@@ -306,21 +309,55 @@ export const ExplorePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cột phải: CTA Cài đặt 1-Click & Phân tích AI */}
+              {/* Cột phải: CTA Cài đặt 1-Click / Đã cài & Phân tích (L-02) */}
               <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
-                <button
-                  onClick={() => openAppDetail(spotlightApp.id)}
-                  className="btn-tactile h-11 px-6 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/30"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Cài Đặt 1-Click</span>
-                </button>
+                {(() => {
+                  const spotlightTrangThai = layTrangThaiCaiDat(
+                    spotlightApp.id,
+                    spotlightApp.repoHandle,
+                  );
+                  const isInstalled = spotlightTrangThai.trangThai === 'DA_CAI_DAT';
+                  const isProcessing =
+                    spotlightTrangThai.trangThai === 'DANG_TAI' ||
+                    spotlightTrangThai.trangThai === 'XAC_MINH' ||
+                    spotlightTrangThai.trangThai === 'DANG_CAI_DAT';
+
+                  return (
+                    <button
+                      onClick={() => openAppDetail(spotlightApp.id)}
+                      className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                        isInstalled
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+                          : isProcessing
+                            ? 'bg-accent-forge/80 text-white shadow-orange-950/30'
+                            : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/30'
+                      }`}
+                    >
+                      {isInstalled ? (
+                        <>
+                          <Check className="w-4 h-4 stroke-[2.5]" />
+                          <span>{spotlightTrangThai.label}</span>
+                        </>
+                      ) : isProcessing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>{spotlightTrangThai.label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>Cài Đặt 1-Click</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 <button
                   onClick={() => openAppDetail(spotlightApp.id)}
                   className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
                 >
-                  <span>Xem phân tích Dual-AI</span>
+                  <span>Xem chi tiết ứng dụng</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-muted" />
                 </button>
               </div>

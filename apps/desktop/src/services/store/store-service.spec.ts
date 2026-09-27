@@ -113,7 +113,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     );
   });
 
-  it('mapDtoToAppCard chuyển đổi UngDungTomTatDto sang AppCardData chính xác', () => {
+  it('mapDtoToAppCard chuyển đổi UngDungTomTatDto sang AppCardData chính xác với dữ liệu thật (L-03)', () => {
     const dto: UngDungTomTatDto = {
       maUngDung: 'app-powertoys',
       tenRepoDayDu: 'microsoft/PowerToys',
@@ -129,6 +129,9 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       khauHieuTiengViet: 'Bộ công cụ tối ưu hóa Windows',
       diemUyTin: 100,
       phienBanMoiNhat: 'v0.84.0',
+      dinhDangCoSan: ['EXE'],
+      kienTrucCoSan: ['x64', 'ARM64'],
+      loaiGiayPhep: 'MIT',
     };
 
     const card = service.mapDtoToAppCard(dto);
@@ -141,7 +144,9 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(card.iconUrl).toBe('https://example.com/icon.png');
     expect(card.soSaoGithub).toBe(138000);
     expect(card.phienBanMoiNhat).toBe('v0.84.0');
-    expect(card.dinhDangFile).toEqual(['EXE', 'MSI']);
+    expect(card.dinhDangFile).toEqual(['EXE']);
+    expect(card.kienTruc).toEqual(['x64', 'ARM64']);
+    expect(card.giayPhep).toBe('MIT');
     expect(card.diemUyTin).toBe(100);
     expect(card.isVerifiedFoss).toBe(true);
   });
@@ -280,8 +285,82 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
 
     const card = service.mapChiTietToAppCard(detailWithoutAi);
     expect(card.moTaNgan).toBe('A helpful desktop utility');
-    expect(card.diemUyTin).toBe(92);
-    expect(card.giayPhep).toBe('FOSS');
+    expect(card.diemUyTin).toBeNull();
+    expect(card.giayPhep).toBeUndefined();
+  });
+
+  it('L-03 Ca thực tế DBeaver: hiện .exe .zip, giấy phép GPL-3.0, không có MSI', () => {
+    const dbeaverDto: UngDungTomTatDto = {
+      maUngDung: 'dbeaver-id',
+      tenRepoDayDu: 'dbeaver/dbeaver',
+      chuSoHuu: 'dbeaver',
+      tenKhoChua: 'dbeaver',
+      duongDanGithub: 'https://github.com/dbeaver/dbeaver',
+      soSaoGithub: 39000,
+      danhMucChinh: 'Lập trình & Phát triển',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: true,
+      phienBanMoiNhat: 'v24.3.0',
+      dinhDangCoSan: ['EXE', 'ZIP'],
+      kienTrucCoSan: ['x64'],
+      loaiGiayPhep: 'GPL-3.0',
+    };
+
+    const card = service.mapDtoToAppCard(dbeaverDto);
+    expect(card.dinhDangFile).toEqual(['EXE', 'ZIP']);
+    expect(card.dinhDangFile).not.toContain('MSI');
+    expect(card.kienTruc).toEqual(['x64']);
+    expect(card.giayPhep).toBe('GPL-3.0');
+  });
+
+  it('L-03 Ca thực tế Cryptomator: hiện .exe .msi và chỉ x64 (không có ARM64)', () => {
+    const cryptoDto: UngDungTomTatDto = {
+      maUngDung: 'crypto-id',
+      tenRepoDayDu: 'cryptomator/cryptomator',
+      chuSoHuu: 'cryptomator',
+      tenKhoChua: 'cryptomator',
+      duongDanGithub: 'https://github.com/cryptomator/cryptomator',
+      soSaoGithub: 12000,
+      danhMucChinh: 'Bảo mật & Quyền riêng tư',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: true,
+      phienBanMoiNhat: '1.14.2',
+      dinhDangCoSan: ['EXE', 'MSI'],
+      kienTrucCoSan: ['x64'],
+      loaiGiayPhep: 'GPL-3.0',
+    };
+
+    const card = service.mapDtoToAppCard(cryptoDto);
+    expect(card.dinhDangFile).toEqual(['EXE', 'MSI']);
+    expect(card.kienTruc).toEqual(['x64']);
+    expect(card.kienTruc).not.toContain('ARM64');
+  });
+
+  it('L-03 Thiếu phiên bản và điểm: để trống, không tự bịa v1.0.0 hay điểm 92', () => {
+    const rawDto: UngDungTomTatDto = {
+      maUngDung: 'raw-id',
+      tenRepoDayDu: 'sample/raw',
+      chuSoHuu: 'sample',
+      tenKhoChua: 'raw',
+      duongDanGithub: 'https://github.com/sample/raw',
+      soSaoGithub: 10,
+      danhMucChinh: 'Tiện ích hệ thống',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: false,
+      // phienBanMoiNhat: undefined,
+      // diemUyTin: undefined,
+      // dinhDangCoSan: undefined,
+    };
+
+    const card = service.mapDtoToAppCard(rawDto);
+    expect(card.phienBanMoiNhat).toBeUndefined();
+    expect(card.diemUyTin).toBeNull();
+    expect(card.dinhDangFile).toBeUndefined();
+    expect(card.kienTruc).toBeUndefined();
+    expect(card.giayPhep).toBeUndefined();
   });
 
   it('timKiem gọi đúng endpoint /search kèm tham số query và platform', async () => {

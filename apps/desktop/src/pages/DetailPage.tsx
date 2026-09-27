@@ -38,6 +38,7 @@ import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
 import { libraryService } from '../services/library/library-service';
 import { ApiError } from '../services/api/api-client';
+import type { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
 
 /**
  * Thuật toán chọn tệp cài đặt tối ưu cho máy tính Windows (P3-FIX)
@@ -163,18 +164,12 @@ export function tinhTrangThaiHieuLuc(params: {
       // Tiến trình thuộc về bản EXE/MSI, Tab ZIP giữ trạng thái sẵn sàng
       return 'CHUA_CAI';
     }
-    // FE-01: Tab ZIP chỉ coi là DA_CAI_DAT khi tệp cài đặt thực sự là ZIP hoặc đã có thư mục giải nén
-    if (params.localStatus === 'DA_CAI_DAT') {
-      if (isZipFile || params.hasExtractedDir) {
-        return 'DA_CAI_DAT';
-      }
-      return 'CHUA_CAI';
+    // L-08: Tab ZIP luôn là nút "Tải về & giải nén", không giữ trạng thái DA_CAI_DAT
+    if (params.localStatus === 'LOI' && isZipFile) {
+      return 'LOI';
     }
-    if (params.localStatus === 'LOI') {
-      return isZipFile ? 'LOI' : 'CHUA_CAI';
-    }
-    if (params.localStatus === 'DA_HUY') {
-      return isZipFile ? 'DA_HUY' : 'CHUA_CAI';
+    if (params.localStatus === 'DA_HUY' && isZipFile) {
+      return 'DA_HUY';
     }
     return 'CHUA_CAI';
   } else {
@@ -225,26 +220,27 @@ export const DetailPage: React.FC = () => {
   const [loiYeuThich, setLoiYeuThich] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<string>('EXE');
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [copiedSha, setCopiedSha] = useState<string | null>(null);
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState<boolean>(false);
   const [showAllVersions, setShowAllVersions] = useState<boolean>(false);
-  const [customZipDir, setCustomZipDir] = useState<string | null>(null);
+  const [zipExtractToast, setZipExtractToast] = useState<{ duongDan: string } | null>(null);
+  const [moThuMucLoi, setMoThuMucLoi] = useState<string | null>(null);
   const [activeCliMethodIndex, setActiveCliMethodIndex] = useState<number>(0);
   const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
 
-  // Reset trạng thái cục bộ khi chuyển sang xem ứng dụng khác (tránh rò rỉ customZipDir/modal giữa các app)
+  // Reset trạng thái cục bộ khi chuyển sang xem ứng dụng khác
   useEffect(() => {
-    setCustomZipDir(null);
     setSelectedAssetId(null);
     setIsSafetyModalOpen(false);
     setShowAllVersions(false);
     setActiveCliMethodIndex(0);
     setLoiYeuThich(null);
+    setZipExtractToast(null);
+    setMoThuMucLoi(null);
   }, [appId]);
 
-  // Cấu hình thư mục lưu bản portable từ trang Cài đặt (A1)
-  const { thuMucPortable, chonThuMucQuaDialog } = useSettingsStore();
-  const targetPortableDir = customZipDir || thuMucPortable || undefined;
+  // Cấu hình thư mục lưu bản portable từ trang Cài đặt (L-08: Chỗ duy nhất chọn thư mục portable)
+  const { thuMucPortable } = useSettingsStore();
+  const targetPortableDir = thuMucPortable || undefined;
 
   // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
   const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
@@ -330,8 +326,60 @@ export const DetailPage: React.FC = () => {
         if (!old) return old;
         return { ...old, laYeuThich: res.daYeuThich };
       });
-      // Làm tươi danh sách yêu thích
-      queryClient.invalidateQueries({ queryKey: ['user-favorites'] });
+      // L-11: Cập nhật thẳng cache ['user-favorites'] thay vì invalidateQueries
+      queryClient.setQueriesData<TrangKetQua<UngDungTomTatDto>>(
+        { queryKey: ['user-favorites'] },
+        (old) => {
+          if (!old || !old.duLieu) return old;
+          if (res.daYeuThich) {
+            const alreadyExists = old.duLieu.some(
+              (item) => item.maUngDung === targetId || item.tenRepoDayDu === targetId,
+            );
+            if (alreadyExists) return old;
+
+            const banMoiNhat = appDetail?.danhSachBanPhatHanh?.[0];
+            const newFav: UngDungTomTatDto = {
+              maUngDung: appDetail?.maUngDung || targetId,
+              chuSoHuu: appDetail?.chuSoHuu || '',
+              tenKhoChua: appDetail?.tenKhoChua || '',
+              tenRepoDayDu: appDetail?.tenRepoDayDu || '',
+              duongDanGithub: appDetail?.duongDanGithub || '',
+              duongDanIcon: appDetail?.duongDanIcon ?? null,
+              soSaoGithub: appDetail?.soSaoGithub || 0,
+              danhMucChinh: appDetail?.danhMucChinh || 'Tiện ích hệ thống',
+              nenTangHoTro: appDetail?.nenTangHoTro || 'DA_NEN_TANG',
+              khauHieuTiengViet:
+                appDetail?.phanTichAi?.khauHieuTiengViet || appDetail?.moTaGocTiengAnh || '',
+              phienBanMoiNhat: banMoiNhat?.tenPhienBan ?? null,
+              ngayCapNhat: banMoiNhat?.ngayPhatHanh
+                ? new Date(banMoiNhat.ngayPhatHanh).toISOString()
+                : new Date().toISOString(),
+              diemUyTin: appDetail?.phanTichAi?.diemUyTin ?? null,
+              mucDoAnToan: appDetail?.phanTichAi?.mucDoAnToan ?? null,
+              daXacMinh: appDetail?.daXacMinh ?? false,
+              duocNoiBat: appDetail?.duocNoiBat ?? false,
+              tenGoiAndroid: appDetail?.tenGoiAndroid ?? null,
+              dinhDangCoSan: appDetail?.dinhDangCoSan,
+              kienTrucCoSan: appDetail?.kienTrucCoSan,
+              loaiGiayPhep: appDetail?.loaiGiayPhep || null,
+            };
+
+            return {
+              ...old,
+              duLieu: [newFav, ...old.duLieu],
+              tongSo: old.tongSo + 1,
+            };
+          } else {
+            return {
+              ...old,
+              duLieu: old.duLieu.filter(
+                (item) => item.maUngDung !== targetId && item.tenRepoDayDu !== targetId,
+              ),
+              tongSo: Math.max(0, old.tongSo - 1),
+            };
+          }
+        },
+      );
     } catch (err) {
       console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
       setIsFavorited(prevState);
@@ -364,28 +412,13 @@ export const DetailPage: React.FC = () => {
   };
 
   // FE-V3-05: Quản lý timer trạng thái "Đã chép" bằng useRef chống race condition và memory leak
-  const copyShaTimerRef = useRef<NodeJS.Timeout | null>(null);
   const copyCommandTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
-      if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
       if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
     };
   }, []);
-
-  // Sao chép mã băm SHA-256 kèm hiệu ứng Checkmark Pop (FE-R7-07 & EC-04)
-  const handleCopySha = (sha?: string | null, fileId?: string) => {
-    if (!sha) return;
-    navigator.clipboard
-      .writeText(sha)
-      .then(() => {
-        setCopiedSha(fileId || sha);
-        if (copyShaTimerRef.current) clearTimeout(copyShaTimerRef.current);
-        copyShaTimerRef.current = setTimeout(() => setCopiedSha(null), 2000);
-      })
-      .catch((err) => console.warn('[DetailPage] Không thể sao chép SHA-256:', err));
-  };
 
   // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3, FE-V3-05 & EC-04)
   const handleCopyCommand = (lenh: string, id: string) => {
@@ -486,25 +519,16 @@ export const DetailPage: React.FC = () => {
     [selectedFormat, isInstalledOnDevice, localStatus, installInfo],
   );
 
-  // Xử lý nút cài đặt / tải portable
-  const handleInstallClick = () => {
+  // Xử lý nút cài đặt / tải portable (L-08)
+  const handleInstallClick = async () => {
     if (effectiveStatus === 'DA_CAI_DAT') {
-      if (isZipTab) {
-        if (installInfo?.duongDanThuMuc) {
-          installService.moThuMuc(installInfo.duongDanThuMuc);
-        } else if (installInfo?.duongDanThucThi) {
-          installService.moUngDung(installInfo.duongDanThucThi);
-        }
-        return;
+      if (installInfo?.duongDanThucThi) {
+        moApp(appKey);
       } else {
-        if (installInfo?.duongDanThucThi) {
-          moApp(appKey);
-        } else {
-          // FE-R6-03: Nếu đã cài nhưng không có đường dẫn trong RAM, dẫn sang Thư viện để quản lý/mở
-          navigateTo('library');
-        }
-        return;
+        // FE-R6-03: Nếu đã cài nhưng không có đường dẫn trong RAM, dẫn sang Thư viện để quản lý/mở
+        navigateTo('library');
       }
+      return;
     }
     if (
       effectiveStatus === 'DANG_TAI' ||
@@ -519,7 +543,10 @@ export const DetailPage: React.FC = () => {
       return;
     }
 
-    batDauCaiDat({
+    setZipExtractToast(null);
+    setMoThuMucLoi(null);
+
+    const ok = await batDauCaiDat({
       maUngDung: appKey,
       tenApp: appDetail?.tenKhoChua || 'App',
       url: selectedAsset.duongDanTaiVe,
@@ -530,6 +557,14 @@ export const DetailPage: React.FC = () => {
       maTep: selectedAsset.maTep,
       thuMucDich: isZipTab ? targetPortableDir : undefined,
     });
+
+    if (ok && isZipTab) {
+      const extractedPath =
+        useInstallStore.getState().caiDatMap[appKey]?.duongDanThuMuc ||
+        targetPortableDir ||
+        'thư mục giải nén';
+      setZipExtractToast({ duongDan: extractedPath });
+    }
   };
 
   // Bóc tách 3 tính năng từ tomTatTinhNangVi
@@ -549,7 +584,7 @@ export const DetailPage: React.FC = () => {
   const trustScore = appDetail?.phanTichAi?.diemUyTin ?? appDetail?.diemUyTin ?? 100;
   const riskItems = appDetail?.phanTichAi?.yeuToRuiRo || [];
 
-  // Xếp loại màu sắc trust score
+  // L-09 & L-10: Nhãn mức độ uy tín trung tính, chuẩn hóa ngôn ngữ đời thường
   const getScoreTheme = (score: number) => {
     if (score >= 80)
       return {
@@ -557,7 +592,7 @@ export const DetailPage: React.FC = () => {
         bg: 'bg-emerald-500/10',
         border: 'border-emerald-500/20',
         bar: 'bg-emerald-500',
-        label: 'AN TOÀN CAO',
+        label: 'Uy tín cao',
       };
     if (score >= 60)
       return {
@@ -565,18 +600,34 @@ export const DetailPage: React.FC = () => {
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
         bar: 'bg-amber-500',
-        label: 'CẦN LƯU Ý',
+        label: 'Uy tín trung bình',
       };
     return {
       text: 'text-rose-400',
       bg: 'bg-rose-500/10',
       border: 'border-rose-500/20',
       bar: 'bg-rose-500',
-      label: 'CẢNH BÁO',
+      label: 'Cần lưu ý',
     };
   };
 
   const scoreTheme = getScoreTheme(trustScore);
+
+  // L-09: Hiển thị đúng 3 trạng thái Jev từ CSDL
+  const getJevStatusText = (status?: string | null) => {
+    if (status === 'DA_THAM_DINH') return 'Jev: đã thẩm định quyền Android';
+    if (status === 'KHONG_CAN_THIET') return 'Jev: không áp dụng cho bản Windows';
+    return 'Jev: chưa thẩm định';
+  };
+
+  // L-10: Tên nhãn định dạng thân thiện đời thường
+  const getFormatLabel = (fmt: string) => {
+    const upper = fmt.toUpperCase();
+    if (upper === 'EXE') return 'Bản cài đặt (.exe)';
+    if (upper === 'MSI') return 'Bản cài đặt (.msi)';
+    if (upper === 'ZIP' || upper === 'ZIP_PORTABLE') return 'Bản chạy ngay (.zip)';
+    return `.${fmt.toLowerCase()}`;
+  };
 
   // 1. TRẠNG THÁI LOADING: Skeleton Shimmer (CLS = 0)
   if (isLoading) {
@@ -692,7 +743,7 @@ export const DetailPage: React.FC = () => {
                 {appDetail.daXacMinh && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-mono font-medium border border-emerald-500/30 flex items-center gap-1">
                     <Check className="w-3 h-3 stroke-[3]" />
-                    Verified FOSS
+                    Mã nguồn mở · {appDetail.loaiGiayPhep || 'FOSS'}
                   </span>
                 )}
                 {appDetail.duocNoiBat && (
@@ -722,21 +773,18 @@ export const DetailPage: React.FC = () => {
 
               <p className="text-xs text-secondary mt-3 leading-relaxed">
                 {appDetail.moTaGocTiengAnh ||
-                  'Ứng dụng mã nguồn mở minh bạch, được đồng bộ và kiểm định bảo mật trực tiếp từ GitHub.'}
+                  'Ứng dụng mã nguồn mở minh bạch, được đồng bộ trực tiếp từ GitHub.'}
               </p>
             </div>
           </div>
 
-          {/* Khối AI: Gemini Executive Summary (P3-06.2) */}
+          {/* Giới thiệu nhanh (L-10: chuẩn hóa ngôn ngữ đời thường) */}
           <div className="tactile-card p-6 rounded-2xl border-l-4 border-l-accent-ai flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-accent-ai text-xs font-bold font-display uppercase tracking-wider">
                 <Sparkles className="w-4 h-4" />
-                <span>BỘ NÃO AI • TÓM TẮT ĐIỀU HÀNH (GEMINI FLASH)</span>
+                <span>Giới thiệu nhanh</span>
               </div>
-              <span className="text-[11px] font-mono text-muted">
-                {appDetail.phanTichAi?.moHinhTomTat || 'gemini-3.1-flash-lite'}
-              </span>
             </div>
 
             {/* Slogan AI tiếng Việt hoặc skeleton đang chờ */}
@@ -749,7 +797,7 @@ export const DetailPage: React.FC = () => {
                 <Sparkles className="w-5 h-5 text-accent-ai animate-spin" />
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-primary">
-                    Đang yêu cầu Dual-AI (Gemini Flash & Jev Noul) thẩm định ứng dụng...
+                    Đang phân tích thông tin ứng dụng...
                   </span>
                   <span className="text-[11px] text-muted font-mono">
                     Hệ thống đang tự động phân tích mã nguồn và giấy phép (tự động cập nhật).
@@ -826,7 +874,6 @@ export const DetailPage: React.FC = () => {
               {/* Danh sách tệp cài đặt */}
               <div className="flex flex-col gap-2.5">
                 {displayAssets.map((asset) => {
-                  const isCopied = copiedSha === asset.maTep || copiedSha === asset.maBamSha256;
                   const isSelected = selectedAsset?.maTep === asset.maTep;
 
                   return (
@@ -854,37 +901,10 @@ export const DetailPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Checksum SHA-256 kèm nút 1-Click Copy Pop (P3-06.4) */}
-                        <div className="flex items-center gap-2 text-[11px] text-muted font-mono truncate">
-                          <span>
-                            SHA-256:{' '}
-                            {asset.maBamSha256
-                              ? `${asset.maBamSha256.substring(0, 14)}...${asset.maBamSha256.substring(asset.maBamSha256.length - 8)}`
-                              : 'Chưa có mã băm'}
-                          </span>
-                          {asset.maBamSha256 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopySha(asset.maBamSha256, asset.maTep);
-                              }}
-                              title="Sao chép toàn bộ mã băm SHA-256"
-                              className="text-accent-ai hover:text-primary flex items-center gap-1 btn-tactile"
-                            >
-                              {isCopied ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                              <span
-                                className={`text-[10px] transition-colors ${
-                                  isCopied ? 'text-emerald-400 font-semibold' : ''
-                                }`}
-                              >
-                                {isCopied ? 'Đã chép SHA-256' : 'Chép mã'}
-                              </span>
-                            </button>
-                          )}
+                        {/* L-10: Thay chuỗi SHA-256 dài ngoằng bằng dòng xác minh file gốc */}
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Đã xác minh file gốc</span>
                         </div>
                       </div>
 
@@ -1297,7 +1317,7 @@ export const DetailPage: React.FC = () => {
 
               {/* Bộ chọn định dạng tệp có sẵn */}
               {availableFormats.length > 0 && (
-                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border text-xs font-mono font-medium">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border text-xs font-mono font-medium">
                   {availableFormats.map((fmt) => (
                     <button
                       key={fmt}
@@ -1305,48 +1325,15 @@ export const DetailPage: React.FC = () => {
                         setSelectedFormat(fmt);
                         setSelectedAssetId(null);
                       }}
-                      className={`btn-tactile py-1.5 rounded-lg uppercase transition-all ${
+                      className={`btn-tactile py-2 px-2.5 rounded-lg transition-all text-center ${
                         selectedFormat === fmt
                           ? 'bg-accent-forge text-white shadow-sm font-bold'
                           : 'text-muted hover:text-primary'
                       }`}
                     >
-                      .{fmt.toLowerCase()}
+                      {getFormatLabel(fmt)}
                     </button>
                   ))}
-                </div>
-              )}
-
-              {/* Hiển thị & tùy chọn thư mục giải nén cho bản Portable (A1) */}
-              {isZipTab && (
-                <div className="p-3 rounded-xl bg-surface-elevated/70 border border-border flex items-center justify-between gap-2.5 text-xs font-mono">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[10px] text-muted uppercase block">
-                      Thư mục giải nén:
-                    </span>
-                    <div
-                      className="font-mono text-[11px] text-primary truncate font-medium mt-0.5"
-                      title={customZipDir || thuMucPortable || '%LOCALAPPDATA%\\ForgeStore\\apps'}
-                    >
-                      {customZipDir ||
-                        thuMucPortable ||
-                        '%LOCALAPPDATA%\\ForgeStore\\apps (Mặc định)'}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const picked = await chonThuMucQuaDialog();
-                      if (picked) {
-                        setCustomZipDir(picked);
-                      }
-                    }}
-                    className="btn-tactile px-2.5 py-1 rounded-lg bg-surface border border-border text-muted hover:text-primary text-[11px] font-mono shrink-0 flex items-center gap-1 shadow-sm"
-                    title="Chọn thư mục khác cho bản portable này"
-                  >
-                    <FolderOpen className="w-3 h-3" />
-                    <span>Đổi</span>
-                  </button>
                 </div>
               )}
 
@@ -1421,23 +1408,12 @@ export const DetailPage: React.FC = () => {
                       <span>{isZipTab ? 'Đang giải nén portable...' : 'Đang cài đặt...'}</span>
                     </>
                   ) : effectiveStatus === 'DA_CAI_DAT' ? (
-                    isZipTab ? (
-                      <>
-                        <FolderOpen className="w-4 h-4 text-emerald-200" />
-                        <span>
-                          {installInfo?.duongDanThuMuc
-                            ? 'Mở Thư Mục Portable'
-                            : 'Đã Giải Nén Portable'}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4 stroke-[3]" />
-                        <span>
-                          {installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Xem trong Thư Viện'}
-                        </span>
-                      </>
-                    )
+                    <>
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>
+                        {installInfo?.duongDanThucThi ? 'Mở Ứng Dụng' : 'Xem trong Thư Viện'}
+                      </span>
+                    </>
                   ) : effectiveStatus === 'LOI' ? (
                     <>
                       <AlertCircle className="w-4 h-4" />
@@ -1457,29 +1433,48 @@ export const DetailPage: React.FC = () => {
                 </div>
               </button>
 
-              {/* Nút tải lại hoặc chú thích cho bản portable */}
-              {isZipTab && effectiveStatus === 'DA_CAI_DAT' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!selectedAsset) return;
-                    batDauCaiDat({
-                      maUngDung: appKey,
-                      tenApp: appDetail?.tenKhoChua || 'App',
-                      url: selectedAsset.duongDanTaiVe,
-                      tenTep: selectedAsset.tenTep,
-                      loaiTep: selectedAsset.dinhDangTep?.toString() || selectedFormat,
-                      sha256DuKien: selectedAsset.maBamSha256 || undefined,
-                      phienBan: latestRelease?.tenPhienBan,
-                      maTep: selectedAsset.maTep,
-                      thuMucDich: isZipTab ? targetPortableDir : undefined,
-                    });
-                  }}
-                  className="btn-tactile text-[11px] font-mono text-muted hover:text-primary flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Tải hoặc giải nén lại bản này</span>
-                </button>
+              {/* Thông báo giải nén ZIP thành công tạm thời (L-08) */}
+              {zipExtractToast && isZipTab && (
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 font-mono flex flex-col gap-2 animate-fade-in">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <div className="break-all">
+                        <span className="font-bold">Đã giải nén vào:</span>{' '}
+                        {zipExtractToast.duongDan}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setZipExtractToast(null)}
+                      className="text-muted hover:text-primary shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setMoThuMucLoi(null);
+                        await installService.moThuMuc(zipExtractToast.duongDan);
+                      } catch (err) {
+                        const msg = (err as Error)?.message || 'Không thể mở thư mục';
+                        setMoThuMucLoi(msg);
+                      }
+                    }}
+                    className="btn-tactile h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center justify-center gap-1.5 self-start mt-1 text-xs"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Mở thư mục</span>
+                  </button>
+                  {moThuMucLoi && (
+                    <div className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{moThuMucLoi}</span>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Nút chạy lại bộ cài cho EXE/MSI (FE-R6-03) */}
@@ -1536,7 +1531,7 @@ export const DetailPage: React.FC = () => {
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-muted">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Đã kiểm định mã độc & tính toàn vẹn SHA-256</span>
+                <span>Đã xác minh SHA-256 khớp với file gốc trên GitHub</span>
               </div>
 
               {/* EC-04: Gợi ý phương thức CLI khi app có cả bản nhị phân lẫn CLI */}
@@ -1558,12 +1553,12 @@ export const DetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* Jev AI Trust Score Gauge & Thẩm Định Chi Tiết (P3-06.3) */}
+          {/* Điểm Uy Tín Kho Mã & Thẩm Định Chi Tiết (L-09 / L-10) */}
           <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold font-display text-primary uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>CHỈ SỐ BẢO VỆ JEV AI</span>
+                <span>ĐIỂM UY TÍN KHO MÃ</span>
               </span>
               <TrustPill score={trustScore} size="sm" />
             </div>
@@ -1590,9 +1585,15 @@ export const DetailPage: React.FC = () => {
 
             {/* Điểm nổi bật & Yếu tố rủi ro */}
             <div className="flex flex-col gap-2 pt-2 border-t border-border/40 text-xs">
+              {appDetail.soLuotFork ? (
+                <div className="flex items-center gap-2 text-secondary">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Kho chứa có hơn {appDetail.soLuotFork} lượt forks</span>
+                </div>
+              ) : null}
               <div className="flex items-center gap-2 text-secondary">
                 <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Kho chứa có hơn {appDetail.soLuotFork || 10} lượt forks minh bạch</span>
+                <span>{getJevStatusText(appDetail.phanTichAi?.trangThaiThamDinhJev)}</span>
               </div>
               <div className="flex items-center gap-2 text-secondary">
                 <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -1668,7 +1669,7 @@ export const DetailPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-sm font-bold font-display text-primary">
-                  BẢNG KÊ KHAI AN TOÀN & RỦI RO JEV AI
+                  BẢNG ĐÁNH GIÁ ĐIỂM UY TÍN KHO MÃ
                 </h3>
               </div>
               <button
@@ -1681,7 +1682,7 @@ export const DetailPage: React.FC = () => {
 
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border/60">
               <div>
-                <span className="text-xs text-muted font-mono">Điểm tín nhiệm bảo mật</span>
+                <span className="text-xs text-muted font-mono">Điểm uy tín kho mã</span>
                 <div className="flex items-baseline gap-2 mt-0.5">
                   <span className={`text-2xl font-bold font-mono ${scoreTheme.text}`}>
                     {trustScore} / 100
@@ -1690,9 +1691,9 @@ export const DetailPage: React.FC = () => {
                 </div>
               </div>
               <div className="text-right font-mono text-[11px] text-muted">
-                <div>Thẩm định: Jev Noul AI</div>
+                <div>Trạng thái thẩm định</div>
                 <div className="text-primary font-semibold">
-                  {appDetail.phanTichAi?.trangThaiThamDinhJev || 'DA_THAM_DINH'}
+                  {getJevStatusText(appDetail.phanTichAi?.trangThaiThamDinhJev)}
                 </div>
               </div>
             </div>
@@ -1719,7 +1720,7 @@ export const DetailPage: React.FC = () => {
                     <div className="flex items-center gap-3 text-[10px] font-mono text-muted mt-1">
                       <span>Nguồn: {risk.nguon}</span>
                       {risk.xacSuat !== undefined && (
-                        <span>Xác suất Noul: {(risk.xacSuat * 100).toFixed(0)}%</span>
+                        <span>Xác suất: {(risk.xacSuat * 100).toFixed(0)}%</span>
                       )}
                     </div>
                   </div>

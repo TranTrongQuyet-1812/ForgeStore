@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Library, RefreshCw, Play, Trash2, Download, Search, Laptop, Compass } from 'lucide-react';
+import {
+  Library,
+  RefreshCw,
+  Play,
+  Trash2,
+  Download,
+  Search,
+  Laptop,
+  Compass,
+  FolderOpen,
+} from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { useUpdaterStore } from '../stores/useUpdaterStore';
@@ -207,40 +217,98 @@ export const LibraryPage: React.FC = () => {
     return null;
   };
 
-  // Xử lý mở app (FE-R6-01: Triệt tiêu im lặng, fallback mở thư mục hoặc thông báo hướng dẫn)
-  const handleOpenApp = (app: {
+  // L-01: Bóc tách thư mục cha từ DisplayIcon (bỏ chỉ số icon ,0 hoặc ,1)
+  const trichXuatThuMucTuDisplayIcon = (displayIcon?: string | null): string | null => {
+    if (!displayIcon || !displayIcon.trim()) return null;
+    let s = displayIcon.trim();
+    // Bỏ tiền tố \\?\ hoặc \??\
+    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    // Bỏ chỉ số icon sau dấu phẩy nếu có
+    const commaIdx = s.lastIndexOf(',');
+    if (commaIdx !== -1) {
+      const after = s
+        .slice(commaIdx + 1)
+        .trim()
+        .replace(/"/g, '');
+      if (!isNaN(Number(after))) {
+        s = s.slice(0, commaIdx);
+      }
+    }
+    const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+    const lastSlash = Math.max(clean.lastIndexOf('\\'), clean.lastIndexOf('/'));
+    if (lastSlash > 0) {
+      const parentDir = clean.slice(0, lastSlash);
+      if (!/system32|temp/i.test(parentDir)) {
+        return parentDir;
+      }
+    }
+    return null;
+  };
+
+  // L-01: Lấy thư mục cài đặt thực tế để mở hoặc hiển thị (bỏ tiền tố \\?\)
+  const layThuMucCaiDatThucTe = (app: {
+    duongDanThuMuc?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }): string | null => {
+    // 1. InstallLocation từ Registry
+    if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
+      return app.regInfo.install_location
+        .trim()
+        .replace(/^\\\\\?\\/, '')
+        .replace(/^\\\?\?\\/, '');
+    }
+    // 2. Thư mục cha từ UninstallString
+    const dirFromUninstall = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
+    if (dirFromUninstall) {
+      return dirFromUninstall.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    }
+    // 3. Thư mục cha từ DisplayIcon
+    const dirFromIcon = trichXuatThuMucTuDisplayIcon(app.regInfo?.display_icon);
+    if (dirFromIcon) {
+      return dirFromIcon.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    }
+    // 4. Nếu là Portable ZIP (có duongDanThuMuc và không phải file download .exe/.msi)
+    if (
+      app.duongDanThuMuc &&
+      app.duongDanThuMuc.trim() &&
+      !/\.(exe|msi)$/i.test(app.duongDanThuMuc.trim())
+    ) {
+      return app.duongDanThuMuc
+        .trim()
+        .replace(/^\\\\\?\\/, '')
+        .replace(/^\\\?\?\\/, '');
+    }
+    return null;
+  };
+
+  // Xử lý mở ứng dụng (L-01: Mở ứng dụng từ DisplayIcon qua Registry hoặc đường dẫn thực thi)
+  const handleOpenApp = async (app: {
     maUngDung: string;
     duongDanThucThi?: string;
     tenApp: string;
-    duongDanThuMuc?: string | null;
+    khoaRegistry?: string | null;
     regInfo?: ThongTinUngDungRegistry | null;
   }) => {
     if (app.duongDanThucThi) {
-      installService.moUngDung(app.duongDanThucThi);
+      await installService.moUngDung(app.duongDanThucThi);
       return;
     }
 
-    if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
-      installService.moThuMuc(app.regInfo.install_location.trim());
-      return;
-    }
-
-    if (app.duongDanThuMuc && app.duongDanThuMuc.trim()) {
-      installService.moThuMuc(app.duongDanThuMuc.trim());
-      return;
-    }
-
-    // Fallback thông minh: Thử suy luận thư mục cài đặt từ UninstallString
-    const inferredDir = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
-    if (inferredDir) {
-      installService.moThuMuc(inferredDir);
-      return;
+    // Khởi chạy native thông qua DisplayIcon từ khóa Registry đã xác minh
+    const regKey = app.regInfo?.registry_key || app.khoaRegistry;
+    if (regKey) {
+      try {
+        const ok = await installService.moUngDungTuRegistry(regKey, app.tenApp);
+        if (ok) return;
+      } catch (err) {
+        console.warn(`[LibraryPage] Không thể mở app từ Registry [${regKey}]:`, err);
+      }
     }
 
     // Nếu là app giả lập trong RAM thì thử moApp
     const localApp = caiDatMap[app.maUngDung];
     if (localApp?.duongDanThucThi) {
-      installService.moUngDung(localApp.duongDanThucThi);
+      await installService.moUngDung(localApp.duongDanThucThi);
       return;
     }
 
@@ -248,6 +316,20 @@ export const LibraryPage: React.FC = () => {
     alert(
       `Ứng dụng "${app.tenApp}" đã được cài đặt vào hệ thống Windows.\n\nBạn có thể khởi chạy trực tiếp từ Start Menu hoặc lối tắt trên Desktop!`,
     );
+  };
+
+  // Xử lý mở thư mục cài đặt thực tế (L-01)
+  const handleOpenFolder = (app: {
+    tenApp: string;
+    duongDanThuMuc?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }) => {
+    const dir = layThuMucCaiDatThucTe(app);
+    if (dir) {
+      installService.moThuMuc(dir);
+    } else {
+      alert(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
+    }
   };
 
   // Xử lý gỡ cài đặt thật và đồng bộ danh sách (A4)
@@ -489,19 +571,30 @@ export const LibraryPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted font-mono truncate">
                     <span>Phiên bản: {app.phienBanHienTai}</span>
-                    {app.duongDanThuMuc && (
-                      <>
-                        <span>•</span>
-                        <span className="truncate max-w-[280px]" title={app.duongDanThuMuc}>
-                          {app.duongDanThuMuc}
-                        </span>
-                      </>
-                    )}
+                    {(() => {
+                      const thuMuc = layThuMucCaiDatThucTe(app);
+                      if (thuMuc) {
+                        return (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[280px]" title={thuMuc}>
+                              {thuMuc}
+                            </span>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <span>•</span>
+                          <span className="text-muted/80">Đã cài trên Windows</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
 
-              {/* Cụm nút hành động (A4) */}
+              {/* Cụm nút hành động (A4, L-01: Tách riêng Mở Ứng Dụng & Mở Thư Mục) */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                 {app.daBiGoBenNgoai ? (
                   /* App đã bị gỡ ngoài Windows: Nút dọn khỏi thư viện (EC-07) */
@@ -533,15 +626,26 @@ export const LibraryPage: React.FC = () => {
                       </button>
                     )}
 
-                    {/* Nút Mở Ứng Dụng (FE-R4-01: khóa khi đang gỡ cài đặt) */}
+                    {/* Nút Mở Ứng Dụng (L-01) */}
                     <button
                       onClick={() => handleOpenApp(app)}
                       disabled={isUninstallingId !== null}
                       className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Khởi chạy ứng dụng native"
+                      title="Khởi chạy ứng dụng"
                     >
                       <Play className="w-3.5 h-3.5 fill-white" />
                       <span>Mở Ứng Dụng</span>
+                    </button>
+
+                    {/* Nút Mở Thư Mục Cài Đặt (L-01) */}
+                    <button
+                      onClick={() => handleOpenFolder(app)}
+                      disabled={isUninstallingId !== null}
+                      className="btn-tactile h-8 px-3 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1.5 shadow-xs transition-all focus-visible:ring-2 focus-visible:ring-accent-forge outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Mở thư mục cài đặt trong File Explorer"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline">Thư Mục</span>
                     </button>
 
                     {/* Nút Gỡ cài đặt native (A4, FE-03) */}

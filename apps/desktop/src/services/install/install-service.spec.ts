@@ -162,7 +162,9 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         expect(stuckApp?.trangThai).toBe('DA_HUY');
         expect(stuckApp?.phanTram).toBe(0);
         expect(stuckApp?.tocDoBps).toBe(0);
-        expect(stuckApp?.thongDiepLoi).toContain('Tiến trình tải bị gián đoạn do ứng dụng đã đóng.');
+        expect(stuckApp?.thongDiepLoi).toContain(
+          'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
+        );
 
         // Đảm bảo app đã cài đặt vẫn giữ nguyên trạng thái và đường dẫn thư mục
         const installedApp = useInstallStore.getState().layThongTinApp('already-installed-app');
@@ -266,6 +268,35 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       await installService.moUngDung(undefined);
       expect(warnSpy).toHaveBeenCalledTimes(4);
       warnSpy.mockRestore();
+    });
+
+    it('moUngDungTuRegistry bỏ qua an toàn và trả về false khi khoaRegistry rỗng', async () => {
+      const resEmpty = await installService.moUngDungTuRegistry('');
+      const resBlank = await installService.moUngDungTuRegistry('   ');
+      expect(resEmpty).toBe(false);
+      expect(resBlank).toBe(false);
+    });
+
+    it('moUngDungTuRegistry gọi command native mo_ung_dung_tu_registry trong môi trường Tauri', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockResolvedValue(undefined);
+
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+
+      const res = await installService.moUngDungTuRegistry('Notepad++', 'Notepad++');
+      expect(res).toBe(true);
+      expect(mockInvoke).toHaveBeenCalledWith('mo_ung_dung_tu_registry', {
+        khoaRegistry: 'Notepad++',
+        tenApp: 'Notepad++',
+      });
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.restoreAllMocks();
     });
   });
 });

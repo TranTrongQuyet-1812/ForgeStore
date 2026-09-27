@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Compass,
-  LayoutGrid,
-  Library,
-  Heart,
-  Settings,
-  Server,
-  ShieldCheck,
-  Laptop,
-} from 'lucide-react';
+import { Compass, LayoutGrid, Library, Heart, Settings } from 'lucide-react';
 import { useNavStore, NavTab } from '../../stores/useNavStore';
 import { useUpdaterStore } from '../../stores/useUpdaterStore';
 
@@ -90,35 +81,6 @@ export const Sidebar: React.FC = () => {
             </nav>
           </div>
         ))}
-      </div>
-
-      {/* Vùng dưới: Thẻ thông số thiết bị & Trạng thái Backend Live */}
-      <div className="flex flex-col gap-2 pt-3 border-t border-border/60">
-        <div className="p-3 rounded-xl bg-surface-elevated/60 border border-border/60 flex flex-col gap-2 shadow-xs">
-          <div className="flex items-center justify-between text-[11px]">
-            <div className="flex items-center gap-1.5 text-secondary">
-              <Server className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="font-medium">Backend Live</span>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px]">
-            <div className="flex items-center gap-1.5 text-secondary">
-              <ShieldCheck className="w-3.5 h-3.5 text-accent-ai" />
-              <span>Dual-AI Active</span>
-            </div>
-            <span className="text-[10px] font-mono text-accent-ai font-semibold">Gemini + Jev</span>
-          </div>
-
-          <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-border/40 text-muted font-mono">
-            <span className="flex items-center gap-1">
-              <Laptop className="w-3 h-3" />
-              Win 11 x64
-            </span>
-            <span>v0.1.0-alpha</span>
-          </div>
-        </div>
       </div>
     </aside>
   );

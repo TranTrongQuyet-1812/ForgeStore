@@ -3,7 +3,7 @@ import { ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { NGUONG_AN_TOAN_CAO, NGUONG_CAN_LUU_Y } from '@forgestore/types';
 
 interface TrustPillProps {
-  score: number;
+  score?: number | null;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   onClick?: () => void;
@@ -15,6 +15,23 @@ export const TrustPill: React.FC<TrustPillProps> = ({
   showLabel = false,
   onClick,
 }) => {
+  if (score === null || score === undefined || score === 0) {
+    const sizeStyles = {
+      sm: 'px-1.5 py-0.5 text-[10px]',
+      md: 'px-2 py-0.5 text-xs',
+      lg: 'px-2.5 py-1 text-sm',
+    }[size];
+
+    return (
+      <span
+        className={`inline-flex items-center font-mono text-muted rounded-full border border-border/60 bg-surface-elevated/40 ${sizeStyles}`}
+        title="Ứng dụng chưa qua đánh giá điểm uy tín"
+      >
+        Chưa đánh giá
+      </span>
+    );
+  }
+
   const isHigh = score >= NGUONG_AN_TOAN_CAO;
   const isMedium = score >= NGUONG_CAN_LUU_Y && score < NGUONG_AN_TOAN_CAO;
 

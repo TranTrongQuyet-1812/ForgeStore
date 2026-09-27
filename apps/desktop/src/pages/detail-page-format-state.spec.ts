@@ -117,14 +117,14 @@ describe('tinhTrangThaiHieuLuc - Trạng thái nút cài đặt theo từng đ�
       expect(status).toBe('DANG_CAI_DAT');
     });
 
-    it('hiển thị DA_CAI_DAT khi vừa giải nén xong bản ZIP trong phiên này (cho mở thư mục)', () => {
+    it('L-08: Tab ZIP trở về CHUA_CAI khi vừa giải nén xong bản ZIP trong phiên này (luôn cho phép tải/giải nén lại)', () => {
       const status = tinhTrangThaiHieuLuc({
         selectedFormat: 'ZIP',
         isInstalledOnDevice: false,
         localStatus: 'DA_CAI_DAT',
         installedFileType: 'ZIP',
       });
-      expect(status).toBe('DA_CAI_DAT');
+      expect(status).toBe('CHUA_CAI');
     });
 
     it('FE-01: KHÔNG hiển thị DA_CAI_DAT ở tab ZIP khi ứng dụng vừa cài xong bản EXE (không có thư mục ZIP)', () => {
@@ -140,7 +140,7 @@ describe('tinhTrangThaiHieuLuc - Trạng thái nút cài đặt theo từng đ�
       expect(status).toBe('CHUA_CAI');
     });
 
-    it('FE-01: hiển thị DA_CAI_DAT ở tab ZIP nếu có thư mục giải nén portable hợp lệ', () => {
+    it('L-08: Tab ZIP trở về CHUA_CAI kể cả khi có thư mục giải nén portable hợp lệ (không kẹt nút Đã Cài Đặt)', () => {
       const status = tinhTrangThaiHieuLuc({
         selectedFormat: 'ZIP',
         isInstalledOnDevice: true,
@@ -148,7 +148,7 @@ describe('tinhTrangThaiHieuLuc - Trạng thái nút cài đặt theo từng đ�
         installedFileType: 'ZIP_PORTABLE',
         hasExtractedDir: true,
       });
-      expect(status).toBe('DA_CAI_DAT');
+      expect(status).toBe('CHUA_CAI');
     });
 
     it('FE-V3-03: phân lập Task Slot - Tab ZIP KHÔNG hiển thị tiến trình tải khi đang tải bộ cài EXE', () => {

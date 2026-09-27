@@ -52,7 +52,12 @@ export const useSettingsStore = create<SettingsState>()(
             set({ thuMucPortable: mockPath });
             return mockPath;
           }
-        } catch (err) {
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          // L-07: Hiển thị lý do từ chối thư mục hệ thống hoặc không có quyền ghi, giữ nguyên giá trị cũ
+          if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+            window.alert(errMsg || 'Thư mục không hợp lệ hoặc không có quyền ghi.');
+          }
           console.error('[useSettingsStore] Lỗi khi mở hộp thoại chọn thư mục:', err);
           return null;
         }

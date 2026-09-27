@@ -12,10 +12,12 @@ import {
 } from 'lucide-react';
 import { useNavStore } from '../../stores/useNavStore';
 import { storeService } from '../../services/store/store-service';
+import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
 export const SearchModal: React.FC = () => {
   const { isSearchModalOpen, setSearchModalOpen, openAppDetail } = useNavStore();
+  const { kiemTraAppDaCai } = useDeviceInstalledApps();
 
   const [query, setQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -129,7 +131,7 @@ export const SearchModal: React.FC = () => {
         setInspectError(res.thongBao || errorMsg);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Lỗi kết nối khi thẩm định repository.';
+      const message = err instanceof Error ? err.message : 'Lỗi kết nối khi kiểm tra repository.';
       setInspectError(message);
     } finally {
       setIsInspecting(false);
@@ -237,11 +239,11 @@ export const SearchModal: React.FC = () => {
             ref={inputRef}
             type="text"
             role="searchbox"
-            aria-label="Tìm kiếm theo tên app, ý định AI hoặc dán link GitHub"
+            aria-label="Tìm kiếm ứng dụng hoặc dán link GitHub"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Tìm theo tên app, ý định AI tiếng Việt hoặc dán link GitHub..."
+            placeholder="Tìm kiếm ứng dụng hoặc dán đường dẫn GitHub..."
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
           />
           {isSearching && <Loader2 className="w-4 h-4 text-accent-forge animate-spin shrink-0" />}
@@ -258,15 +260,15 @@ export const SearchModal: React.FC = () => {
           </kbd>
         </div>
 
-        {/* 2. Nội dung kết quả tìm kiếm / chế độ Paste & Play */}
+        {/* 2. Nội dung kết quả tìm kiếm / chế độ Dán link cài đặt */}
         <div className="p-4 max-h-[420px] overflow-y-auto flex flex-col gap-2">
-          {/* Nhánh 1: Phát hiện link GitHub hoặc loaiTruyVan === 'URL' (P3-07.2 Paste & Play) */}
+          {/* Nhánh 1: Phát hiện link GitHub hoặc loaiTruyVan === 'URL' */}
           {isGithubUrl || searchResult?.loaiTruyVan === 'URL' ? (
             <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-accent-forge font-semibold text-xs">
                   <Github className="w-4 h-4" />
-                  <span>PHÁT HIỆN LIÊN KẾT GITHUB (PASTE & PLAY)</span>
+                  <span>DÁN ĐƯỜNG DẪN GITHUB ĐỂ CÀI</span>
                 </div>
                 {searchResult?.duongDanUrl?.daCoTrongStore && (
                   <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
@@ -277,11 +279,11 @@ export const SearchModal: React.FC = () => {
 
               <p className="text-xs text-secondary leading-relaxed">
                 {searchResult?.duongDanUrl?.daCoTrongStore
-                  ? 'Ứng dụng này đã được thẩm định an toàn và đồng bộ đầy đủ tệp cài đặt trong kho ForgeStore.'
-                  : 'Hệ thống sẽ kết nối GitHub API, tự động trích xuất bản phát hành mới nhất, thẩm định SHA-256 và tóm tắt AI tiếng Việt.'}
+                  ? 'Ứng dụng này đã có sẵn và đồng bộ đầy đủ tệp cài đặt trong kho ForgeStore.'
+                  : 'Hệ thống sẽ kết nối GitHub, tự động lấy phiên bản mới nhất và kiểm tra tệp cài đặt.'}
               </p>
 
-              {/* Thông báo lỗi khi thẩm định thất bại */}
+              {/* Thông báo lỗi khi kiểm tra thất bại */}
               {inspectError && (
                 <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -296,12 +298,12 @@ export const SearchModal: React.FC = () => {
                   <span>
                     {inspectSuccess.chiCoHuongDanCli ? (
                       <>
-                        Repository phân phối qua hướng dẫn dòng lệnh (CLI). Đang mở trang chi tiết
-                        của <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                        Ứng dụng phân phối qua hướng dẫn dòng lệnh (CLI). Đang mở trang chi tiết của{' '}
+                        <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
                       </>
                     ) : (
                       <>
-                        Thẩm định hoàn tất! Đang chuyển sang trang cài đặt của{' '}
+                        Kiểm tra hoàn tất! Đang chuyển sang trang cài đặt của{' '}
                         <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
                       </>
                     )}
@@ -318,7 +320,11 @@ export const SearchModal: React.FC = () => {
                   }}
                   className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30"
                 >
-                  <span>Mở Trang Cài Đặt Ngay</span>
+                  <span>
+                    {kiemTraAppDaCai(undefined, searchResult.duongDanUrl!.repo)
+                      ? 'Mở Trang Ứng Dụng (✓ Đã cài)'
+                      : 'Mở Trang Cài Đặt Ngay'}
+                  </span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               ) : (
@@ -330,11 +336,11 @@ export const SearchModal: React.FC = () => {
                   {isInspecting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Đang thẩm định repo và tệp cài đặt...</span>
+                      <span>Đang kiểm tra ứng dụng và tệp cài đặt...</span>
                     </>
                   ) : (
                     <>
-                      <span>Thẩm Định & Nạp Cài Đặt Ngay</span>
+                      <span>Kiểm Tra & Xem Cài Đặt</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -342,7 +348,7 @@ export const SearchModal: React.FC = () => {
               )}
             </div>
           ) : query.trim().length >= 2 ? (
-            /* Nhánh 2: Kết quả tìm kiếm theo tên hoặc ý định AI (P3-07.1) */
+            /* Nhánh 2: Kết quả tìm kiếm theo tên hoặc ý định */
             <div className="flex flex-col gap-2">
               {/* Huy hiệu thông báo loại truy vấn */}
               {searchResult?.loaiTruyVan === 'Y_DINH' && (
@@ -351,11 +357,10 @@ export const SearchModal: React.FC = () => {
                     <Sparkles className="w-4 h-4 shrink-0" />
                     <span>
                       {searchResult.truyVanDich
-                        ? `Tìm theo ý định ngữ nghĩa AI: "${searchResult.truyVanDich}"`
-                        : 'Tìm kiếm thông minh kết hợp Dual-AI & pgvector'}
+                        ? `Tìm kiếm: "${searchResult.truyVanDich}"`
+                        : 'Tìm kiếm thông minh'}
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono text-muted">gemini-3.1-flash-lite</span>
                 </div>
               )}
 
@@ -379,7 +384,7 @@ export const SearchModal: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            Thẩm định hoàn tất! Đang mở trang chi tiết của{' '}
+                            Kiểm tra hoàn tất! Đang mở trang chi tiết của{' '}
                             <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
                           </>
                         )}
@@ -389,7 +394,7 @@ export const SearchModal: React.FC = () => {
                   {isInspecting && (
                     <div className="text-accent-forge text-xs flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                      <span>Đang kết nối GitHub và thẩm định gói cài đặt...</span>
+                      <span>Đang kết nối GitHub và kiểm tra gói cài đặt...</span>
                     </div>
                   )}
                 </div>
@@ -444,6 +449,11 @@ export const SearchModal: React.FC = () => {
                               <h4 className="text-xs font-bold text-primary font-display truncate">
                                 {app.tenKhoChua}
                               </h4>
+                              {kiemTraAppDaCai(app.maUngDung, app.tenRepoDayDu) && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 shrink-0">
+                                  ✓ Đã cài
+                                </span>
+                              )}
                               {isFromGithub ? (
                                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30 shrink-0">
                                   Từ GitHub
@@ -457,7 +467,7 @@ export const SearchModal: React.FC = () => {
                             <p className="text-[11px] text-secondary truncate">
                               {app.khauHieuTiengViet ||
                                 (isFromGithub
-                                  ? 'Mã nguồn mở GitHub • Nhấn để thẩm định và nạp vào Store'
+                                  ? 'Mã nguồn mở GitHub • Nhấn để kiểm tra và xem cài đặt'
                                   : `${app.danhMucChinh} • Cập nhật ${app.phienBanMoiNhat || 'mới'}`)}
                             </p>
                           </div>
@@ -499,8 +509,8 @@ export const SearchModal: React.FC = () => {
                     Không tìm thấy ứng dụng nào khớp với "<strong>{query}</strong>".
                   </p>
                   <p className="text-[11px] text-muted max-w-sm">
-                    Ông có thể dán trực tiếp đường dẫn GitHub repo để hệ thống thẩm định và nạp cài
-                    đặt ngay!
+                    Bạn có thể dán trực tiếp đường dẫn GitHub để hệ thống kiểm tra và mở cài đặt
+                    ngay!
                   </p>
                 </div>
               ) : null}
@@ -512,13 +522,11 @@ export const SearchModal: React.FC = () => {
                 <Search className="w-6 h-6" />
               </div>
               <div className="flex flex-col gap-1 max-w-sm">
-                <p className="text-xs font-medium text-primary">
-                  Tìm kiếm thông minh hoặc Nạp ứng dụng trực tiếp
-                </p>
+                <p className="text-xs font-medium text-primary">Tìm kiếm hoặc Cài đặt từ GitHub</p>
                 <p className="text-[11px] text-secondary leading-relaxed">
-                  Gõ <strong>tên ứng dụng</strong> (vd: <em>RustDesk</em>), mô tả ý định bằng{' '}
+                  Gõ <strong>tên ứng dụng</strong> (vd: <em>RustDesk</em>), mô tả nhu cầu bằng{' '}
                   <strong>tiếng Việt</strong> (vd: <em>"quay màn hình nhẹ"</em>) hoặc{' '}
-                  <strong>dán liên kết GitHub</strong> (Paste & Play).
+                  <strong>dán liên kết GitHub</strong> để cài đặt ngay.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-mono text-muted mt-1">

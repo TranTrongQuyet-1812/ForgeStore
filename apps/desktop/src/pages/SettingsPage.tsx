@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Sun, Moon, Laptop, FolderArchive, FolderOpen, RotateCcw } from 'lucide-react';
+import {
+  Settings,
+  Sun,
+  Moon,
+  Laptop,
+  FolderArchive,
+  FolderOpen,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { useThemeStore } from '../stores/useThemeStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useAuthStore } from '../stores/useAuthStore';
@@ -10,11 +19,61 @@ export const SettingsPage: React.FC = () => {
   const { thuMucPortable, datLaiMacDinh, chonThuMucQuaDialog } = useSettingsStore();
   const { maThietBi } = useAuthStore();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
+  const [downloadSize, setDownloadSize] = useState<number | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
+
+  const fetchDownloadSize = async () => {
+    const isTauri =
+      typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const bytes = await invoke<number>('lay_dung_luong_thu_muc_downloads');
+        setDownloadSize(bytes);
+      } catch (err) {
+        console.warn('Không thể lấy dung lượng thư mục downloads:', err);
+      }
+    }
+  };
+
+  const handleCleanDownloads = async () => {
+    const isTauri =
+      typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (isTauri) {
+      try {
+        setIsCleaning(true);
+        const { invoke } = await import('@tauri-apps/api/core');
+        const freed = await invoke<number>('don_dep_thu_muc_downloads');
+        await fetchDownloadSize();
+        if (freed > 0) {
+          alert(`Đã dọn dẹp ${formatBytes(freed)} tệp cài đặt tạm thời.`);
+        } else {
+          alert('Thư mục tải về đã sạch sẽ, không có tệp thừa cần dọn.');
+        }
+      } catch (err) {
+        console.error('Lỗi khi dọn dẹp downloads:', err);
+      } finally {
+        setIsCleaning(false);
+      }
+    } else {
+      setDownloadSize(0);
+      alert('Đã dọn dẹp bộ nhớ tạm (môi trường web test).');
+    }
+  };
+
+  const formatBytes = (bytes?: number | null): string => {
+    if (bytes === null || bytes === undefined) return 'Đang tính...';
+    if (bytes === 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   useEffect(() => {
     deviceService.getDeviceInfo().then((info) => {
       setDeviceInfo(info);
     });
+    fetchDownloadSize();
   }, []);
 
   return (
@@ -120,6 +179,48 @@ export const SettingsPage: React.FC = () => {
                 <span>Mặc định</span>
               </button>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Dọn dẹp bộ nhớ tạm & Tệp tải về (L-05) */}
+      <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-accent-forge" />
+              <span>Dọn dẹp tệp tải về</span>
+            </h3>
+            <p className="text-xs text-secondary mt-1">
+              Các bộ cài đặt tạm thời được lưu trong thư mục tải về. Bạn có thể dọn dẹp để giải
+              phóng dung lượng ổ cứng bất cứ lúc nào.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-surface-elevated/70 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span className="text-[11px] font-mono text-muted uppercase">
+              Dung lượng bộ nhớ tạm:
+            </span>
+            <div className="font-mono text-xs text-primary font-medium truncate mt-0.5">
+              {formatBytes(downloadSize)}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleCleanDownloads}
+              disabled={isCleaning || downloadSize === 0}
+              className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all ${
+                downloadSize === 0
+                  ? 'bg-surface border border-border text-muted cursor-not-allowed'
+                  : 'bg-rose-500/90 hover:bg-rose-600 text-white'
+              }`}
+            >
+              <Trash2 className={`w-3.5 h-3.5 ${isCleaning ? 'animate-spin' : ''}`} />
+              <span>{isCleaning ? 'Đang dọn dẹp...' : 'Dọn dẹp file tải về'}</span>
+            </button>
           </div>
         </div>
       </div>
