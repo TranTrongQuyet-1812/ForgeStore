@@ -3,6 +3,7 @@ import { AppModule } from '../src/app.module';
 import { AppsService } from '../src/modules/apps/apps.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { CacheService } from '../src/modules/redis/cache.service';
+import { GithubService } from '../src/modules/github/github.service';
 
 const FEATURED_REPOS = new Set([
   'rustdesk/rustdesk',
@@ -49,6 +50,7 @@ async function main() {
   const appsService = app.get(AppsService);
   const prisma = app.get(PrismaService);
   const cacheService = app.get(CacheService);
+  const githubService = app.get(GithubService);
 
   let thanhCong = 0;
   let thatBai = 0;
@@ -63,17 +65,23 @@ async function main() {
       const owner = parts[0] || '';
       const repo = parts[1] || '';
       const appRecord = await appsService.dongBoRepo(owner, repo);
+      const repoData = await githubService.layRepo(owner, repo);
 
-      // Cập nhật trạng thái xác minh (L-09: kiểm tra tiêu chí OSI thật, không gán cứng true) & nổi bật
+      // Cập nhật trạng thái xác minh (L-09, R-07: kiểm tra tiêu chí OSI thật và repo.archived) & nổi bật
       const OSI_LICENSES = [
         'MIT',
         'GPL',
+        'GENERAL PUBLIC',
         'AGPL',
+        'AFFERO',
         'LGPL',
+        'LESSER GENERAL',
         'APACHE',
         'BSD',
         'MPL',
+        'MOZILLA PUBLIC',
         'EPL',
+        'ECLIPSE PUBLIC',
         'ISC',
         'ZLIB',
         'UNLICENSE',
@@ -82,7 +90,7 @@ async function main() {
       const hasOsiLicense = appRecord.loaiGiayPhep
         ? OSI_LICENSES.some((lic) => appRecord.loaiGiayPhep!.toUpperCase().includes(lic))
         : false;
-      const isVerified = hasOsiLicense && !appRecord.moTaGocTiengAnh?.includes('[Archived]');
+      const isVerified = hasOsiLicense && !repoData.archived;
 
       await prisma.ungDung.update({
         where: { maUngDung: appRecord.maUngDung },

@@ -76,7 +76,23 @@ pub fn quet_tat_ca_ung_dung_registry() -> Vec<ThongTinUngDungRegistry> {
                         let publisher: Option<String> = sub.get_value("Publisher").ok();
                         let uninstall_string: Option<String> = sub.get_value("UninstallString").ok();
                         let install_location: Option<String> = sub.get_value("InstallLocation").ok();
-                        let display_icon: Option<String> = sub.get_value("DisplayIcon").ok();
+                        let mut display_icon: Option<String> = sub.get_value("DisplayIcon").ok();
+
+                        // R-08: Nếu display_icon rỗng hoặc không phải file exe hợp lệ (ví dụ msiexec.exe,0 hoặc uninstaller),
+                        // kiểm tra xem trong install_location hoặc install_location\bin có file thực thi hợp lệ không
+                        let icon_hop_le = display_icon
+                            .as_ref()
+                            .and_then(|icon| trich_xuat_exe_tu_display_icon(icon))
+                            .is_some();
+
+                        if !icon_hop_le {
+                            if let Some(ref loc) = install_location {
+                                let loc_path = std::path::Path::new(loc.trim().trim_matches('"'));
+                                if let Some(exe) = tim_tep_thuc_thi_trong_thu_muc_cai_dat(loc_path, Some(&display_name)) {
+                                    display_icon = Some(exe.to_string_lossy().to_string());
+                                }
+                            }
+                        }
 
                         danh_sach.push(ThongTinUngDungRegistry {
                             display_name,
@@ -560,13 +576,140 @@ pub fn chay_go_cai_dat_registry_an_toan(
     chay_go_cai_dat_registry(&final_uninstall_string)
 }
 
-/// Kiểm tra tệp thực thi có phải là ứng dụng hợp lệ hay không (R-01)
+/// Kiểm tra xem đường dẫn có nằm dưới thư mục Windows hay không (R-06)
+/// Đọc linh hoạt từ biến môi trường %SystemRoot% / %windir% hoặc mặc định C:\Windows
+pub fn la_thu_muc_windows(path_str: &str) -> bool {
+    let lower = path_str.to_ascii_lowercase().replace('/', "\\");
+    if lower.starts_with(r"c:\windows\") || lower == r"c:\windows" {
+        return true;
+    }
+    if let Ok(windir) = std::env::var("windir") {
+        let win_lower = windir.to_ascii_lowercase().replace('/', "\\");
+        let prefix = if win_lower.ends_with('\\') { win_lower } else { format!("{}\\", win_lower) };
+        if lower.starts_with(&prefix) || lower == prefix.trim_end_matches('\\') {
+            return true;
+        }
+    }
+    if let Ok(sysroot) = std::env::var("SystemRoot") {
+        let sys_lower = sysroot.to_ascii_lowercase().replace('/', "\\");
+        let prefix = if sys_lower.ends_with('\\') { sys_lower } else { format!("{}\\", sys_lower) };
+        if lower.starts_with(&prefix) || lower == prefix.trim_end_matches('\\') {
+            return true;
+        }
+    }
+    false
+}
+
+/// Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không (R-06)
+/// - Cấm mọi thư mục nằm dưới thư mục Windows (%SystemRoot%, %windir%, C:\Windows)
+/// - Cấm thư mục ProgramData\Package Cache của các bộ cài đặt
+/// - Cấm các thư mục temp, system32, syswow64 theo đúng path segment (không chặn nhầm Tempest)
+/// - Cấm thư mục gốc như C:\ hoặc C:
+pub fn la_thu_muc_cai_dat_hop_le(path: &std::path::Path) -> bool {
+    let s = path.to_string_lossy();
+    let normalized = s.replace('/', "\\");
+    let trimmed = normalized.trim().trim_matches('"').trim();
+
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // 1. Chặn thư mục nằm dưới thư mục Windows
+    if la_thu_muc_windows(trimmed) {
+        return false;
+    }
+
+    // 2. Chặn Package Cache của Windows Installer / Visual Studio / burn engine
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.contains(r"programdata\package cache") || lower.contains(r"package cache") {
+        return false;
+    }
+
+    // 3. Chặn thư mục Temp, System32, SysWOW64 theo đúng từng phân đoạn đường dẫn (không chặn nhầm Tempest)
+    for part in lower.split('\\') {
+        let p_clean = part.trim();
+        if p_clean == "temp" || p_clean == "tmp" || p_clean == "system32" || p_clean == "syswow64" {
+            return false;
+        }
+    }
+
+    // 4. Không được chỉ là ổ đĩa gốc như C:\ hoặc C:
+    if (lower.len() <= 3 && lower.contains(':')) || lower == "\\" {
+        return false;
+    }
+
+    true
+}
+
+/// Tìm file thực thi chính của ứng dụng trong InstallLocation hoặc InstallLocation\bin (R-08)
+pub fn tim_tep_thuc_thi_trong_thu_muc_cai_dat(
+    install_loc: &std::path::Path,
+    ten_app: Option<&str>,
+) -> Option<std::path::PathBuf> {
+    if !install_loc.is_dir() || !la_thu_muc_cai_dat_hop_le(install_loc) {
+        return None;
+    }
+
+    let search_dirs = [install_loc.to_path_buf(), install_loc.join("bin")];
+    let app_clean = ten_app.map(chuan_hoa_ten).unwrap_or_default();
+
+    for dir in &search_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+
+        // 1. Nếu có tên app, thử trực tiếp {ten_app}.exe
+        if let Some(app_name) = ten_app {
+            let direct = dir.join(format!("{}.exe", app_name));
+            if direct.is_file() && la_tep_thuc_thi_app_hop_le(&direct) {
+                return Some(direct);
+            }
+        }
+
+        // 2. Duyệt các file .exe trong thư mục tìm file khớp tên hoặc file duy nhất
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut valid_exes = Vec::new();
+
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && la_tep_thuc_thi_app_hop_le(&p) {
+                    let file_stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+                    let norm_stem = chuan_hoa_ten(file_stem);
+
+                    if !app_clean.is_empty()
+                        && (norm_stem == app_clean
+                            || norm_stem.contains(&app_clean)
+                            || app_clean.contains(&norm_stem))
+                    {
+                        return Some(p);
+                    }
+
+                    valid_exes.push(p);
+                }
+            }
+
+            // Nếu trong thư mục con bin/ chỉ có đúng 1 file .exe hợp lệ, chọn file đó
+            if dir.file_name().and_then(|f| f.to_str()) == Some("bin") && valid_exes.len() == 1 {
+                return Some(valid_exes.remove(0));
+            }
+        }
+    }
+
+    None
+}
+
+/// Kiểm tra tệp thực thi có phải là ứng dụng hợp lệ hay không (R-01, R-06)
 /// Loại bỏ các file có tên chứa unins, uninst, uninstall, setup, install, update, msiexec,
-/// và mọi file nằm dưới C:\Windows\ để tránh chạy nhầm bộ gỡ hoặc bộ cài đặt.
+/// và mọi file nằm dưới C:\Windows\ hoặc Package Cache để tránh chạy nhầm bộ gỡ hoặc bộ cài đặt.
 pub fn la_tep_thuc_thi_app_hop_le(path: &std::path::Path) -> bool {
     let path_str = path.to_string_lossy().to_ascii_lowercase();
-    // Chặn mọi file nằm dưới thư mục C:\Windows\ (hoặc c:/windows/)
-    if path_str.starts_with(r"c:\windows\") || path_str.starts_with("c:/windows/") {
+    // Chặn mọi file nằm dưới thư mục Windows (R-06)
+    if la_thu_muc_windows(&path_str) {
+        return false;
+    }
+
+    // Chặn file trong Package Cache
+    if path_str.contains(r"programdata\package cache") || path_str.contains(r"package cache") {
         return false;
     }
 
@@ -643,7 +786,7 @@ pub fn trich_xuat_exe_tu_display_icon(display_icon_str: &str) -> Option<std::pat
     None
 }
 
-/// Mở ứng dụng đã cài đặt trên máy bằng cách đọc Registry (L-01)
+/// Mở ứng dụng đã cài đặt trên máy bằng cách đọc Registry (L-01, R-08)
 /// Tuyệt đối an toàn: Native Rust tự tra cứu Registry đã được Windows xác thực,
 /// trích xuất file .exe từ DisplayIcon, kiểm tra tồn tại và khởi chạy.
 pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Result<(), String> {
@@ -688,17 +831,12 @@ pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Re
                     }
                 }
 
-                // 2. Thử lấy từ InstallLocation
+                // 2. Thử lấy từ InstallLocation (R-08: tìm cả trong bin\)
                 if let Ok(install_loc) = sub.get_value::<String, _>("InstallLocation") {
                     let loc_path = Path::new(install_loc.trim().trim_matches('"'));
-                    if loc_path.is_dir() {
-                        if let Some(app_name) = ten_app {
-                            let candidate = loc_path.join(format!("{}.exe", app_name));
-                            if candidate.is_file() && la_tep_thuc_thi_app_hop_le(&candidate) {
-                                exe_path_opt = Some(candidate);
-                                break;
-                            }
-                        }
+                    if let Some(exe) = tim_tep_thuc_thi_trong_thu_muc_cai_dat(loc_path, ten_app) {
+                        exe_path_opt = Some(exe);
+                        break;
                     }
                 }
             }
@@ -743,7 +881,7 @@ pub fn mo_ung_dung_tu_registry(khoa_registry: &str, ten_app: Option<&str>) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_chuan_hoa_ten() {
@@ -956,8 +1094,41 @@ mod tests {
         let update_icon = r#"C:\Users\User\AppData\Local\App\update.exe"#;
         assert_eq!(trich_xuat_exe_tu_display_icon(update_icon), None);
     }
+
+    #[test]
+    fn test_la_thu_muc_cai_dat_hop_le_du_lieu_that() {
+        // R-06: Chặn mọi thư mục dưới Windows
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Windows\System32")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Windows\SysWOW64")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Windows\Installer\{341B2BF9-AA0C-4060-B485-05FB7C561C1A}")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\windows")));
+
+        // R-06: Chặn Package Cache của Windows Installer / burn
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\ProgramData\Package Cache\{GUID}")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"D:\ProgramData\Package Cache")));
+
+        // R-06: Chặn Temp nhưng không chặn nhầm Tempest
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Users\User\AppData\Local\Temp")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Temp")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\temp\app")));
+        assert!(la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Program Files\Tempest")));
+
+        // R-06: Chấp nhận các thư mục phần mềm hợp lệ
+        assert!(la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Program Files\Flameshot")));
+        assert!(la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Program Files\Notepad++")));
+        assert!(la_thu_muc_cai_dat_hop_le(Path::new(r"C:\Program Files\DBeaver")));
+        assert!(la_thu_muc_cai_dat_hop_le(Path::new(r"D:\Software\PortableApp")));
+
+        // R-06: Chặn ổ đĩa gốc
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:\")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"C:")));
+        assert!(!la_thu_muc_cai_dat_hop_le(Path::new(r"")));
+    }
+
+    #[test]
+    fn test_la_tep_thuc_thi_app_hop_le_package_cache() {
+        // R-06: Chặn tệp thực thi trong Package Cache
+        assert!(!la_tep_thuc_thi_app_hop_le(Path::new(r"C:\ProgramData\Package Cache\setup.exe")));
+        assert!(!la_tep_thuc_thi_app_hop_le(Path::new(r"C:\ProgramData\Package Cache\{GUID}\app.exe")));
+    }
 }
-
-
-
-
