@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
 import { UpdateDeviceDto } from './dto/update-device.dto';
-import { GhiNhanCaiDatDto } from './dto/installed-app.dto';
+import { CapNhatKhoaRegistryDto, GhiNhanCaiDatDto } from './dto/installed-app.dto';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { UserSessionContext } from '../auth/interfaces/jwt-payload.interface';
 
@@ -93,5 +93,25 @@ export class DevicesController {
     @Param('appId', new ParseUUIDPipe({ version: '4' })) appId: string,
   ) {
     return await this.devicesService.goCaiDat(user.maNguoiDung, id, appId);
+  }
+
+  @Patch(':id/installed/:appId/registry')
+  @ApiOperation({
+    summary: 'Cập nhật riêng khóa Registry Windows cho ứng dụng đã cài đặt',
+    description:
+      'Chỉ cập nhật khóa Registry và tên hiển thị Registry, bảo toàn mã tệp và phiên bản.',
+  })
+  @ApiParam({ name: 'id', description: 'Mã UUID của thiết bị' })
+  @ApiParam({ name: 'appId', description: 'Mã UUID của ứng dụng' })
+  @ApiResponse({ status: 200, description: 'Cập nhật khóa registry thành công' })
+  @ApiResponse({ status: 403, description: 'Không có quyền truy cập thiết bị của người khác' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy thiết bị hoặc bản ghi cài đặt' })
+  async capNhatKhoaRegistry(
+    @NguoiDungHienTai() user: UserSessionContext,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('appId', new ParseUUIDPipe({ version: '4' })) appId: string,
+    @Body() dto: CapNhatKhoaRegistryDto,
+  ) {
+    return await this.devicesService.capNhatKhoaRegistry(user.maNguoiDung, id, appId, dto);
   }
 }

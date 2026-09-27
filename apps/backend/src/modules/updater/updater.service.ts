@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nest
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckUpdatesDto } from './dto/check-updates.dto';
 import { coBanMoiHon } from './utils/version-comparator.util';
+import { layBanPhatHanhMoiNhat } from '../apps/utils/release-selector.util';
 import {
   BanPhatHanhDto,
   CheckUpdatesItemDto,
@@ -46,6 +47,14 @@ export class UpdaterService {
       throw new ForbiddenException('Bạn không có quyền kiểm tra cập nhật trên thiết bị này');
     }
 
+    // Xác định nền tảng của thiết bị
+    const platformThietBi =
+      thietBi.loaiThietBi === 'MAY_TINH_WINDOWS'
+        ? 'windows'
+        : thietBi.loaiThietBi === 'DIEN_THOAI_ANDROID'
+          ? 'android'
+          : null;
+
     // Cập nhật thời gian hoạt động gần nhất của thiết bị
     await this.prisma.thietBi
       .update({
@@ -54,7 +63,7 @@ export class UpdaterService {
       })
       .catch(() => {});
 
-    // 2. Xác định danh sách app cần kiểm tra
+    // 2. Xác định danh sách app cần kiểm tra (hỗ trợ cả danhSachCaiDat và ungDung - BE-02)
     let danhSachKiemTra: Array<{
       maUngDung?: string;
       tenGoiAndroid?: string;
@@ -62,12 +71,13 @@ export class UpdaterService {
       maTepDaCai?: string | null;
     }> = [];
 
-    if (dto.ungDung && dto.ungDung.length > 0) {
+    const danhSachDauVao = dto.danhSachCaiDat || dto.ungDung;
+    if (danhSachDauVao && danhSachDauVao.length > 0) {
       // Client tự gửi danh sách app đang chạy
-      danhSachKiemTra = dto.ungDung.map((item) => ({
+      danhSachKiemTra = danhSachDauVao.map((item) => ({
         maUngDung: item.maUngDung,
         tenGoiAndroid: item.tenGoiAndroid,
-        phienBanHienTai: item.phienBan,
+        phienBanHienTai: item.phienBanHienTai || item.phienBan || '',
       }));
     } else {
       // Lấy từ CSDL ung_dung_da_cai của thiết bị
@@ -109,7 +119,7 @@ export class UpdaterService {
             danhSachPhatHanh: {
               where: { laBanThuNghiem: false },
               orderBy: { ngayPhatHanh: 'desc' },
-              take: 1,
+              take: 10,
               include: { danhSachTepCaiDat: true },
             },
           },
@@ -121,7 +131,7 @@ export class UpdaterService {
             danhSachPhatHanh: {
               where: { laBanThuNghiem: false },
               orderBy: { ngayPhatHanh: 'desc' },
-              take: 1,
+              take: 10,
               include: { danhSachTepCaiDat: true },
             },
           },
@@ -132,7 +142,11 @@ export class UpdaterService {
         continue;
       }
 
-      const banMoiNhat = app.danhSachPhatHanh[0]!;
+      // N1: Chọn bản mới nhất theo nền tảng thiết bị
+      const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, platformThietBi);
+      if (!banMoiNhat) {
+        continue;
+      }
       const phienBanMoi = banMoiNhat.tenPhienBan;
 
       // So sánh phiên bản:

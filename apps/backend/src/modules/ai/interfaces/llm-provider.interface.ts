@@ -1,3 +1,4 @@
+import type { HuongDanCaiDatDto } from '@forgestore/types';
 import { KetQuaChangelog, KetQuaTomTat } from '../dto/ai-summary.dto';
 
 export type TenNhaCungCap = 'GEMINI' | 'NVIDIA_NIM';
@@ -19,4 +20,14 @@ export interface INhaCungCapTomTat {
    * Tóm tắt Changelog bản phát hành thành các điểm mới tiếng Việt.
    */
   tomTatChangelog(changelog: string, repoName: string): Promise<KetQuaChangelog>;
+
+  /**
+   * Trích xuất hướng dẫn cài đặt qua dòng lệnh (CLI) từ README (Phase 3).
+   */
+  trichXuatHuongDanCaiDat(
+    installSection: string,
+    repoName: string,
+    rawReadme: string,
+    duongDanReadmeGoc?: string,
+  ): Promise<HuongDanCaiDatDto | null>;
 }

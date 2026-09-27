@@ -1,6 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../redis/cache.service';
 import { LoaiThietBi } from '@prisma/client';
+import { layBanPhatHanhMoiNhat, BanPhatHanhToiThieu } from '../apps/utils/release-selector.util';
+import { coBanMoiHon } from '../updater/utils/version-comparator.util';
 
 export interface DangKyThietBiParams {
   dinhDanhPhanCung: string;
@@ -12,7 +21,10 @@ export interface DangKyThietBiParams {
 export class DevicesService {
   private readonly logger = new Logger(DevicesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cacheService?: CacheService,
+  ) {}
 
   /**
    * Đăng ký hoặc cập nhật thiết bị vật lý gắn với người dùng.
@@ -131,42 +143,97 @@ export class DevicesService {
   }
 
   /**
-   * Lấy danh sách ứng dụng đã cài đặt trên thiết bị, kèm cờ coBanMoi (P2-51.1).
+   * Xóa cache danh sách ứng dụng đã cài đặt của thiết bị (R-02).
+   */
+  private async xoaCacheThietBi(maThietBi: string): Promise<void> {
+    if (this.cacheService) {
+      await this.cacheService.del(`device:installed:${maThietBi}`);
+    }
+  }
+
+  /**
+   * Lấy danh sách ứng dụng đã cài đặt trên thiết bị, kèm cờ coBanMoi (P2-51.1, R-02).
+   * Tối ưu truy vấn tinh gọn, lọc bản mới nhất theo nền tảng, so sánh SemVer và cache Redis 120s.
    */
   async layDanhSachAppDaCai(maNguoiDung: string, maThietBi: string) {
-    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+    const thietBi = await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const cacheKey = `device:installed:${maThietBi}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<Array<Record<string, unknown>>>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const platform = thietBi.loaiThietBi === LoaiThietBi.DIEN_THOAI_ANDROID ? 'android' : 'windows';
 
     const danhSach = await this.prisma.ungDungDaCai.findMany({
       where: { maThietBi },
-      include: {
+      select: {
+        maBanGhi: true,
+        maNguoiDung: true,
+        maUngDung: true,
+        maThietBi: true,
+        phienBanHienTai: true,
+        maTepDaCai: true,
+        duongDanThuMuc: true,
+        khoaRegistry: true,
+        tenHienThiRegistry: true,
+        ngayCaiDat: true,
+        ngayCapNhatCuoi: true,
         ungDung: {
-          include: {
-            phanTichAI: true,
+          select: {
+            maUngDung: true,
+            tenKhoChua: true,
+            tenRepoDayDu: true,
+            duongDanIcon: true,
+            soSaoGithub: true,
+            danhMucChinh: true,
+            nenTangHoTro: true,
+            moTaGocTiengAnh: true,
+            daXacMinh: true,
+            phanTichAI: {
+              select: {
+                khauHieuTiengViet: true,
+                diemUyTin: true,
+                mucDoAnToan: true,
+              },
+            },
             danhSachPhatHanh: {
+              where: { laBanThuNghiem: false },
               orderBy: { ngayPhatHanh: 'desc' },
-              take: 1,
-              include: {
-                danhSachTepCaiDat: true,
+              take: 10,
+              select: {
+                maPhatHanh: true,
+                tenPhienBan: true,
+                ngayPhatHanh: true,
+                laBanThuNghiem: true,
+                danhSachTepCaiDat: {
+                  select: {
+                    maTep: true,
+                    tenTep: true,
+                    dinhDangTep: true,
+                  },
+                },
               },
             },
           },
         },
-        tepDaCai: true,
       },
       orderBy: { ngayCapNhatCuoi: 'desc' },
     });
 
-    return danhSach.map((item) => {
+    const result = danhSach.map((item) => {
       const app = item.ungDung;
-      const banMoiNhat = app.danhSachPhatHanh?.[0];
-      const phienBanMoi = banMoiNhat?.tenPhienBan;
-
-      // Cờ có bản mới: so sánh phiên bản hiện tại với bản mới nhất của repo
-      const coBanMoi = Boolean(
-        phienBanMoi &&
-        phienBanMoi.toLowerCase().replace(/^v/, '') !==
-          item.phienBanHienTai.toLowerCase().replace(/^v/, ''),
+      const banMoiNhat = layBanPhatHanhMoiNhat(
+        app.danhSachPhatHanh as unknown as BanPhatHanhToiThieu[],
+        platform,
       );
+      const phienBanMoi = banMoiNhat?.tenPhienBan ?? null;
+
+      // Cờ có bản mới: so sánh SemVer bằng coBanMoiHon theo nền tảng
+      const coBanMoi = Boolean(phienBanMoi && coBanMoiHon(item.phienBanHienTai, phienBanMoi));
 
       return {
         maBanGhi: item.maBanGhi,
@@ -176,10 +243,12 @@ export class DevicesService {
         phienBanHienTai: item.phienBanHienTai,
         maTepDaCai: item.maTepDaCai,
         duongDanThuMuc: item.duongDanThuMuc,
+        khoaRegistry: item.khoaRegistry ?? null,
+        tenHienThiRegistry: item.tenHienThiRegistry ?? null,
         ngayCaiDat: item.ngayCaiDat.toISOString(),
         ngayCapNhatCuoi: item.ngayCapNhatCuoi.toISOString(),
         coBanMoi,
-        phienBanMoiNhat: phienBanMoi || null,
+        phienBanMoiNhat: phienBanMoi,
         ungDung: {
           maUngDung: app.maUngDung,
           tenKhoChua: app.tenKhoChua,
@@ -189,12 +258,18 @@ export class DevicesService {
           danhMucChinh: app.danhMucChinh,
           nenTangHoTro: app.nenTangHoTro,
           khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet ?? app.moTaGocTiengAnh ?? '',
-          diemUyTin: app.phanTichAI?.diemUyTin ?? 100,
+          diemUyTin: app.phanTichAI?.diemUyTin ?? null,
           mucDoAnToan: app.phanTichAI?.mucDoAnToan ?? null,
           daXacMinh: app.daXacMinh,
         },
       };
     });
+
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, result, 120);
+    }
+
+    return result;
   }
 
   /**
@@ -208,6 +283,8 @@ export class DevicesService {
       phienBanHienTai: string;
       maTepDaCai?: string;
       duongDanThuMuc?: string;
+      khoaRegistry?: string;
+      tenHienThiRegistry?: string;
     },
   ) {
     await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
@@ -236,28 +313,48 @@ export class DevicesService {
         phienBanHienTai: dto.phienBanHienTai,
         maTepDaCai: dto.maTepDaCai || null,
         duongDanThuMuc: dto.duongDanThuMuc || null,
+        khoaRegistry: dto.khoaRegistry || null,
+        tenHienThiRegistry: dto.tenHienThiRegistry || null,
       },
       update: {
-        phienBanHienTai: dto.phienBanHienTai,
-        maTepDaCai: dto.maTepDaCai || null,
-        duongDanThuMuc: dto.duongDanThuMuc || null,
-        ngayCapNhatCuoi: new Date(),
+        phienBanHienTai: dto.phienBanHienTai !== undefined ? dto.phienBanHienTai : undefined,
+        maTepDaCai: dto.maTepDaCai !== undefined ? dto.maTepDaCai || null : undefined,
+        duongDanThuMuc: dto.duongDanThuMuc !== undefined ? dto.duongDanThuMuc || null : undefined,
+        khoaRegistry: dto.khoaRegistry !== undefined ? dto.khoaRegistry || null : undefined,
+        tenHienThiRegistry:
+          dto.tenHienThiRegistry !== undefined ? dto.tenHienThiRegistry || null : undefined,
+        ngayCapNhatCuoi:
+          dto.phienBanHienTai !== undefined || dto.maTepDaCai !== undefined
+            ? new Date()
+            : undefined,
       },
     });
 
-    // Tăng số lượt tải của tệp cài đặt nếu có
+    // Tăng số lượt tải của tệp cài đặt nếu có (SEC-R7-09: chỉ tăng nếu tệp thuộc ứng dụng đang ghi nhận)
     if (dto.maTepDaCai) {
-      await this.prisma.tepCaiDat
-        .update({
-          where: { maTep: dto.maTepDaCai },
-          data: { soLuotTai: { increment: 1 } },
-        })
-        .catch((err) => {
-          this.logger.warn(
-            `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
-          );
-        });
+      const tepThuocApp = await this.prisma.tepCaiDat.findFirst({
+        where: {
+          maTep: dto.maTepDaCai,
+          banPhatHanh: { maUngDung: dto.maUngDung },
+        },
+        select: { maTep: true },
+      });
+
+      if (tepThuocApp) {
+        await this.prisma.tepCaiDat
+          .update({
+            where: { maTep: dto.maTepDaCai },
+            data: { soLuotTai: { increment: 1 } },
+          })
+          .catch((err) => {
+            this.logger.warn(
+              `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
+            );
+          });
+      }
     }
+
+    await this.xoaCacheThietBi(maThietBi);
 
     this.logger.log(
       `Đã ghi nhận cài đặt [${ungDung.tenRepoDayDu}] (v${dto.phienBanHienTai}) trên thiết bị [${maThietBi}]`,
@@ -279,6 +376,8 @@ export class DevicesService {
       },
     });
 
+    await this.xoaCacheThietBi(maThietBi);
+
     this.logger.log(
       `Đã gỡ cài đặt app [${maUngDung}] khỏi thiết bị [${maThietBi}] (Số lượng xóa: ${xoa.count})`,
     );
@@ -287,5 +386,50 @@ export class DevicesService {
       daGo: true,
       soLuong: xoa.count,
     };
+  }
+
+  /**
+   * Cập nhật riêng thông tin Registry Windows cho ứng dụng đã cài đặt (P2-51.4).
+   * Tuyệt đối không đụng vào maTepDaCai, duongDanThuMuc, phienBanHienTai, ngayCapNhatCuoi.
+   */
+  async capNhatKhoaRegistry(
+    maNguoiDung: string,
+    maThietBi: string,
+    maUngDung: string,
+    dto: { khoaRegistry: string; tenHienThiRegistry?: string },
+  ) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const tonTai = await this.prisma.ungDungDaCai.findUnique({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+    });
+
+    if (!tonTai) {
+      throw new NotFoundException(
+        `Không tìm thấy bản ghi cài đặt cho ứng dụng [${maUngDung}] trên thiết bị [${maThietBi}]`,
+      );
+    }
+
+    const ketQua = await this.prisma.ungDungDaCai.update({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+      data: {
+        khoaRegistry: dto.khoaRegistry,
+        tenHienThiRegistry: dto.tenHienThiRegistry ?? null,
+      },
+    });
+
+    await this.xoaCacheThietBi(maThietBi);
+
+    return ketQua;
   }
 }

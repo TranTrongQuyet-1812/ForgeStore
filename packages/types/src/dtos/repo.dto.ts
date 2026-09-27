@@ -1,4 +1,5 @@
 import type { TrangThaiNapRepo } from '../enums.js';
+import type { HuongDanCaiDatDto } from './huong-dan-cli.dto.js';
 import type { BanPhatHanhDto, TepCaiDatDto, UngDungChiTietDto } from './ung-dung.dto.js';
 
 /**
@@ -20,6 +21,8 @@ export interface InspectRepoResponseDto {
   ungDung?: UngDungChiTietDto;
   banPhatHanh?: BanPhatHanhDto;
   tepPhuHop?: TepCaiDatDto;
+  chiCoHuongDanCli?: boolean;
+  huongDanCaiDat?: HuongDanCaiDatDto;
 }
 
 /**

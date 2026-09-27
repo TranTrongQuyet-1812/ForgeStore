@@ -1,5 +1,9 @@
 import { apiClient } from '../api/api-client';
-import type { GhiNhanCaiDatRequest, UngDungDaCaiDto } from '@forgestore/types';
+import type {
+  CapNhatKhoaRegistryRequest,
+  GhiNhanCaiDatRequest,
+  UngDungDaCaiDto,
+} from '@forgestore/types';
 
 export const libraryService = {
   /**
@@ -26,6 +30,24 @@ export const libraryService = {
     } catch (err) {
       console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt lên backend:', err);
       return null;
+    }
+  },
+
+  /**
+   * Cập nhật riêng khóa Registry Windows cho ứng dụng đã cài đặt (DELIV-40.2)
+   * Giữ nguyên mã tệp đã cài và phiên bản hiện tại trên CSDL backend.
+   */
+  async capNhatKhoaRegistry(
+    deviceId: string,
+    appId: string,
+    dto: CapNhatKhoaRegistryRequest,
+  ): Promise<boolean> {
+    try {
+      await apiClient.patch(`/devices/${deviceId}/installed/${appId}/registry`, dto);
+      return true;
+    } catch (err) {
+      console.warn('[LibraryService] Lỗi khi cập nhật khóa registry lên backend:', err);
+      return false;
     }
   },
 

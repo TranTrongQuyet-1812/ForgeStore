@@ -1,6 +1,20 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::ffi::OsStr;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW;
+
+
 /// Kết quả sau khi chạy bộ cài đặt hoặc giải nén (P3-10)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct KetQuaCaiDat {
@@ -9,6 +23,7 @@ pub struct KetQuaCaiDat {
     pub thong_diep: String,
     pub duong_dan_cai_dat: Option<String>,
     pub duong_dan_thuc_thi: Option<String>,
+    pub thong_tin_registry: Option<crate::uninstaller::ThongTinUngDungRegistry>,
 }
 
 /// Lấy thư mục gốc chứa các app portable được cài đặt: %LOCALAPPDATA%\ForgeStore\apps\<ten_app>\
@@ -58,8 +73,8 @@ pub fn kiem_tra_tep_an_toan(duong_dan_tep: &Path) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-/// Chạy bộ cài Windows .exe và chờ tiến trình kết thúc (P3-10.1 & Điểm 4, 5)
-pub fn chay_bo_cai_exe(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
+/// Chạy bộ cài Windows .exe và chờ tiến trình kết thúc (P3-10.1 & Điểm 4, 5, Win32 UAC Elevation)
+pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiDat, String> {
     if !duong_dan_tep.exists() {
         return Err(format!("Tệp cài đặt .exe không tồn tại: {}", duong_dan_tep.display()));
     }
@@ -67,58 +82,142 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
     let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
 
     #[cfg(target_os = "windows")]
+    let snapshot_truoc = crate::uninstaller::chup_snapshot_khoa_registry();
+
+    #[cfg(target_os = "windows")]
     {
-        // Khởi chạy file EXE và chờ người dùng hoàn tất cài đặt (Điểm 4)
-        let mut child = Command::new(&safe_path)
-            .spawn()
-            .map_err(|e| format!("Không thể khởi chạy bộ cài đặt .exe: {}", e))?;
+        // Khởi chạy file EXE qua ShellExecuteExW để kích hoạt hộp thoại UAC xin quyền Admin
+        let path_wide: Vec<u16> = OsStr::new(safe_path.as_os_str())
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
-        let status = child
-            .wait()
-            .map_err(|e| format!("Lỗi khi theo dõi tiến trình cài đặt .exe: {}", e))?;
+        let mut sei: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+        sei.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+        sei.lpFile = path_wide.as_ptr();
+        sei.nShow = SW_SHOW as i32;
 
-        if status.success() {
+        // SEC-R9-07: Gán thư mục làm việc an toàn cố định C:\Windows\System32 cho bộ cài EXE chống DLL Hijacking từ thư mục downloads
+        let default_sys32 = std::path::Path::new(r"C:\Windows\System32");
+        let work_dir_wide: Vec<u16> = OsStr::new(default_sys32.as_os_str())
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        sei.lpDirectory = work_dir_wide.as_ptr();
+
+        let success = unsafe { ShellExecuteExW(&mut sei) };
+        if success == 0 {
+            let err_code = unsafe { GetLastError() };
+            if err_code == ERROR_CANCELLED {
+                return Err("NGUOI_DUNG_HUY: Người dùng đã từ chối cấp quyền Quản trị viên (UAC).".to_string());
+            }
+            return Err(format!(
+                "Không thể khởi chạy bộ cài đặt .exe qua ShellExecuteExW (mã lỗi Win32: {}).",
+                err_code
+            ));
+        }
+
+        let h_process = sei.hProcess;
+        if !h_process.is_null() {
+            unsafe {
+                // SEC-R8-03: Đặt timeout bảo vệ 45 phút cho bộ cài đặt lớn, tránh khóa luồng Tokio vĩnh viễn nếu installer bị treo
+                const TIMEOUT_INSTALL_MS: u32 = 45 * 60 * 1000;
+                const WAIT_TIMEOUT_VAL: u32 = 258;
+
+                let wait_res = WaitForSingleObject(h_process, TIMEOUT_INSTALL_MS);
+                if wait_res == WAIT_TIMEOUT_VAL {
+                    CloseHandle(h_process);
+                    return Err("TIEN_TRINH_TREO: Quá trình cài đặt .exe vượt quá thời gian cho phép (45 phút).".to_string());
+                }
+
+                let mut exit_code: u32 = 0;
+                GetExitCodeProcess(h_process, &mut exit_code);
+                CloseHandle(h_process);
+
+                if exit_code == 0 {
+                    // L-05: Cài đặt EXE thành công, tự động xóa file bộ cài trong downloads để tránh phình đĩa
+                    let clean_exe_path = bo_tien_to_dos_device_path(&safe_path);
+                    let _ = std::fs::remove_file(&clean_exe_path);
+
+                    let thong_tin_registry = crate::uninstaller::tim_khoa_registry_moi(&snapshot_truoc, ten_app)
+                        .or_else(|| crate::uninstaller::tim_ung_dung_chinh_xac_registry(ten_app, None, None));
+
+                    Ok(KetQuaCaiDat {
+                        thanh_cong: true,
+                        loai_cai_dat: "EXE".to_string(),
+                        thong_diep: "Đã cài đặt phần mềm (.exe) thành công.".to_string(),
+                        duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
+                        duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
+                        thong_tin_registry,
+                    })
+                } else {
+                    Err(format!(
+                        "Bộ cài đặt .exe kết thúc không thành công hoặc người dùng đã hủy (mã thoát: {}).",
+                        exit_code
+                    ))
+                }
+            }
+        } else {
+            let thong_tin_registry = crate::uninstaller::tim_khoa_registry_moi(&snapshot_truoc, ten_app)
+                .or_else(|| crate::uninstaller::tim_ung_dung_chinh_xac_registry(ten_app, None, None));
+
             Ok(KetQuaCaiDat {
                 thanh_cong: true,
                 loai_cai_dat: "EXE".to_string(),
-                thong_diep: "Đã cài đặt phần mềm (.exe) thành công.".to_string(),
-                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
-                duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
+                thong_diep: "Đã khởi chạy bộ cài đặt .exe.".to_string(),
+                duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
+                duong_dan_thuc_thi: None,
+                thong_tin_registry,
             })
-        } else {
-            let code = status.code().unwrap_or(-1);
-            Err(format!(
-                "Bộ cài đặt .exe kết thúc không thành công hoặc người dùng đã hủy (mã thoát: {}).",
-                code
-            ))
         }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = ten_app;
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "EXE".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập cài đặt .exe thành công.".to_string(),
             duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
+            thong_tin_registry: None,
         })
     }
 }
 
-/// Chạy bộ cài Windows .msi qua msiexec.exe và kiểm tra mã thoát (P3-10.1 & Điểm 4, 5)
-pub fn chay_bo_cai_msi(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
+/// Loại bỏ tiền tố DOS Device Path (\\?\ hoặc \??\) để tương thích với các tiện ích cổ điển như msiexec.exe (L-06)
+pub fn bo_tien_to_dos_device_path(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else if let Some(stripped) = s.strip_prefix(r"\??\") {
+        PathBuf::from(stripped)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// Chạy bộ cài Windows .msi qua msiexec.exe và kiểm tra mã thoát (P3-10.1 & L-06)
+pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiDat, String> {
     if !duong_dan_tep.exists() {
         return Err(format!("Tệp cài đặt .msi không tồn tại: {}", duong_dan_tep.display()));
     }
 
     let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
+    // L-06: msiexec.exe là tiện ích Win32 cổ điển không hỗ trợ tiền tố \\?\ của Windows NT device namespace
+    let clean_msi_path = bo_tien_to_dos_device_path(&safe_path);
+
+    #[cfg(target_os = "windows")]
+    let snapshot_truoc = crate::uninstaller::chup_snapshot_khoa_registry();
 
     #[cfg(target_os = "windows")]
     {
         let mut child = Command::new("msiexec.exe")
+            .current_dir(r"C:\Windows\System32")
             .arg("/i")
-            .arg(&safe_path)
+            .arg(&clean_msi_path)
             .spawn()
             .map_err(|e| format!("Không thể khởi chạy msiexec cho tệp .msi: {}", e))?;
 
@@ -128,23 +227,42 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
 
         let code = status.code().unwrap_or(-1);
         match code {
-            0 => Ok(KetQuaCaiDat {
-                thanh_cong: true,
-                loai_cai_dat: "MSI".to_string(),
-                thong_diep: "Đã hoàn tất cài đặt Windows Installer (.msi) thành công.".to_string(),
-                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
-                duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
-            }),
-            1602 => Err("Người dùng đã hủy tiến trình cài đặt Windows Installer (.msi).".to_string()),
-            3010 => Ok(KetQuaCaiDat {
-                thanh_cong: true,
-                loai_cai_dat: "MSI".to_string(),
-                thong_diep: "Cài đặt thành công nhưng hệ thống yêu cầu khởi động lại máy để hoàn tất.".to_string(),
-                duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
-                duong_dan_thuc_thi: None,
-            }),
+            0 => {
+                // L-05: Cài đặt MSI thành công, tự động xóa file bộ cài trong downloads
+                let _ = std::fs::remove_file(&clean_msi_path);
+
+                let thong_tin_registry = crate::uninstaller::tim_khoa_registry_moi(&snapshot_truoc, ten_app)
+                    .or_else(|| crate::uninstaller::tim_ung_dung_chinh_xac_registry(ten_app, None, None));
+
+                Ok(KetQuaCaiDat {
+                    thanh_cong: true,
+                    loai_cai_dat: "MSI".to_string(),
+                    thong_diep: "Đã hoàn tất cài đặt Windows Installer (.msi) thành công.".to_string(),
+                    duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
+                    duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
+                    thong_tin_registry,
+                })
+            }
+            1602 => Err("NGUOI_DUNG_HUY: Người dùng đã hủy tiến trình cài đặt Windows Installer (.msi).".to_string()),
+            3010 => {
+                // L-05: Cài đặt MSI thành công (yêu cầu khởi động lại máy), tự động xóa file bộ cài
+                let _ = std::fs::remove_file(&clean_msi_path);
+
+                let thong_tin_registry = crate::uninstaller::tim_khoa_registry_moi(&snapshot_truoc, ten_app)
+                    .or_else(|| crate::uninstaller::tim_ung_dung_chinh_xac_registry(ten_app, None, None));
+
+                Ok(KetQuaCaiDat {
+                    thanh_cong: true,
+                    loai_cai_dat: "MSI".to_string(),
+                    thong_diep: "Cài đặt thành công nhưng hệ thống yêu cầu khởi động lại máy để hoàn tất.".to_string(),
+                    duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
+                    duong_dan_thuc_thi: None,
+                    thong_tin_registry,
+                })
+            }
+            1619 => Err("Lỗi 1619: Gói cài đặt MSI không thể mở được. Hãy kiểm tra đường dẫn hoặc quyền truy cập tệp.".to_string()),
             _ => Err(format!(
-                "Bộ cài đặt Windows Installer kết thúc với mã lỗi: {}.",
+                "Bộ cài đặt Windows Installer (.msi) kết thúc không thành công với mã lỗi: {}.",
                 code
             )),
         }
@@ -152,24 +270,183 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path) -> Result<KetQuaCaiDat, String> {
 
     #[cfg(not(target_os = "windows"))]
     {
+        let _ = ten_app;
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "MSI".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập chạy msiexec thành công.".to_string(),
             duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
+            thong_tin_registry: None,
         })
     }
 }
 
-/// Giải nén bản Portable .zip và phòng chống lỗ hổng Zip Slip (P3-10.2)
-pub fn giai_nen_portable_zip(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiDat, String> {
+/// Kiểm tra xem một thư mục có phải là thư mục hệ thống nguy hiểm hoặc thư mục gốc không (SEC-02 & SEC-04)
+pub fn kiem_tra_thu_muc_an_toan(dir: &Path) -> Result<PathBuf, String> {
+    if !dir.exists() {
+        return Err(format!("Thư mục không tồn tại: {}", dir.display()));
+    }
+    let canonical = dir
+        .canonicalize()
+        .map_err(|e| format!("Không thể chuẩn hóa đường dẫn thư mục: {}", e))?;
+
+    // 1. Cấm thư mục gốc ổ đĩa (vd: C:\, D:\)
+    if canonical.parent().is_none() {
+        return Err("BẢO MẬT: Không được phép sử dụng thư mục gốc của ổ đĩa làm ranh giới thực thi.".to_string());
+    }
+
+    // 2. Cấm thư mục Windows (%WINDIR%, System32)
+    if let Ok(windir) = std::env::var("WINDIR") {
+        if let Ok(canon_win) = PathBuf::from(windir).canonicalize() {
+            if canonical.starts_with(&canon_win) {
+                return Err("BẢO MẬT: Không được phép sử dụng thư mục hệ thống Windows.".to_string());
+            }
+        }
+    }
+
+    // 3. Cấm thư mục Program Files / Program Files (x86)
+    for env_var in &["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"] {
+        if let Ok(pf) = std::env::var(env_var) {
+            if let Ok(canon_pf) = PathBuf::from(pf).canonicalize() {
+                if canonical.starts_with(&canon_pf) {
+                    return Err("BẢO MẬT: Không được phép sử dụng thư mục Program Files của hệ thống.".to_string());
+                }
+            }
+        }
+    }
+
+    // 4. Cấm thư mục Startup tự khởi động cùng Windows (cả APPDATA người dùng lẫn ProgramData toàn máy - SEC-04)
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let startup = PathBuf::from(appdata).join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        if let Ok(canon_startup) = startup.canonicalize() {
+            if canonical.starts_with(&canon_startup) {
+                return Err("BẢO MẬT: Không được phép sử dụng thư mục Startup của người dùng.".to_string());
+            }
+        }
+    }
+    if let Ok(progdata) = std::env::var("ProgramData") {
+        let startup_all = PathBuf::from(progdata).join("Microsoft\\Windows\\Start Menu\\Programs\\Startup");
+        if let Ok(canon_startup_all) = startup_all.canonicalize() {
+            if canonical.starts_with(&canon_startup_all) {
+                return Err("BẢO MẬT: Không được phép sử dụng thư mục Startup chung của hệ thống Windows.".to_string());
+            }
+        }
+    }
+
+    Ok(canonical)
+}
+
+/// Kiểm tra an toàn hệ thống và quyền ghi thư mục khi người dùng chọn đường dẫn portable (L-07)
+pub fn kiem_tra_thu_muc_an_toan_va_quyen_ghi(dir: &Path) -> Result<PathBuf, String> {
+    // 1. Kiểm tra an toàn (chặn C:\Windows, Program Files, Startup, Root C:\...)
+    let canonical = match kiem_tra_thu_muc_an_toan(dir) {
+        Ok(c) => c,
+        Err(_) => {
+            return Err("Không thể dùng thư mục hệ thống (C:\\Windows, C:\\Program Files...). Hãy chọn thư mục trong ổ dữ liệu, ví dụ D:\\Apps hoặc thư mục trong Documents.".to_string());
+        }
+    };
+
+    // 2. Thử tạo tệp tạm để kiểm tra quyền ghi (Write Permission)
+    let test_file = canonical.join(format!(".forgestore_write_test_{}.tmp", std::process::id()));
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&test_file) {
+        Ok(f) => {
+            drop(f);
+            let _ = std::fs::remove_file(&test_file);
+        }
+        Err(e) => {
+            return Err(format!(
+                "Thư mục không có quyền ghi: {}. Vui lòng chọn một thư mục khác (ví dụ: D:\\Apps hoặc thư mục trong Documents).",
+                e
+            ));
+        }
+    }
+
+    Ok(bo_tien_to_dos_device_path(&canonical))
+}
+
+/// Kiểm tra xem tệp thực thi có nằm trong thư mục dữ liệu an toàn của ForgeStore
+/// hoặc trong thư mục giải nén portable được người dùng chỉ định tường minh hay không (A1, SEC-02)
+pub fn kiem_tra_tep_thuc_thi_an_toan(
+    duong_dan_tep: &Path,
+    thu_muc_cho_phep: Option<&Path>,
+) -> Result<PathBuf, String> {
+    if !duong_dan_tep.exists() {
+        return Err(format!("Tệp không tồn tại: {}", duong_dan_tep.display()));
+    }
+
+    let canonical = duong_dan_tep
+        .canonicalize()
+        .map_err(|e| format!("Không thể giải quyết đường dẫn tệp: {}", e))?;
+
+    // SEC-R6-01 & SEC-R7-01: Bắt buộc phần mở rộng TRÊN ĐƯỜNG DẪN THỰC TẾ (CANONICAL) phải là .exe
+    // Ngăn chặn kỹ thuật tạo symlink app.exe -> payload.bat để qua mặt bộ lọc trước khi canonicalize!
+    let is_exe = canonical
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map_or(false, |ext| ext.eq_ignore_ascii_case("exe"));
+    if !is_exe {
+        return Err("BẢO MẬT: Chỉ cho phép khởi chạy tệp thực thi định dạng .exe.".to_string());
+    }
+
+    let base_dir = std::env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")));
+
+    let forgestore_root = base_dir.join("ForgeStore");
+    let forgestore_canonical = forgestore_root.canonicalize().unwrap_or(forgestore_root);
+
+    // 1. Cho phép nếu nằm trong thư mục gốc ForgeStore
+    if canonical.starts_with(&forgestore_canonical) {
+        return Ok(canonical);
+    }
+
+    // 2. Cho phép nếu nằm trong thư mục người dùng đã chọn tường minh cho portable app (A1)
+    // SEC-02: Phải kiểm tra thu_muc_cho_phep an toàn, cấm root C:\ hoặc thư mục hệ thống
+    if let Some(allowed) = thu_muc_cho_phep {
+        if let Ok(allowed_canonical) = kiem_tra_thu_muc_an_toan(allowed) {
+            if canonical.starts_with(&allowed_canonical) {
+                return Ok(canonical);
+            }
+        }
+    }
+
+    Err(format!(
+        "BẢO MẬT: Đường dẫn '{}' nằm ngoài thư mục an toàn của ForgeStore và thư mục portable được phép.",
+        canonical.display()
+    ))
+}
+
+/// Giải nén bản Portable .zip và phòng chống lỗ hổng Zip Slip (P3-10.2, A1, SEC-03, SEC-04)
+pub fn giai_nen_portable_zip(
+    duong_dan_tep: &Path,
+    ten_app: &str,
+    thu_muc_tuy_chon: Option<&Path>,
+) -> Result<KetQuaCaiDat, String> {
     if !duong_dan_tep.exists() {
         return Err(format!("Tệp nén .zip không tồn tại: {}", duong_dan_tep.display()));
     }
 
     let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
-    let dest_dir = lay_thu_muc_cai_dat_app(ten_app)?;
+
+    // Chuẩn hóa tên app an toàn cho thư mục
+    let safe_app_name: String = ten_app
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+
+    // Nếu người dùng chọn thư mục đích (A1, SEC-04): kiểm tra an toàn thư mục đích
+    // Nếu không: fallback về mặc định %LOCALAPPDATA%\ForgeStore\apps\<safe_app_name>
+    let dest_dir = if let Some(custom_dir) = thu_muc_tuy_chon {
+        let safe_custom = kiem_tra_thu_muc_an_toan(custom_dir)?;
+        let target = safe_custom.join(&safe_app_name);
+        std::fs::create_dir_all(&target)
+            .map_err(|e| format!("Không thể tạo thư mục đích '{}': {}", target.display(), e))?;
+        target
+    } else {
+        lay_thu_muc_cai_dat_app(ten_app)?
+    };
+
     let canonical_dest = dest_dir.canonicalize()
         .map_err(|e| format!("Không thể chuẩn hóa đường dẫn đích: {}", e))?;
 
@@ -179,12 +456,16 @@ pub fn giai_nen_portable_zip(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQ
         .map_err(|e| format!("Tệp không phải định dạng zip hợp lệ hoặc bị hỏng: {}", e))?;
 
     let mut potential_exe: Option<PathBuf> = None;
+    let mut total_uncompressed_bytes: u64 = 0;
+    // SEC-R9-05: Chống Zip Bomb DoS: Giới hạn tối đa 512MB mỗi file và 4GB toàn bộ gói nén
+    const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+    const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
     for i in 0..archive.len() {
         let mut zip_file = archive.by_index(i)
             .map_err(|e| format!("Lỗi khi đọc phần tử zip #{}: {}", i, e))?;
 
-        // Chặn lỗ hổng Zip-Slip (P3-10.2): enclosed_name loại bỏ đường dẫn tương đối ../
+        // Chặn lỗ hổng Zip-Slip Lớp 1 (P3-10.2): enclosed_name loại bỏ đường dẫn tương đối ../
         let enclosed_name = match zip_file.enclosed_name() {
             Some(path) => path.to_owned(),
             None => {
@@ -197,28 +478,81 @@ pub fn giai_nen_portable_zip(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQ
 
         let outpath = dest_dir.join(&enclosed_name);
 
-        // Kiểm tra an toàn kép: outpath phải nằm trọn trong dest_dir
-        if let Ok(canon_out) = outpath.canonicalize() {
-            if !canon_out.starts_with(&canonical_dest) {
-                return Err("CẢNH BÁO AN NINH: Tệp giải nén vượt ra ngoài thư mục an toàn!".to_string());
-            }
-        }
-
         if zip_file.name().ends_with('/') {
             std::fs::create_dir_all(&outpath)
                 .map_err(|e| format!("Không thể tạo thư mục con: {}", e))?;
+            // SEC-03: Kiểm tra tính bao hàm của thư mục con vừa tạo
+            if let Ok(canon_sub) = outpath.canonicalize() {
+                if !canon_sub.starts_with(&canonical_dest) {
+                    return Err("CẢNH BÁO AN NINH: Thư mục giải nén vượt ra ngoài thư mục an toàn!".to_string());
+                }
+            }
         } else {
             if let Some(parent) = outpath.parent() {
                 if !parent.exists() {
                     std::fs::create_dir_all(parent)
                         .map_err(|e| format!("Không thể tạo thư mục cha: {}", e))?;
                 }
+                // SEC-03: Chốt chặn Zip-Slip Lớp 2 chuẩn xác: Thư mục cha phải nằm trọn trong dest_dir
+                let canon_parent = parent.canonicalize()
+                    .map_err(|e| format!("Không thể chuẩn hóa thư mục cha: {}", e))?;
+                if !canon_parent.starts_with(&canonical_dest) {
+                    return Err("CẢNH BÁO AN NINH: Thư mục cha giải nén vượt ra ngoài thư mục an toàn!".to_string());
+                }
+            }
+
+            // SEC-04 & SEC-V3-01: Kiểm tra symlink_metadata và canonicalize trước khi tạo/ghi tệp
+            // Ngăn chặn triệt để TOCTOU Truncation: Nếu tệp đã tồn tại, kiểm tra xem nó có nằm trong canonical_dest không
+            // trước khi File::create mở và truncate tệp!
+            if outpath.exists() || outpath.symlink_metadata().is_ok() {
+                if let Ok(meta) = outpath.symlink_metadata() {
+                    if meta.file_type().is_symlink() {
+                        return Err(format!(
+                            "CẢNH BÁO AN NINH: Phát hiện tệp liên kết symlink nguy hiểm: '{}'",
+                            outpath.display()
+                        ));
+                    }
+                }
+                if let Ok(canon_existing) = outpath.canonicalize() {
+                    if !canon_existing.starts_with(&canonical_dest) {
+                        return Err(format!(
+                            "CẢNH BÁO AN NINH: Tệp đích hiện tại '{}' trỏ ra ngoài thư mục an toàn!",
+                            outpath.display()
+                        ));
+                    }
+                }
             }
 
             let mut outfile = std::fs::File::create(&outpath)
                 .map_err(|e| format!("Không thể tạo tệp giải nén '{}': {}", outpath.display(), e))?;
-            std::io::copy(&mut zip_file, &mut outfile)
+
+            // SEC-03: Kiểm tra tệp sau khi tạo xem có bị Symlink/Junction redirect ra ngoài không
+            let canon_out = outpath.canonicalize()
+                .map_err(|e| format!("Không thể chuẩn hóa tệp giải nén: {}", e))?;
+            if !canon_out.starts_with(&canonical_dest) {
+                let _ = std::fs::remove_file(&outpath);
+                return Err("CẢNH BÁO AN NINH: Tệp giải nén vượt ra ngoài thư mục an toàn!".to_string());
+            }
+
+            // SEC-R9-05: Đọc tối đa MAX_FILE_BYTES + 1 để phát hiện tệp vượt trần dung lượng an toàn (Zip Bomb DoS)
+            use std::io::Read;
+            let mut limited_reader = (&mut zip_file).take(MAX_FILE_BYTES + 1);
+            let bytes_written = std::io::copy(&mut limited_reader, &mut outfile)
                 .map_err(|e| format!("Lỗi khi ghi dữ liệu giải nén: {}", e))?;
+
+            if bytes_written > MAX_FILE_BYTES {
+                let _ = std::fs::remove_file(&outpath);
+                return Err(format!(
+                    "CẢNH BÁO AN NINH: Tệp nén '{}' vượt quá giới hạn an toàn 512MB (nghi vấn Zip Bomb)!",
+                    outpath.display()
+                ));
+            }
+
+            total_uncompressed_bytes = total_uncompressed_bytes.saturating_add(bytes_written);
+            if total_uncompressed_bytes > MAX_TOTAL_BYTES {
+                let _ = std::fs::remove_file(&outpath);
+                return Err("CẢNH BÁO AN NINH: Tổng dung lượng gói nén vượt quá giới hạn an toàn 4GB (nghi vấn Zip Bomb)!".to_string());
+            }
 
             // Ghi nhận file .exe tiềm năng để người dùng mở trực tiếp
             if let Some(ext) = outpath.extension() {
@@ -231,28 +565,95 @@ pub fn giai_nen_portable_zip(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQ
         }
     }
 
+    // Đóng file handle trước khi xóa file zip trên Windows
+    drop(archive);
+
+    // L-05: Giải nén ZIP thành công, tự động xóa file .zip tải về trong thư mục downloads
+    let clean_zip_path = bo_tien_to_dos_device_path(&safe_path);
+    let _ = std::fs::remove_file(&clean_zip_path);
+
     Ok(KetQuaCaiDat {
         thanh_cong: true,
         loai_cai_dat: "PORTABLE_ZIP".to_string(),
         thong_diep: format!("Đã giải nén bản portable vào '{}' thành công.", dest_dir.display()),
         duong_dan_cai_dat: Some(dest_dir.to_string_lossy().to_string()),
         duong_dan_thuc_thi: potential_exe.map(|p| p.to_string_lossy().to_string()),
+        thong_tin_registry: None,
     })
 }
 
-/// Mở ứng dụng đã cài đặt qua đường dẫn thực thi
-pub fn mo_ung_dung_thuc_thi(duong_dan: &Path) -> Result<(), String> {
+/// Mở ứng dụng đã cài đặt qua đường dẫn thực thi (hỗ trợ cả app portable trong thư mục người dùng chọn)
+pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -> Result<(), String> {
     if !duong_dan.exists() {
         return Err(format!("Đường dẫn thực thi không tồn tại: {}", duong_dan.display()));
     }
 
-    let safe_path = kiem_tra_tep_an_toan(duong_dan)?;
+    let safe_path = kiem_tra_tep_thuc_thi_an_toan(duong_dan, thu_muc_cho_phep)?;
 
     #[cfg(target_os = "windows")]
     {
-        Command::new(&safe_path)
+        let path_wide: Vec<u16> = OsStr::new(safe_path.as_os_str())
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let mut sei: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
+        sei.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
+        sei.fMask = 0;
+        sei.lpFile = path_wide.as_ptr();
+        sei.nShow = SW_SHOW as i32;
+
+        let success = unsafe { ShellExecuteExW(&mut sei) };
+        if success == 0 {
+            let err_code = unsafe { GetLastError() };
+            if err_code == ERROR_CANCELLED {
+                return Err("NGUOI_DUNG_HUY: Người dùng đã từ chối cấp quyền khi mở ứng dụng.".to_string());
+            }
+            return Err(format!("Không thể mở ứng dụng (mã lỗi Win32: {}).", err_code));
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(())
+    }
+}
+
+/// Mở thư mục an toàn trong Windows File Explorer (A1, TC-09)
+/// Kiểm tra nghiêm ngặt: Đường dẫn bắt buộc phải tồn tại và là thư mục (is_dir).
+/// Tuyệt đối từ chối nếu là tệp tin để ngăn chặn tấn công thực thi mã tùy ý từ Webview.
+pub fn mo_thu_muc_he_thong(duong_dan: &Path) -> Result<(), String> {
+    // SEC-R6-03, SEC-R7-06 & SEC-R8-05: Cấm tuyệt đối đường dẫn mạng UNC (\\ hoặc //) và NT Object Manager device path (\??\ hoặc \\?\)
+    // Chuẩn hóa trim() để tránh bypass bằng khoảng trắng dẫn đầu, chống rò rỉ băm NetNTLMv2 qua SMB
+    let path_str = duong_dan.to_string_lossy();
+    let trimmed = path_str.trim();
+    if trimmed.starts_with(r"\\")
+        || trimmed.starts_with("//")
+        || trimmed.starts_with(r"\??\")
+        || trimmed.starts_with(r"\\?\")
+    {
+        return Err("BẢO MẬT: Không được phép mở đường dẫn mạng UNC hoặc thiết bị NT.".to_string());
+    }
+
+    if !duong_dan.exists() {
+        return Err(format!("Đường dẫn thư mục không tồn tại: {}", duong_dan.display()));
+    }
+
+    if !duong_dan.is_dir() {
+        return Err(format!("BẢO MẬT: Đường dẫn '{}' không phải là thư mục. Thao tác bị từ chối!", duong_dan.display()));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // DELIV-44.3: Sử dụng đường dẫn tuyệt đối C:\Windows\explorer.exe thay vì lệnh explorer chung
+        let explorer_path = std::env::var("WINDIR")
+            .map(|w| format!("{}\\explorer.exe", w))
+            .unwrap_or_else(|_| r"C:\Windows\explorer.exe".to_string());
+        std::process::Command::new(explorer_path)
+            .arg(duong_dan)
             .spawn()
-            .map_err(|e| format!("Không thể mở ứng dụng: {}", e))?;
+            .map_err(|e| format!("Không thể khởi chạy Windows File Explorer: {}", e))?;
         Ok(())
     }
 
@@ -267,6 +668,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_mo_thu_muc_he_thong_unc_tu_choi() {
+        let res = mo_thu_muc_he_thong(Path::new(r"\\attacker-ip\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC"));
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_nt_device_path_tu_choi() {
+        let res = mo_thu_muc_he_thong(Path::new(r"\??\UNC\attacker-ip\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC hoặc thiết bị NT"));
+    }
+
+    #[test]
+    fn test_kiem_tra_tep_thuc_thi_an_toan_duoi_khong_phai_exe() {
+        let temp_dir = std::env::temp_dir();
+        let bat_file = temp_dir.join("forgestore_test_evil.bat");
+        let _ = std::fs::File::create(&bat_file);
+
+        let res = kiem_tra_tep_thuc_thi_an_toan(&bat_file, Some(&temp_dir));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("định dạng .exe"));
+
+        let _ = std::fs::remove_file(&bat_file);
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_khong_ton_tai() {
+        let res = mo_thu_muc_he_thong(Path::new("C:\\invalid\\nonexistent_dir_12345"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không tồn tại"));
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_la_tep_tin_tu_choi() {
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("forgestore_test_not_a_dir.tmp");
+        let _ = std::fs::File::create(&temp_file);
+
+        let res = mo_thu_muc_he_thong(&temp_file);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không phải là thư mục"));
+
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
     fn test_lay_thu_muc_cai_dat_app() {
         let res = lay_thu_muc_cai_dat_app("RustDesk App!@#");
         assert!(res.is_ok());
@@ -277,22 +725,117 @@ mod tests {
 
     #[test]
     fn test_chay_bo_cai_exe_file_khong_ton_tai() {
-        let res = chay_bo_cai_exe(Path::new("C:\\invalid\\path\\nonexistent.exe"));
+        let res = chay_bo_cai_exe(Path::new("C:\\invalid\\path\\nonexistent.exe"), "TestApp");
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("không tồn tại"));
     }
 
     #[test]
     fn test_chay_bo_cai_msi_file_khong_ton_tai() {
-        let res = chay_bo_cai_msi(Path::new("C:\\invalid\\path\\nonexistent.msi"));
+        let res = chay_bo_cai_msi(Path::new("C:\\invalid\\path\\nonexistent.msi"), "TestApp");
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("không tồn tại"));
     }
 
     #[test]
     fn test_giai_nen_zip_file_khong_ton_tai() {
-        let res = giai_nen_portable_zip(Path::new("C:\\invalid\\path\\nonexistent.zip"), "TestApp");
+        let res = giai_nen_portable_zip(Path::new("C:\\invalid\\path\\nonexistent.zip"), "TestApp", None);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("không tồn tại"));
     }
+
+    #[test]
+    fn test_giai_nen_zip_voi_thu_muc_tuy_chon_file_khong_ton_tai() {
+        let custom_dir = Path::new("D:\\MyApps");
+        let res = giai_nen_portable_zip(Path::new("C:\\invalid\\path\\nonexistent.zip"), "TestApp", Some(custom_dir));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không tồn tại"));
+    }
+
+    #[test]
+    fn test_kiem_tra_tep_thuc_thi_an_toan_khong_ton_tai() {
+        let res = kiem_tra_tep_thuc_thi_an_toan(Path::new("C:\\invalid\\nonexistent.exe"), None);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_kiem_tra_thu_muc_an_toan_cam_root() {
+        // SEC-02 & SEC-04: Cấm thư mục gốc ổ đĩa
+        let res = kiem_tra_thu_muc_an_toan(Path::new("C:\\"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("gốc của ổ đĩa"));
+    }
+
+    #[test]
+    fn test_kiem_tra_thu_muc_an_toan_cam_windows() {
+        // SEC-02 & SEC-04: Cấm thư mục hệ thống Windows
+        if let Ok(windir) = std::env::var("WINDIR") {
+            let res = kiem_tra_thu_muc_an_toan(Path::new(&windir));
+            assert!(res.is_err());
+            assert!(res.unwrap_err().contains("hệ thống Windows"));
+        }
+    }
+
+    #[test]
+    fn test_kiem_tra_thu_muc_an_toan_cho_phep_temp() {
+        let temp = std::env::temp_dir();
+        let res = kiem_tra_thu_muc_an_toan(&temp);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_mo_thu_muc_he_thong_unc_co_khoang_trang_dau_tu_choi() {
+        // SEC-R8-05: Đường dẫn UNC có khoảng trắng dẫn đầu vẫn phải bị từ chối
+        let res = mo_thu_muc_he_thong(Path::new("  \\\\attacker\\share"));
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("đường dẫn mạng UNC"));
+    }
+
+    #[test]
+    fn test_bo_tien_to_dos_device_path_msi_du_lieu_that() {
+        // L-06: Dữ liệu thật từ test case 07 (Flameshot) và test case 08 (DBeaver)
+        let flameshot_verbatim = Path::new(r"\\?\C:\Users\TRANQUYET\AppData\Local\ForgeStore\downloads\Flameshot-12.1.0-win64.msi");
+        let flameshot_clean = bo_tien_to_dos_device_path(flameshot_verbatim);
+        assert_eq!(
+            flameshot_clean.to_string_lossy(),
+            r"C:\Users\TRANQUYET\AppData\Local\ForgeStore\downloads\Flameshot-12.1.0-win64.msi"
+        );
+
+        let dbeaver_verbatim = Path::new(r"\\?\C:\Users\TRANQUYET\AppData\Local\ForgeStore\downloads\dbeaver-ce-24.3.0-x86_64-setup.msi");
+        let dbeaver_clean = bo_tien_to_dos_device_path(dbeaver_verbatim);
+        assert_eq!(
+            dbeaver_clean.to_string_lossy(),
+            r"C:\Users\TRANQUYET\AppData\Local\ForgeStore\downloads\dbeaver-ce-24.3.0-x86_64-setup.msi"
+        );
+
+        let nt_namespace = Path::new(r"\??\D:\Apps\Sample.msi");
+        let nt_clean = bo_tien_to_dos_device_path(nt_namespace);
+        assert_eq!(nt_clean.to_string_lossy(), r"D:\Apps\Sample.msi");
+
+        let normal_path = Path::new(r"C:\Program Files\Common\App.msi");
+        let normal_clean = bo_tien_to_dos_device_path(normal_path);
+        assert_eq!(normal_clean.to_string_lossy(), r"C:\Program Files\Common\App.msi");
+    }
+
+    #[test]
+    fn test_kiem_tra_thu_muc_an_toan_va_quyen_ghi_windows_tu_choi() {
+        // L-07: Chọn C:\Windows hoặc Program Files bị từ chối với thông điệp rõ ràng
+        if let Ok(windir) = std::env::var("WINDIR") {
+            let res = kiem_tra_thu_muc_an_toan_va_quyen_ghi(Path::new(&windir));
+            assert!(res.is_err());
+            let err = res.unwrap_err();
+            assert!(err.contains("Không thể dùng thư mục hệ thống"));
+        }
+    }
+
+    #[test]
+    fn test_kiem_tra_thu_muc_an_toan_va_quyen_ghi_temp_thanh_cong() {
+        // L-07: Thư mục an toàn có quyền ghi trả về thành công và không có tiền tố \\?\
+        let temp_dir = std::env::temp_dir();
+        let res = kiem_tra_thu_muc_an_toan_va_quyen_ghi(&temp_dir);
+        assert!(res.is_ok());
+        let clean_path = res.unwrap();
+        assert!(!clean_path.to_string_lossy().starts_with(r"\\?\"));
+    }
 }
+

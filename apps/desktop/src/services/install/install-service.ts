@@ -4,6 +4,7 @@ import type {
   ThamSoCaiDat,
   TienDoTaiFrontend,
   TienDoTaiPayload,
+  ThongTinUngDungRegistry,
 } from './install-types';
 
 /**
@@ -53,12 +54,47 @@ export class InstallService {
   /**
    * Mở ứng dụng đã cài đặt qua đường dẫn thực thi (.exe)
    */
-  async moUngDung(duongDanThucThi: string): Promise<void> {
+  async moUngDung(duongDanThucThi?: string | null, thuMucChoPhep?: string): Promise<void> {
+    if (!duongDanThucThi || !duongDanThucThi.trim()) {
+      console.warn('[InstallService] moUngDung bị bỏ qua vì đường dẫn rỗng');
+      return;
+    }
+    const cleanPath = duongDanThucThi.trim();
     if (this.isTauriEnv()) {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke<void>('mo_ung_dung', { duongDanThucThi });
+      await invoke<void>('mo_ung_dung', {
+        duongDanThucThi: cleanPath,
+        thuMucChoPhep: thuMucChoPhep || null,
+      });
     } else {
-      console.info(`[WebDev Preview] Giả lập mở ứng dụng tại: ${duongDanThucThi}`);
+      console.info(`[WebDev Preview] Giả lập mở ứng dụng tại: ${cleanPath}`);
+    }
+  }
+
+  /**
+   * Mở thư mục chứa bản portable trong File Explorer (A1, TC-09, SEC-02)
+   */
+  async moThuMuc(duongDanThuMuc?: string | null): Promise<void> {
+    if (!duongDanThuMuc || !duongDanThuMuc.trim()) {
+      console.warn('[InstallService] moThuMuc bị bỏ qua vì đường dẫn rỗng');
+      return;
+    }
+    const cleanPath = duongDanThuMuc.trim();
+    if (this.isTauriEnv()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('mo_thu_muc', { duongDan: cleanPath });
+      } catch (err) {
+        console.warn('Lỗi khi mở thư mục qua Tauri command, thử lại bằng revealItemInDir:', err);
+        try {
+          const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+          await revealItemInDir(cleanPath);
+        } catch (revealErr) {
+          console.error('Không thể mở thư mục qua File Explorer:', revealErr);
+        }
+      }
+    } else {
+      console.info(`[WebDev Preview] Giả lập mở thư mục tại: ${cleanPath}`);
     }
   }
 
@@ -111,6 +147,7 @@ export class InstallService {
       duongDanTep: ketQuaTai.duong_dan_tep,
       loaiTep: params.loaiTep,
       tenApp: params.tenApp,
+      thuMucDich: params.thuMucDich || null,
     });
 
     // 5. Báo hoàn tất
@@ -195,6 +232,69 @@ export class InstallService {
       duong_dan_cai_dat: 'C:\\ForgeStore\\apps\\' + params.tenApp,
       duong_dan_thuc_thi: 'C:\\ForgeStore\\apps\\' + params.tenApp + '\\' + params.tenApp + '.exe',
     };
+  }
+
+  /**
+   * Kiểm tra thông tin cài đặt của ứng dụng trong Windows Registry (A4, Vấn đề 1)
+   */
+  async kiemTraAppRegistry(
+    tenApp: string,
+    registryKey?: string,
+    displayName?: string,
+  ): Promise<ThongTinUngDungRegistry | null> {
+    if (this.isTauriEnv()) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<ThongTinUngDungRegistry | null>('kiem_tra_ung_dung_da_cai_registry', {
+          tenApp,
+          registryKey: registryKey || null,
+          displayName: displayName || null,
+        });
+      } catch (err) {
+        console.warn(`[InstallService] Lỗi khi kiểm tra registry cho ${tenApp}:`, err);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Chạy tiến trình gỡ cài đặt chính chủ của phần mềm qua UninstallString từ Registry (A4, SEC-01)
+   */
+  async goCaiDatQuaRegistry(
+    tenApp: string,
+    uninstallString?: string,
+    registryKey?: string,
+  ): Promise<boolean> {
+    if (this.isTauriEnv()) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<boolean>('go_cai_dat_ung_dung_qua_registry', {
+        tenApp,
+        uninstallString: uninstallString || null,
+        registryKey: registryKey || null,
+      });
+    }
+    // Web dev preview fallback
+    return true;
+  }
+
+  /**
+   * Khởi chạy ứng dụng native từ Registry qua DisplayIcon hoặc InstallLocation (L-01)
+   */
+  async moUngDungTuRegistry(khoaRegistry: string, tenApp?: string): Promise<boolean> {
+    if (!khoaRegistry || !khoaRegistry.trim()) {
+      return false;
+    }
+    if (this.isTauriEnv()) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('mo_ung_dung_tu_registry', {
+        khoaRegistry: khoaRegistry.trim(),
+        tenApp: tenApp || null,
+      });
+      return true;
+    }
+    // Web dev preview fallback
+    return true;
   }
 }
 

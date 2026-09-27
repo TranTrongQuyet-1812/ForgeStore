@@ -2,12 +2,17 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { installService } from '../services/install/install-service';
 import { libraryService } from '../services/library/library-service';
+import { queryClient } from '../services/api/query-client';
+import { apiClient } from '../services/api/api-client';
 import { useAuthStore } from './useAuthStore';
 import type {
   ThamSoCaiDat,
   ThongTinCaiDatApp,
   TrangThaiCaiDat,
 } from '../services/install/install-types';
+
+export type { ThongTinCaiDatApp, ThamSoCaiDat, TrangThaiCaiDat };
+export type CaiDatTienTrinh = ThongTinCaiDatApp;
 
 const safeMemoryStorage = {
   getItem: (name: string): string | null => {
@@ -39,6 +44,9 @@ const safeMemoryStorage = {
   },
 };
 
+// Dọn dẹp key cũ không còn được phép lưu trữ trạng thái cài đặt vĩnh viễn (A3)
+safeMemoryStorage.removeItem('forgestore_installed_apps');
+
 interface InstallState {
   caiDatMap: Record<string, ThongTinCaiDatApp>;
 
@@ -47,6 +55,7 @@ interface InstallState {
   huyCaiDat: (maUngDung: string) => Promise<void>;
   moApp: (maUngDung: string) => Promise<void>;
   goCaiDatLocal: (maUngDung: string) => void;
+  xoaTrangThaiTam: () => void;
   capNhatTrangThai: (maUngDung: string, partial: Partial<ThongTinCaiDatApp>) => void;
   layThongTinApp: (maUngDung: string) => ThongTinCaiDatApp | undefined;
 }
@@ -92,6 +101,7 @@ export const useInstallStore = create<InstallState>()(
         // Khởi tạo trạng thái đang tải
         get().capNhatTrangThai(maUngDung, {
           tenApp,
+          loaiTep: params.loaiTep,
           trangThai: 'DANG_TAI',
           phanTram: 0,
           tocDoBps: 0,
@@ -112,29 +122,44 @@ export const useInstallStore = create<InstallState>()(
           });
 
           if (res.thanh_cong) {
+            const isPortableZip = params.loaiTep?.toUpperCase().includes('ZIP');
+
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_CAI_DAT',
+              loaiTep: params.loaiTep,
               phanTram: 100,
               tocDoBps: 0,
               duongDanThucThi: res.duong_dan_thuc_thi ?? undefined,
+              duongDanThuMuc: isPortableZip ? (res.duong_dan_cai_dat ?? undefined) : undefined,
+              registryKey: res.thong_tin_registry?.registry_key ?? undefined,
+              registryDisplayName: res.thong_tin_registry?.display_name ?? undefined,
+              registryPublisher: res.thong_tin_registry?.publisher ?? undefined,
+              registryDisplayVersion: res.thong_tin_registry?.display_version ?? undefined,
             });
 
-            // Ghi nhận cài đặt lên Backend nếu có thể (P3-10.3 & P3-12.2 & Điểm 1, 6)
-            try {
-              const maThietBi = useAuthStore.getState().maThietBi;
-              if (maThietBi) {
-                await libraryService.ghiNhanCaiDat(maThietBi, {
-                  maUngDung,
-                  phienBanHienTai: params.phienBan || '0.0.0',
-                  maTepDaCai: params.maTep,
-                  duongDanThuMuc: res.duong_dan_cai_dat ?? undefined,
-                });
+            // Ghi nhận cài đặt lên Backend nếu là file cài đặt hệ thống EXE/MSI (P3-10.3 & A1 & A3)
+            // Tuyệt đối KHÔNG ghi nhận bản ZIP portable vào Thư viện máy (Nguyên tắc 3 & A1)
+            if (!isPortableZip) {
+              try {
+                const maThietBi = useAuthStore.getState().maThietBi;
+                if (maThietBi) {
+                  await libraryService.ghiNhanCaiDat(maThietBi, {
+                    maUngDung,
+                    phienBanHienTai: params.phienBan || '0.0.0',
+                    maTepDaCai: params.maTep,
+                    duongDanThuMuc: undefined, // DELIV-44.3: Bản EXE/MSI không lưu duongDanThuMuc (lấy từ registry)
+                    khoaRegistry: res.thong_tin_registry?.registry_key ?? undefined,
+                    tenHienThiRegistry: res.thong_tin_registry?.display_name ?? undefined,
+                  });
+                  // Cập nhật tức thì cả trang Chi tiết và trang Thư viện qua server query (A3)
+                  queryClient.invalidateQueries({ queryKey: ['device-installed-apps'] });
+                }
+              } catch (syncErr) {
+                console.warn(
+                  '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
+                  syncErr,
+                );
               }
-            } catch (syncErr) {
-              console.warn(
-                '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
-                syncErr,
-              );
             }
 
             return true;
@@ -153,13 +178,25 @@ export const useInstallStore = create<InstallState>()(
                 ? err
                 : 'Lỗi không xác định khi tải và cài đặt';
 
-          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI
-          if (errMsg.includes('DA_HUY')) {
+          // Nếu là hủy thì đánh dấu DA_HUY thay vì LOI (P3-FIX & L-09: Tách hủy tải vs từ chối UAC)
+          const currentTrangThai = get().caiDatMap[maUngDung]?.trangThai;
+          const isUacOrCancel =
+            errMsg.includes('DA_HUY') ||
+            errMsg.includes('NGUOI_DUNG_HUY') ||
+            errMsg.includes('1223') ||
+            errMsg.includes('1602') ||
+            errMsg.toLowerCase().includes('từ chối') ||
+            errMsg.toLowerCase().includes('đã hủy');
+
+          if (isUacOrCancel) {
+            const isDownloading = currentTrangThai === 'DANG_TAI';
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_HUY',
               phanTram: 0,
               tocDoBps: 0,
-              thongDiepLoi: undefined,
+              thongDiepLoi: isDownloading
+                ? 'Đã hủy tiến trình tải.'
+                : 'Đã hủy tiến trình cài đặt hoặc từ chối cấp quyền Quản trị viên (UAC).',
             });
           } else {
             get().capNhatTrangThai(maUngDung, {
@@ -172,11 +209,16 @@ export const useInstallStore = create<InstallState>()(
       },
 
       huyCaiDat: async (maUngDung) => {
+        const currentTrangThai = get().caiDatMap[maUngDung]?.trangThai;
         await installService.huyTai(maUngDung);
         get().capNhatTrangThai(maUngDung, {
           trangThai: 'DA_HUY',
           phanTram: 0,
           tocDoBps: 0,
+          thongDiepLoi:
+            currentTrangThai === 'DANG_TAI'
+              ? 'Đã hủy tiến trình tải.'
+              : 'Đã hủy tiến trình cài đặt.',
         });
       },
 
@@ -186,6 +228,10 @@ export const useInstallStore = create<InstallState>()(
           delete next[maUngDung];
           return { caiDatMap: next };
         });
+      },
+
+      xoaTrangThaiTam: () => {
+        set({ caiDatMap: {} });
       },
 
       moApp: async (maUngDung) => {
@@ -198,14 +244,55 @@ export const useInstallStore = create<InstallState>()(
       },
     }),
     {
-      name: 'forgestore_installed_apps',
+      name: 'forgestore_install_tasks',
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
-        // Chỉ lưu vĩnh viễn các app đã cài đặt thành công
+        // L-08: Chỉ lưu các tiến trình dở dang để merge reset sang DA_HUY khi khởi động lại app.
+        // Bản Portable ZIP không lưu kẹt DA_CAI_DAT trong storage.
         caiDatMap: Object.fromEntries(
-          Object.entries(state.caiDatMap).filter(([_, v]) => v.trangThai === 'DA_CAI_DAT'),
+          Object.entries(state.caiDatMap).filter(
+            ([_, v]) =>
+              v.trangThai === 'DANG_TAI' ||
+              v.trangThai === 'XAC_MINH' ||
+              v.trangThai === 'DANG_CAI_DAT',
+          ),
         ),
       }),
+      merge: (persistedState, currentState) => {
+        // FE-R7-01 / EC-03: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
+        // Sửa trực tiếp trên persistedState trước khi gộp vào store, triệt tiêu lỗi TDZ useInstallStore.setState
+        const typed = persistedState as Partial<InstallState> | undefined;
+        if (!typed || !typed.caiDatMap) {
+          return {
+            ...currentState,
+            ...(typed || {}),
+          };
+        }
+
+        const next = { ...typed.caiDatMap };
+        for (const [id, item] of Object.entries(next)) {
+          if (['DANG_TAI', 'XAC_MINH', 'DANG_CAI_DAT'].includes(item.trangThai)) {
+            next[id] = {
+              ...item,
+              trangThai: 'DA_HUY',
+              phanTram: 0,
+              tocDoBps: 0,
+              thongDiepLoi: 'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
+            };
+          }
+        }
+
+        return {
+          ...currentState,
+          ...typed,
+          caiDatMap: next,
+        };
+      },
     },
   ),
 );
+
+// Tự động dọn sạch các trạng thái tạm khi người dùng đăng xuất (A3)
+apiClient.onLogout(() => {
+  useInstallStore.getState().xoaTrangThaiTam();
+});

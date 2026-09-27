@@ -16,22 +16,26 @@ describe('FavoritesService (P2-50)', () => {
         findUnique: vi.fn(),
         create: vi.fn(),
         delete: vi.fn(),
+        deleteMany: vi.fn(),
       },
       ungDung: {
         findUnique: vi.fn(),
         findFirst: vi.fn(),
+      },
+      thietBi: {
+        findUnique: vi.fn(),
       },
     };
 
     service = new FavoritesService(prisma as unknown as PrismaService);
   });
 
-  describe('chuyenDoiYeuThich (P2-50.2 & P2-50.3)', () => {
+  describe('chuyenDoiYeuThich (P2-50.2 & P2-50.3 & L-11)', () => {
     const maNguoiDung = 'user-uuid-1';
     const maUngDung = 'app-uuid-rustdesk';
 
     it('ném NotFoundException nếu ứng dụng không tồn tại trong Store', async () => {
-      prisma.ungDung.findUnique.mockResolvedValue(null);
+      prisma.ungDung.findFirst.mockResolvedValue(null);
 
       await expect(service.chuyenDoiYeuThich(maNguoiDung, 'app-khong-ton-tai')).rejects.toThrow(
         NotFoundException,
@@ -39,12 +43,12 @@ describe('FavoritesService (P2-50)', () => {
     });
 
     it('thêm vào yêu thích nếu chưa có bản ghi (toggle ON -> true)', async () => {
-      prisma.ungDung.findUnique.mockResolvedValue({
+      prisma.ungDung.findFirst.mockResolvedValue({
         maUngDung,
         tenRepoDayDu: 'rustdesk/rustdesk',
       });
-      // Chưa có trong DB
-      prisma.khoYeuThich.findUnique.mockResolvedValue(null);
+      // Chưa có trong DB -> deleteMany trả về count: 0
+      prisma.khoYeuThich.deleteMany.mockResolvedValue({ count: 0 });
       prisma.khoYeuThich.create.mockResolvedValue({
         maYeuThich: 'fav-1',
         maNguoiDung,
@@ -55,6 +59,12 @@ describe('FavoritesService (P2-50)', () => {
       const result = await service.chuyenDoiYeuThich(maNguoiDung, maUngDung, 'MAY_TINH');
 
       expect(result).toEqual({ daYeuThich: true });
+      expect(prisma.khoYeuThich.deleteMany).toHaveBeenCalledWith({
+        where: {
+          maNguoiDung,
+          maUngDung,
+        },
+      });
       expect(prisma.khoYeuThich.create).toHaveBeenCalledWith({
         data: {
           maNguoiDung,
@@ -65,38 +75,31 @@ describe('FavoritesService (P2-50)', () => {
     });
 
     it('xóa khỏi yêu thích nếu đã có bản ghi (toggle OFF -> false)', async () => {
-      prisma.ungDung.findUnique.mockResolvedValue({
+      prisma.ungDung.findFirst.mockResolvedValue({
         maUngDung,
         tenRepoDayDu: 'rustdesk/rustdesk',
       });
-      // Đã có trong DB
-      prisma.khoYeuThich.findUnique.mockResolvedValue({
-        maYeuThich: 'fav-1',
-        maNguoiDung,
-        maUngDung,
-      });
-      prisma.khoYeuThich.delete.mockResolvedValue({});
+      // Đã có trong DB -> deleteMany xóa được count: 1
+      prisma.khoYeuThich.deleteMany.mockResolvedValue({ count: 1 });
 
       const result = await service.chuyenDoiYeuThich(maNguoiDung, maUngDung);
 
       expect(result).toEqual({ daYeuThich: false });
-      expect(prisma.khoYeuThich.delete).toHaveBeenCalledWith({
+      expect(prisma.khoYeuThich.deleteMany).toHaveBeenCalledWith({
         where: {
-          maNguoiDung_maUngDung: {
-            maNguoiDung,
-            maUngDung,
-          },
+          maNguoiDung,
+          maUngDung,
         },
       });
+      expect(prisma.khoYeuThich.create).not.toHaveBeenCalled();
     });
 
     it('tìm ứng dụng theo repo slug nếu không phải UUID và toggle thành công', async () => {
-      prisma.ungDung.findUnique.mockResolvedValue(null);
       prisma.ungDung.findFirst.mockResolvedValue({
         maUngDung,
         tenRepoDayDu: 'microsoft/PowerToys',
       });
-      prisma.khoYeuThich.findUnique.mockResolvedValue(null);
+      prisma.khoYeuThich.deleteMany.mockResolvedValue({ count: 0 });
       prisma.khoYeuThich.create.mockResolvedValue({
         maYeuThich: 'fav-powertoys',
         maNguoiDung,
@@ -115,22 +118,23 @@ describe('FavoritesService (P2-50)', () => {
     });
 
     it('bấm 2 lần liên tiếp không gây trùng lặp bản ghi nhờ ràng buộc UNIQUE', async () => {
-      prisma.ungDung.findUnique.mockResolvedValue({
+      prisma.ungDung.findFirst.mockResolvedValue({
         maUngDung,
         tenRepoDayDu: 'rustdesk/rustdesk',
       });
 
-      // Lần 1: Chưa có -> Tạo mới (true)
-      prisma.khoYeuThich.findUnique.mockResolvedValueOnce(null);
-      const res1 = await service.chuyenDoiYeuThich(maNguoiDung, maUngDung);
-      expect(res1.daYeuThich).toBe(true);
-
-      // Lần 2: Đã có -> Xóa (false)
-      prisma.khoYeuThich.findUnique.mockResolvedValueOnce({
+      // Lần 1: Chưa có -> deleteMany xóa 0 -> Tạo mới (true)
+      prisma.khoYeuThich.deleteMany.mockResolvedValueOnce({ count: 0 });
+      prisma.khoYeuThich.create.mockResolvedValueOnce({
         maYeuThich: 'fav-1',
         maNguoiDung,
         maUngDung,
       });
+      const res1 = await service.chuyenDoiYeuThich(maNguoiDung, maUngDung);
+      expect(res1.daYeuThich).toBe(true);
+
+      // Lần 2: Đã có -> deleteMany xóa 1 -> false
+      prisma.khoYeuThich.deleteMany.mockResolvedValueOnce({ count: 1 });
       const res2 = await service.chuyenDoiYeuThich(maNguoiDung, maUngDung);
       expect(res2.daYeuThich).toBe(false);
     });
@@ -202,6 +206,41 @@ describe('FavoritesService (P2-50)', () => {
       expect(set.has('app1')).toBe(true);
       expect(set.has('app2')).toBe(false);
       expect(set.has('app3')).toBe(true);
+    });
+  });
+
+  describe('bấm thích đồng thời', () => {
+    it('lần bấm thứ hai vấp UNIQUE (P2002) vẫn trả daYeuThich = true, không ném lỗi 500', async () => {
+      prisma.ungDung.findFirst.mockResolvedValue({
+        maUngDung: 'app-1',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+      });
+      prisma.khoYeuThich.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.khoYeuThich.create.mockRejectedValue(
+        Object.assign(new Error('Unique'), { code: 'P2002' }),
+      );
+
+      await expect(service.chuyenDoiYeuThich('user-1', 'app-1')).resolves.toEqual({
+        daYeuThich: true,
+      });
+    });
+  });
+
+  describe('xacDinhThietBiThem (loại thiết bị lấy từ phiên, không từ header client)', () => {
+    it('máy tính Windows -> MAY_TINH', async () => {
+      prisma.thietBi.findUnique.mockResolvedValue({ loaiThietBi: 'MAY_TINH_WINDOWS' });
+      await expect(service.xacDinhThietBiThem('tb-1')).resolves.toBe('MAY_TINH');
+    });
+
+    it('điện thoại Android -> DIEN_THOAI', async () => {
+      prisma.thietBi.findUnique.mockResolvedValue({ loaiThietBi: 'DIEN_THOAI_ANDROID' });
+      await expect(service.xacDinhThietBiThem('tb-2')).resolves.toBe('DIEN_THOAI');
+    });
+
+    it('không có mã thiết bị hoặc không tìm thấy -> MAY_TINH', async () => {
+      await expect(service.xacDinhThietBiThem(undefined)).resolves.toBe('MAY_TINH');
+      prisma.thietBi.findUnique.mockResolvedValue(null);
+      await expect(service.xacDinhThietBiThem('khong-co')).resolves.toBe('MAY_TINH');
     });
   });
 });

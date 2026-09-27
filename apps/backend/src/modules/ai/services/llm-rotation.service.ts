@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { HuongDanCaiDatDto } from '@forgestore/types';
 import { CacheService } from '../../redis/cache.service';
 import { KetQuaChangelog, KetQuaTomTat } from '../dto/ai-summary.dto';
 import { INhaCungCapTomTat, TenNhaCungCap } from '../interfaces/llm-provider.interface';
 import { GeminiProvider } from '../providers/gemini.provider';
 import { NvidiaNimProvider } from '../providers/nvidia-nim.provider';
+import { bocTachHuongDanTuCodeBlocks } from '../utils/cli-guide-extractor.util';
+import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
 export interface KetQuaTomTatKemModel {
   ketQua: KetQuaTomTat;
@@ -29,13 +32,14 @@ export class LlmRotationService {
     private readonly geminiProvider: GeminiProvider,
     private readonly nvidiaNimProvider: NvidiaNimProvider,
     private readonly cacheService: CacheService,
+    private readonly rateLimiter: LlmRateLimiterService,
   ) {
     // Thứ tự ưu tiên cố định theo D-15: [Gemini, NVIDIA NIM]
     this.providers = [this.geminiProvider, this.nvidiaNimProvider];
   }
 
   /**
-   * Tóm tắt README với cơ chế tự động xoay tua khi gặp lỗi 429 (P2-39.3).
+   * Tóm tắt README với cơ chế tự động xoay tua khi gặp lỗi 429 hoặc hết Token Bucket chủ động (P2-39.3, AI1).
    */
   async tomTatReadme(
     readme: string,
@@ -45,10 +49,29 @@ export class LlmRotationService {
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
       if (!provider) continue;
-      const isLocked = await this.kiemTraKhoa(provider.ten);
 
+      // 1. Kiểm tra khóa cứng (429 trước đó nếu có)
+      const isLocked = await this.kiemTraKhoa(provider.ten);
       if (isLocked) {
-        this.logger.warn(`Nhà cung cấp [${provider.ten}] đang bị khóa, bỏ qua.`);
+        this.logger.warn(`Nhà cung cấp [${provider.ten}] đang bị khóa 429, bỏ qua.`);
+        continue;
+      }
+
+      // 2. Kiểm tra Token Bucket chủ động (AI1, BE-02)
+      let token = { chapNhan: true, conLai: 1, capacity: 12 };
+      try {
+        token = await this.rateLimiter.layToken(provider.ten);
+      } catch (rateErr) {
+        this.logger.warn(
+          `Lỗi khi lấy token bucket cho [${provider.ten}]: ${rateErr}. Tạm coi như hợp lệ.`,
+        );
+      }
+
+      if (!token.chapNhan) {
+        const nextProvider = this.providers[i + 1];
+        this.logger.warn(
+          `🔄 [Xoay Tua LLM Chủ Động] ${provider.ten} hết Token Bucket (${token.conLai.toFixed(1)} < 1.0 / ${token.capacity} RPM). Chủ động xoay sang ${nextProvider ? nextProvider.ten : 'Dự phòng'} mà không đợi 429.`,
+        );
         continue;
       }
 
@@ -99,9 +122,28 @@ export class LlmRotationService {
     for (let i = 0; i < this.providers.length; i++) {
       const provider = this.providers[i];
       if (!provider) continue;
-      const isLocked = await this.kiemTraKhoa(provider.ten);
 
+      // 1. Kiểm tra khóa cứng
+      const isLocked = await this.kiemTraKhoa(provider.ten);
       if (isLocked) continue;
+
+      // 2. Kiểm tra Token Bucket chủ động (AI1, BE-02)
+      let token = { chapNhan: true, conLai: 1, capacity: 12 };
+      try {
+        token = await this.rateLimiter.layToken(provider.ten);
+      } catch (rateErr) {
+        this.logger.warn(
+          `Lỗi khi lấy token bucket cho [${provider.ten}]: ${rateErr}. Tạm coi như hợp lệ.`,
+        );
+      }
+
+      if (!token.chapNhan) {
+        const nextProvider = this.providers[i + 1];
+        this.logger.warn(
+          `🔄 [Xoay Tua LLM Chủ Động] ${provider.ten} hết Token Bucket cho Changelog. Chủ động xoay sang ${nextProvider ? nextProvider.ten : 'Dự phòng'}.`,
+        );
+        continue;
+      }
 
       try {
         const ketQua = await provider.tomTatChangelog(changelog, repoName);
@@ -129,6 +171,75 @@ export class LlmRotationService {
       },
       moHinhTomTat: 'DU_PHONG',
     };
+  }
+
+  /**
+   * Trích xuất hướng dẫn cài đặt dòng lệnh qua LLM Rotation (Gemini ⇄ NVIDIA NIM) kèm code-fallback.
+   */
+  async trichXuatHuongDanCaiDat(
+    installSection: string,
+    repoName: string,
+    rawReadme: string,
+    duongDanReadmeGoc?: string,
+  ): Promise<HuongDanCaiDatDto | null> {
+    for (let i = 0; i < this.providers.length; i++) {
+      const provider = this.providers[i];
+      if (!provider) continue;
+
+      // 1. Kiểm tra khóa cứng
+      const isLocked = await this.kiemTraKhoa(provider.ten);
+      if (isLocked) {
+        continue;
+      }
+
+      // 2. Kiểm tra Token Bucket chủ động (AI1, BE-02)
+      let token = { chapNhan: true, conLai: 1, capacity: 12 };
+      try {
+        token = await this.rateLimiter.layToken(provider.ten);
+      } catch (rateErr) {
+        this.logger.warn(
+          `Lỗi khi lấy token bucket cho [${provider.ten}]: ${rateErr}. Tạm coi như hợp lệ.`,
+        );
+      }
+
+      if (!token.chapNhan) {
+        this.logger.warn(
+          `🔄 [Xoay Tua LLM CLI] ${provider.ten} hết Token Bucket. Xoay sang nhà cung cấp tiếp theo.`,
+        );
+        continue;
+      }
+
+      try {
+        const kq = await provider.trichXuatHuongDanCaiDat(
+          installSection,
+          repoName,
+          rawReadme,
+          duongDanReadmeGoc,
+        );
+        if (kq) {
+          return kq;
+        }
+      } catch (err: unknown) {
+        const error = err as { status?: number; message?: string };
+        const isRateLimit =
+          error.status === 429 ||
+          Boolean(error.message?.includes('429')) ||
+          Boolean(error.message?.includes('RESOURCE_EXHAUSTED'));
+
+        if (isRateLimit) {
+          const lockTtl = this.tinhThoiGianKhoa(error.message || '');
+          await this.khoaProvider(provider.ten, lockTtl);
+          this.logger.warn(
+            `🔄 [Xoay Tua LLM CLI] ${provider.ten} chạm hạn ngạch 429, khóa ${lockTtl}s`,
+          );
+        } else {
+          this.logger.error(`Lỗi bóc tách CLI từ [${provider.ten}]: ${error.message}`);
+        }
+      }
+    }
+
+    // Fallback: nếu cả 2 provider đều không thành công, bóc tách bằng code thuần từ code blocks
+    return bocTachHuongDanTuCodeBlocks(installSection, rawReadme, duongDanReadmeGoc);
   }
 
   /**

@@ -77,11 +77,30 @@ async function main() {
       const [owner, repo] = slug.split('/');
       const appRecord = await appsService.dongBoRepo(owner!, repo!);
 
-      // Cập nhật trạng thái xác minh & nổi bật
+      // Cập nhật trạng thái xác minh (L-09: kiểm tra tiêu chí OSI thật, không gán cứng true) & nổi bật
+      const OSI_LICENSES = [
+        'MIT',
+        'GPL',
+        'AGPL',
+        'LGPL',
+        'APACHE',
+        'BSD',
+        'MPL',
+        'EPL',
+        'ISC',
+        'ZLIB',
+        'UNLICENSE',
+        'CC0',
+      ];
+      const hasOsiLicense = appRecord.loaiGiayPhep
+        ? OSI_LICENSES.some((lic) => appRecord.loaiGiayPhep!.toUpperCase().includes(lic))
+        : false;
+      const isVerified = hasOsiLicense && !appRecord.moTaGocTiengAnh?.includes('[Archived]');
+
       await prisma.ungDung.update({
         where: { maUngDung: appRecord.maUngDung },
         data: {
-          daXacMinh: true,
+          daXacMinh: isVerified,
           duocNoiBat: FEATURED_REPOS.has(slug),
         },
       });
@@ -100,6 +119,14 @@ async function main() {
       }
 
       thanhCong++;
+
+      // Giãn cách an toàn 4.5 giây giữa các app để đảm bảo không vượt ngưỡng 12 RPM của Gemini (AI1)
+      if (thanhCong + thatBai < SEED_REPOS.length) {
+        console.info(
+          `  ⏳ Giãn cách an toàn 4.5s trước app tiếp theo (Token Bucket Rate Limiting D-15 / AI1)...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 4500));
+      }
     } catch (err: unknown) {
       thatBai++;
       console.error(`  ❌ Thất bại khi đồng bộ [${slug}]: ${(err as Error).message}`);

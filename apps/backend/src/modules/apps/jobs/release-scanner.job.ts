@@ -115,7 +115,19 @@ export class ReleaseScannerJob {
             soReleaseMoi++;
           }
         } catch (err: unknown) {
-          this.logger.warn(`Lỗi khi quét release cho [${app.tenRepoDayDu}]: ${String(err)}`);
+          const errMsg = String(err);
+          this.logger.warn(`Lỗi khi quét release cho [${app.tenRepoDayDu}]: ${errMsg}`);
+          // ARCH-05: Circuit Breaker - Ngắt ngay vòng lặp nếu bị GitHub Rate Limit (403/429) chống spam
+          if (
+            errMsg.includes('403') ||
+            errMsg.includes('429') ||
+            errMsg.toLowerCase().includes('rate limit')
+          ) {
+            this.logger.error(
+              '🚨 GitHub Rate Limit Exceeded (403/429)! Dừng quét ngay để bảo vệ IP và Token.',
+            );
+            break;
+          }
         }
       }
 

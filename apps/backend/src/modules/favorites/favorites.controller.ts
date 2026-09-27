@@ -4,19 +4,11 @@ import {
   Post,
   Param,
   Query,
-  Headers,
   UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-  ApiHeader,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { FavoritesService } from './favorites.service';
 import { QueryFavoritesDto } from './dto/query-favorites.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -58,11 +50,6 @@ export class FavoritesController {
     description: 'Mã UUID của ứng dụng',
     type: String,
   })
-  @ApiHeader({
-    name: 'x-device-type',
-    description: 'Loại thiết bị bấm thích (MAY_TINH | DI_DONG)',
-    required: false,
-  })
   @ApiResponse({
     status: 200,
     description: 'Chuyển đổi trạng thái yêu thích thành công',
@@ -74,10 +61,12 @@ export class FavoritesController {
   async chuyenDoiYeuThich(
     @NguoiDungHienTai('maNguoiDung') maNguoiDung: string,
     @Param('id') id: string,
-    @Headers('x-device-type') thietBiHeader?: string,
+    @NguoiDungHienTai('maThietBi') maThietBi?: string,
   ) {
     const cleanId = decodeURIComponent(id.trim());
-    const thietBi = thietBiHeader?.toUpperCase() === 'DI_DONG' ? 'DI_DONG' : 'MAY_TINH';
+    // Loại thiết bị lấy từ phiên đăng nhập (JWT `did`), không nhận header tự khai của client:
+    // header lạ còn khiến preflight CORS của WebView2 chặn luôn request.
+    const thietBi = await this.favoritesService.xacDinhThietBiThem(maThietBi);
     return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, cleanId, thietBi);
   }
 
@@ -90,11 +79,10 @@ export class FavoritesController {
     @NguoiDungHienTai('maNguoiDung') maNguoiDung: string,
     @Param('owner') owner: string,
     @Param('repo') repo: string,
-    @Headers('x-device-type') thietBiHeader?: string,
+    @NguoiDungHienTai('maThietBi') maThietBi?: string,
   ) {
     const slug = `${owner}/${repo}`;
-    const thietBi = thietBiHeader?.toUpperCase() === 'DI_DONG' ? 'DI_DONG' : 'MAY_TINH';
+    const thietBi = await this.favoritesService.xacDinhThietBiThem(maThietBi);
     return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, slug, thietBi);
   }
 }
-

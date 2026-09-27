@@ -5,6 +5,7 @@ import type {
   NenTangHoTro,
   TrangThaiThamDinhJev,
 } from '../enums.js';
+import type { HuongDanCaiDatDto } from './huong-dan-cli.dto.js';
 
 /**
  * Mục chi tiết cảnh báo / điểm trừ trong Trust Score.
@@ -34,6 +35,7 @@ export interface PhanTichAiDto {
   yeuToRuiRo: YeuToRuiRoItem[];
   quyenHanDaKiemTra: string[]; // Danh sách quyền Android trích xuất từ APK Range Request
   moHinhTomTat?: string | null; // Tên model (gemini-3.1-flash-lite, NVIDIA NIM, DU_PHONG)
+  huongDanCaiDat?: HuongDanCaiDatDto | null; // Hướng dẫn cài đặt CLI bóc tách từ README (Phase 3)
   thoiGianPhanTich?: string | Date;
 }
 
@@ -51,6 +53,8 @@ export interface TepCaiDatDto {
   maBamSha256?: string | null;
   soLuotTai: number;
   ngayTao?: string | Date;
+  diemUuTien?: number;
+  hopMay?: boolean;
 }
 
 /**
@@ -81,7 +85,7 @@ export interface UngDungTomTatDto {
   duongDanIcon?: string | null;
   soSaoGithub: number;
   danhMucChinh: string;
-  nenTangHoTro: NenTangHoTro;
+  nenTangHoTro: NenTangHoTro | null;
   duocNoiBat: boolean;
   daXacMinh: boolean;
   tenGoiAndroid?: string | null; // Package name Android (D-13)
@@ -89,7 +93,11 @@ export interface UngDungTomTatDto {
   diemUyTin?: number | null; // 0 - 100
   mucDoAnToan?: MucDoUyTin | null;
   phienBanMoiNhat?: string | null;
+  dinhDangCoSan?: string[]; // Các định dạng tệp có thật trong bản mới nhất (L-03)
+  kienTrucCoSan?: string[]; // Các kiến trúc chip có thật trong bản mới nhất (L-03)
+  loaiGiayPhep?: string | null; // Giấy phép bản quyền thật từ kho mã (L-03)
   ngayCapNhat?: string | Date;
+  chuaThamDinh?: boolean; // Cờ đánh dấu repo từ GitHub chưa thẩm định vào Store
 }
 
 /**
@@ -105,6 +113,7 @@ export interface UngDungChiTietDto extends UngDungTomTatDto {
   dongBoLanCuoi: string | Date;
   ngayTao: string | Date;
   phanTichAi?: PhanTichAiDto | null;
+  huongDanCaiDat?: HuongDanCaiDatDto | null; // Hướng dẫn cài đặt CLI đã lọc theo nền tảng
   banPhatHanhMoiNhat?: BanPhatHanhDto | null;
   danhSachBanPhatHanh?: BanPhatHanhDto[];
   laYeuThich?: boolean;
@@ -128,4 +137,12 @@ export interface ResolveAssetResponseDto {
   tepCaiDat: TepCaiDatDto;
   nguonQuyetDinh: 'LUAT' | 'JEV' | 'DU_PHONG';
   doTinCay?: number; // Độ tin cậy nếu qua Jev AI Choice primitive
+}
+
+/**
+ * DTO danh mục ứng dụng kèm số lượng app thật (K3).
+ */
+export interface DanhMucDto {
+  ten: string;
+  soLuong: number;
 }

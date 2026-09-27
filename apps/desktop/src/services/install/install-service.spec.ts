@@ -104,5 +104,199 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       expect(info?.trangThai).toBe('LOI');
       expect(info?.thongDiepLoi).toContain('LỖI_XAC_MINH_SHA256');
     });
+
+    it('khôi phục từ storage và tự động reset các tác vụ DANG_TAI/XAC_MINH về DA_HUY mà không bị lỗi TDZ', async () => {
+      const storageMap = new Map<string, string>();
+      const mockLocalStorage = {
+        getItem: (k: string) => storageMap.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          storageMap.set(k, v);
+        },
+        removeItem: (k: string) => {
+          storageMap.delete(k);
+        },
+        clear: () => {
+          storageMap.clear();
+        },
+      };
+
+      const originalWindow = (globalThis as unknown as { window?: unknown }).window;
+      (globalThis as unknown as { window: unknown }).window = {
+        localStorage: mockLocalStorage,
+      };
+
+      const mockStorageData = {
+        state: {
+          caiDatMap: {
+            'stuck-download-app': {
+              maUngDung: 'stuck-download-app',
+              tenApp: 'Stuck App',
+              trangThai: 'DANG_TAI',
+              phanTram: 42,
+              tocDoBps: 1024000,
+              daTaiBytes: 42000000,
+              tongBytes: 100000000,
+              thoiGianCapNhat: Date.now(),
+            },
+            'already-installed-app': {
+              maUngDung: 'already-installed-app',
+              tenApp: 'Installed App',
+              trangThai: 'DA_CAI_DAT',
+              phanTram: 100,
+              duongDanThuMuc: 'D:\\Apps\\Portable',
+              thoiGianCapNhat: Date.now(),
+            },
+          },
+        },
+        version: 0,
+      };
+
+      try {
+        mockLocalStorage.setItem('forgestore_install_tasks', JSON.stringify(mockStorageData));
+
+        await useInstallStore.persist.rehydrate();
+
+        expect(useInstallStore.persist.hasHydrated()).toBe(true);
+        const stuckApp = useInstallStore.getState().layThongTinApp('stuck-download-app');
+        expect(stuckApp).toBeDefined();
+        expect(stuckApp?.trangThai).toBe('DA_HUY');
+        expect(stuckApp?.phanTram).toBe(0);
+        expect(stuckApp?.tocDoBps).toBe(0);
+        expect(stuckApp?.thongDiepLoi).toContain(
+          'Tiến trình tải bị gián đoạn do ứng dụng đã đóng.',
+        );
+
+        // Đảm bảo app đã cài đặt vẫn giữ nguyên trạng thái và đường dẫn thư mục
+        const installedApp = useInstallStore.getState().layThongTinApp('already-installed-app');
+        expect(installedApp).toBeDefined();
+        expect(installedApp?.trangThai).toBe('DA_CAI_DAT');
+        expect(installedApp?.duongDanThuMuc).toBe('D:\\Apps\\Portable');
+      } finally {
+        if (originalWindow === undefined) {
+          delete (globalThis as unknown as { window?: unknown }).window;
+        } else {
+          (globalThis as unknown as { window: unknown }).window = originalWindow;
+        }
+      }
+    });
+  });
+
+  describe('Registry & Native Uninstaller (A4)', () => {
+    it('kiemTraAppRegistry trả về null trong môi trường Web dev', async () => {
+      const res = await installService.kiemTraAppRegistry('Notepad++');
+      expect(res).toBeNull();
+    });
+
+    it('goCaiDatQuaRegistry trả về true trong môi trường Web dev fallback', async () => {
+      const res = await installService.goCaiDatQuaRegistry(
+        '"C:\\Program Files\\App\\uninstall.exe"',
+      );
+      expect(res).toBe(true);
+    });
+  });
+
+  describe('Safe Folder Opener (A1, TC-09, SEC-02)', () => {
+    it('moThuMuc chạy fallback an toàn trong môi trường Web dev', async () => {
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\Notepad++');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[WebDev Preview] Giả lập mở thư mục tại: D:\\ForgeStore_Apps\\Notepad++',
+        ),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('moThuMuc gọi native mo_thu_muc trong môi trường Tauri', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockResolvedValue(undefined);
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\PortableApp');
+      expect(mockInvoke).toHaveBeenCalledWith('mo_thu_muc', {
+        duongDan: 'D:\\ForgeStore_Apps\\PortableApp',
+      });
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.restoreAllMocks();
+    });
+
+    it('moThuMuc fallback sang revealItemInDir nếu mo_thu_muc native lỗi', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockRejectedValue(new Error('Lỗi invoke'));
+      const mockReveal = vi.fn().mockResolvedValue(undefined);
+
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+      vi.doMock('@tauri-apps/plugin-opener', () => ({
+        revealItemInDir: mockReveal,
+      }));
+
+      await installService.moThuMuc('D:\\ForgeStore_Apps\\FallbackDir');
+      expect(mockInvoke).toHaveBeenCalled();
+      expect(mockReveal).toHaveBeenCalledWith('D:\\ForgeStore_Apps\\FallbackDir');
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.doUnmock('@tauri-apps/plugin-opener');
+      vi.restoreAllMocks();
+    });
+
+    it('moThuMuc bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await installService.moThuMuc('');
+      await installService.moThuMuc('   ');
+      await installService.moThuMuc(null);
+      await installService.moThuMuc(undefined);
+      expect(warnSpy).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
+
+    it('moUngDung bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await installService.moUngDung('');
+      await installService.moUngDung('   ');
+      await installService.moUngDung(null);
+      await installService.moUngDung(undefined);
+      expect(warnSpy).toHaveBeenCalledTimes(4);
+      warnSpy.mockRestore();
+    });
+
+    it('moUngDungTuRegistry bỏ qua an toàn và trả về false khi khoaRegistry rỗng', async () => {
+      const resEmpty = await installService.moUngDungTuRegistry('');
+      const resBlank = await installService.moUngDungTuRegistry('   ');
+      expect(resEmpty).toBe(false);
+      expect(resBlank).toBe(false);
+    });
+
+    it('moUngDungTuRegistry gọi command native mo_ung_dung_tu_registry trong môi trường Tauri', async () => {
+      vi.spyOn(
+        installService as unknown as { isTauriEnv: () => boolean },
+        'isTauriEnv',
+      ).mockReturnValue(true);
+      const mockInvoke = vi.fn().mockResolvedValue(undefined);
+
+      vi.doMock('@tauri-apps/api/core', () => ({
+        invoke: mockInvoke,
+      }));
+
+      const res = await installService.moUngDungTuRegistry('Notepad++', 'Notepad++');
+      expect(res).toBe(true);
+      expect(mockInvoke).toHaveBeenCalledWith('mo_ung_dung_tu_registry', {
+        khoaRegistry: 'Notepad++',
+        tenApp: 'Notepad++',
+      });
+
+      vi.doUnmock('@tauri-apps/api/core');
+      vi.restoreAllMocks();
+    });
   });
 });

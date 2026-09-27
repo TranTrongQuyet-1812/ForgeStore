@@ -7,6 +7,7 @@ import { GithubModule } from '../github/github.module';
 import { GeminiProvider } from './providers/gemini.provider';
 import { NvidiaNimProvider } from './providers/nvidia-nim.provider';
 import { LlmRotationService } from './services/llm-rotation.service';
+import { LlmRateLimiterService } from './services/llm-rate-limiter.service';
 import { AiFallbackRetryJob } from './jobs/ai-fallback-retry.job';
 
 import { ApkInspectorService } from './services/apk-inspector.service';
@@ -23,6 +24,7 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
   providers: [
     GeminiProvider,
     NvidiaNimProvider,
+    LlmRateLimiterService,
     LlmRotationService,
     AiFallbackRetryJob,
     ApkInspectorService,
@@ -35,6 +37,7 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
     JevBenchmarkService,
   ],
   exports: [
+    LlmRateLimiterService,
     LlmRotationService,
     ApkInspectorService,
     JevClientService,

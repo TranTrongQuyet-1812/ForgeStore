@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Library, RefreshCw, Play, Trash2, Download, Search, Laptop, Compass } from 'lucide-react';
+import {
+  Library,
+  RefreshCw,
+  Play,
+  Trash2,
+  Download,
+  Search,
+  Laptop,
+  Compass,
+  FolderOpen,
+} from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { useUpdaterStore } from '../stores/useUpdaterStore';
@@ -8,17 +18,24 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { libraryService } from '../services/library/library-service';
 import { deviceService, DeviceInfo } from '../services/device/device-service';
 import { installService } from '../services/install/install-service';
+import type { ThongTinUngDungRegistry } from '../services/install/install-types';
 import { authService } from '../services/auth/auth-service';
 
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
-  const { caiDatMap, goCaiDatLocal, moApp } = useInstallStore();
+  const { caiDatMap, goCaiDatLocal } = useInstallStore();
   const { soLuongBanCapNhat, danhSachCapNhat, dangKiemTra, kiemTraCapNhat } = useUpdaterStore();
-  const { isAuthenticated, maThietBi } = useAuthStore();
+  const { user, isAuthenticated, maThietBi } = useAuthStore();
   const queryClient = useQueryClient();
 
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
+  const [registryMap, setRegistryMap] = useState<Record<string, ThongTinUngDungRegistry | null>>(
+    {},
+  );
+  const [isCheckingRegistry, setIsCheckingRegistry] = useState(false);
+  const [isUninstallingId, setIsUninstallingId] = useState<string | null>(null);
+  const syncedRegistryKeysRef = useRef<Set<string>>(new Set());
 
   // 1. Lấy thông tin thiết bị máy trạm
   useEffect(() => {
@@ -27,13 +44,13 @@ export const LibraryPage: React.FC = () => {
     });
   }, []);
 
-  // 2. Nạp danh sách ứng dụng đã cài đặt từ Backend (P3-12.2 & Điểm 1)
+  // 2. Nạp danh sách ứng dụng đã cài đặt từ Backend theo máy hiện tại (P3-12.2 & A3)
   const {
     data: backendInstalledApps = [],
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['device-installed-apps', maThietBi],
+    queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
     queryFn: () =>
       maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
     enabled: Boolean(isAuthenticated && maThietBi),
@@ -47,13 +64,65 @@ export const LibraryPage: React.FC = () => {
     }
   }, [isAuthenticated, maThietBi, kiemTraCapNhat]);
 
-  // 4. Hợp nhất danh sách ứng dụng đã cài đặt (Backend + Local Install Cache)
-  const localAppsList = Object.values(caiDatMap).filter((app) => app.trangThai === 'DA_CAI_DAT');
+  // 4. Đối chiếu ứng dụng đã cài đặt với Windows Registry (A4)
+  useEffect(() => {
+    if (backendInstalledApps.length === 0) {
+      setRegistryMap({});
+      return;
+    }
 
-  // Tạo map tra cứu bản cập nhật từ updater store
+    let isMounted = true;
+    setIsCheckingRegistry(true);
+
+    Promise.all(
+      backendInstalledApps.map(async (app) => {
+        const ten = app.ungDung?.tenKhoChua || app.ungDung?.tenRepoDayDu || app.maUngDung;
+        const currentCaiDatMap = useInstallStore.getState().caiDatMap;
+        const localApp = currentCaiDatMap[app.maUngDung];
+        const regKey = app.khoaRegistry || localApp?.registryKey;
+        const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
+        const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
+
+        // DELIV-40.2 & FE-R7-03: Tự động lưu ngược khóa Registry cho app cũ bằng endpoint riêng
+        // Dùng syncedRegistryKeysRef để tránh spam PUT request khi chuyển tab
+        if (
+          maThietBi &&
+          !app.khoaRegistry &&
+          regInfo?.registry_key &&
+          !syncedRegistryKeysRef.current.has(app.maUngDung)
+        ) {
+          syncedRegistryKeysRef.current.add(app.maUngDung);
+          libraryService
+            .capNhatKhoaRegistry(maThietBi, app.maUngDung, {
+              khoaRegistry: regInfo.registry_key,
+              tenHienThiRegistry: regInfo.display_name || undefined,
+            })
+            .catch((err) => {
+              syncedRegistryKeysRef.current.delete(app.maUngDung);
+              console.warn('[LibraryPage] Không thể tự động lưu khóa registry lên backend:', err);
+            });
+        }
+
+        return { maUngDung: app.maUngDung, regInfo };
+      }),
+    ).then((results) => {
+      if (!isMounted) return;
+      const newMap: Record<string, ThongTinUngDungRegistry | null> = {};
+      for (const r of results) {
+        newMap[r.maUngDung] = r.regInfo;
+      }
+      setRegistryMap(newMap);
+      setIsCheckingRegistry(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [backendInstalledApps, maThietBi]);
+
+  // 5. Danh sách ứng dụng đã cài đặt trên máy trạm hiện tại (Nguyên tắc 1, A3 & A4)
   const updatesMap = new Map(danhSachCapNhat.map((u) => [u.maUngDung, u]));
 
-  // Gộp danh sách duy nhất theo maUngDung
   const mergedAppsMap = new Map<
     string,
     {
@@ -65,39 +134,41 @@ export const LibraryPage: React.FC = () => {
       iconUrl?: string;
       coBanMoi: boolean;
       phienBanMoi?: string;
+      khoaRegistry?: string | null;
+      tenHienThiRegistry?: string | null;
+      regInfo?: ThongTinUngDungRegistry | null;
+      daBiGoBenNgoai: boolean;
     }
   >();
 
-  // Đưa app từ backend vào map
+  // Đưa app từ backend vào map và đối chiếu với registry
   for (const bApp of backendInstalledApps) {
     const updateItem = updatesMap.get(bApp.maUngDung);
+    const localApp = caiDatMap[bApp.maUngDung];
+    const regInfo = registryMap[bApp.maUngDung];
+
+    // Phát hiện app đã bị gỡ ngoài Windows:
+    // Khi đã quét xong registry (registryMap có phần tử), regInfo trả về null và không có phiên vừa cài local
+    const daBiGoBenNgoai =
+      !isCheckingRegistry &&
+      Object.keys(registryMap).length > 0 &&
+      registryMap[bApp.maUngDung] === null &&
+      !localApp;
+
     mergedAppsMap.set(bApp.maUngDung, {
       maUngDung: bApp.maUngDung,
       tenApp: bApp.ungDung?.tenKhoChua || bApp.ungDung?.tenRepoDayDu || bApp.maUngDung,
       phienBanHienTai: bApp.phienBanHienTai,
       duongDanThuMuc: bApp.duongDanThuMuc ?? undefined,
+      duongDanThucThi: localApp?.duongDanThucThi ?? undefined,
       iconUrl: bApp.ungDung?.duongDanIcon ?? undefined,
       coBanMoi: Boolean(updateItem?.coBanCapNhat),
       phienBanMoi: updateItem?.phienBanMoiNhat,
+      khoaRegistry: bApp.khoaRegistry ?? localApp?.registryKey,
+      tenHienThiRegistry: bApp.tenHienThiRegistry ?? localApp?.registryDisplayName,
+      regInfo,
+      daBiGoBenNgoai,
     });
-  }
-
-  // Đưa app từ local install store vào map (nếu chưa có hoặc bổ sung path)
-  for (const lApp of localAppsList) {
-    const existing = mergedAppsMap.get(lApp.maUngDung);
-    const updateItem = updatesMap.get(lApp.maUngDung);
-    if (existing) {
-      existing.duongDanThucThi = lApp.duongDanThucThi || existing.duongDanThucThi;
-    } else {
-      mergedAppsMap.set(lApp.maUngDung, {
-        maUngDung: lApp.maUngDung,
-        tenApp: lApp.tenApp || lApp.maUngDung,
-        phienBanHienTai: 'v1.0.0',
-        duongDanThucThi: lApp.duongDanThucThi,
-        coBanMoi: Boolean(updateItem?.coBanCapNhat),
-        phienBanMoi: updateItem?.phienBanMoiNhat,
-      });
-    }
   }
 
   const allInstalledApps = Array.from(mergedAppsMap.values());
@@ -107,22 +178,329 @@ export const LibraryPage: React.FC = () => {
     app.tenApp.toLowerCase().includes(searchFilter.trim().toLowerCase()),
   );
 
-  // Xử lý mở app
-  const handleOpenApp = (app: { maUngDung: string; duongDanThucThi?: string; tenApp: string }) => {
+  // R-06, SEC-R9-02, SEC-R9-03: Kiểm tra thư mục cài đặt có an toàn và hợp lệ hay không
+  // - Chặn đường dẫn mạng UNC (\\ hoặc //) chống rò rỉ NTLM
+  // - Chặn mọi thư mục nằm dưới Windows (kể cả ổ đĩa khác C:\)
+  // - Chặn ProgramData\Package Cache (kể cả 8.3 short name packag~1)
+  // - Chặn temp, tmp, system32, syswow64 theo từng segment (không chặn nhầm Tempest, xử lý trailing dot)
+  // - Chặn ổ đĩa gốc C:\ hoặc C:
+  const laThuMucCaiDatHopLe = (dir?: string | null): boolean => {
+    if (!dir || !dir.trim()) return false;
+    let s = dir.trim();
+
+    // SEC-R9-03: Chặn đường dẫn mạng UNC và NT Device Path chống rò rỉ NTLM hash
+    if (s.startsWith('\\\\') || s.startsWith('//') || s.startsWith('\\??\\') || s.startsWith('\\\\?\\')) {
+      return false;
+    }
+
+    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '').trim().replace(/^"/, '').replace(/"$/, '').trim();
+    if (!s) return false;
+
+    const normalized = s.replace(/\//g, '\\');
+    const lower = normalized.toLowerCase();
+
+    // 1. Chặn thư mục nằm dưới Windows (kể cả trên ổ đĩa khác C)
+    if (lower.startsWith('c:\\windows\\') || lower === 'c:\\windows' || lower.includes(':\\windows\\')) {
+      return false;
+    }
+
+    // 2. Chặn Package Cache (kể cả 8.3 SFN packag~1)
+    if (
+      lower.includes('programdata\\package cache') ||
+      lower.includes('package cache') ||
+      lower.includes('packag~1')
+    ) {
+      return false;
+    }
+
+    // 3. Chặn Temp, System32, SysWOW64 theo đúng phân đoạn (không chặn nhầm Tempest, loại bỏ trailing dot)
+    const segments = lower.split('\\');
+    for (const seg of segments) {
+      const cleanSeg = seg.trim().replace(/\.+$/, '');
+      if (cleanSeg === 'temp' || cleanSeg === 'tmp' || cleanSeg === 'system32' || cleanSeg === 'syswow64') {
+        return false;
+      }
+    }
+
+    // 4. Chặn ổ đĩa gốc
+    if ((lower.length <= 3 && lower.includes(':')) || lower === '\\') {
+      return false;
+    }
+
+    return true;
+  };
+
+    // L-01, R-06: Bóc tách thư mục cha từ UninstallString
+    const trichXuatThuMucCaiDatTuUninstallString = (uninstallString?: string | null): string | null => {
+      if (!uninstallString || !uninstallString.trim()) return null;
+      const trimmed = uninstallString.trim();
+
+      let exePath = '';
+      if (trimmed.startsWith('"')) {
+        const closeQuoteIdx = trimmed.indexOf('"', 1);
+        if (closeQuoteIdx !== -1) {
+          exePath = trimmed.slice(1, closeQuoteIdx);
+        }
+      } else {
+        const exeIdx = trimmed.toLowerCase().lastIndexOf('.exe');
+        if (exeIdx !== -1) {
+          exePath = trimmed.slice(0, exeIdx + 4).trim();
+        } else {
+          const parts = trimmed.split(' ');
+          exePath = parts[0] || '';
+        }
+      }
+
+      if (exePath.toLowerCase().endsWith('.exe')) {
+        const lastSlash = Math.max(exePath.lastIndexOf('\\'), exePath.lastIndexOf('/'));
+        if (lastSlash > 0) {
+          const parentDir = exePath.slice(0, lastSlash);
+          if (laThuMucCaiDatHopLe(parentDir)) {
+            return parentDir;
+          }
+        }
+      }
+      return null;
+    };
+
+    // L-01, R-06: Bóc tách thư mục cha từ DisplayIcon (bỏ chỉ số icon ,0 hoặc ,1)
+    const trichXuatThuMucTuDisplayIcon = (displayIcon?: string | null): string | null => {
+      if (!displayIcon || !displayIcon.trim()) return null;
+      let s = displayIcon.trim();
+      s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+      const commaIdx = s.lastIndexOf(',');
+      if (commaIdx !== -1) {
+        const after = s
+          .slice(commaIdx + 1)
+          .trim()
+          .replace(/"/g, '');
+        if (!isNaN(Number(after))) {
+          s = s.slice(0, commaIdx);
+        }
+      }
+      const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+      const lastSlash = Math.max(clean.lastIndexOf('\\'), clean.lastIndexOf('/'));
+      if (lastSlash > 0) {
+        const parentDir = clean.slice(0, lastSlash);
+        if (laThuMucCaiDatHopLe(parentDir)) {
+          return parentDir;
+        }
+      }
+      return null;
+    };
+
+    // R-01, R-06: Kiểm tra DisplayIcon có phải là ứng dụng hợp lệ hay không (loại bỏ uninstaller/setup/msiexec/Windows/Package Cache)
+    const laDisplayIconHopLe = (displayIcon?: string | null): boolean => {
+      if (!displayIcon || !displayIcon.trim()) return false;
+      let s = displayIcon.trim();
+      s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+      const commaIdx = s.lastIndexOf(',');
+      if (commaIdx !== -1) {
+        const after = s
+          .slice(commaIdx + 1)
+          .trim()
+          .replace(/"/g, '');
+        if (!isNaN(Number(after))) {
+          s = s.slice(0, commaIdx);
+        }
+      }
+      const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+      const lower = clean.toLowerCase();
+      if (!lower.endsWith('.exe')) return false;
+      if (lower.startsWith('c:\\windows\\') || lower.startsWith('c:/windows/') || lower.includes('package cache')) return false;
+
+      const lastSlash = Math.max(lower.lastIndexOf('\\'), lower.lastIndexOf('/'));
+      const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
+      const tuKhoaCam = ['unins', 'uninst', 'uninstall', 'setup', 'install', 'update', 'msiexec'];
+      if (tuKhoaCam.some((kw) => fileName.includes(kw))) {
+        return false;
+      }
+      return true;
+    };
+
+    // L-01, R-06: Lấy thư mục cài đặt thực tế để mở hoặc hiển thị (thẩm định nghiêm ngặt qua laThuMucCaiDatHopLe)
+    const layThuMucCaiDatThucTe = (app: {
+      duongDanThuMuc?: string | null;
+      regInfo?: ThongTinUngDungRegistry | null;
+    }): string | null => {
+      // 1. InstallLocation từ Registry
+      if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
+        const cleaned = app.regInfo.install_location
+          .trim()
+          .replace(/^\\\\\?\\/, '')
+          .replace(/^\\\?\?\\/, '');
+        if (laThuMucCaiDatHopLe(cleaned)) {
+          return cleaned;
+        }
+      }
+      // 2. Thư mục cha từ UninstallString
+      const dirFromUninstall = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
+      if (dirFromUninstall && laThuMucCaiDatHopLe(dirFromUninstall)) {
+        return dirFromUninstall.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+      }
+      // 3. Thư mục cha từ DisplayIcon
+      const dirFromIcon = trichXuatThuMucTuDisplayIcon(app.regInfo?.display_icon);
+      if (dirFromIcon && laThuMucCaiDatHopLe(dirFromIcon)) {
+        return dirFromIcon.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+      }
+      // 4. Nếu là Portable ZIP (có duongDanThuMuc và không phải file download .exe/.msi)
+      if (
+        app.duongDanThuMuc &&
+        app.duongDanThuMuc.trim() &&
+        !/\.(exe|msi)$/i.test(app.duongDanThuMuc.trim())
+      ) {
+        const cleaned = app.duongDanThuMuc
+          .trim()
+          .replace(/^\\\\\?\\/, '')
+          .replace(/^\\\?\?\\/, '');
+        if (laThuMucCaiDatHopLe(cleaned)) {
+          return cleaned;
+        }
+      }
+      return null;
+    };
+
+  // Xử lý mở ứng dụng (L-01: Mở ứng dụng từ DisplayIcon qua Registry hoặc đường dẫn thực thi)
+  const handleOpenApp = async (app: {
+    maUngDung: string;
+    duongDanThucThi?: string;
+    tenApp: string;
+    khoaRegistry?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }) => {
     if (app.duongDanThucThi) {
-      installService.moUngDung(app.duongDanThucThi);
+      await installService.moUngDung(app.duongDanThucThi);
+      return;
+    }
+
+    // Khởi chạy native thông qua DisplayIcon từ khóa Registry đã xác minh
+    const regKey = app.regInfo?.registry_key || app.khoaRegistry;
+    if (regKey) {
+      try {
+        const ok = await installService.moUngDungTuRegistry(regKey, app.tenApp);
+        if (ok) return;
+      } catch (err) {
+        console.warn(`[LibraryPage] Không thể mở app từ Registry [${regKey}]:`, err);
+      }
+    }
+
+    // Nếu là app giả lập trong RAM thì thử moApp
+    const localApp = caiDatMap[app.maUngDung];
+    if (localApp?.duongDanThucThi) {
+      await installService.moUngDung(localApp.duongDanThucThi);
+      return;
+    }
+
+    // Nếu hoàn toàn không thể định vị file/folder thực thi: Thông báo rõ ràng cho người dùng
+    alert(
+      `Ứng dụng "${app.tenApp}" đã được cài đặt vào hệ thống Windows.\n\nBạn có thể khởi chạy trực tiếp từ Start Menu hoặc lối tắt trên Desktop!`,
+    );
+  };
+
+  // Xử lý mở thư mục cài đặt thực tế (L-01)
+  const handleOpenFolder = (app: {
+    tenApp: string;
+    duongDanThuMuc?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }) => {
+    const dir = layThuMucCaiDatThucTe(app);
+    if (dir) {
+      installService.moThuMuc(dir);
     } else {
-      moApp(app.maUngDung);
+      alert(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
     }
   };
 
-  // Xử lý gỡ khỏi danh sách
-  const handleRemoveApp = async (maUngDung: string) => {
-    if (confirm('Bạn có chắc muốn gỡ ứng dụng này khỏi danh sách quản lý trên máy?')) {
-      goCaiDatLocal(maUngDung);
-      if (maThietBi) {
-        await libraryService.goCaiDat(maThietBi, maUngDung);
-        queryClient.invalidateQueries({ queryKey: ['device-installed-apps', maThietBi] });
+  // Xử lý gỡ cài đặt thật và đồng bộ danh sách (A4)
+  const handleUninstallApp = async (app: {
+    maUngDung: string;
+    tenApp: string;
+    phienBanHienTai: string;
+    khoaRegistry?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+    daBiGoBenNgoai: boolean;
+  }) => {
+    // Trường hợp 1: Phần mềm đã bị người dùng gỡ bên ngoài Windows (A4)
+    if (app.daBiGoBenNgoai) {
+      if (
+        confirm(
+          `Phần mềm "${app.tenApp}" đã được gỡ cài đặt bên ngoài Windows.\n\nBạn có muốn dọn bản ghi này khỏi Thư viện của máy?`,
+        )
+      ) {
+        try {
+          setIsUninstallingId(app.maUngDung);
+          goCaiDatLocal(app.maUngDung);
+          if (maThietBi) {
+            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            queryClient.invalidateQueries({
+              queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+            });
+          }
+        } finally {
+          setIsUninstallingId(null);
+        }
+      }
+      return;
+    }
+
+    // Trường hợp 2: Gỡ cài đặt native qua UninstallString từ Registry Windows (A4, Vấn đề 1)
+    const displayName = app.regInfo?.display_name || app.tenApp;
+    const displayVersion = app.regInfo?.display_version || app.phienBanHienTai;
+    const publisher = app.regInfo?.publisher ? ` (Nhà phát triển: ${app.regInfo.publisher})` : '';
+
+    const xacNhan = confirm(
+      `Bạn có chắc chắn muốn gỡ cài đặt phần mềm "${displayName}"${publisher} - Phiên bản ${displayVersion} khỏi máy tính này không?\n\nThao tác này sẽ khởi chạy trình gỡ cài đặt chính chủ của phần mềm.`,
+    );
+
+    if (!xacNhan) return;
+
+    if (app.regInfo?.uninstall_string) {
+      try {
+        setIsUninstallingId(app.maUngDung);
+        const keyToUse = app.regInfo.registry_key || app.khoaRegistry || undefined;
+        await installService.goCaiDatQuaRegistry(
+          app.tenApp,
+          app.regInfo.uninstall_string,
+          keyToUse,
+        );
+
+        // Sau khi bộ gỡ chính chủ chạy xong thành công: Xóa bản ghi trên Backend
+        if (maThietBi) {
+          await libraryService.goCaiDat(maThietBi, app.maUngDung);
+        }
+        goCaiDatLocal(app.maUngDung);
+        queryClient.invalidateQueries({
+          queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+        });
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes('NGUOI_DUNG_HUY')) {
+          // Người dùng chủ động bấm Cancel ở hộp UAC hoặc uninstaller: không làm gì
+        } else {
+          alert(`Không thể hoàn tất gỡ cài đặt: ${errorMsg}`);
+        }
+      } finally {
+        setIsUninstallingId(null);
+      }
+    } else {
+      // Nếu không tìm thấy UninstallString trong registry: hỏi dọn bản ghi
+      if (
+        confirm(
+          `Không tìm thấy lệnh gỡ cài đặt trong Registry Windows cho "${app.tenApp}". Bạn có muốn xóa phần mềm này khỏi danh sách quản lý?`,
+        )
+      ) {
+        try {
+          setIsUninstallingId(app.maUngDung);
+          goCaiDatLocal(app.maUngDung);
+          if (maThietBi) {
+            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            queryClient.invalidateQueries({
+              queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+            });
+          }
+        } finally {
+          setIsUninstallingId(null);
+        }
       }
     }
   };
@@ -260,58 +638,116 @@ export const LibraryPage: React.FC = () => {
                     <h3 className="text-sm font-bold font-display text-primary truncate group-hover:text-accent-forge transition-colors">
                       {app.tenApp}
                     </h3>
-                    {app.coBanMoi && (
+                    {app.daBiGoBenNgoai ? (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono text-[10px] font-bold shrink-0">
+                        Đã bị gỡ bên ngoài Windows
+                      </span>
+                    ) : app.coBanMoi ? (
                       <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[10px] font-bold shrink-0">
                         Bản mới: {app.phienBanMoi || 'Mới'}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted font-mono truncate">
                     <span>Phiên bản: {app.phienBanHienTai}</span>
-                    {app.duongDanThuMuc && (
-                      <>
-                        <span>•</span>
-                        <span className="truncate max-w-[280px]" title={app.duongDanThuMuc}>
-                          {app.duongDanThuMuc}
-                        </span>
-                      </>
-                    )}
+                    {(() => {
+                      const thuMuc = layThuMucCaiDatThucTe(app);
+                      if (thuMuc) {
+                        return (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[280px]" title={thuMuc}>
+                              {thuMuc}
+                            </span>
+                          </>
+                        );
+                      }
+                      return (
+                        <>
+                          <span>•</span>
+                          <span className="text-muted/80">Đã cài trên Windows</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
 
-              {/* Cụm nút hành động */}
+              {/* Cụm nút hành động (A4, L-01: Tách riêng Mở Ứng Dụng & Mở Thư Mục) */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                {/* Nút cập nhật nếu có bản mới */}
-                {app.coBanMoi && (
+                {app.daBiGoBenNgoai ? (
+                  /* App đã bị gỡ ngoài Windows: Nút dọn khỏi thư viện (EC-07) */
                   <button
-                    onClick={() => openAppDetail(app.maUngDung)}
-                    className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none"
-                    title="Cập nhật lên phiên bản mới"
+                    onClick={() => handleUninstallApp(app)}
+                    disabled={isUninstallingId !== null}
+                    className="btn-tactile h-8 px-3.5 rounded-lg bg-surface-elevated hover:bg-rose-500/15 border border-rose-500/30 text-rose-400 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-rose-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Dọn bản ghi này khỏi danh sách quản lý máy này"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Cập Nhật</span>
+                    {isUninstallingId === app.maUngDung ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Dọn Khỏi Thư Viện</span>
                   </button>
+                ) : (
+                  <>
+                    {/* Nút cập nhật nếu có bản mới */}
+                    {app.coBanMoi && (
+                      <button
+                        onClick={() => openAppDetail(app.maUngDung)}
+                        disabled={isUninstallingId !== null}
+                        className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Cập nhật lên phiên bản mới"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Cập Nhật</span>
+                      </button>
+                    )}
+
+                    {/* Nút Mở Ứng Dụng (L-01, R-01, R-08: Hiện khi có file thực thi, DisplayIcon hợp lệ hoặc InstallLocation khả dụng) */}
+                    {(app.duongDanThucThi ||
+                      laDisplayIconHopLe(app.regInfo?.display_icon) ||
+                      (app.regInfo?.install_location && laThuMucCaiDatHopLe(app.regInfo?.install_location))) && (
+                      <button
+                        onClick={() => handleOpenApp(app)}
+                        disabled={isUninstallingId !== null}
+                        className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Khởi chạy ứng dụng"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-white" />
+                        <span>Mở Ứng Dụng</span>
+                      </button>
+                    )}
+
+                    {/* Nút Mở Thư Mục Cài Đặt (L-01, R-06: Chỉ hiện khi có thư mục cài đặt hợp lệ, không mở vào Windows) */}
+                    {layThuMucCaiDatThucTe(app) && (
+                      <button
+                        onClick={() => handleOpenFolder(app)}
+                        disabled={isUninstallingId !== null}
+                        className="btn-tactile h-8 px-3 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1.5 shadow-xs transition-all focus-visible:ring-2 focus-visible:ring-accent-forge outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Mở thư mục cài đặt trong File Explorer"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline">Thư Mục</span>
+                      </button>
+                    )}
+
+                    {/* Nút Gỡ cài đặt native (A4, FE-03) */}
+                    <button
+                      onClick={() => handleUninstallApp(app)}
+                      disabled={isUninstallingId !== null}
+                      className="btn-tactile h-8 w-8 rounded-lg border border-border hover:bg-rose-500/10 hover:border-rose-500/30 text-muted hover:text-rose-400 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 outline-none disabled:opacity-50"
+                      title="Gỡ cài đặt phần mềm này khỏi máy"
+                    >
+                      {isUninstallingId === app.maUngDung ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </>
                 )}
-
-                {/* Nút Mở Ứng Dụng */}
-                <button
-                  onClick={() => handleOpenApp(app)}
-                  className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none"
-                  title="Khởi chạy ứng dụng native"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Mở Ứng Dụng</span>
-                </button>
-
-                {/* Nút Gỡ bỏ khỏi danh sách */}
-                <button
-                  onClick={() => handleRemoveApp(app.maUngDung)}
-                  className="btn-tactile h-8 w-8 rounded-lg border border-border hover:bg-rose-500/10 hover:border-rose-500/30 text-muted hover:text-rose-400 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 outline-none"
-                  title="Gỡ khỏi danh sách quản lý máy này"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
               </div>
             </div>
           ))}
@@ -328,8 +764,8 @@ export const LibraryPage: React.FC = () => {
             Chưa có ứng dụng nào được cài đặt trên máy này
           </h3>
           <p className="text-xs text-secondary max-w-md leading-relaxed">
-            Duyệt kho ForgeStore và chỉ với 1-Click Cài Đặt, phần mềm sẽ tự động tải, xác thực
-            SHA-256 nguyên tử và xuất hiện tại thư viện này.
+            Duyệt kho ForgeStore và chỉ với 1-Click Cài Đặt, phần mềm sẽ tự động tải, cài đặt an
+            toàn và xuất hiện tại thư viện này.
           </p>
           <button
             onClick={() => navigateTo('explore')}

@@ -1,5 +1,6 @@
 pub mod downloader;
 pub mod installer;
+pub mod uninstaller;
 
 use downloader::{KetQuaTai, TienDoTai, TrinhQuanLyTai};
 use installer::KetQuaCaiDat;
@@ -180,28 +181,55 @@ async fn kiem_tra_sha256(
     })
 }
 
-/// Thực thi bộ cài đặt (.exe, .msi) hoặc giải nén bản portable .zip (P3-10, Điểm 4 & 7)
+/// Hộp thoại native chọn thư mục hệ thống (A1 & L-07)
+#[tauri::command]
+async fn chon_thu_muc(thu_muc_mac_dinh: Option<String>) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(dir) = thu_muc_mac_dinh {
+            if !dir.trim().is_empty() {
+                dialog = dialog.set_directory(dir);
+            }
+        }
+        let folder = dialog.pick_folder();
+        if let Some(path) = folder {
+            // L-07: Kiểm tra thư mục an toàn và quyền ghi ngay khi người dùng chọn
+            let verified = installer::kiem_tra_thu_muc_an_toan_va_quyen_ghi(&path)?;
+            Ok(Some(verified.to_string_lossy().to_string()))
+        } else {
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|e| format!("Lỗi khi mở hộp thoại chọn thư mục: {}", e))?
+}
+
+/// Thực thi bộ cài đặt (.exe, .msi) hoặc giải nén bản portable .zip (P3-10, Điểm 4, 7 & A1)
 #[tauri::command]
 async fn cai_dat_ung_dung(
     duong_dan_tep: String,
     loai_tep: String,
     ten_app: String,
+    thu_muc_dich: Option<String>,
 ) -> Result<KetQuaCaiDat, String> {
     tokio::task::spawn_blocking(move || {
         let path = Path::new(&duong_dan_tep);
         let loai_upper = loai_tep.trim().to_uppercase();
+        let custom_dest = thu_muc_dich.as_deref().map(Path::new);
 
         match loai_upper.as_str() {
-            "EXE" => installer::chay_bo_cai_exe(path),
-            "MSI" => installer::chay_bo_cai_msi(path),
-            "ZIP" | "PORTABLE_ZIP" | "ZIP_PORTABLE" => installer::giai_nen_portable_zip(path, &ten_app),
+            "EXE" => installer::chay_bo_cai_exe(path, &ten_app),
+            "MSI" => installer::chay_bo_cai_msi(path, &ten_app),
+            "ZIP" | "PORTABLE_ZIP" | "ZIP_PORTABLE" => {
+                installer::giai_nen_portable_zip(path, &ten_app, custom_dest)
+            }
             _ => {
                 // Tự động nhận diện đuôi mở rộng nếu không truyền đúng loại
                 if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                     match ext.to_lowercase().as_str() {
-                        "exe" => installer::chay_bo_cai_exe(path),
-                        "msi" => installer::chay_bo_cai_msi(path),
-                        "zip" => installer::giai_nen_portable_zip(path, &ten_app),
+                        "exe" => installer::chay_bo_cai_exe(path, &ten_app),
+                        "msi" => installer::chay_bo_cai_msi(path, &ten_app),
+                        "zip" => installer::giai_nen_portable_zip(path, &ten_app, custom_dest),
                         _ => Err(format!("Định dạng tệp không được hỗ trợ để cài đặt: .{}", ext)),
                     }
                 } else {
@@ -214,11 +242,11 @@ async fn cai_dat_ung_dung(
     .map_err(|e| format!("Lỗi runtime task khi cài đặt ứng dụng: {}", e))?
 }
 
-/// Mở ứng dụng đã cài đặt qua đường dẫn thực thi
+/// Mở ứng dụng đã cài đặt qua đường dẫn thực thi (A1: cho phép cả app portable)
 #[tauri::command]
-fn mo_ung_dung(duong_dan_thuc_thi: String) -> Result<(), String> {
+fn mo_ung_dung(duong_dan_thuc_thi: String, thu_muc_cho_phep: Option<String>) -> Result<(), String> {
     let path = Path::new(&duong_dan_thuc_thi);
-    installer::mo_ung_dung_thuc_thi(path)
+    installer::mo_ung_dung_thuc_thi(path, thu_muc_cho_phep.as_deref().map(Path::new))
 }
 
 /// Lấy thư mục tải về ForgeStore downloads trên máy
@@ -226,6 +254,62 @@ fn mo_ung_dung(duong_dan_thuc_thi: String) -> Result<(), String> {
 fn lay_thu_muc_tai_ve_cmd() -> Result<String, String> {
     let dir = downloader::lay_thu_muc_tai_ve()?;
     Ok(dir.to_string_lossy().to_string())
+}
+
+/// Lấy tổng dung lượng thư mục downloads theo bytes (L-05)
+#[tauri::command]
+fn lay_dung_luong_thu_muc_downloads() -> Result<u64, String> {
+    downloader::tinh_dung_luong_thu_muc_downloads()
+}
+
+/// Dọn dẹp toàn bộ tệp trong thư mục downloads, trả về số bytes đã dọn (L-05)
+#[tauri::command]
+fn don_dep_thu_muc_downloads() -> Result<u64, String> {
+    downloader::don_dep_thu_muc_downloads()
+}
+
+/// Mở thư mục an toàn trong Windows File Explorer (A1, TC-09, SEC-02)
+#[tauri::command]
+fn mo_thu_muc(duong_dan: String) -> Result<(), String> {
+    installer::mo_thu_muc_he_thong(Path::new(&duong_dan))
+}
+
+/// Kiểm tra xem ứng dụng đã được cài đặt thật trong Registry Windows hay chưa (A4, Vấn đề 1)
+#[tauri::command]
+fn kiem_tra_ung_dung_da_cai_registry(
+    ten_app: String,
+    registry_key: Option<String>,
+    display_name: Option<String>,
+) -> Result<Option<uninstaller::ThongTinUngDungRegistry>, String> {
+    Ok(uninstaller::tim_ung_dung_chinh_xac_registry(
+        &ten_app,
+        registry_key.as_deref(),
+        display_name.as_deref(),
+    ))
+}
+
+/// Gỡ cài đặt ứng dụng native qua chuỗi UninstallString chính chủ từ Registry (A4, SEC-01)
+#[tauri::command]
+async fn go_cai_dat_ung_dung_qua_registry(
+    ten_app: String,
+    uninstall_string: Option<String>,
+    registry_key: Option<String>,
+) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || {
+        uninstaller::chay_go_cai_dat_registry_an_toan(
+            &ten_app,
+            uninstall_string.as_deref(),
+            registry_key.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| format!("Lỗi khi chạy tiến trình gỡ cài đặt: {}", e))?
+}
+
+/// Mở ứng dụng native thông qua DisplayIcon hoặc thông tin Registry đã xác minh (L-01)
+#[tauri::command]
+fn mo_ung_dung_tu_registry(khoa_registry: String, ten_app: Option<String>) -> Result<(), String> {
+    uninstaller::mo_ung_dung_tu_registry(&khoa_registry, ten_app.as_deref())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -260,7 +344,14 @@ pub fn run() {
             kiem_tra_sha256,
             cai_dat_ung_dung,
             mo_ung_dung,
-            lay_thu_muc_tai_ve_cmd
+            lay_thu_muc_tai_ve_cmd,
+            chon_thu_muc,
+            mo_thu_muc,
+            lay_dung_luong_thu_muc_downloads,
+            don_dep_thu_muc_downloads,
+            kiem_tra_ung_dung_da_cai_registry,
+            go_cai_dat_ung_dung_qua_registry,
+            mo_ung_dung_tu_registry
         ])
         .run(tauri::generate_context!())
         .expect("error while running forgestore desktop application");

@@ -23,7 +23,7 @@ export const FavoritesPage: React.FC = () => {
     queryKey: ['user-favorites', isAuthenticated],
     queryFn: () => favoritesService.layDanhSachYeuThich(1, 50),
     enabled: isAuthenticated,
-    staleTime: 1000 * 60 * 2, // 2 phút cache
+    staleTime: 1000 * 60 * 5, // L-11: 5 phút cache, mở lại kho yêu thích hiển thị ngay lập tức không chờ server
   });
 
   const rawApps = favoritesResponse?.duLieu || [];
