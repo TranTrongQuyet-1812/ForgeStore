@@ -579,7 +579,13 @@ pub fn chay_go_cai_dat_registry_an_toan(
 /// Kiểm tra xem đường dẫn có nằm dưới thư mục Windows hay không (R-06)
 /// Đọc linh hoạt từ biến môi trường %SystemRoot% / %windir% hoặc mặc định C:\Windows
 pub fn la_thu_muc_windows(path_str: &str) -> bool {
-    let lower = path_str.to_ascii_lowercase().replace('/', "\\");
+    // R-09: Bỏ tiền tố \\?\ hoặc \??\ trước khi so, nếu không `\\?\C:\Windows\...` sẽ lọt qua bộ lọc
+    let trimmed = path_str.trim();
+    let no_prefix = trimmed
+        .strip_prefix(r"\\?\")
+        .or_else(|| trimmed.strip_prefix(r"\??\"))
+        .unwrap_or(trimmed);
+    let lower = no_prefix.to_ascii_lowercase().replace('/', "\\");
     if lower.starts_with(r"c:\windows\") || lower == r"c:\windows" {
         return true;
     }
@@ -1250,5 +1256,20 @@ mod tests {
         assert_eq!(backslash_result, None);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_la_tep_thuc_thi_app_hop_le_duong_dan_co_tien_to() {
+        // R-09: Đường dẫn có tiền tố \\?\ hoặc \??\ vẫn phải bị chặn nếu nằm dưới thư mục Windows
+        assert!(la_thu_muc_windows(r"\\?\C:\Windows\notepad.exe"));
+        assert!(la_thu_muc_windows(r"\??\C:\Windows\System32\cmd.exe"));
+        assert!(!la_tep_thuc_thi_app_hop_le(std::path::Path::new(r"\\?\C:\Windows\notepad.exe")));
+        assert!(!la_tep_thuc_thi_app_hop_le(std::path::Path::new(r"\??\C:\Windows\notepad.exe")));
+
+        // Đường dẫn app hợp lệ có tiền tố vẫn được chấp nhận
+        assert!(!la_thu_muc_windows(r"\\?\C:\Program Files\Notepad++\notepad++.exe"));
+        assert!(la_tep_thuc_thi_app_hop_le(std::path::Path::new(
+            r"\\?\C:\Program Files\Notepad++\notepad++.exe"
+        )));
     }
 }
