@@ -182,46 +182,58 @@ export const ExplorePage: React.FC = () => {
     <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none animate-fade-in">
       {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Chỉ hiển thị khi có dữ liệu thật từ Backend) */}
       {isFeaturedLoading ? (
-        <section className="tactile-card rounded-2xl p-6 md:p-8 border border-border/80 h-[240px] skeleton-shimmer" />
+        <section className="surface-card rounded-2xl p-6 md:p-8 border border-border h-[240px] skeleton-shimmer" />
       ) : currentSpotlight && spotlightApp ? (
-        <section className="tactile-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border/80">
+        <section className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border">
           <div className="relative z-10 flex flex-col gap-5">
             {/* Hàng trên: Bộ chọn 3 chế độ Spotlight */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
                 <button
                   onClick={() => setSpotlightMode('trending')}
-                  className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'trending'
-                      ? 'bg-accent-forge text-white shadow-sm font-semibold'
-                      : 'text-muted hover:text-primary'
+                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <Flame className="w-3.5 h-3.5" />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 ${
+                      spotlightMode === 'trending' ? 'shadow-[0_0_6px_rgba(249,115,22,0.6)]' : 'opacity-40'
+                    }`}
+                  />
                   <span>🔥 Đang được quan tâm</span>
                 </button>
 
                 <button
                   onClick={() => setSpotlightMode('curated')}
-                  className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'curated'
-                      ? 'bg-accent-forge text-white shadow-sm font-semibold'
-                      : 'text-muted hover:text-primary'
+                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <Star className="w-3.5 h-3.5" />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 ${
+                      spotlightMode === 'curated' ? 'shadow-[0_0_6px_rgba(251,191,36,0.6)]' : 'opacity-40'
+                    }`}
+                  />
                   <span>⭐ Forge Đề Xuất</span>
                 </button>
 
                 <button
                   onClick={() => setSpotlightMode('security')}
-                  className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'security'
-                      ? 'bg-accent-forge text-white shadow-sm font-semibold'
-                      : 'text-muted hover:text-primary'
+                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <Shield className="w-3.5 h-3.5" />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ${
+                      spotlightMode === 'security' ? 'shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'opacity-40'
+                    }`}
+                  />
                   <span>🛡️ Điểm uy tín cao</span>
                 </button>
               </div>
@@ -447,31 +459,37 @@ export const ExplorePage: React.FC = () => {
           </div>
 
           {/* Dải chip lọc danh mục chuẩn CSDL động (K3) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 lg:pb-0">
-            {displayCategories.map((category) => (
-              <button
-                key={category.ten}
-                onClick={() => setActiveCategory(category.ten)}
-                className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                  activeCategory === category.ten
-                    ? 'bg-accent-forge text-white shadow-sm font-semibold'
-                    : 'bg-surface hover:bg-surface-elevated text-secondary hover:text-primary border border-border'
-                }`}
-              >
-                <span>{category.ten}</span>
-                {category.soLuong > 0 && (
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
-                      activeCategory === category.ten
-                        ? 'bg-white/20 text-white'
-                        : 'bg-surface-elevated text-muted'
-                    }`}
-                  >
-                    {category.soLuong}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 lg:pb-0">
+            {displayCategories.map((category) => {
+              const isActive = activeCategory === category.ten;
+              return (
+                <button
+                  key={category.ten}
+                  onClick={() => setActiveCategory(category.ten)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 outline-none ${
+                    isActive
+                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      : 'bg-surface hover:bg-surface-hover text-secondary hover:text-primary border border-border'
+                  }`}
+                >
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(249,115,22,0.6)]" />
+                  )}
+                  <span>{category.ten}</span>
+                  {category.soLuong > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+                        isActive
+                          ? 'bg-accent-forge/15 text-accent-forge border border-accent-forge/25 font-bold'
+                          : 'bg-surface-hover text-muted border border-border'
+                      }`}
+                    >
+                      {category.soLuong}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 

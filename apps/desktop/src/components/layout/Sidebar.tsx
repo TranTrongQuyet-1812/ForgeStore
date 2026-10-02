@@ -38,15 +38,40 @@ export const Sidebar: React.FC = () => {
   const { soLuongBanCapNhat } = useUpdaterStore();
 
   return (
-    <aside className="w-[240px] min-w-[240px] h-full bg-surface border-r border-border/80 flex flex-col justify-between p-3 select-none transition-colors duration-200 shadow-sm">
-      {/* Vùng trên: Các nhóm điều hướng phân lớp rõ ràng */}
-      <div className="flex flex-col gap-5">
+    <aside className="w-[260px] min-w-[260px] h-full bg-surface border-r border-border flex flex-col justify-between select-none transition-colors duration-200 shadow-sm z-30">
+      {/* 1. Đỉnh Sidebar: Khối Thương Hiệu Hero Brand to bản & bề thế */}
+      <div
+        data-tauri-drag-region
+        className="h-16 px-4 flex items-center border-b border-border shrink-0 cursor-default"
+      >
+        <button
+          onClick={() => navigateTo('explore')}
+          title="Về trang Khám phá"
+          className="flex items-center gap-3.5 text-left group focus:outline-none"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-surface-elevated border border-border flex items-center justify-center p-2 shadow-md shadow-black/5 dark:shadow-black/40 group-hover:border-accent-forge/40 group-hover:shadow-[0_0_14px_rgba(249,115,22,0.2)] transition-all duration-200 shrink-0">
+            <img src="/logo.png" alt="ForgeStore Logo" className="w-full h-full object-contain drop-shadow" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="font-display font-black text-lg text-primary tracking-tight leading-none group-hover:text-accent-forge transition-colors">
+              ForgeStore
+            </span>
+            <span className="text-[10px] font-mono tracking-wider text-muted uppercase font-semibold flex items-center gap-1.5 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(249,115,22,0.7)]" />
+              <span>Kho Mã Nguồn Mở</span>
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {/* 2. Vùng menu điều hướng phân lớp chuyên nghiệp */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-5">
         {NAV_GROUPS.map((group) => (
           <div key={group.groupName} className="flex flex-col gap-1">
-            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted font-mono">
+            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted font-mono mb-1">
               {group.groupName}
             </div>
-            <nav className="flex flex-col gap-0.5">
+            <nav className="flex flex-col gap-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
@@ -56,22 +81,27 @@ export const Sidebar: React.FC = () => {
                   <button
                     key={item.id}
                     onClick={() => navigateTo(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 focus-visible:ring-2 focus-visible:ring-accent-forge outline-none ${
+                    className={`group relative overflow-hidden w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 outline-none ${
                       isActive
-                        ? 'bg-surface-elevated text-accent-forge font-semibold shadow-xs border border-border/60'
-                        : 'text-secondary hover:text-primary hover:bg-surface-elevated/50'
+                        ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border'
+                        : 'text-secondary hover:text-primary hover:bg-surface-hover'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
+                    {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái kèm ánh glow */}
+                    {isActive && (
+                      <div className="absolute left-0 top-2 bottom-2 w-1 bg-accent-forge rounded-r shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
+                    )}
+
+                    <div className={`flex items-center gap-2.5 ${isActive ? 'pl-1.5' : ''}`}>
                       <Icon
                         className={`w-4 h-4 ${isActive ? 'text-accent-forge' : 'text-muted'}`}
-                        strokeWidth={isActive ? 2 : 1.75}
+                        strokeWidth={isActive ? 2.25 : 1.75}
                       />
                       <span>{item.label}</span>
                     </div>
 
                     {hasUpdateBadge && (
-                      <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-accent-forge text-white font-mono font-bold shadow-xs animate-pulse">
+                      <span className="px-2 py-0.5 text-[10px] rounded-full bg-accent-forge/20 text-accent-forge border border-accent-forge/30 font-mono font-bold shadow-xs animate-pulse">
                         {soLuongBanCapNhat}
                       </span>
                     )}
@@ -81,6 +111,17 @@ export const Sidebar: React.FC = () => {
             </nav>
           </div>
         ))}
+      </div>
+
+      {/* 3. Chân Sidebar: Widget trạng thái hệ thống mini */}
+      <div className="p-3 border-t border-border shrink-0">
+        <div className="p-2.5 rounded-xl bg-surface-elevated border border-border flex items-center justify-between text-[11px] font-mono text-muted">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-secondary font-medium">v0.1.0 • FOSS</span>
+          </div>
+          <span className="text-[10px] text-muted font-medium">Desktop</span>
+        </div>
       </div>
     </aside>
   );

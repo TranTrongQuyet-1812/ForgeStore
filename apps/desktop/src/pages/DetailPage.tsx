@@ -202,6 +202,17 @@ export function tinhTrangThaiHieuLuc(params: {
   }
 }
 
+/**
+ * Phân tích text tính năng từ AI: nếu có dạng **Tiêu đề**: Nội dung thì tách riêng tiêu đề
+ */
+function parseFeatureText(text: string): { title?: string; desc: string } {
+  const match = text.match(/^\*\*(.*?)\*\*[:\s-]*(.*)$/s);
+  if (match) {
+    return { title: match[1].trim(), desc: match[2].trim() };
+  }
+  return { desc: text.replace(/\*\*/g, '').trim() };
+}
+
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo } = useNavStore();
@@ -809,20 +820,23 @@ export const DetailPage: React.FC = () => {
             {/* 3 Thẻ tính năng cốt lõi có icon chuyên biệt (P3-06.2) */}
             {featureList.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
-                {featureList.map((feature, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-xl bg-surface-elevated/70 border border-border/60 flex flex-col gap-2"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border/40">
-                      {featureIcons[idx] || <CheckCircle2 className="w-4 h-4 text-primary" />}
+                {featureList.map((feature, idx) => {
+                  const parsed = parseFeatureText(feature);
+                  return (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-xl bg-surface-elevated/40 hover:bg-surface-elevated border border-border hover:border-border-focus transition-all flex flex-col gap-2.5"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center border border-border text-accent-ai shrink-0">
+                        {featureIcons[idx] || <CheckCircle2 className="w-4 h-4 text-primary" />}
+                      </div>
+                      <h4 className="text-xs font-bold text-primary font-display">
+                        {parsed.title || `Tính Năng #${idx + 1}`}
+                      </h4>
+                      <p className="text-[11px] text-secondary leading-relaxed">{parsed.desc}</p>
                     </div>
-                    <h4 className="text-xs font-bold text-primary font-display">
-                      Tính Năng #{idx + 1}
-                    </h4>
-                    <p className="text-[11px] text-secondary leading-relaxed">{feature}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               appDetail.phanTichAi?.tomTatTinhNangVi && (
@@ -836,7 +850,7 @@ export const DetailPage: React.FC = () => {
           {/* Bảng Các Tệp Cài Đặt & Checksum SHA-256 (P3-06.4) - Chỉ hiển thị khi có tệp cài đặt */}
           {coFileCaiDat && (
             <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-border/50 pb-3 flex-wrap gap-2">
+              <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
                 <div>
                   <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
                     <FileArchive className="w-4 h-4 text-accent-forge" />
@@ -885,17 +899,22 @@ export const DetailPage: React.FC = () => {
                           setSelectedFormat(asset.dinhDangTep.toString());
                         }
                       }}
-                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all cursor-pointer ${
+                      className={`relative overflow-hidden p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-surface-elevated/90 border-accent-forge/60 shadow-md ring-1 ring-accent-forge/30'
-                          : 'bg-surface-elevated/40 border-border/50 hover:border-border hover:bg-surface-elevated/60'
+                          ? 'bg-surface-elevated border-border-focus shadow-sm'
+                          : 'bg-surface/40 border-border hover:border-border-focus hover:bg-surface/70'
                       }`}
                     >
-                      <div className="flex flex-col gap-1 min-w-0">
+                      {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái khi được chọn (Linear/Raycast style) */}
+                      {isSelected && (
+                        <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-accent-forge rounded-r" />
+                      )}
+
+                      <div className={`flex flex-col gap-1 min-w-0 ${isSelected ? 'pl-2' : ''}`}>
                         <div className="flex items-center gap-2 font-mono text-xs font-bold text-primary truncate">
                           <span className="truncate">{asset.tenTep}</span>
                           {isSelected && (
-                            <span className="px-1.5 py-0.5 rounded bg-accent-forge/15 text-accent-forge text-[10px] shrink-0 font-bold border border-accent-forge/30">
+                            <span className="px-2 py-0.5 rounded-full bg-accent-forge/10 text-accent-forge text-[10px] shrink-0 font-semibold border border-accent-forge/20 tracking-wider">
                               ĐANG CHỌN
                             </span>
                           )}
@@ -933,9 +952,9 @@ export const DetailPage: React.FC = () => {
           {coHuongDanCli && huongDanCli && (
             <div
               id="cli-guide-section"
-              className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-border/80"
+              className="tactile-card p-6 rounded-2xl flex flex-col gap-5"
             >
-              <div className="flex items-center justify-between border-b border-border/50 pb-3 flex-wrap gap-2">
+              <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-accent-forge" />
                   <h3 className="text-sm font-bold font-display text-primary uppercase tracking-wider">
@@ -956,21 +975,29 @@ export const DetailPage: React.FC = () => {
 
               {/* Tabs chọn phương thức cài đặt */}
               {huongDanCli.cachCai.length > 1 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
-                  {huongDanCli.cachCai.map((cach, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setActiveCliMethodIndex(idx)}
-                      className={`btn-tactile px-3.5 py-1.5 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all ${
-                        activeCliMethodIndex === idx
-                          ? 'bg-accent-forge text-white border-accent-forge shadow-sm font-bold'
-                          : 'bg-surface-elevated/70 text-secondary border-border/70 hover:text-primary hover:bg-surface-elevated'
-                      }`}
-                    >
-                      {cach.nhom} • {cach.ten}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5 overflow-x-auto p-1 rounded-xl bg-surface/50 border border-border text-xs font-mono">
+                  {huongDanCli.cachCai.map((cach, idx) => {
+                    const isActive = activeCliMethodIndex === idx;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveCliMethodIndex(idx)}
+                        className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                          isActive
+                            ? 'bg-surface-elevated text-primary shadow-sm border border-border-focus font-bold'
+                            : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                        }`}
+                      >
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                        )}
+                        <span>
+                          {cach.nhom} • {cach.ten}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -983,7 +1010,7 @@ export const DetailPage: React.FC = () => {
                 return (
                   <div className="flex flex-col gap-4">
                     {/* Thông tin phương thức & Yêu cầu tiên quyết */}
-                    <div className="p-3.5 rounded-xl bg-surface-elevated/40 border border-border/50 flex flex-col gap-2">
+                    <div className="p-3.5 rounded-xl bg-surface/40 border border-border flex flex-col gap-2">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold font-display text-primary">
@@ -1014,21 +1041,14 @@ export const DetailPage: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Danh sách các bước lệnh */}
-                    <div className="flex flex-col gap-3">
+                    {/* Danh sách các bước lệnh (loại bỏ viền lồng hộp, phân tách thoáng đãng) */}
+                    <div className="flex flex-col gap-4">
                       {currentMethod.buoc.map((buoc, bIdx) => {
                         const stepId = `cli-${activeCliMethodIndex}-${bIdx}`;
                         const isCopied = copiedCommandId === stepId;
 
                         return (
-                          <div
-                            key={bIdx}
-                            className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
-                              buoc.ruiRoCao
-                                ? 'bg-rose-500/5 border-rose-500/30'
-                                : 'bg-surface-elevated/30 border-border/50'
-                            }`}
-                          >
+                          <div key={bIdx} className="flex flex-col gap-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs font-semibold text-primary flex items-center gap-2">
                                 <span className="w-5 h-5 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-[10px] font-mono font-bold text-accent-forge shrink-0">
@@ -1046,14 +1066,14 @@ export const DetailPage: React.FC = () => {
                             </div>
 
                             {/* Khối dòng lệnh nguyên văn */}
-                            <div className="relative group rounded-xl bg-slate-950 border border-slate-800 overflow-hidden shadow-inner">
+                            <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
                               <pre className="p-3.5 pr-28 text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed select-text font-medium">
                                 <code>{buoc.lenh}</code>
                               </pre>
                               <button
                                 type="button"
                                 onClick={() => handleCopyCommand(buoc.lenh, stepId)}
-                                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm"
+                                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm"
                                 title="Sao chép câu lệnh này vào Clipboard"
                               >
                                 {isCopied ? (
@@ -1087,7 +1107,7 @@ export const DetailPage: React.FC = () => {
                     </div>
 
                     {/* Banner an toàn hiển thị & README gốc */}
-                    <div className="p-3.5 rounded-xl bg-surface-elevated/60 border border-border/60 text-xs text-muted flex items-start sm:items-center justify-between gap-3 leading-relaxed flex-col sm:flex-row">
+                    <div className="p-3.5 rounded-xl bg-surface/40 border border-border text-xs text-muted flex items-start sm:items-center justify-between gap-3 leading-relaxed flex-col sm:flex-row">
                       <div className="flex items-start gap-2">
                         <Shield className="w-4 h-4 text-accent-forge shrink-0 mt-0.5" />
                         <span>
@@ -1116,7 +1136,7 @@ export const DetailPage: React.FC = () => {
 
           {/* Trường hợp không có cả tệp cài đặt lẫn hướng dẫn CLI */}
           {!coFileCaiDat && !coHuongDanCli && (
-            <div className="tactile-card p-6 rounded-2xl border border-border/50 text-center text-xs text-muted">
+            <div className="tactile-card p-6 rounded-2xl border border-border text-center text-xs text-muted">
               Ứng dụng này hiện chưa có tệp cài đặt phù hợp với Windows (.exe, .msi, .zip) và chưa
               có hướng dẫn cài đặt dòng lệnh.
             </div>
@@ -1125,7 +1145,7 @@ export const DetailPage: React.FC = () => {
           {/* Lịch Sử Các Bản Phát Hành (P3-06.4) */}
           {appDetail.danhSachBanPhatHanh && appDetail.danhSachBanPhatHanh.length > 1 && (
             <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-border/50 pb-3">
+              <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
                   <Layers className="w-4 h-4 text-muted" />
                   <span>LỊCH SỬ PHIÊN BẢN ({appDetail.danhSachBanPhatHanh.length})</span>
@@ -1143,14 +1163,14 @@ export const DetailPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2.5">
                 {(showAllVersions
                   ? appDetail.danhSachBanPhatHanh
                   : appDetail.danhSachBanPhatHanh.slice(0, 3)
                 ).map((release) => (
                   <div
                     key={release.maPhatHanh}
-                    className="p-3.5 rounded-xl bg-surface-elevated/40 border border-border/40 flex flex-col gap-1.5"
+                    className="p-3.5 rounded-xl bg-surface/30 hover:bg-surface/60 border border-border transition-all flex flex-col gap-1.5"
                   >
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-bold text-primary">
@@ -1289,7 +1309,7 @@ export const DetailPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-border shadow-xl">
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 shadow-xl">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
                 <button
@@ -1298,7 +1318,7 @@ export const DetailPage: React.FC = () => {
                   className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
                     isFavorited
                       ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
-                      : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                      : 'bg-surface-elevated border-border hover:border-border-focus text-muted hover:text-primary'
                   } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
                   title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
                 >
@@ -1315,25 +1335,31 @@ export const DetailPage: React.FC = () => {
                 </p>
               )}
 
-              {/* Bộ chọn định dạng tệp có sẵn */}
+              {/* Bộ chọn định dạng tệp có sẵn (Segmented Control tinh tế) */}
               {availableFormats.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border text-xs font-mono font-medium">
-                  {availableFormats.map((fmt) => (
-                    <button
-                      key={fmt}
-                      onClick={() => {
-                        setSelectedFormat(fmt);
-                        setSelectedAssetId(null);
-                      }}
-                      className={`btn-tactile py-2 px-2.5 rounded-lg transition-all text-center ${
-                        selectedFormat === fmt
-                          ? 'bg-accent-forge text-white shadow-sm font-bold'
-                          : 'text-muted hover:text-primary'
-                      }`}
-                    >
-                      {getFormatLabel(fmt)}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-1 rounded-xl bg-surface/50 border border-border text-xs font-mono font-medium">
+                  {availableFormats.map((fmt) => {
+                    const isFmtActive = selectedFormat === fmt;
+                    return (
+                      <button
+                        key={fmt}
+                        onClick={() => {
+                          setSelectedFormat(fmt);
+                          setSelectedAssetId(null);
+                        }}
+                        className={`btn-tactile py-2 px-2.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${
+                          isFmtActive
+                            ? 'bg-surface-elevated text-primary shadow-sm border border-border-focus font-bold'
+                            : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                        }`}
+                      >
+                        {isFmtActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                        )}
+                        <span>{getFormatLabel(fmt)}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1543,7 +1569,7 @@ export const DetailPage: React.FC = () => {
                       .getElementById('cli-guide-section')
                       ?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  className="btn-tactile text-[11px] font-mono text-muted hover:text-accent-forge flex items-center justify-center gap-1.5 transition-colors pt-2 border-t border-border/50"
+                  className="btn-tactile text-[11px] font-mono text-muted hover:text-accent-forge flex items-center justify-center gap-1.5 transition-colors pt-2 border-t border-border"
                   title="Cuộn tới phần hướng dẫn cài đặt qua dòng lệnh"
                 >
                   <Terminal className="w-3.5 h-3.5 text-accent-forge" />
@@ -1576,7 +1602,7 @@ export const DetailPage: React.FC = () => {
             </div>
 
             {/* Thanh Progress Gauge Trực Quan */}
-            <div className="w-full bg-surface-elevated h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-surface-elevated/80 h-2.5 rounded-full overflow-hidden p-0.5 border border-border">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${scoreTheme.bar}`}
                 style={{ width: `${Math.min(100, Math.max(5, trustScore))}%` }}
@@ -1584,7 +1610,7 @@ export const DetailPage: React.FC = () => {
             </div>
 
             {/* Điểm nổi bật & Yếu tố rủi ro */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-border/40 text-xs">
+            <div className="flex flex-col gap-2 pt-2 border-t border-border text-xs">
               {appDetail.soLuotFork ? (
                 <div className="flex items-center gap-2 text-secondary">
                   <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -1634,17 +1660,17 @@ export const DetailPage: React.FC = () => {
               <span>DỮ LIỆU KHO CHỨA GITHUB</span>
             </h4>
             <div className="flex flex-col gap-2 font-mono text-[11px] text-secondary">
-              <div className="flex justify-between py-1 border-b border-border/40">
+              <div className="flex justify-between py-1 border-b border-border">
                 <span>Ngôn ngữ chính:</span>
                 <span className="text-primary font-bold">
                   {appDetail.ngonNguChinh || 'Đa ngôn ngữ'}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/40">
+              <div className="flex justify-between py-1 border-b border-border">
                 <span>Forks:</span>
                 <span className="text-primary">{formatStars(appDetail.soLuotFork)}</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-border/40">
+              <div className="flex justify-between py-1 border-b border-border">
                 <span>Bản phát hành:</span>
                 <span className="text-primary">
                   {appDetail.danhSachBanPhatHanh?.length || 1} releases
@@ -1680,7 +1706,7 @@ export const DetailPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border/60">
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border">
               <div>
                 <span className="text-xs text-muted font-mono">Điểm uy tín kho mã</span>
                 <div className="flex items-baseline gap-2 mt-0.5">
@@ -1707,7 +1733,7 @@ export const DetailPage: React.FC = () => {
                 riskItems.map((risk, idx) => (
                   <div
                     key={idx}
-                    className="p-3 rounded-xl bg-surface-elevated/40 border border-border/50 flex flex-col gap-1 text-xs"
+                    className="p-3 rounded-xl bg-surface/40 border border-border flex flex-col gap-1 text-xs"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-primary flex items-center gap-1.5">

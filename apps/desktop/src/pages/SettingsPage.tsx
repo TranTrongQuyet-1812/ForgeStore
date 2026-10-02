@@ -124,12 +124,12 @@ export const SettingsPage: React.FC = () => {
                 : 'bg-surface border-border hover:bg-surface-elevated'
             }`}
           >
-            <div className="w-10 h-10 rounded-lg bg-[#F8F7F4] border border-border flex items-center justify-center text-slate-800">
+            <div className="w-10 h-10 rounded-lg bg-[#F7F5F0] border border-border flex items-center justify-center text-slate-800">
               <Sun className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-semibold text-primary">Light Mode (Trắng ngà sữa)</div>
-              <div className="text-[11px] text-muted">Nền #F8F7F4 ấm cúng, không chói mắt</div>
+              <div className="text-xs font-semibold text-primary">Light Mode (Warm Oat & Giấy Mộc)</div>
+              <div className="text-[11px] text-muted">Nền ngà sữa #F7F5F0 ấm cúng, chống chói mắt</div>
             </div>
           </div>
         </div>

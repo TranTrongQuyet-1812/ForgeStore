@@ -33,13 +33,14 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-canvas text-primary font-body">
-      {/* 1. Thanh tiêu đề Custom Titlebar Frameless (64px / 56px) */}
-      <Titlebar />
+    <div className="h-screen w-screen flex overflow-hidden bg-canvas text-primary font-body select-none">
+      {/* 1. Thanh điều hướng dọc Full-Height Sidebar (260px) */}
+      <Sidebar />
 
-      {/* 2. Phần thân 2 cột (Sidebar 240px cố định + Vùng nội dung chính co giãn) */}
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
+      {/* 2. Cột nội dung bên phải: Header (Titlebar) + Vùng cuộn chính */}
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
+        {/* Thanh tiêu đề Custom Titlebar Frameless */}
+        <Titlebar />
 
         {/* Vùng cuộn nội dung chính với Zero-Latency Crossfade & Micro-Elevation */}
         <main

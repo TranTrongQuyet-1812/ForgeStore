@@ -5,52 +5,58 @@
 @tailwind utilities;
 
 :root {
-  /* Bảng màu Trắng ngà sữa (Light Mode) - Ấm cúng, dịu mắt, không trắng toát #FFFFFF */
-  --color-bg-canvas: #F8F7F4;
-  --color-bg-surface: #FFFFFF;
+  /* Bảng màu Trắng ngà sữa (Light Mode: Warm Oat & Linen Paper) - ui-ux-pro-max-skill */
+  --color-bg-canvas: #F7F5F0;
+  --color-bg-surface: #EFECE6;
   --color-bg-surface-elevated: #FFFFFF;
-  --color-bg-surface-hover: #F2EFE9;
-  --color-border-subtle: #E2DFD6;
-  --color-border-active: #CBD5E1;
-  --color-text-primary: #1E293B;
-  --color-text-secondary: #475569;
-  --color-text-muted: #8E9BAE;
-  --card-specular: rgba(255, 255, 255, 0.8);
-  --ambient-glow: rgba(249, 115, 22, 0.03);
+  --color-bg-surface-hover: #E7E3D9;
+  --color-border-subtle: rgba(28, 25, 23, 0.08);
+  --color-border-active: rgba(28, 25, 23, 0.18);
+  --color-text-primary: #1C1917;
+  --color-text-secondary: #57534E;
+  --color-text-muted: #8C857E;
+  --card-specular: rgba(255, 255, 255, 0.7);
+  --card-shadow: rgba(28, 25, 23, 0.04);
+  --card-shadow-hover: rgba(28, 25, 23, 0.08);
+  --ambient-glow: rgba(234, 88, 12, 0.025);
 }
 
 .dark {
   /* Bảng màu Dark Mode than chì dịu mắt - Nền #0B0F19, tuyệt đối không đen kịt #000000 chống lóa */
   --color-bg-canvas: #0B0F19;
   --color-bg-surface: #131B2B;
-  --color-bg-surface-elevated: #1A2438;
+  --color-bg-surface-elevated: #182234;
   --color-bg-surface-hover: #1E2B42;
-  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-border-active: rgba(255, 255, 255, 0.14);
   --color-text-primary: #F1F5F9;
   --color-text-secondary: #94A3B8;
   --color-text-muted: #64748B;
-  --card-specular: rgba(255, 255, 255, 0.06);
-  --ambient-glow: rgba(249, 115, 22, 0.06);
+  --card-specular: rgba(255, 255, 255, 0.04);
+  --card-shadow: rgba(0, 0, 0, 0.35);
+  --card-shadow-hover: rgba(0, 0, 0, 0.5);
+  --ambient-glow: rgba(249, 115, 22, 0.04);
 }
 
 @layer utilities {
-  /* Lớp bề mặt Tactile với viền sáng Specular Rim Light 1px (Linear / Raycast Style) */
+  /* Lớp bề mặt Tactile với viền sáng Specular Rim Light 1px (Linear / Raycast Style) - Đầm chắc, tĩnh tại, không co giật */
   .tactile-card {
-    background-color: var(--color-bg-surface);
+    background-color: var(--color-bg-surface-elevated);
     border: 1px solid var(--color-border-subtle);
-    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 4px 20px -2px rgba(0, 0, 0, 0.35);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 2px 10px -2px var(--card-shadow);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   }
 
   .tactile-card:hover {
     border-color: var(--color-border-active);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 8px 28px -4px rgba(0, 0, 0, 0.5);
-    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 6px 20px -3px var(--card-shadow-hover);
   }
 
-  .tactile-card:active {
-    transform: scale(0.99);
+  /* Khối container tĩnh (Hero Spotlight, Panels...) - Tuyệt đối không lún thụt khi tương tác các nút bên trong */
+  .surface-card {
+    background-color: var(--color-bg-surface-elevated);
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 4px 16px -2px var(--card-shadow);
   }
 
   .tactile-elevated {
