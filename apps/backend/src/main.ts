@@ -19,8 +19,8 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
-  // P2-04.1: Tiền tố chung /api/v1 cho mọi route
-  app.setGlobalPrefix('api/v1');
+  // P2-04.1: Tiền tố chung /api/v1 cho mọi route (ngoại trừ root / chào mừng)
+  app.setGlobalPrefix('api/v1', { exclude: ['/'] });
 
   // P2-04.2: ValidationPipe toàn cục
   app.useGlobalPipes(

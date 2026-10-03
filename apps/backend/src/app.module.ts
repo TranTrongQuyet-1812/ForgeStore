@@ -18,8 +18,10 @@ import { UpdaterModule } from './modules/updater/updater.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { AppController } from './app.controller';
 
 @Module({
+  controllers: [AppController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
