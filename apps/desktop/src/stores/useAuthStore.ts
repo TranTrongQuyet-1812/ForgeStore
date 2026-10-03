@@ -7,6 +7,7 @@ import type {
 } from '@forgestore/types';
 import { tokenStorage, parseJwtDid } from '../services/auth/token-storage';
 import { apiClient, ApiError } from '../services/api/api-client';
+import { queryClient } from '../services/api/query-client';
 
 interface AuthState {
   user: NguoiDungDto | null;
@@ -117,6 +118,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     await tokenStorage.clearAllTokens();
+    // Xóa toàn bộ cache dữ liệu riêng tư của người dùng cũ (chống Data Bleeding)
+    queryClient.clear();
     set({
       user: null,
       thietBi: null,

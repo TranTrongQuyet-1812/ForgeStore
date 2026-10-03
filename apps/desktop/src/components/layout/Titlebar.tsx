@@ -206,7 +206,7 @@ export const Titlebar: React.FC = () => {
             </button>
 
             {isAuthMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 p-1.5 rounded-2xl bg-surface-elevated border border-border shadow-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 mt-2 w-64 p-1.5 rounded-2xl bg-surface-elevated border border-border shadow-2xl z-50 animate-fade-in">
                 <div className="px-2.5 py-2 border-b border-border/50 mb-1">
                   <p className="text-xs font-semibold text-primary">Đăng nhập vào ForgeStore</p>
                   <p className="text-[11px] text-muted leading-tight mt-0.5">

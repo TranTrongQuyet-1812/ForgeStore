@@ -315,7 +315,7 @@ export const DetailPage: React.FC = () => {
   const handleToggleFavorite = async () => {
     if (isTogglingFavorite) return;
     if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập GitHub ở thanh trên cùng để lưu ứng dụng vào Kho yêu thích!');
+      alert('Vui lòng đăng nhập tài khoản ở thanh trên cùng để lưu ứng dụng vào Kho yêu thích!');
       return;
     }
 

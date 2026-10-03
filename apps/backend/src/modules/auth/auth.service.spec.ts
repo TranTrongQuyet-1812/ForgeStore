@@ -369,6 +369,61 @@ describe('AuthService', () => {
 
       vi.unstubAllGlobals();
     });
+
+    it('SEC-01: từ chối Auto-Linking nếu email chỉ lấy từ profile ghUser.email mà không có trong /user/emails verified', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: 'test-challenge',
+        redirect: 'forgestore://auth/callback',
+        provider: 'github',
+      });
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('access_token')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ access_token: 'gh-token-secret' }),
+          });
+        }
+        if (url.includes('api.github.com/user/emails')) {
+          // Trả về mảng rỗng hoặc lỗi (không có verified email)
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([]),
+          });
+        }
+        if (url.includes('api.github.com/user')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                id: 112233,
+                login: 'attacker',
+                name: 'Attacker',
+                email: 'victim@gmail.com', // Email public profile mạo danh chưa verify
+              }),
+          });
+        }
+        return Promise.reject(new Error('Unknown url'));
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(null);
+      mockPrisma.nguoiDung.create.mockResolvedValue({
+        maNguoiDung: 'new-user-uuid',
+        tenDangNhap: 'attacker',
+        thuDienTu: 'victim@gmail.com',
+      });
+
+      await service.xuLyGithubCallback('gh-code', 'valid-state');
+
+      // Khẳng định: KHÔNG gọi update trên bất kỳ tài khoản có sẵn nào
+      expect(mockPrisma.nguoiDung.update).not.toHaveBeenCalled();
+      // Bắt buộc gọi create tài khoản mới
+      expect(mockPrisma.nguoiDung.create).toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
   });
 
   describe('P2-13 & Điểm 2, 3: doiMaXacThuc (PKCE RFC 7636 Flow)', () => {

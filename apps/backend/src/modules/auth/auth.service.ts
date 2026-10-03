@@ -174,7 +174,7 @@ export class AuthService {
       });
     }
 
-    if (stateData.provider && stateData.provider !== 'github') {
+    if (stateData.provider !== 'github') {
       throw new BadRequestException({
         maLoi: 'PROVIDER_KHONG_KHOP',
         thongBao: 'Mã state xác thực không khớp với nhà cung cấp GitHub',
@@ -241,8 +241,9 @@ export class AuthService {
       avatar_url?: string | null;
     };
 
-    // Điểm 9: Lấy email chính xác đã verified
+    // Điểm 9: Lấy email chính xác đã verified từ API chuyên biệt của GitHub
     let primaryEmail: string | null = null;
+    let isEmailVerified = false;
     try {
       const emailsRes = await fetch('https://api.github.com/user/emails', {
         headers: {
@@ -260,16 +261,23 @@ export class AuthService {
         const verifiedEmails = emails.filter((e) => e.verified);
         const primary = verifiedEmails.find((e) => e.primary) || verifiedEmails[0];
         if (primary) {
-          primaryEmail = primary.email;
+          primaryEmail = primary.email.trim().toLowerCase();
+          isEmailVerified = true;
         }
       }
     } catch (emailErr) {
       this.logger.warn(`Không thể lấy danh sách email GitHub: ${(emailErr as Error).message}`);
     }
 
-    // Nếu không lấy được qua user/emails, kiểm tra nếu profile email có sẵn
-    if (!primaryEmail && ghUser.email) {
-      primaryEmail = ghUser.email;
+    // Nếu không lấy được qua user/emails, chỉ dùng ghUser.email làm fallback tham khảo cho tạo tài khoản mới
+    // SEC-01: Tuyệt đối KHÔNG gán isEmailVerified = true từ ghUser.email vì email profile GitHub không bắt buộc verify
+    let fallbackProfileEmail: string | null = null;
+    if (ghUser.email) {
+      fallbackProfileEmail = ghUser.email.trim().toLowerCase();
+    }
+
+    if (!ghUser.id || typeof ghUser.id !== 'number') {
+      throw new BadRequestException('Thông tin người dùng GitHub không hợp lệ (thiếu user ID)');
     }
 
     // Tạo mới hoặc cập nhật người dùng trong CSDL - Hỗ trợ liên kết hai chiều (Two-Way Auto-Linking)
@@ -284,16 +292,16 @@ export class AuthService {
         data: {
           tenDangNhap: ghUser.login,
           tenHienThi: ghUser.name || ghUser.login,
-          thuDienTu: primaryEmail || user.thuDienTu,
+          thuDienTu: primaryEmail || user.thuDienTu || fallbackProfileEmail,
           duongDanAvatar: ghUser.avatar_url || user.duongDanAvatar,
         },
       });
-    } else if (primaryEmail) {
-      // Tự động liên kết hai chiều nếu đã có tài khoản trùng email đã verified (ví dụ user đăng ký trước bằng Google)
+    } else if (primaryEmail && isEmailVerified) {
+      // SEC-01 & SEC-04: Tự động liên kết hai chiều CHỈ KHI email đã verified và tài khoản đó CHƯA TỪNG liên kết GitHub khác
       const existingUserWithEmail = await this.prisma.nguoiDung.findFirst({
         where: { thuDienTu: primaryEmail },
       });
-      if (existingUserWithEmail) {
+      if (existingUserWithEmail && !existingUserWithEmail.maDinhDanhGithub) {
         user = await this.prisma.nguoiDung.update({
           where: { maNguoiDung: existingUserWithEmail.maNguoiDung },
           data: {
@@ -320,7 +328,7 @@ export class AuthService {
           maDinhDanhGithub: String(ghUser.id),
           tenDangNhap: username,
           tenHienThi: ghUser.name || ghUser.login,
-          thuDienTu: primaryEmail,
+          thuDienTu: primaryEmail || fallbackProfileEmail,
           duongDanAvatar: ghUser.avatar_url,
           vaiTro: VaiTro.NGUOI_DUNG,
         },
@@ -364,7 +372,7 @@ export class AuthService {
       });
     }
 
-    if (stateData.provider && stateData.provider !== 'google') {
+    if (stateData.provider !== 'google') {
       throw new BadRequestException({
         maLoi: 'PROVIDER_KHONG_KHOP',
         thongBao: 'Mã state xác thực không khớp với nhà cung cấp Google',
@@ -437,17 +445,26 @@ export class AuthService {
       picture?: string;
     };
 
+    if (!googleUser.sub) {
+      throw new BadRequestException(
+        'Thông tin người dùng Google không hợp lệ (thiếu sub identifier)',
+      );
+    }
+
+    const normalizedEmail = googleUser.email ? googleUser.email.trim().toLowerCase() : null;
+
     // 3. Tìm hoặc tự động liên kết tài khoản
     let user = await this.prisma.nguoiDung.findUnique({
       where: { maDinhDanhGoogle: googleUser.sub },
     });
 
-    if (!user && googleUser.email && googleUser.email_verified) {
+    if (!user && normalizedEmail && googleUser.email_verified) {
       // Tự động liên kết nếu đã có tài khoản trùng email đã verified (ví dụ user đã đăng ký qua GitHub)
+      // SEC-04 FIX: Chỉ liên kết nếu tài khoản đó CHƯA TỪNG liên kết với tài khoản Google khác
       const existingUserWithEmail = await this.prisma.nguoiDung.findFirst({
-        where: { thuDienTu: googleUser.email },
+        where: { thuDienTu: normalizedEmail },
       });
-      if (existingUserWithEmail) {
+      if (existingUserWithEmail && !existingUserWithEmail.maDinhDanhGoogle) {
         user = await this.prisma.nguoiDung.update({
           where: { maNguoiDung: existingUserWithEmail.maNguoiDung },
           data: {
@@ -493,7 +510,7 @@ export class AuthService {
           maDinhDanhGoogle: googleUser.sub,
           tenDangNhap: username,
           tenHienThi: googleUser.name || username,
-          thuDienTu: googleUser.email,
+          thuDienTu: normalizedEmail,
           duongDanAvatar: googleUser.picture,
           vaiTro: VaiTro.NGUOI_DUNG,
         },
