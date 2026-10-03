@@ -9,6 +9,7 @@ import { FavoritesPage } from '../../pages/FavoritesPage';
 import { CategoriesPage } from '../../pages/CategoriesPage';
 import { SettingsPage } from '../../pages/SettingsPage';
 import { SearchModal } from '../search/SearchModal';
+import { AuthModal } from '../auth/AuthModal';
 
 export const AppLayout: React.FC = () => {
   const { currentTab } = useNavStore();
@@ -53,6 +54,9 @@ export const AppLayout: React.FC = () => {
 
       {/* 3. Modal tìm kiếm nhanh Ctrl+K (Toàn cục) */}
       <SearchModal />
+
+      {/* 4. Hộp thoại xác thực tài khoản trung tâm (Toàn cục) */}
+      <AuthModal />
     </div>
   );
 };

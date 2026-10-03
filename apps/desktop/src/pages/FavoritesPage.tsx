@@ -4,13 +4,12 @@ import { Heart, Sparkles, LogIn, Compass, RefreshCw, AlertCircle } from 'lucide-
 import { AppCard, AppCardData } from '../components/common/AppCard';
 import { useNavStore } from '../stores/useNavStore';
 import { useAuthStore } from '../stores/useAuthStore';
-import { authService } from '../services/auth/auth-service';
 import { favoritesService } from '../services/favorites/favorites-service';
 import { storeService } from '../services/store/store-service';
 import type { UngDungTomTatDto } from '@forgestore/types';
 
 export const FavoritesPage: React.FC = () => {
-  const { navigateTo } = useNavStore();
+  const { navigateTo, setAuthModalOpen } = useNavStore();
   const { isAuthenticated } = useAuthStore();
 
   // Nạp danh sách ứng dụng yêu thích từ API backend (P3-12.1)
@@ -70,15 +69,15 @@ export const FavoritesPage: React.FC = () => {
                 Đăng nhập để đồng bộ kho yêu thích
               </h3>
               <p className="text-[11px] text-secondary mt-0.5">
-                Lưu ứng dụng yêu thích an toàn trên tài khoản GitHub và mở ngay trên máy tính hoặc
+                Lưu ứng dụng yêu thích an toàn trên tài khoản đám mây và mở ngay trên máy tính hoặc
                 điện thoại.
               </p>
             </div>
           </div>
 
           <button
-            onClick={() => authService.loginWithGithub()}
-            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
+            onClick={() => setAuthModalOpen(true)}
+            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Đăng Nhập Ngay</span>
