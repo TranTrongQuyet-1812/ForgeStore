@@ -27,6 +27,28 @@ export class AuthService {
 
   /**
    * Khởi tạo luồng đăng nhập GitHub OAuth.
+  /**
+   * Kiểm tra tính hợp lệ và an toàn của URL chuyển hướng redirect (chống Open Redirect).
+   */
+  private kiemTraRedirectHopLe(redirect: string): boolean {
+    const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
+    try {
+      const u = new URL(redirect);
+      const isScheme = u.protocol === `${appDeepLinkScheme}:` && !u.hash;
+      const isLoopback =
+        u.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(u.hostname) &&
+        !u.username &&
+        !u.password &&
+        !u.hash;
+      return isScheme || isLoopback;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Khởi tạo luồng đăng nhập GitHub OAuth.
    * Sinh mã state ngẫu nhiên lưu vào Redis kèm PKCE challenge và redirect URL.
    * Điểm 1: Vá lỗ hổng Open Redirect bằng URL parsing nghiêm ngặt (chặn userinfo, kiểm tra protocol & hostname).
    */
@@ -40,23 +62,7 @@ export class AuthService {
 
     const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
 
-    // Điểm 1: Phân tích URL redirect thật sự để chặn đứng Open Redirect (ví dụ http://localhost:1@evil.com)
-    let isAllowedRedirect = false;
-    try {
-      const u = new URL(redirect);
-      const isScheme = u.protocol === `${appDeepLinkScheme}:` && !u.hash;
-      const isLoopback =
-        u.protocol === 'http:' &&
-        ['localhost', '127.0.0.1'].includes(u.hostname) &&
-        !u.username &&
-        !u.password &&
-        !u.hash;
-      isAllowedRedirect = isScheme || isLoopback;
-    } catch {
-      isAllowedRedirect = false;
-    }
-
-    if (!isAllowedRedirect) {
+    if (!this.kiemTraRedirectHopLe(redirect)) {
       throw new BadRequestException(
         `Đường dẫn chuyển hướng redirect không hợp lệ. Chỉ chấp nhận ${appDeepLinkScheme}:// hoặc loopback localhost hợp lệ.`,
       );
@@ -65,10 +71,10 @@ export class AuthService {
     const state = randomUUID();
     const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
 
-    // Lưu state kèm challenge và redirect vào Redis / Memory Fallback với TTL 10 phút (600 giây)
+    // Lưu state kèm challenge, redirect và provider vào Redis / Memory Fallback với TTL 10 phút (600 giây)
     await this.cacheService.set(
       stateKey,
-      { challenge, redirect, createdAt: Date.now() },
+      { challenge, redirect, createdAt: Date.now(), provider: 'github' },
       DEFAULT_TTL.OAUTH_STATE,
     );
 
@@ -100,22 +106,7 @@ export class AuthService {
 
     const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
 
-    let isAllowedRedirect = false;
-    try {
-      const u = new URL(redirect);
-      const isScheme = u.protocol === `${appDeepLinkScheme}:` && !u.hash;
-      const isLoopback =
-        u.protocol === 'http:' &&
-        ['localhost', '127.0.0.1'].includes(u.hostname) &&
-        !u.username &&
-        !u.password &&
-        !u.hash;
-      isAllowedRedirect = isScheme || isLoopback;
-    } catch {
-      isAllowedRedirect = false;
-    }
-
-    if (!isAllowedRedirect) {
+    if (!this.kiemTraRedirectHopLe(redirect)) {
       throw new BadRequestException(
         `Đường dẫn chuyển hướng redirect không hợp lệ. Chỉ chấp nhận ${appDeepLinkScheme}:// hoặc loopback localhost hợp lệ.`,
       );
@@ -144,7 +135,6 @@ export class AuthService {
       redirect_uri: callbackUrl,
       response_type: 'code',
       scope: 'openid email profile',
-      access_type: 'offline',
       state,
       prompt: 'select_account',
     });
@@ -155,9 +145,15 @@ export class AuthService {
   /**
    * Đọc và xóa state nguyên tử từ Redis (layVaXoa / GETDEL).
    */
-  async layVaXoaState(state: string): Promise<{ challenge: string; redirect: string } | null> {
+  async layVaXoaState(
+    state: string,
+  ): Promise<{ challenge: string; redirect: string; provider?: 'github' | 'google' } | null> {
     const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
-    return await this.cacheService.layVaXoa<{ challenge: string; redirect: string }>(stateKey);
+    return await this.cacheService.layVaXoa<{
+      challenge: string;
+      redirect: string;
+      provider?: 'github' | 'google';
+    }>(stateKey);
   }
 
   /**
@@ -175,6 +171,13 @@ export class AuthService {
       throw new BadRequestException({
         maLoi: 'MA_XAC_THUC_KHONG_HOP_LE',
         thongBao: 'Mã state xác thực không hợp lệ hoặc phiên đăng nhập đã quá hạn 10 phút',
+      });
+    }
+
+    if (stateData.provider && stateData.provider !== 'github') {
+      throw new BadRequestException({
+        maLoi: 'PROVIDER_KHONG_KHOP',
+        thongBao: 'Mã state xác thực không khớp với nhà cung cấp GitHub',
       });
     }
 
@@ -269,24 +272,60 @@ export class AuthService {
       primaryEmail = ghUser.email;
     }
 
-    // Tạo mới hoặc cập nhật người dùng trong CSDL
-    const user = await this.prisma.nguoiDung.upsert({
+    // Tạo mới hoặc cập nhật người dùng trong CSDL - Hỗ trợ liên kết hai chiều (Two-Way Auto-Linking)
+    let user = await this.prisma.nguoiDung.findUnique({
       where: { maDinhDanhGithub: String(ghUser.id) },
-      create: {
-        maDinhDanhGithub: String(ghUser.id),
-        tenDangNhap: ghUser.login,
-        tenHienThi: ghUser.name || ghUser.login,
-        thuDienTu: primaryEmail,
-        duongDanAvatar: ghUser.avatar_url,
-        vaiTro: VaiTro.NGUOI_DUNG,
-      },
-      update: {
-        tenDangNhap: ghUser.login,
-        tenHienThi: ghUser.name || ghUser.login,
-        thuDienTu: primaryEmail,
-        duongDanAvatar: ghUser.avatar_url,
-      },
     });
+
+    if (user) {
+      // Đã có tài khoản liên kết với GitHub ID này -> cập nhật thông tin
+      user = await this.prisma.nguoiDung.update({
+        where: { maNguoiDung: user.maNguoiDung },
+        data: {
+          tenDangNhap: ghUser.login,
+          tenHienThi: ghUser.name || ghUser.login,
+          thuDienTu: primaryEmail || user.thuDienTu,
+          duongDanAvatar: ghUser.avatar_url || user.duongDanAvatar,
+        },
+      });
+    } else if (primaryEmail) {
+      // Tự động liên kết hai chiều nếu đã có tài khoản trùng email đã verified (ví dụ user đăng ký trước bằng Google)
+      const existingUserWithEmail = await this.prisma.nguoiDung.findFirst({
+        where: { thuDienTu: primaryEmail },
+      });
+      if (existingUserWithEmail) {
+        user = await this.prisma.nguoiDung.update({
+          where: { maNguoiDung: existingUserWithEmail.maNguoiDung },
+          data: {
+            maDinhDanhGithub: String(ghUser.id),
+            tenHienThi: existingUserWithEmail.tenHienThi || ghUser.name || ghUser.login,
+            duongDanAvatar: existingUserWithEmail.duongDanAvatar || ghUser.avatar_url,
+          },
+        });
+      }
+    }
+
+    if (!user) {
+      // Tạo mới người dùng GitHub
+      let username = ghUser.login;
+      const existingUsername = await this.prisma.nguoiDung.findFirst({
+        where: { tenDangNhap: username },
+      });
+      if (existingUsername) {
+        username = `${ghUser.login}_${randomUUID().slice(0, 4)}`;
+      }
+
+      user = await this.prisma.nguoiDung.create({
+        data: {
+          maDinhDanhGithub: String(ghUser.id),
+          tenDangNhap: username,
+          tenHienThi: ghUser.name || ghUser.login,
+          thuDienTu: primaryEmail,
+          duongDanAvatar: ghUser.avatar_url,
+          vaiTro: VaiTro.NGUOI_DUNG,
+        },
+      });
+    }
 
     // P2-10.5: TUYỆT ĐỐI KHÔNG LƯU GitHub access token vào DB
 
@@ -322,6 +361,13 @@ export class AuthService {
       throw new BadRequestException({
         maLoi: 'MA_XAC_THUC_KHONG_HOP_LE',
         thongBao: 'Mã state xác thực không hợp lệ hoặc phiên đăng nhập đã quá hạn 10 phút',
+      });
+    }
+
+    if (stateData.provider && stateData.provider !== 'google') {
+      throw new BadRequestException({
+        maLoi: 'PROVIDER_KHONG_KHOP',
+        thongBao: 'Mã state xác thực không khớp với nhà cung cấp Google',
       });
     }
 
@@ -415,11 +461,25 @@ export class AuthService {
 
     if (!user) {
       // Tạo mới người dùng từ Google
-      const emailPrefix = googleUser.email ? googleUser.email.split('@')[0] : null;
-      const baseUsername: string =
-        emailPrefix && emailPrefix.trim().length > 0
-          ? emailPrefix.trim()
-          : `google_${googleUser.sub.slice(0, 8)}`;
+      // Bảo vệ riêng tư: Tạo username từ name của Google (slug không dấu) hoặc UUID ngẫu nhiên, không dùng prefix email
+      let baseUsername = 'user';
+      if (googleUser.name && googleUser.name.trim().length > 0) {
+        const slug = googleUser.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_+|_+$/g, '');
+        if (slug.length >= 3) {
+          baseUsername = slug.slice(0, 20);
+        } else {
+          baseUsername = `user_${randomUUID().slice(0, 6)}`;
+        }
+      } else {
+        baseUsername = `user_${randomUUID().slice(0, 6)}`;
+      }
+
       let username = baseUsername;
       const existingUsername = await this.prisma.nguoiDung.findFirst({
         where: { tenDangNhap: username },

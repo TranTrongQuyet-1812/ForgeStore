@@ -220,14 +220,25 @@ describe('AuthService', () => {
       );
     });
 
-    it('xác thực thành công với GitHub, lọc email verified, mask log và sinh exchange code 60s', async () => {
-      // Mock atomic layVaXoa
+    it('ném lỗi BadRequestException khi state thuộc provider khác (provider không khớp)', async () => {
       mockCache.layVaXoa.mockResolvedValue({
         challenge: 'test-challenge',
         redirect: 'forgestore://auth/callback',
+        provider: 'google',
       });
 
-      // Mock fetch GitHub API
+      await expect(service.xuLyGithubCallback('gh-code-123', 'valid-state')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('xác thực thành công với GitHub, lọc email verified, tạo mới user và sinh exchange code 60s', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: 'test-challenge',
+        redirect: 'forgestore://auth/callback',
+        provider: 'github',
+      });
+
       const mockFetch = vi.fn().mockImplementation((url: string) => {
         if (url.includes('access_token')) {
           return Promise.resolve({
@@ -262,29 +273,101 @@ describe('AuthService', () => {
       });
       vi.stubGlobal('fetch', mockFetch);
 
-      mockPrisma.nguoiDung.upsert.mockResolvedValue({
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(null);
+      mockPrisma.nguoiDung.create.mockResolvedValue({
         maNguoiDung: 'user-uuid-1',
         tenDangNhap: 'testuser',
-        email: 'verified@example.com',
+        thuDienTu: 'verified@example.com',
         tenHienThi: 'Test User',
-        anhDaiDien: 'https://avatars.githubusercontent.com/u/123456',
+        duongDanAvatar: 'https://avatars.githubusercontent.com/u/123456',
         vaiTro: VaiTro.NGUOI_DUNG,
       });
 
       const redirectUrl = await service.xuLyGithubCallback('gh-auth-code-valid', 'valid-state');
 
-      // Điểm 3: Kiểm tra layVaXoa được gọi đúng key state
       expect(mockCache.layVaXoa).toHaveBeenCalledWith('fs:auth:state:valid-state');
-      // Điểm 9: Email truyền vào upsert phải là email verified
-      expect(mockPrisma.nguoiDung.upsert).toHaveBeenCalledWith(
+      expect(mockPrisma.nguoiDung.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          create: expect.objectContaining({ thuDienTu: 'verified@example.com' }),
+          data: expect.objectContaining({
+            maDinhDanhGithub: '123456',
+            thuDienTu: 'verified@example.com',
+            tenDangNhap: 'testuser',
+          }),
         }),
       );
-      // Zero-Token-on-URL: Không để lộ token trên URL
       expect(redirectUrl).toContain('forgestore://auth/callback?code=');
       expect(redirectUrl).not.toContain('accessToken');
       expect(redirectUrl).not.toContain('refreshToken');
+
+      vi.unstubAllGlobals();
+    });
+
+    it('Two-Way Auto-Linking: tự động gắn maDinhDanhGithub vào tài khoản đã tạo trước qua Google có cùng email verified', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: 'test-challenge',
+        redirect: 'forgestore://auth/callback',
+        provider: 'github',
+      });
+
+      const mockFetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('access_token')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ access_token: 'gh-token-secret' }),
+          });
+        }
+        if (url.includes('api.github.com/user/emails')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve([{ email: 'shared@gmail.com', primary: true, verified: true }]),
+          });
+        }
+        if (url.includes('api.github.com/user')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                id: 998877,
+                login: 'ghuser',
+                name: 'GH User',
+                avatar_url: 'https://avatars.githubusercontent.com/u/998877',
+              }),
+          });
+        }
+        return Promise.reject(new Error('Unknown url'));
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      // findUnique by maDinhDanhGithub returns null (chưa gắn GitHub)
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      // findFirst by email tìm thấy tài khoản đã đăng ký qua Google trước đó
+      const existingGoogleUser = {
+        maNguoiDung: 'google-user-uuid-1',
+        maDinhDanhGoogle: 'google-sub-777',
+        thuDienTu: 'shared@gmail.com',
+        tenDangNhap: 'google_user',
+        tenHienThi: 'Google User',
+      };
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(existingGoogleUser);
+      mockPrisma.nguoiDung.update.mockResolvedValue({
+        ...existingGoogleUser,
+        maDinhDanhGithub: '998877',
+      });
+
+      const redirectUrl = await service.xuLyGithubCallback('gh-auth-code-valid', 'valid-state');
+
+      expect(redirectUrl).toContain('forgestore://auth/callback?code=');
+      expect(mockPrisma.nguoiDung.update).toHaveBeenCalledWith({
+        where: { maNguoiDung: 'google-user-uuid-1' },
+        data: expect.objectContaining({
+          maDinhDanhGithub: '998877',
+        }),
+      });
+      expect(mockPrisma.nguoiDung.create).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
     });
   });
 
@@ -688,7 +771,7 @@ describe('AuthService', () => {
     const validChallenge = 'E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJSTFuZ-PoTM';
     const validRedirect = 'forgestore://auth';
 
-    it('khoiTaoGoogleAuth: tạo URL đăng nhập Google hợp lệ kèm PKCE challenge và state', async () => {
+    it('khoiTaoGoogleAuth: tạo URL đăng nhập Google hợp lệ kèm PKCE challenge và state (không có access_type offline)', async () => {
       const authUrl = await service.khoiTaoGoogleAuth(validChallenge, validRedirect);
 
       expect(authUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
@@ -698,7 +781,7 @@ describe('AuthService', () => {
       );
       expect(authUrl).toContain('response_type=code');
       expect(authUrl).toContain('scope=openid+email+profile');
-      expect(authUrl).toContain('access_type=offline');
+      expect(authUrl).not.toContain('access_type=offline');
       expect(authUrl).toContain('prompt=select_account');
 
       expect(mockCache.set).toHaveBeenCalledWith(
@@ -732,27 +815,38 @@ describe('AuthService', () => {
       );
     });
 
-    it('xuLyGoogleCallback: tạo người dùng mới từ Google và trả về deep link kèm exchange code', async () => {
+    it('xuLyGoogleCallback: ném lỗi BadRequestException khi state thuộc provider khác (github)', async () => {
       mockCache.layVaXoa.mockResolvedValue({
         challenge: validChallenge,
         redirect: 'forgestore://auth',
+        provider: 'github',
+      });
+
+      await expect(service.xuLyGoogleCallback('valid-code', 'valid-state')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('xuLyGoogleCallback: tạo người dùng mới từ Google với username là name slug an toàn (không lộ email)', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: validChallenge,
+        redirect: 'forgestore://auth',
+        provider: 'google',
       });
 
       // Mock fetch: token exchange và userinfo
       const mockFetch = vi.fn();
-      // 1. Google token response
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ access_token: 'mock-google-token' }),
       });
-      // 2. Google userinfo response
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           sub: 'google-sub-12345',
-          email: 'quyet@gmail.com',
+          email: 'secret_email@gmail.com',
           email_verified: true,
-          name: 'Quyết Trần',
+          name: 'Trần Trọng Quyết',
           picture: 'https://lh3.googleusercontent.com/avatar',
         }),
       });
@@ -762,9 +856,9 @@ describe('AuthService', () => {
       mockPrisma.nguoiDung.findFirst.mockResolvedValue(null);
       mockPrisma.nguoiDung.create.mockResolvedValue({
         maNguoiDung: 'user-google-uuid-1',
-        tenDangNhap: 'quyet',
-        tenHienThi: 'Quyết Trần',
-        thuDienTu: 'quyet@gmail.com',
+        tenDangNhap: 'tran_trong_quyet',
+        tenHienThi: 'Trần Trọng Quyết',
+        thuDienTu: 'secret_email@gmail.com',
         duongDanAvatar: 'https://lh3.googleusercontent.com/avatar',
       });
 
@@ -775,8 +869,17 @@ describe('AuthService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             maDinhDanhGoogle: 'google-sub-12345',
-            thuDienTu: 'quyet@gmail.com',
-            tenHienThi: 'Quyết Trần',
+            thuDienTu: 'secret_email@gmail.com',
+            tenDangNhap: 'tran_trong_quyet',
+            tenHienThi: 'Trần Trọng Quyết',
+          }),
+        }),
+      );
+      // Đảm bảo tên đăng nhập KHÔNG bao giờ dùng phần prefix của email
+      expect(mockPrisma.nguoiDung.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenDangNhap: 'secret_email',
           }),
         }),
       );
@@ -796,6 +899,7 @@ describe('AuthService', () => {
       mockCache.layVaXoa.mockResolvedValue({
         challenge: validChallenge,
         redirect: 'forgestore://auth',
+        provider: 'google',
       });
 
       const mockFetch = vi.fn();

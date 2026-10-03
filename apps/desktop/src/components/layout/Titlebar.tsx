@@ -277,9 +277,12 @@ export const Titlebar: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="mt-1 pt-1.5 px-2 border-t border-border/40 text-[10px] text-muted/80 flex items-center justify-between">
+                <div className="mt-1 pt-1.5 px-2 border-t border-border/40 text-[10px] text-muted flex items-center justify-between">
                   <span>Không cần mật khẩu</span>
-                  <span className="font-mono">PKCE S256</span>
+                  <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Bảo mật cao
+                  </span>
                 </div>
               </div>
             )}
