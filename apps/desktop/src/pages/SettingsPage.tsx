@@ -128,8 +128,12 @@ export const SettingsPage: React.FC = () => {
               <Sun className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-semibold text-primary">Light Mode (Warm Oat & Giấy Mộc)</div>
-              <div className="text-[11px] text-muted">Nền ngà sữa #F7F5F0 ấm cúng, chống chói mắt</div>
+              <div className="text-xs font-semibold text-primary">
+                Light Mode (Warm Oat & Giấy Mộc)
+              </div>
+              <div className="text-[11px] text-muted">
+                Nền ngà sữa #F7F5F0 ấm cúng, chống chói mắt
+              </div>
             </div>
           </div>
         </div>

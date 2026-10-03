@@ -199,7 +199,9 @@ export const ExplorePage: React.FC = () => {
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 ${
-                      spotlightMode === 'trending' ? 'shadow-[0_0_6px_rgba(249,115,22,0.6)]' : 'opacity-40'
+                      spotlightMode === 'trending'
+                        ? 'shadow-[0_0_6px_rgba(249,115,22,0.6)]'
+                        : 'opacity-40'
                     }`}
                   />
                   <span>🔥 Đang được quan tâm</span>
@@ -215,7 +217,9 @@ export const ExplorePage: React.FC = () => {
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 ${
-                      spotlightMode === 'curated' ? 'shadow-[0_0_6px_rgba(251,191,36,0.6)]' : 'opacity-40'
+                      spotlightMode === 'curated'
+                        ? 'shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                        : 'opacity-40'
                     }`}
                   />
                   <span>⭐ Forge Đề Xuất</span>
@@ -231,7 +235,9 @@ export const ExplorePage: React.FC = () => {
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ${
-                      spotlightMode === 'security' ? 'shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'opacity-40'
+                      spotlightMode === 'security'
+                        ? 'shadow-[0_0_6px_rgba(52,211,153,0.6)]'
+                        : 'opacity-40'
                     }`}
                   />
                   <span>🛡️ Điểm uy tín cao</span>

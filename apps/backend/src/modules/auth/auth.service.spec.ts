@@ -18,6 +18,9 @@ interface MockPrisma {
     upsert: MockFn;
     findUnique: MockFn;
     findUniqueOrThrow: MockFn;
+    findFirst: MockFn;
+    create: MockFn;
+    update: MockFn;
   };
   thietBi: {
     findUniqueOrThrow: MockFn;
@@ -68,6 +71,9 @@ describe('AuthService', () => {
         upsert: vi.fn(),
         findUnique: vi.fn(),
         findUniqueOrThrow: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
       },
       thietBi: {
         findUniqueOrThrow: vi.fn(),
@@ -106,6 +112,9 @@ describe('AuthService', () => {
           GITHUB_CLIENT_ID: 'mock-client-id',
           GITHUB_CLIENT_SECRET: 'mock-client-secret',
           GITHUB_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/callback',
+          GOOGLE_CLIENT_ID: 'mock-google-client-id',
+          GOOGLE_CLIENT_SECRET: 'mock-google-client-secret',
+          GOOGLE_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/google/callback',
           JWT_EXPIRES_IN: '15m',
           REFRESH_TOKEN_TTL_DAYS: 30,
           PORT: 3000,
@@ -672,6 +681,167 @@ describe('AuthService', () => {
       mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
 
       await expect(service.layHoSo('non-existent-user')).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('P3B-15: khoiTaoGoogleAuth & xuLyGoogleCallback', () => {
+    const validChallenge = 'E9Melhoa2OwvFrGMTJguCH5rtx64ZWqiJSTFuZ-PoTM';
+    const validRedirect = 'forgestore://auth';
+
+    it('khoiTaoGoogleAuth: tạo URL đăng nhập Google hợp lệ kèm PKCE challenge và state', async () => {
+      const authUrl = await service.khoiTaoGoogleAuth(validChallenge, validRedirect);
+
+      expect(authUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
+      expect(authUrl).toContain('client_id=mock-google-client-id');
+      expect(authUrl).toContain(
+        'redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fv1%2Fauth%2Fgoogle%2Fcallback',
+      );
+      expect(authUrl).toContain('response_type=code');
+      expect(authUrl).toContain('scope=openid+email+profile');
+      expect(authUrl).toContain('access_type=offline');
+      expect(authUrl).toContain('prompt=select_account');
+
+      expect(mockCache.set).toHaveBeenCalledWith(
+        expect.stringContaining('auth:state:'),
+        expect.objectContaining({
+          challenge: validChallenge,
+          redirect: validRedirect,
+          provider: 'google',
+        }),
+        DEFAULT_TTL.OAUTH_STATE,
+      );
+    });
+
+    it('khoiTaoGoogleAuth: ném lỗi nếu PKCE challenge không hợp lệ', async () => {
+      await expect(service.khoiTaoGoogleAuth('invalid-short', validRedirect)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('khoiTaoGoogleAuth: ném lỗi nếu redirect URI không hợp lệ (chống Open Redirect)', async () => {
+      await expect(
+        service.khoiTaoGoogleAuth(validChallenge, 'https://malicious-site.com'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('xuLyGoogleCallback: ném lỗi khi state không tồn tại hoặc hết hạn', async () => {
+      mockCache.layVaXoa.mockResolvedValue(null);
+
+      await expect(service.xuLyGoogleCallback('valid-code', 'invalid-state')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('xuLyGoogleCallback: tạo người dùng mới từ Google và trả về deep link kèm exchange code', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: validChallenge,
+        redirect: 'forgestore://auth',
+      });
+
+      // Mock fetch: token exchange và userinfo
+      const mockFetch = vi.fn();
+      // 1. Google token response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'mock-google-token' }),
+      });
+      // 2. Google userinfo response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'google-sub-12345',
+          email: 'quyet@gmail.com',
+          email_verified: true,
+          name: 'Quyết Trần',
+          picture: 'https://lh3.googleusercontent.com/avatar',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(null);
+      mockPrisma.nguoiDung.create.mockResolvedValue({
+        maNguoiDung: 'user-google-uuid-1',
+        tenDangNhap: 'quyet',
+        tenHienThi: 'Quyết Trần',
+        thuDienTu: 'quyet@gmail.com',
+        duongDanAvatar: 'https://lh3.googleusercontent.com/avatar',
+      });
+
+      const redirectResult = await service.xuLyGoogleCallback('valid-google-code', 'valid-state');
+
+      expect(redirectResult).toContain('forgestore://auth?code=');
+      expect(mockPrisma.nguoiDung.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            maDinhDanhGoogle: 'google-sub-12345',
+            thuDienTu: 'quyet@gmail.com',
+            tenHienThi: 'Quyết Trần',
+          }),
+        }),
+      );
+      expect(mockCache.set).toHaveBeenCalledWith(
+        expect.stringContaining('auth:exchange:'),
+        expect.objectContaining({
+          maNguoiDung: 'user-google-uuid-1',
+          challenge: validChallenge,
+        }),
+        DEFAULT_TTL.EXCHANGE_CODE,
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it('xuLyGoogleCallback: tự động liên kết tài khoản nếu đã tồn tại user có email trùng khớp', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: validChallenge,
+        redirect: 'forgestore://auth',
+      });
+
+      const mockFetch = vi.fn();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'mock-google-token' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'google-sub-99999',
+          email: 'existing@forgestore.dev',
+          email_verified: true,
+          name: 'Existing User',
+          picture: 'https://google.com/pic.png',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      // findUnique by maDinhDanhGoogle returns null
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      // findFirst by email returns existing GitHub user
+      const existingUser = {
+        maNguoiDung: 'existing-user-uuid',
+        maDinhDanhGithub: 'gh-123',
+        thuDienTu: 'existing@forgestore.dev',
+        tenDangNhap: 'github_master',
+      };
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(existingUser);
+      mockPrisma.nguoiDung.update.mockResolvedValue({
+        ...existingUser,
+        maDinhDanhGoogle: 'google-sub-99999',
+      });
+
+      const redirectResult = await service.xuLyGoogleCallback('valid-google-code', 'valid-state');
+
+      expect(redirectResult).toContain('forgestore://auth?code=');
+      expect(mockPrisma.nguoiDung.update).toHaveBeenCalledWith({
+        where: { maNguoiDung: 'existing-user-uuid' },
+        data: expect.objectContaining({
+          maDinhDanhGoogle: 'google-sub-99999',
+        }),
+      });
+      expect(mockPrisma.nguoiDung.create).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
     });
   });
 });

@@ -48,6 +48,29 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     }
   });
 
+  it('loginWithGoogle sinh mã PKCE và mở trình duyệt với URL /auth/google', async () => {
+    const openMock = vi.fn();
+    const originalWindow = (global as unknown as { window?: unknown }).window;
+    (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
+
+    try {
+      await authService.loginWithGoogle();
+
+      expect(openMock).toHaveBeenCalledTimes(1);
+      const calledUrl = openMock.mock.calls[0][0] as string;
+
+      expect(calledUrl).toContain('/auth/google');
+      expect(calledUrl).toContain(`redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`);
+      expect(calledUrl).toContain('challenge=');
+
+      const verifier = pkce.getAndClearVerifier();
+      expect(verifier).toBeDefined();
+      expect(verifier).toHaveLength(64);
+    } finally {
+      (global as unknown as { window?: unknown }).window = originalWindow;
+    }
+  });
+
   it('handleDeepLinkUrl xử lý URL forgestore://auth?code=... và đổi token thành công', async () => {
     // 1. Giả lập đã có verifier được lưu từ bước login
     pkce.saveVerifier('mock-saved-pkce-verifier-123');

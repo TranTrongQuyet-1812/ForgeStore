@@ -189,18 +189,33 @@ export const LibraryPage: React.FC = () => {
     let s = dir.trim();
 
     // SEC-R9-03: Chặn đường dẫn mạng UNC và NT Device Path chống rò rỉ NTLM hash
-    if (s.startsWith('\\\\') || s.startsWith('//') || s.startsWith('\\??\\') || s.startsWith('\\\\?\\')) {
+    if (
+      s.startsWith('\\\\') ||
+      s.startsWith('//') ||
+      s.startsWith('\\??\\') ||
+      s.startsWith('\\\\?\\')
+    ) {
       return false;
     }
 
-    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '').trim().replace(/^"/, '').replace(/"$/, '').trim();
+    s = s
+      .replace(/^\\\\\?\\/, '')
+      .replace(/^\\\?\?\\/, '')
+      .trim()
+      .replace(/^"/, '')
+      .replace(/"$/, '')
+      .trim();
     if (!s) return false;
 
     const normalized = s.replace(/\//g, '\\');
     const lower = normalized.toLowerCase();
 
     // 1. Chặn thư mục nằm dưới Windows (kể cả trên ổ đĩa khác C)
-    if (lower.startsWith('c:\\windows\\') || lower === 'c:\\windows' || lower.includes(':\\windows\\')) {
+    if (
+      lower.startsWith('c:\\windows\\') ||
+      lower === 'c:\\windows' ||
+      lower.includes(':\\windows\\')
+    ) {
       return false;
     }
 
@@ -217,7 +232,12 @@ export const LibraryPage: React.FC = () => {
     const segments = lower.split('\\');
     for (const seg of segments) {
       const cleanSeg = seg.trim().replace(/\.+$/, '');
-      if (cleanSeg === 'temp' || cleanSeg === 'tmp' || cleanSeg === 'system32' || cleanSeg === 'syswow64') {
+      if (
+        cleanSeg === 'temp' ||
+        cleanSeg === 'tmp' ||
+        cleanSeg === 'system32' ||
+        cleanSeg === 'syswow64'
+      ) {
         return false;
       }
     }
@@ -230,135 +250,142 @@ export const LibraryPage: React.FC = () => {
     return true;
   };
 
-    // L-01, R-06: Bóc tách thư mục cha từ UninstallString
-    const trichXuatThuMucCaiDatTuUninstallString = (uninstallString?: string | null): string | null => {
-      if (!uninstallString || !uninstallString.trim()) return null;
-      const trimmed = uninstallString.trim();
+  // L-01, R-06: Bóc tách thư mục cha từ UninstallString
+  const trichXuatThuMucCaiDatTuUninstallString = (
+    uninstallString?: string | null,
+  ): string | null => {
+    if (!uninstallString || !uninstallString.trim()) return null;
+    const trimmed = uninstallString.trim();
 
-      let exePath = '';
-      if (trimmed.startsWith('"')) {
-        const closeQuoteIdx = trimmed.indexOf('"', 1);
-        if (closeQuoteIdx !== -1) {
-          exePath = trimmed.slice(1, closeQuoteIdx);
-        }
+    let exePath = '';
+    if (trimmed.startsWith('"')) {
+      const closeQuoteIdx = trimmed.indexOf('"', 1);
+      if (closeQuoteIdx !== -1) {
+        exePath = trimmed.slice(1, closeQuoteIdx);
+      }
+    } else {
+      const exeIdx = trimmed.toLowerCase().lastIndexOf('.exe');
+      if (exeIdx !== -1) {
+        exePath = trimmed.slice(0, exeIdx + 4).trim();
       } else {
-        const exeIdx = trimmed.toLowerCase().lastIndexOf('.exe');
-        if (exeIdx !== -1) {
-          exePath = trimmed.slice(0, exeIdx + 4).trim();
-        } else {
-          const parts = trimmed.split(' ');
-          exePath = parts[0] || '';
-        }
+        const parts = trimmed.split(' ');
+        exePath = parts[0] || '';
       }
+    }
 
-      if (exePath.toLowerCase().endsWith('.exe')) {
-        const lastSlash = Math.max(exePath.lastIndexOf('\\'), exePath.lastIndexOf('/'));
-        if (lastSlash > 0) {
-          const parentDir = exePath.slice(0, lastSlash);
-          if (laThuMucCaiDatHopLe(parentDir)) {
-            return parentDir;
-          }
-        }
-      }
-      return null;
-    };
-
-    // L-01, R-06: Bóc tách thư mục cha từ DisplayIcon (bỏ chỉ số icon ,0 hoặc ,1)
-    const trichXuatThuMucTuDisplayIcon = (displayIcon?: string | null): string | null => {
-      if (!displayIcon || !displayIcon.trim()) return null;
-      let s = displayIcon.trim();
-      s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
-      const commaIdx = s.lastIndexOf(',');
-      if (commaIdx !== -1) {
-        const after = s
-          .slice(commaIdx + 1)
-          .trim()
-          .replace(/"/g, '');
-        if (!isNaN(Number(after))) {
-          s = s.slice(0, commaIdx);
-        }
-      }
-      const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
-      const lastSlash = Math.max(clean.lastIndexOf('\\'), clean.lastIndexOf('/'));
+    if (exePath.toLowerCase().endsWith('.exe')) {
+      const lastSlash = Math.max(exePath.lastIndexOf('\\'), exePath.lastIndexOf('/'));
       if (lastSlash > 0) {
-        const parentDir = clean.slice(0, lastSlash);
+        const parentDir = exePath.slice(0, lastSlash);
         if (laThuMucCaiDatHopLe(parentDir)) {
           return parentDir;
         }
       }
-      return null;
-    };
+    }
+    return null;
+  };
 
-    // R-01, R-06: Kiểm tra DisplayIcon có phải là ứng dụng hợp lệ hay không (loại bỏ uninstaller/setup/msiexec/Windows/Package Cache)
-    const laDisplayIconHopLe = (displayIcon?: string | null): boolean => {
-      if (!displayIcon || !displayIcon.trim()) return false;
-      let s = displayIcon.trim();
-      s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
-      const commaIdx = s.lastIndexOf(',');
-      if (commaIdx !== -1) {
-        const after = s
-          .slice(commaIdx + 1)
-          .trim()
-          .replace(/"/g, '');
-        if (!isNaN(Number(after))) {
-          s = s.slice(0, commaIdx);
-        }
+  // L-01, R-06: Bóc tách thư mục cha từ DisplayIcon (bỏ chỉ số icon ,0 hoặc ,1)
+  const trichXuatThuMucTuDisplayIcon = (displayIcon?: string | null): string | null => {
+    if (!displayIcon || !displayIcon.trim()) return null;
+    let s = displayIcon.trim();
+    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    const commaIdx = s.lastIndexOf(',');
+    if (commaIdx !== -1) {
+      const after = s
+        .slice(commaIdx + 1)
+        .trim()
+        .replace(/"/g, '');
+      if (!isNaN(Number(after))) {
+        s = s.slice(0, commaIdx);
       }
-      const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
-      const lower = clean.toLowerCase();
-      if (!lower.endsWith('.exe')) return false;
-      if (lower.startsWith('c:\\windows\\') || lower.startsWith('c:/windows/') || lower.includes('package cache')) return false;
+    }
+    const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+    const lastSlash = Math.max(clean.lastIndexOf('\\'), clean.lastIndexOf('/'));
+    if (lastSlash > 0) {
+      const parentDir = clean.slice(0, lastSlash);
+      if (laThuMucCaiDatHopLe(parentDir)) {
+        return parentDir;
+      }
+    }
+    return null;
+  };
 
-      const lastSlash = Math.max(lower.lastIndexOf('\\'), lower.lastIndexOf('/'));
-      const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
-      const tuKhoaCam = ['unins', 'uninst', 'uninstall', 'setup', 'install', 'update', 'msiexec'];
-      if (tuKhoaCam.some((kw) => fileName.includes(kw))) {
-        return false;
+  // R-01, R-06: Kiểm tra DisplayIcon có phải là ứng dụng hợp lệ hay không (loại bỏ uninstaller/setup/msiexec/Windows/Package Cache)
+  const laDisplayIconHopLe = (displayIcon?: string | null): boolean => {
+    if (!displayIcon || !displayIcon.trim()) return false;
+    let s = displayIcon.trim();
+    s = s.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    const commaIdx = s.lastIndexOf(',');
+    if (commaIdx !== -1) {
+      const after = s
+        .slice(commaIdx + 1)
+        .trim()
+        .replace(/"/g, '');
+      if (!isNaN(Number(after))) {
+        s = s.slice(0, commaIdx);
       }
-      return true;
-    };
+    }
+    const clean = s.trim().replace(/^"/, '').replace(/"$/, '').trim();
+    const lower = clean.toLowerCase();
+    if (!lower.endsWith('.exe')) return false;
+    if (
+      lower.startsWith('c:\\windows\\') ||
+      lower.startsWith('c:/windows/') ||
+      lower.includes('package cache')
+    )
+      return false;
 
-    // L-01, R-06: Lấy thư mục cài đặt thực tế để mở hoặc hiển thị (thẩm định nghiêm ngặt qua laThuMucCaiDatHopLe)
-    const layThuMucCaiDatThucTe = (app: {
-      duongDanThuMuc?: string | null;
-      regInfo?: ThongTinUngDungRegistry | null;
-    }): string | null => {
-      // 1. InstallLocation từ Registry
-      if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
-        const cleaned = app.regInfo.install_location
-          .trim()
-          .replace(/^\\\\\?\\/, '')
-          .replace(/^\\\?\?\\/, '');
-        if (laThuMucCaiDatHopLe(cleaned)) {
-          return cleaned;
-        }
+    const lastSlash = Math.max(lower.lastIndexOf('\\'), lower.lastIndexOf('/'));
+    const fileName = lastSlash >= 0 ? lower.slice(lastSlash + 1) : lower;
+    const tuKhoaCam = ['unins', 'uninst', 'uninstall', 'setup', 'install', 'update', 'msiexec'];
+    if (tuKhoaCam.some((kw) => fileName.includes(kw))) {
+      return false;
+    }
+    return true;
+  };
+
+  // L-01, R-06: Lấy thư mục cài đặt thực tế để mở hoặc hiển thị (thẩm định nghiêm ngặt qua laThuMucCaiDatHopLe)
+  const layThuMucCaiDatThucTe = (app: {
+    duongDanThuMuc?: string | null;
+    regInfo?: ThongTinUngDungRegistry | null;
+  }): string | null => {
+    // 1. InstallLocation từ Registry
+    if (app.regInfo?.install_location && app.regInfo.install_location.trim()) {
+      const cleaned = app.regInfo.install_location
+        .trim()
+        .replace(/^\\\\\?\\/, '')
+        .replace(/^\\\?\?\\/, '');
+      if (laThuMucCaiDatHopLe(cleaned)) {
+        return cleaned;
       }
-      // 2. Thư mục cha từ UninstallString
-      const dirFromUninstall = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
-      if (dirFromUninstall && laThuMucCaiDatHopLe(dirFromUninstall)) {
-        return dirFromUninstall.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    }
+    // 2. Thư mục cha từ UninstallString
+    const dirFromUninstall = trichXuatThuMucCaiDatTuUninstallString(app.regInfo?.uninstall_string);
+    if (dirFromUninstall && laThuMucCaiDatHopLe(dirFromUninstall)) {
+      return dirFromUninstall.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    }
+    // 3. Thư mục cha từ DisplayIcon
+    const dirFromIcon = trichXuatThuMucTuDisplayIcon(app.regInfo?.display_icon);
+    if (dirFromIcon && laThuMucCaiDatHopLe(dirFromIcon)) {
+      return dirFromIcon.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
+    }
+    // 4. Nếu là Portable ZIP (có duongDanThuMuc và không phải file download .exe/.msi)
+    if (
+      app.duongDanThuMuc &&
+      app.duongDanThuMuc.trim() &&
+      !/\.(exe|msi)$/i.test(app.duongDanThuMuc.trim())
+    ) {
+      const cleaned = app.duongDanThuMuc
+        .trim()
+        .replace(/^\\\\\?\\/, '')
+        .replace(/^\\\?\?\\/, '');
+      if (laThuMucCaiDatHopLe(cleaned)) {
+        return cleaned;
       }
-      // 3. Thư mục cha từ DisplayIcon
-      const dirFromIcon = trichXuatThuMucTuDisplayIcon(app.regInfo?.display_icon);
-      if (dirFromIcon && laThuMucCaiDatHopLe(dirFromIcon)) {
-        return dirFromIcon.replace(/^\\\\\?\\/, '').replace(/^\\\?\?\\/, '');
-      }
-      // 4. Nếu là Portable ZIP (có duongDanThuMuc và không phải file download .exe/.msi)
-      if (
-        app.duongDanThuMuc &&
-        app.duongDanThuMuc.trim() &&
-        !/\.(exe|msi)$/i.test(app.duongDanThuMuc.trim())
-      ) {
-        const cleaned = app.duongDanThuMuc
-          .trim()
-          .replace(/^\\\\\?\\/, '')
-          .replace(/^\\\?\?\\/, '');
-        if (laThuMucCaiDatHopLe(cleaned)) {
-          return cleaned;
-        }
-      }
-      return null;
-    };
+    }
+    return null;
+  };
 
   // Xử lý mở ứng dụng (L-01: Mở ứng dụng từ DisplayIcon qua Registry hoặc đường dẫn thực thi)
   const handleOpenApp = async (app: {
@@ -708,7 +735,8 @@ export const LibraryPage: React.FC = () => {
                     {/* Nút Mở Ứng Dụng (L-01, R-01, R-08: Hiện khi có file thực thi, DisplayIcon hợp lệ hoặc InstallLocation khả dụng) */}
                     {(app.duongDanThucThi ||
                       laDisplayIconHopLe(app.regInfo?.display_icon) ||
-                      (app.regInfo?.install_location && laThuMucCaiDatHopLe(app.regInfo?.install_location))) && (
+                      (app.regInfo?.install_location &&
+                        laThuMucCaiDatHopLe(app.regInfo?.install_location))) && (
                       <button
                         onClick={() => handleOpenApp(app)}
                         disabled={isUninstallingId !== null}

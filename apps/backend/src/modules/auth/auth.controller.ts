@@ -70,6 +70,58 @@ export class AuthController {
   }
 
   @CongKhai()
+  @Get('google')
+  @ApiOperation({
+    summary: 'Khởi tạo đăng nhập Google OAuth',
+    description:
+      'Nhận PKCE challenge và redirect URI từ app native, sinh mã state ngẫu nhiên và chuyển hướng trình duyệt tới trang ủy quyền của Google.',
+  })
+  @ApiResponse({ status: 302, description: 'Chuyển hướng đến Google OAuth Authorize' })
+  async khoiTaoGoogle(@Query() query: GithubAuthQueryDto, @Res() res: Response) {
+    const authUrl = await this.authService.khoiTaoGoogleAuth(query.challenge, query.redirect);
+    return res.redirect(authUrl);
+  }
+
+  @CongKhai()
+  @Get('google/callback')
+  @ApiOperation({
+    summary: 'Xử lý phản hồi từ Google OAuth (Callback)',
+    description:
+      'Nhận code và state từ Google, xác thực state 1 lần, lấy thông tin người dùng Google, sinh mã exchange code (TTL 60s) và chuyển hướng về app native qua deep link.',
+  })
+  @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
+  @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
+  async xuLyGoogleCallback(@Query() query: GithubCallbackQueryDto, @Res() res: Response) {
+    try {
+      if (query.error || !query.code || !query.state) {
+        let redirectTarget = 'forgestore://auth';
+        if (query.state) {
+          try {
+            const stateData = await this.authService.layVaXoaState(query.state);
+            if (stateData?.redirect) {
+              redirectTarget = stateData.redirect;
+            }
+          } catch {
+            // Nuốt lỗi Redis để luôn redirect về client
+          }
+        }
+        const errCode = query.error || 'DANG_NHAP_BI_HUY';
+        const sep = redirectTarget.includes('?') ? '&' : '?';
+        return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+      }
+
+      const deepLinkUrl = await this.authService.xuLyGoogleCallback(query.code, query.state);
+      return res.redirect(deepLinkUrl);
+    } catch (err: unknown) {
+      const redirectTarget = 'forgestore://auth';
+      const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
+      const errCode = errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI';
+      const sep = redirectTarget.includes('?') ? '&' : '?';
+      return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+    }
+  }
+
+  @CongKhai()
   @Post('exchange')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

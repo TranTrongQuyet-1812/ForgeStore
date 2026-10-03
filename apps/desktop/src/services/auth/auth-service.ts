@@ -68,6 +68,20 @@ export class AuthService {
    * Bắt đầu đăng nhập GitHub với PKCE
    */
   public async loginWithGithub(): Promise<void> {
+    await this.startOAuthFlow('/auth/github');
+  }
+
+  /**
+   * Bắt đầu đăng nhập Google với PKCE (P3B-15)
+   */
+  public async loginWithGoogle(): Promise<void> {
+    await this.startOAuthFlow('/auth/google');
+  }
+
+  /**
+   * Khởi tạo luồng OAuth chung với PKCE và mở trình duyệt
+   */
+  private async startOAuthFlow(endpoint: string): Promise<void> {
     // 1. Sinh Code Verifier và Code Challenge S256 chuẩn RFC 7636
     const verifier = pkce.generateCodeVerifier(64);
     const challenge = await pkce.generateCodeChallenge(verifier);
@@ -75,9 +89,9 @@ export class AuthService {
     // 2. Lưu verifier vào bộ nhớ tạm
     pkce.saveVerifier(verifier);
 
-    // 3. Xây dựng URL điều hướng tới /auth/github
+    // 3. Xây dựng URL điều hướng tới endpoint OAuth
     const baseUrl = apiClient.getBaseUrl();
-    const authUrl = `${baseUrl}/auth/github?challenge=${encodeURIComponent(challenge)}&redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`;
+    const authUrl = `${baseUrl}${endpoint}?challenge=${encodeURIComponent(challenge)}&redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`;
 
     // 4. Mở trình duyệt hệ thống
     if (isTauri()) {

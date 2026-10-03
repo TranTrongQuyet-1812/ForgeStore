@@ -50,7 +50,11 @@ export const Sidebar: React.FC = () => {
           className="flex items-center gap-3.5 text-left group focus:outline-none"
         >
           <div className="w-11 h-11 rounded-2xl bg-surface-elevated border border-border flex items-center justify-center p-2 shadow-md shadow-black/5 dark:shadow-black/40 group-hover:border-accent-forge/40 group-hover:shadow-[0_0_14px_rgba(249,115,22,0.2)] transition-all duration-200 shrink-0">
-            <img src="/logo.png" alt="ForgeStore Logo" className="w-full h-full object-contain drop-shadow" />
+            <img
+              src="/logo.png"
+              alt="ForgeStore Logo"
+              className="w-full h-full object-contain drop-shadow"
+            />
           </div>
           <div className="flex flex-col min-w-0">
             <span className="font-display font-black text-lg text-primary tracking-tight leading-none group-hover:text-accent-forge transition-colors">

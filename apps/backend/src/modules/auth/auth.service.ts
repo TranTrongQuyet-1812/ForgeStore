@@ -88,6 +88,71 @@ export class AuthService {
   }
 
   /**
+   * Khởi tạo luồng đăng nhập Google OAuth.
+   * Sinh mã state ngẫu nhiên lưu vào Redis kèm PKCE challenge và redirect URL.
+   */
+  async khoiTaoGoogleAuth(challenge: string, redirect: string): Promise<string> {
+    if (!challenge || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+      throw new BadRequestException(
+        'Mã PKCE challenge không hợp lệ. Bắt buộc phải là chuỗi S256 base64url có độ dài đúng 43 ký tự.',
+      );
+    }
+
+    const appDeepLinkScheme = this.config.get<string>('APP_DEEP_LINK_SCHEME', 'forgestore');
+
+    let isAllowedRedirect = false;
+    try {
+      const u = new URL(redirect);
+      const isScheme = u.protocol === `${appDeepLinkScheme}:` && !u.hash;
+      const isLoopback =
+        u.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(u.hostname) &&
+        !u.username &&
+        !u.password &&
+        !u.hash;
+      isAllowedRedirect = isScheme || isLoopback;
+    } catch {
+      isAllowedRedirect = false;
+    }
+
+    if (!isAllowedRedirect) {
+      throw new BadRequestException(
+        `Đường dẫn chuyển hướng redirect không hợp lệ. Chỉ chấp nhận ${appDeepLinkScheme}:// hoặc loopback localhost hợp lệ.`,
+      );
+    }
+
+    const state = randomUUID();
+    const stateKey = `${CACHE_PREFIX.AUTH_STATE}${state}`;
+
+    await this.cacheService.set(
+      stateKey,
+      { challenge, redirect, createdAt: Date.now(), provider: 'google' },
+      DEFAULT_TTL.OAUTH_STATE,
+    );
+
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) {
+      throw new BadRequestException('GOOGLE_CLIENT_ID chưa được cấu hình trên máy chủ');
+    }
+
+    const callbackUrl =
+      this.config.get<string>('GOOGLE_CALLBACK_URL') ||
+      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/auth/google/callback`;
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: callbackUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'offline',
+      state,
+      prompt: 'select_account',
+    });
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
+
+  /**
    * Đọc và xóa state nguyên tử từ Redis (layVaXoa / GETDEL).
    */
   async layVaXoaState(state: string): Promise<{ challenge: string; redirect: string } | null> {
@@ -242,6 +307,155 @@ export class AuthService {
     this.logger.log(`Đã cấp exchange code cho người dùng [${user.tenDangNhap}]`);
 
     // Chuyển hướng về native app
+    const separator = stateData.redirect.includes('?') ? '&' : '?';
+    return `${stateData.redirect}${separator}code=${exchangeCode}`;
+  }
+
+  /**
+   * Xử lý callback từ Google OAuth.
+   * Đổi code lấy Access Token và User Profile, tạo mới hoặc liên kết tài khoản theo email/Google ID.
+   */
+  async xuLyGoogleCallback(code: string, state: string): Promise<string> {
+    const stateData = await this.layVaXoaState(state);
+
+    if (!stateData) {
+      throw new BadRequestException({
+        maLoi: 'MA_XAC_THUC_KHONG_HOP_LE',
+        thongBao: 'Mã state xác thực không hợp lệ hoặc phiên đăng nhập đã quá hạn 10 phút',
+      });
+    }
+
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = this.config.get<string>('GOOGLE_CLIENT_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('Chưa cấu hình GOOGLE_CLIENT_ID hoặc GOOGLE_CLIENT_SECRET');
+    }
+
+    const callbackUrl =
+      this.config.get<string>('GOOGLE_CALLBACK_URL') ||
+      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/auth/google/callback`;
+
+    // 1. Đổi code lấy Google tokens
+    let tokenRes: Response;
+    try {
+      tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: callbackUrl,
+        }).toString(),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (fetchErr) {
+      this.logger.error(`Timeout hoặc lỗi kết nối Google token: ${(fetchErr as Error).message}`);
+      throw new BadRequestException('Quá thời gian kết nối tới máy chủ Google OAuth');
+    }
+
+    const tokenData = (await tokenRes.json()) as { access_token?: string; error?: string };
+
+    if (!tokenRes.ok || !tokenData.access_token) {
+      this.logger.error(`Lỗi đổi code Google: ${JSON.stringify(tokenData)}`);
+      throw new BadRequestException('Không thể lấy mã truy cập từ Google');
+    }
+
+    // 2. Lấy thông tin userinfo từ Google
+    let userRes: Response;
+    try {
+      userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (fetchErr) {
+      this.logger.error(`Timeout lấy thông tin profile Google: ${(fetchErr as Error).message}`);
+      throw new BadRequestException('Quá thời gian kết nối tới Google UserInfo API');
+    }
+
+    if (!userRes.ok) {
+      throw new BadRequestException('Không thể truy vấn thông tin người dùng từ Google');
+    }
+
+    const googleUser = (await userRes.json()) as {
+      sub: string;
+      name?: string;
+      email?: string;
+      email_verified?: boolean;
+      picture?: string;
+    };
+
+    // 3. Tìm hoặc tự động liên kết tài khoản
+    let user = await this.prisma.nguoiDung.findUnique({
+      where: { maDinhDanhGoogle: googleUser.sub },
+    });
+
+    if (!user && googleUser.email && googleUser.email_verified) {
+      // Tự động liên kết nếu đã có tài khoản trùng email đã verified (ví dụ user đã đăng ký qua GitHub)
+      const existingUserWithEmail = await this.prisma.nguoiDung.findFirst({
+        where: { thuDienTu: googleUser.email },
+      });
+      if (existingUserWithEmail) {
+        user = await this.prisma.nguoiDung.update({
+          where: { maNguoiDung: existingUserWithEmail.maNguoiDung },
+          data: {
+            maDinhDanhGoogle: googleUser.sub,
+            duongDanAvatar: existingUserWithEmail.duongDanAvatar || googleUser.picture,
+            tenHienThi: existingUserWithEmail.tenHienThi || googleUser.name,
+          },
+        });
+      }
+    }
+
+    if (!user) {
+      // Tạo mới người dùng từ Google
+      const emailPrefix = googleUser.email ? googleUser.email.split('@')[0] : null;
+      const baseUsername: string =
+        emailPrefix && emailPrefix.trim().length > 0
+          ? emailPrefix.trim()
+          : `google_${googleUser.sub.slice(0, 8)}`;
+      let username = baseUsername;
+      const existingUsername = await this.prisma.nguoiDung.findFirst({
+        where: { tenDangNhap: username },
+      });
+      if (existingUsername) {
+        username = `${baseUsername}_${randomUUID().slice(0, 4)}`;
+      }
+
+      user = await this.prisma.nguoiDung.create({
+        data: {
+          maDinhDanhGoogle: googleUser.sub,
+          tenDangNhap: username,
+          tenHienThi: googleUser.name || username,
+          thuDienTu: googleUser.email,
+          duongDanAvatar: googleUser.picture,
+          vaiTro: VaiTro.NGUOI_DUNG,
+        },
+      });
+    }
+
+    // 4. Sinh exchange code (TTL 60s) lưu vào Redis
+    const exchangeCode = randomUUID();
+    const exchangeKey = `${CACHE_PREFIX.AUTH_EXCHANGE}${exchangeCode}`;
+
+    await this.cacheService.set(
+      exchangeKey,
+      {
+        maNguoiDung: user.maNguoiDung,
+        challenge: stateData.challenge,
+      },
+      DEFAULT_TTL.EXCHANGE_CODE,
+    );
+
+    this.logger.log(`Đã cấp exchange code cho người dùng Google [${user.tenDangNhap}]`);
+
+    // 5. Chuyển hướng về native app qua deep link
     const separator = stateData.redirect.includes('?') ? '&' : '?';
     return `${stateData.redirect}${separator}code=${exchangeCode}`;
   }
