@@ -99,7 +99,7 @@ async function bootstrap() {
   // Cho phép đóng kết nối gọn gàng khi nhận tín hiệu SIGTERM/SIGINT
   app.enableShutdownHooks();
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`🚀 Máy chủ Central Backend đang hoạt động tại: http://localhost:${port}/api/v1`);
   logger.log(`📚 Tài liệu Swagger UI khả dụng tại: http://localhost:${port}/api/docs`);
   logger.log(`🌱 Môi trường thực thi: ${nodeEnv}`);
