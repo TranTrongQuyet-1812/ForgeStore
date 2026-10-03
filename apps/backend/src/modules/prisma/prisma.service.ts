@@ -20,15 +20,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    this.logger.log('Đang kết nối tới Supabase PostgreSQL qua Transaction Pooler...');
+    this.logger.log('Đang kết nối tới PostgreSQL 17 (Dokploy Self-Hosted)...');
     await this.$connect();
-    this.logger.log('✅ Đã kết nối thành công tới Supabase PostgreSQL!');
+    this.logger.log('✅ Đã kết nối thành công tới PostgreSQL 17 (Dokploy Self-Hosted)!');
   }
 
   async onModuleDestroy() {
-    this.logger.log('Đang đóng kết nối Supabase PostgreSQL...');
+    this.logger.log('Đang đóng kết nối PostgreSQL 17 (Dokploy Self-Hosted)...');
     await this.$disconnect();
-    this.logger.log('Đã đóng kết nối Supabase PostgreSQL an toàn.');
+    this.logger.log('Đã đóng kết nối PostgreSQL 17 (Dokploy Self-Hosted) an toàn.');
   }
 
   /**

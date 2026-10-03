@@ -48,7 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Phiên đăng nhập đã bị thu hồi hoặc đã kết thúc');
     }
 
-    // Cache phiên 60s để giảm round-trip Supabase (L-12)
+    // Cache phiên 60s để giảm round-trip CSDL (L-12)
     await this.cacheService.set(cacheKey, { hopLe: true, maNguoiDung: phien.maNguoiDung }, 60);
 
     return {

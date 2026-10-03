@@ -50,7 +50,7 @@ describe('JwtStrategy (L-12: Redis Session Cache)', () => {
     );
   });
 
-  it('Cache HIT (hợp lệ): Trả về context ngay lập tức mà KHÔNG gọi CSDL Supabase', async () => {
+  it('Cache HIT (hợp lệ): Trả về context ngay lập tức mà KHÔNG gọi CSDL', async () => {
     mockCache.get.mockResolvedValue({
       hopLe: true,
       maNguoiDung: 'user-uuid-1',

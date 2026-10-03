@@ -204,7 +204,7 @@ export class AuthService {
       primaryEmail = ghUser.email;
     }
 
-    // Tạo mới hoặc cập nhật người dùng trong CSDL Supabase
+    // Tạo mới hoặc cập nhật người dùng trong CSDL
     const user = await this.prisma.nguoiDung.upsert({
       where: { maDinhDanhGithub: String(ghUser.id) },
       create: {

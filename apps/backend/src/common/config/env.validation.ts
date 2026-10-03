@@ -4,12 +4,12 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // Supabase PostgreSQL
+  // PostgreSQL 17 + pgvector (Dokploy Self-Hosted)
   DATABASE_URL: z
-    .string({ required_error: 'DATABASE_URL là bắt buộc (kết nối pooler cổng 6543)' })
+    .string({ required_error: 'DATABASE_URL là bắt buộc (kết nối PostgreSQL 17)' })
     .min(1, 'DATABASE_URL không được để trống'),
   DIRECT_URL: z
-    .string({ required_error: 'DIRECT_URL là bắt buộc (kết nối trực tiếp cổng 5432)' })
+    .string({ required_error: 'DIRECT_URL là bắt buộc (kết nối trực tiếp PostgreSQL 17)' })
     .min(1, 'DIRECT_URL không được để trống'),
 
   // Redis Cache (Hỗ trợ REDIS_URL chuỗi kết nối chuẩn hoặc các biến riêng lẻ)
