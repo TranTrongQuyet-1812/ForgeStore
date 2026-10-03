@@ -39,12 +39,32 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
   async xuLyCallback(@Query() query: Record<string, string | undefined>, @Res() res: Response) {
     try {
+      // Chuẩn hóa ép kiểu an toàn chống HTTP Parameter Pollution (HPP)
+      const code =
+        typeof query.code === 'string'
+          ? query.code
+          : Array.isArray(query.code)
+            ? (query.code as string[])[0]
+            : undefined;
+      const state =
+        typeof query.state === 'string'
+          ? query.state
+          : Array.isArray(query.state)
+            ? (query.state as string[])[0]
+            : undefined;
+      const error =
+        typeof query.error === 'string'
+          ? query.error
+          : Array.isArray(query.error)
+            ? (query.error as string[])[0]
+            : undefined;
+
       // 1. Nếu GitHub trả về lỗi hoặc người dùng hủy ủy quyền
-      if (query.error || !query.code || !query.state) {
+      if (error || !code || !state) {
         let redirectTarget = 'forgestore://auth';
-        if (query.state) {
+        if (state) {
           try {
-            const stateData = await this.authService.layVaXoaState(query.state);
+            const stateData = await this.authService.layVaXoaState(state);
             if (stateData?.redirect) {
               redirectTarget = stateData.redirect;
             }
@@ -52,13 +72,13 @@ export class AuthController {
             // Nuốt lỗi Redis để luôn redirect về client
           }
         }
-        const errCode = query.error || 'DANG_NHAP_BI_HUY';
+        const errCode = error || 'DANG_NHAP_BI_HUY';
         const sep = redirectTarget.includes('?') ? '&' : '?';
         return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
       }
 
       // 2. Luồng bình thường: Đổi code lấy GitHub token và sinh exchange code
-      const deepLinkUrl = await this.authService.xuLyGithubCallback(query.code, query.state);
+      const deepLinkUrl = await this.authService.xuLyGithubCallback(code, state);
       return res.redirect(deepLinkUrl);
     } catch (err: unknown) {
       // 3. Bắt các lỗi trong quá trình callback và redirect về deep-link để UI client không bị treo
@@ -97,11 +117,31 @@ export class AuthController {
     @Res() res: Response,
   ) {
     try {
-      if (query.error || !query.code || !query.state) {
+      // Chuẩn hóa ép kiểu an toàn chống HTTP Parameter Pollution (HPP)
+      const code =
+        typeof query.code === 'string'
+          ? query.code
+          : Array.isArray(query.code)
+            ? (query.code as string[])[0]
+            : undefined;
+      const state =
+        typeof query.state === 'string'
+          ? query.state
+          : Array.isArray(query.state)
+            ? (query.state as string[])[0]
+            : undefined;
+      const error =
+        typeof query.error === 'string'
+          ? query.error
+          : Array.isArray(query.error)
+            ? (query.error as string[])[0]
+            : undefined;
+
+      if (error || !code || !state) {
         let redirectTarget = 'forgestore://auth';
-        if (query.state) {
+        if (state) {
           try {
-            const stateData = await this.authService.layVaXoaState(query.state);
+            const stateData = await this.authService.layVaXoaState(state);
             if (stateData?.redirect) {
               redirectTarget = stateData.redirect;
             }
@@ -109,12 +149,12 @@ export class AuthController {
             // Nuốt lỗi Redis để luôn redirect về client
           }
         }
-        const errCode = query.error || 'DANG_NHAP_BI_HUY';
+        const errCode = error || 'DANG_NHAP_BI_HUY';
         const sep = redirectTarget.includes('?') ? '&' : '?';
         return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
       }
 
-      const deepLinkUrl = await this.authService.xuLyGoogleCallback(query.code, query.state);
+      const deepLinkUrl = await this.authService.xuLyGoogleCallback(code, state);
       return res.redirect(deepLinkUrl);
     } catch (err: unknown) {
       const redirectTarget = 'forgestore://auth';

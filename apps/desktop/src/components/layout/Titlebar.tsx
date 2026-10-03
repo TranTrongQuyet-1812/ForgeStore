@@ -40,6 +40,7 @@ export const Titlebar: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const [isMaximized, setIsMaximized] = useState(false);
   const [isAuthMenuOpen, setIsAuthMenuOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const authMenuRef = useRef<HTMLDivElement>(null);
 
   // Đóng auth menu khi click ra ngoài hoặc nhấn Esc
@@ -167,11 +168,19 @@ export const Titlebar: React.FC = () => {
 
         {isAuthenticated && user ? (
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-surface-elevated border border-border text-xs shadow-xs">
-              {user.duongDanAvatar ? (
+            <div
+              className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-surface-elevated border border-border text-xs shadow-xs select-none"
+              title={
+                user.tenHienThi
+                  ? `${user.tenHienThi} (@${user.tenDangNhap})`
+                  : `@${user.tenDangNhap}`
+              }
+            >
+              {user.duongDanAvatar && !avatarError ? (
                 <img
                   src={user.duongDanAvatar}
                   alt={user.tenDangNhap}
+                  onError={() => setAvatarError(true)}
                   className="w-4 h-4 rounded-full object-cover border border-border"
                 />
               ) : (

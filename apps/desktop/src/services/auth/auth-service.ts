@@ -121,7 +121,7 @@ export class AuthService {
       const error = parsedUrl.searchParams.get('error');
       if (error) {
         pkce.getAndClearVerifier();
-        console.warn(`[AuthService] Đăng nhập GitHub không thành công: ${error}`);
+        console.warn(`[AuthService] Đăng nhập không thành công: ${error}`);
         return false;
       }
 
