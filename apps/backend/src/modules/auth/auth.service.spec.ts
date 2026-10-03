@@ -412,15 +412,21 @@ describe('AuthService', () => {
       mockPrisma.nguoiDung.create.mockResolvedValue({
         maNguoiDung: 'new-user-uuid',
         tenDangNhap: 'attacker',
-        thuDienTu: 'victim@gmail.com',
+        thuDienTu: null,
       });
 
       await service.xuLyGithubCallback('gh-code', 'valid-state');
 
       // Khẳng định: KHÔNG gọi update trên bất kỳ tài khoản có sẵn nào
       expect(mockPrisma.nguoiDung.update).not.toHaveBeenCalled();
-      // Bắt buộc gọi create tài khoản mới
-      expect(mockPrisma.nguoiDung.create).toHaveBeenCalled();
+      // Bắt buộc gọi create tài khoản mới nhưng thuDienTu PHẢI LÀ null (không lưu email profile chưa verify)
+      expect(mockPrisma.nguoiDung.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            thuDienTu: null,
+          }),
+        }),
+      );
 
       vi.unstubAllGlobals();
     });
@@ -999,6 +1005,56 @@ describe('AuthService', () => {
         }),
       });
       expect(mockPrisma.nguoiDung.create).not.toHaveBeenCalled();
+
+      vi.unstubAllGlobals();
+    });
+
+    it('SEC-01 (Google): khi email_verified = false, không auto-link và lưu thuDienTu là null khi tạo tài khoản', async () => {
+      mockCache.layVaXoa.mockResolvedValue({
+        challenge: validChallenge,
+        redirect: 'forgestore://auth',
+        provider: 'google',
+      });
+
+      const mockFetch = vi.fn();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: 'mock-google-token' }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'google-unverified-sub',
+          email: 'unverified@example.com',
+          email_verified: false,
+          name: 'Unverified Google User',
+        }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
+      mockPrisma.nguoiDung.findFirst.mockResolvedValue(null);
+      mockPrisma.nguoiDung.create.mockResolvedValue({
+        maNguoiDung: 'user-google-unverified-uuid',
+        tenDangNhap: 'unverified_google_user',
+        tenHienThi: 'Unverified Google User',
+        thuDienTu: null,
+      });
+
+      const redirectResult = await service.xuLyGoogleCallback('valid-code', 'valid-state');
+
+      expect(redirectResult).toContain('forgestore://auth?code=');
+      // Không được auto-link với bất kỳ user nào có email trùng
+      expect(mockPrisma.nguoiDung.update).not.toHaveBeenCalled();
+      // Bắt buộc tạo mới với thuDienTu là null
+      expect(mockPrisma.nguoiDung.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            maDinhDanhGoogle: 'google-unverified-sub',
+            thuDienTu: null,
+          }),
+        }),
+      );
 
       vi.unstubAllGlobals();
     });

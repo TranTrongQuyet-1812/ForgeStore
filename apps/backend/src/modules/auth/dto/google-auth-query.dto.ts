@@ -53,6 +53,14 @@ export class GoogleCallbackQueryDto {
   @IsString()
   iss?: string;
 
+  @ApiPropertyOptional({
+    description: 'Google Workspace Hosted Domain (ví dụ: tentruong.edu.vn, company.com)',
+    example: 'tentruong.edu.vn',
+  })
+  @IsOptional()
+  @IsString()
+  hd?: string;
+
   @ApiPropertyOptional({ description: 'Mã lỗi nếu người dùng hủy ủy quyền trên Google' })
   @IsOptional()
   @IsString()

@@ -6,8 +6,8 @@ import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { AuthExchangeDto } from './dto/auth-exchange.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { GithubAuthQueryDto, GithubCallbackQueryDto } from './dto/github-auth-query.dto';
-import { GoogleAuthQueryDto, GoogleCallbackQueryDto } from './dto/google-auth-query.dto';
+import { GithubAuthQueryDto } from './dto/github-auth-query.dto';
+import { GoogleAuthQueryDto } from './dto/google-auth-query.dto';
 import { UserSessionContext } from './interfaces/jwt-payload.interface';
 
 @ApiTags('Xác thực (Auth)')
@@ -37,7 +37,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
   @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
-  async xuLyCallback(@Query() query: GithubCallbackQueryDto, @Res() res: Response) {
+  async xuLyCallback(@Query() query: Record<string, string | undefined>, @Res() res: Response) {
     try {
       // 1. Nếu GitHub trả về lỗi hoặc người dùng hủy ủy quyền
       if (query.error || !query.code || !query.state) {
@@ -92,7 +92,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
   @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
-  async xuLyGoogleCallback(@Query() query: GoogleCallbackQueryDto, @Res() res: Response) {
+  async xuLyGoogleCallback(
+    @Query() query: Record<string, string | undefined>,
+    @Res() res: Response,
+  ) {
     try {
       if (query.error || !query.code || !query.state) {
         let redirectTarget = 'forgestore://auth';
