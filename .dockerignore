@@ -1,9 +1,9 @@
-node_modules
-.git
-.github
-.vscode
-.antigravity
-.agents
+**/node_modules
+**/.git
+**/.github
+**/.vscode
+**/.antigravity
+**/.agents
 apps/desktop
 apps/mobile
 docs
@@ -11,4 +11,6 @@ Tài Liệu báo Cáo
 *.md
 *.log
 .DS_Store
-dist
+**/dist
+**/.env*
+!**/.env.example

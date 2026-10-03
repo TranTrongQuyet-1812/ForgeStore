@@ -6,7 +6,7 @@
 # -------------------------------------------------------------
 # Stage 1: Base Alpine with libc6, openssl & pnpm
 # -------------------------------------------------------------
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -48,11 +48,17 @@ RUN pnpm --filter @forgestore/types run build
 # Build Central Backend NestJS
 RUN pnpm --filter @forgestore/backend run build
 
+# Prune devDependencies to keep production image lightweight
+RUN pnpm prune --prod
+
+# Remove source TypeScript files not needed at runtime
+RUN rm -rf apps/backend/src packages/types/src
+
 # -------------------------------------------------------------
 # Stage 4: Production Runner
 # -------------------------------------------------------------
-FROM node:22-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl dumb-init
+FROM node:24-alpine AS runner
+RUN apk add --no-cache libc6-compat openssl dumb-init wget
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -62,13 +68,18 @@ ENV PORT=3000
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 
-# Copy entire build tree preserving pnpm workspace symlinks
+# Copy pruned build tree preserving pnpm workspace symlinks
 COPY --from=builder --chown=nestjs:nodejs /app ./
 
 USER nestjs
 
 EXPOSE 3000
 
+# Docker Healthcheck for Swarm auto-healing & zero-downtime rolling update
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://localhost:3000/api/v1/health || exit 1
+
 # Use dumb-init as PID 1 to safely handle Unix signals
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "apps/backend/dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma && node apps/backend/dist/main.js"]
+
