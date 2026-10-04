@@ -1,12 +1,15 @@
 /**
  * Dịch vụ Xác thực Toàn diện (Authentication Service) cho ForgeStore Desktop.
  *
- * Tính năng chính (P3-04):
- * 1. Khởi tạo quy trình GitHub OAuth + PKCE (RFC 7636).
- * 2. Mở trình duyệt mặc định hệ thống qua plugin opener.
- * 3. Lắng nghe Deep Link URL `forgestore://auth?code=...` qua plugin deep-link.
- * 4. Đổi mã 1 lần lấy cặp JWT Tokens qua `POST /auth/exchange` kèm thông tin thiết bị (SHA-256 MachineGuid).
- * 5. Cập nhật state đăng nhập vào Zustand useAuthStore và Windows Credential Manager.
+ * Tính năng chính (P3-04 & Mục 68):
+ * 1. Khởi tạo quy trình GitHub / Google OAuth + PKCE (RFC 7636).
+ * 2. Hỗ trợ đa phiên đồng thời (Multi-Session): Gắn tham số session `a=<sessionId>` vào redirect URL,
+ *    giúp bảo toàn verifier độc lập khi người dùng mở nhiều tab hoặc bấm "Thử lại".
+ * 3. Mở trình duyệt mặc định hệ thống qua plugin opener.
+ * 4. Lắng nghe Deep Link URL `forgestore://auth?a=...&code=...` qua plugin deep-link.
+ * 5. Bỏ qua các deep link hủy từ tab cũ (`sessionId !== currentSessionId`) để không gây gián đoạn phiên đang chờ.
+ * 6. Đổi mã 1 lần lấy cặp JWT Tokens qua `POST /auth/exchange` kèm thông tin thiết bị (SHA-256 MachineGuid).
+ * 7. Cập nhật state đăng nhập vào Zustand useAuthStore và Windows Credential Manager.
  */
 
 import { apiClient } from '../api/api-client';
@@ -22,6 +25,7 @@ export class AuthService {
   private isListening = false;
   private unlistenDeepLink: (() => void) | null = null;
   private authErrorListeners = new Set<(error: string) => void>();
+  private currentSessionId: string | null = null;
 
   /**
    * Đăng ký lắng nghe sự kiện lỗi xác thực hoặc người dùng hủy cấp quyền
@@ -41,6 +45,20 @@ export class AuthService {
         console.error('[AuthService] Lỗi trong authErrorListener:', err);
       }
     }
+  }
+
+  /**
+   * Lấy mã phiên đăng nhập đang hoạt động
+   */
+  public getCurrentSessionId(): string | null {
+    return this.currentSessionId;
+  }
+
+  /**
+   * Hủy phiên đăng nhập hiện tại khi người dùng bấm "Hủy kết nối và thử lại"
+   */
+  public cancelCurrentLogin(): void {
+    this.currentSessionId = null;
   }
 
   /**
@@ -103,18 +121,23 @@ export class AuthService {
    * Khởi tạo luồng OAuth chung với PKCE và mở trình duyệt
    */
   private async startOAuthFlow(endpoint: string): Promise<void> {
-    // 1. Sinh Code Verifier và Code Challenge S256 chuẩn RFC 7636
+    // 1. Sinh mã phiên ngẫu nhiên cho lần đăng nhập này (Mục 68)
+    const sessionId = pkce.generateSessionId();
+    this.currentSessionId = sessionId;
+
+    // 2. Sinh Code Verifier và Code Challenge S256 chuẩn RFC 7636
     const verifier = pkce.generateCodeVerifier(64);
     const challenge = await pkce.generateCodeChallenge(verifier);
 
-    // 2. Lưu verifier vào bộ nhớ tạm
-    pkce.saveVerifier(verifier);
+    // 3. Lưu verifier vào bộ nhớ tạm theo sessionId (chống ghi đè giữa các tab)
+    pkce.saveVerifier(verifier, sessionId);
 
-    // 3. Xây dựng URL điều hướng tới endpoint OAuth
+    // 4. Xây dựng URL điều hướng tới endpoint OAuth với redirect URI chứa sessionId (?a=...)
     const baseUrl = apiClient.getBaseUrl();
-    const authUrl = `${baseUrl}${endpoint}?challenge=${encodeURIComponent(challenge)}&redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`;
+    const redirectWithSession = `${DEEP_LINK_SCHEME}?a=${sessionId}`;
+    const authUrl = `${baseUrl}${endpoint}?challenge=${encodeURIComponent(challenge)}&redirect=${encodeURIComponent(redirectWithSession)}`;
 
-    // 4. Mở trình duyệt hệ thống
+    // 5. Mở trình duyệt hệ thống
     if (isTauri()) {
       try {
         const { openUrl } = await import('@tauri-apps/plugin-opener');
@@ -135,13 +158,34 @@ export class AuthService {
    */
   public async handleDeepLinkUrl(urlStr: string): Promise<boolean> {
     try {
-      // Phân tách tham số code từ URL (ví dụ: forgestore://auth?code=xyz hoặc forgestore://auth/callback?code=xyz)
+      // Phân tách tham số từ URL (ví dụ: forgestore://auth?a=xyz&code=abc hoặc forgestore://auth?a=xyz&error=access_denied)
       const parsedUrl = new URL(urlStr.replace('forgestore://auth', 'http://localhost/auth'));
+      const sessionId = parsedUrl.searchParams.get('a') || undefined;
 
       // Kiểm tra nếu callback trả về mã lỗi (ví dụ người dùng hủy cấp quyền)
       const error = parsedUrl.searchParams.get('error');
       if (error) {
-        pkce.getAndClearVerifier();
+        // Xóa verifier của phiên đó khỏi storage
+        if (sessionId) {
+          pkce.getAndClearVerifier(sessionId);
+        } else {
+          pkce.getAndClearVerifier();
+        }
+
+        // Nếu app đã đăng nhập xong rồi, bỏ qua lỗi từ các tab thừa còn lại
+        if (useAuthStore.getState().isAuthenticated) {
+          return false;
+        }
+
+        // Nếu lỗi gửi về từ một tab cũ (không khớp phiên đang chờ hiện tại), bỏ qua và không tắt spinner
+        if (sessionId && this.currentSessionId && sessionId !== this.currentSessionId) {
+          console.warn(
+            `[AuthService] Bỏ qua deep link lỗi từ phiên cũ [${sessionId}]. Phiên hiện tại đang chờ là [${this.currentSessionId}].`,
+          );
+          return false;
+        }
+
+        this.currentSessionId = null;
         console.warn(`[AuthService] Đăng nhập không thành công: ${error}`);
         this.notifyAuthError(error);
         return false;
@@ -155,11 +199,11 @@ export class AuthService {
         return false;
       }
 
-      // Lấy lại Code Verifier đã lưu khi mở trình duyệt
-      const verifier = pkce.getAndClearVerifier();
+      // Lấy lại Code Verifier đã lưu tương ứng với sessionId
+      const verifier = pkce.getAndClearVerifier(sessionId);
       if (!verifier) {
         console.error(
-          '[AuthService] Không tìm thấy PKCE Verifier hợp lệ. Phiên đăng nhập có thể đã hết hạn.',
+          `[AuthService] Không tìm thấy PKCE Verifier hợp lệ cho phiên [${sessionId ?? 'default'}]. Phiên đăng nhập có thể đã hết hạn.`,
         );
         this.notifyAuthError('EXPIRED_VERIFIER');
         return false;
@@ -174,6 +218,8 @@ export class AuthService {
         verifier,
         thietBi,
       });
+
+      this.currentSessionId = null;
 
       // Lưu trữ phiên an toàn vào RAM & Windows Credential Manager
       await useAuthStore.getState().setAuth(authRes);
@@ -194,6 +240,7 @@ export class AuthService {
         await apiClient.post('/auth/logout').catch(() => {});
       }
     } finally {
+      this.currentSessionId = null;
       await useAuthStore.getState().logout();
     }
   }

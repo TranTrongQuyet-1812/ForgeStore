@@ -41,6 +41,7 @@ export const AuthModal: React.FC = () => {
       if (e.key === 'Escape' && isAuthModalOpen) {
         setAuthModalOpen(false);
         setLoadingProvider(null);
+        authService.cancelCurrentLogin();
       }
     };
 
@@ -80,6 +81,7 @@ export const AuthModal: React.FC = () => {
         if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
           setAuthModalOpen(false);
           setLoadingProvider(null);
+          authService.cancelCurrentLogin();
         }
       }}
     >
@@ -92,6 +94,7 @@ export const AuthModal: React.FC = () => {
           onClick={() => {
             setAuthModalOpen(false);
             setLoadingProvider(null);
+            authService.cancelCurrentLogin();
           }}
           className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title="Đóng (Esc)"
@@ -114,7 +117,7 @@ export const AuthModal: React.FC = () => {
             Đăng nhập vào ForgeStore
           </h2>
           <p className="text-xs text-secondary mt-1.5 max-w-[280px] mx-auto leading-relaxed">
-            Đồng bộ kho ứng dụng và thiết bị của bạn
+            Lưu ứng dụng yêu thích theo tài khoản của bạn
           </p>
         </div>
 
@@ -177,7 +180,10 @@ export const AuthModal: React.FC = () => {
           <div className="mt-3.5 text-center animate-fade-in">
             <button
               type="button"
-              onClick={() => setLoadingProvider(null)}
+              onClick={() => {
+                setLoadingProvider(null);
+                authService.cancelCurrentLogin();
+              }}
               className="text-[11px] text-muted hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer inline-flex items-center gap-1 font-medium underline underline-offset-4"
             >
               Hủy kết nối và thử lại

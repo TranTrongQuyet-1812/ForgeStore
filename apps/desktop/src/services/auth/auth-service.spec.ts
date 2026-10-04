@@ -5,10 +5,11 @@ import { tokenStorage } from './token-storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { VaiTro } from '@forgestore/types';
 
-describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
+describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchange)', () => {
   const originalFetch = global.fetch;
 
   beforeEach(async () => {
+    pkce.clearAllVerifiers();
     await tokenStorage.clearAllTokens();
     useAuthStore.setState({
       user: null,
@@ -24,7 +25,7 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     authService.destroy();
   });
 
-  it('loginWithGithub sinh mã PKCE và lưu verifier vào bộ nhớ tạm', async () => {
+  it('loginWithGithub sinh mã PKCE, tạo sessionId và lưu verifier vào bộ nhớ tạm', async () => {
     const openMock = vi.fn();
     const originalWindow = (global as unknown as { window?: unknown }).window;
     (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
@@ -36,11 +37,15 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
       const calledUrl = openMock.mock.calls[0][0] as string;
 
       expect(calledUrl).toContain('/auth/github');
-      expect(calledUrl).toContain(`redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`);
+      // Redirect URI chứa DEEP_LINK_SCHEME và tham số session ?a=
+      expect(calledUrl).toContain(encodeURIComponent(`${DEEP_LINK_SCHEME}?a=`));
       expect(calledUrl).toContain('challenge=');
 
-      // Verifier phải được lưu trong pkce storage
-      const verifier = pkce.getAndClearVerifier();
+      const currentSessionId = authService.getCurrentSessionId();
+      expect(currentSessionId).toBeTruthy();
+
+      // Verifier phải được lưu tương ứng với sessionId
+      const verifier = pkce.getAndClearVerifier(currentSessionId!);
       expect(verifier).toBeDefined();
       expect(verifier).toHaveLength(64);
     } finally {
@@ -48,7 +53,7 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     }
   });
 
-  it('loginWithGoogle sinh mã PKCE và mở trình duyệt với URL /auth/google', async () => {
+  it('loginWithGoogle sinh mã PKCE và mở trình duyệt với URL /auth/google kèm sessionId', async () => {
     const openMock = vi.fn();
     const originalWindow = (global as unknown as { window?: unknown }).window;
     (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
@@ -60,10 +65,13 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
       const calledUrl = openMock.mock.calls[0][0] as string;
 
       expect(calledUrl).toContain('/auth/google');
-      expect(calledUrl).toContain(`redirect=${encodeURIComponent(DEEP_LINK_SCHEME)}`);
+      expect(calledUrl).toContain(encodeURIComponent(`${DEEP_LINK_SCHEME}?a=`));
       expect(calledUrl).toContain('challenge=');
 
-      const verifier = pkce.getAndClearVerifier();
+      const currentSessionId = authService.getCurrentSessionId();
+      expect(currentSessionId).toBeTruthy();
+
+      const verifier = pkce.getAndClearVerifier(currentSessionId!);
       expect(verifier).toBeDefined();
       expect(verifier).toHaveLength(64);
     } finally {
@@ -71,9 +79,10 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     }
   });
 
-  it('handleDeepLinkUrl xử lý URL forgestore://auth?code=... và đổi token thành công', async () => {
+  it('handleDeepLinkUrl xử lý URL forgestore://auth?a=...&code=... và đổi token thành công', async () => {
+    const sessionId = 'session-test-01';
     // 1. Giả lập đã có verifier được lưu từ bước login
-    pkce.saveVerifier('mock-saved-pkce-verifier-123');
+    pkce.saveVerifier('mock-saved-pkce-verifier-123', sessionId);
 
     // 2. Mock fetch cho endpoint /auth/exchange
     const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
@@ -104,9 +113,9 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
 
     global.fetch = mockFetch;
 
-    // 3. Giả lập hệ điều hành gửi deep link
+    // 3. Giả lập hệ điều hành gửi deep link chứa sessionId
     const success = await authService.handleDeepLinkUrl(
-      'forgestore://auth?code=oauth-exchange-code-999',
+      `forgestore://auth?a=${sessionId}&code=oauth-exchange-code-999`,
     );
     expect(success).toBe(true);
 
@@ -120,6 +129,96 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     expect(await tokenStorage.getRefreshToken()).toBe('mock-jwt-refresh-token');
   });
 
+  it('bỏ qua deep link error từ tab cũ khi người dùng đã mở tab mới (Multi-Session Safety)', async () => {
+    const errorListener = vi.fn();
+    authService.onAuthError(errorListener);
+
+    const openMock = vi.fn();
+    const originalWindow = (global as unknown as { window?: unknown }).window;
+    (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
+
+    try {
+      // 1. Mở Tab A
+      await authService.loginWithGoogle();
+      const sessionA = authService.getCurrentSessionId()!;
+
+      // 2. Bấm "Hủy kết nối và thử lại", mở tiếp Tab B
+      await authService.loginWithGithub();
+      const sessionB = authService.getCurrentSessionId()!;
+
+      expect(sessionA).not.toBe(sessionB);
+
+      // 3. Người dùng bấm Hủy trên Tab A cũ: deep link error của session A gửi về
+      const resA = await authService.handleDeepLinkUrl(
+        `forgestore://auth?a=${sessionA}&error=access_denied`,
+      );
+      expect(resA).toBe(false);
+
+      // Vì sessionA != sessionB (phiên hiện tại đang chờ), errorListener KHÔNG ĐƯỢC PHÉP gọi để tránh tắt spinner Tab B!
+      expect(errorListener).not.toHaveBeenCalled();
+
+      // 4. Mock fetch cho exchange của Tab B
+      const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url.includes('/auth/exchange')) {
+          const body = JSON.parse(init?.body as string);
+          expect(body.code).toBe('code-for-tab-b');
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              accessToken: 'jwt-tab-b',
+              refreshToken: 'refresh-tab-b',
+              nguoiDung: {
+                maNguoiDung: 'user-b',
+                tenDangNhap: 'user_b',
+                vaiTro: VaiTro.NGUOI_DUNG,
+              },
+            }),
+          };
+        }
+        return { ok: false, status: 404, json: async () => ({}) };
+      });
+      global.fetch = mockFetch;
+
+      // 5. Tab B đăng nhập thành công
+      const resB = await authService.handleDeepLinkUrl(
+        `forgestore://auth?a=${sessionB}&code=code-for-tab-b`,
+      );
+      expect(resB).toBe(true);
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    } finally {
+      (global as unknown as { window?: unknown }).window = originalWindow;
+    }
+  });
+
+  it('handleDeepLinkUrl kích hoạt onAuthError khi phiên hiện tại nhận lỗi hủy', async () => {
+    const errorListener = vi.fn();
+    const unsubscribe = authService.onAuthError(errorListener);
+
+    const openMock = vi.fn();
+    const originalWindow = (global as unknown as { window?: unknown }).window;
+    (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
+
+    try {
+      await authService.loginWithGoogle();
+      const sessionActive = authService.getCurrentSessionId()!;
+
+      // Giả lập người dùng bấm Hủy trên chính tab đang chờ
+      const res = await authService.handleDeepLinkUrl(
+        `forgestore://auth?a=${sessionActive}&error=access_denied`,
+      );
+      expect(res).toBe(false);
+      expect(errorListener).toHaveBeenCalledWith('access_denied');
+
+      // Hủy đăng ký listener
+      unsubscribe();
+      await authService.handleDeepLinkUrl('forgestore://auth?error=another_error');
+      expect(errorListener).toHaveBeenCalledTimes(1);
+    } finally {
+      (global as unknown as { window?: unknown }).window = originalWindow;
+    }
+  });
+
   it('handleDeepLinkUrl trả về false nếu URL không chứa code hoặc thiếu verifier', async () => {
     // Trường hợp 1: Không có code
     const res1 = await authService.handleDeepLinkUrl('forgestore://auth?other=abc');
@@ -128,21 +227,6 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     // Trường hợp 2: Có code nhưng không có verifier (hoặc đã hết hạn)
     const res2 = await authService.handleDeepLinkUrl('forgestore://auth?code=xyz');
     expect(res2).toBe(false);
-  });
-
-  it('handleDeepLinkUrl kích hoạt onAuthError khi nhận deep link lỗi hoặc hủy cấp quyền', async () => {
-    const errorListener = vi.fn();
-    const unsubscribe = authService.onAuthError(errorListener);
-
-    // Giả lập người dùng bấm Hủy trên Google hoặc GitHub
-    const res = await authService.handleDeepLinkUrl('forgestore://auth?error=access_denied');
-    expect(res).toBe(false);
-    expect(errorListener).toHaveBeenCalledWith('access_denied');
-
-    // Hủy đăng ký listener
-    unsubscribe();
-    await authService.handleDeepLinkUrl('forgestore://auth?error=another_error');
-    expect(errorListener).toHaveBeenCalledTimes(1);
   });
 
   it('logout dọn sạch phiên đăng nhập trên UI và storage', async () => {
