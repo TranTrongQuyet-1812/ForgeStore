@@ -175,7 +175,7 @@ export const ConfirmDialog: React.FC = () => {
 
         {/* Biểu tượng Squircle theo theme */}
         <div
-          className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-4.5 ${getIconWrapperClass()}`}
+          className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-4 ${getIconWrapperClass()}`}
         >
           {renderIcon()}
         </div>

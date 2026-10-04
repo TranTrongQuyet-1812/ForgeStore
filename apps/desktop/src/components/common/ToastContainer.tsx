@@ -15,7 +15,7 @@ export const ToastContainer: React.FC = () => {
         return <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
       case 'info':
       default:
-        return <Info className="w-4 h-4 text-accent-ai shrink-0 mt-0.5" />;
+        return <Info className="w-4 h-4 text-cyan-600 dark:text-accent-ai shrink-0 mt-0.5" />;
     }
   };
 
