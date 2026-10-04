@@ -127,8 +127,8 @@ jobs:
       - name: Install dependencies (desktop)
         run: pnpm install --frozen-lockfile --filter "@forgestore/desktop..."
 
-      - name: Build shared types
-        run: pnpm --filter @forgestore/types run build
+      - name: Build shared packages (types, ui-tokens)
+        run: pnpm build
 
       # tauri::generate_context! cần thư mục apps/desktop/dist có sẵn lúc biên dịch Rust
       - name: Build desktop frontend
