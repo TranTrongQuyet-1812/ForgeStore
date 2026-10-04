@@ -18,6 +18,23 @@ export const AuthModal: React.FC = () => {
     }
   }, [isAuthenticated, isAuthModalOpen, setAuthModalOpen]);
 
+  // Lắng nghe sự kiện lỗi xác thực hoặc người dùng hủy từ deep link
+  useEffect(() => {
+    const unsubscribe = authService.onAuthError(() => {
+      setLoadingProvider(null);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Tự động giải phóng trạng thái chờ sau 60 giây (1 phút) nếu người dùng tắt tab hoặc không có phản hồi
+  useEffect(() => {
+    if (!loadingProvider) return;
+    const timer = setTimeout(() => {
+      setLoadingProvider(null);
+    }, 60000);
+    return () => clearTimeout(timer);
+  }, [loadingProvider]);
+
   // Lắng nghe phím Escape để đóng modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -154,6 +171,19 @@ export const AuthModal: React.FC = () => {
             <span>Tiếp tục với GitHub</span>
           </button>
         </div>
+
+        {/* Nút hủy thủ công giải phóng spinner ngay lập tức nếu người dùng đóng tab trình duyệt */}
+        {loadingProvider !== null && (
+          <div className="mt-3.5 text-center animate-fade-in">
+            <button
+              type="button"
+              onClick={() => setLoadingProvider(null)}
+              className="text-[11px] text-muted hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer inline-flex items-center gap-1 font-medium underline underline-offset-4"
+            >
+              Hủy kết nối và thử lại
+            </button>
+          </div>
+        )}
 
         {/* Footer bảo mật kín đáo, không có đường kẻ thô cắt ngang */}
         <div className="mt-6 text-center text-[11px] text-muted flex items-center justify-center gap-1.5">

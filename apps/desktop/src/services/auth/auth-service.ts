@@ -21,6 +21,27 @@ export const DEEP_LINK_SCHEME = 'forgestore://auth';
 export class AuthService {
   private isListening = false;
   private unlistenDeepLink: (() => void) | null = null;
+  private authErrorListeners = new Set<(error: string) => void>();
+
+  /**
+   * Đăng ký lắng nghe sự kiện lỗi xác thực hoặc người dùng hủy cấp quyền
+   */
+  public onAuthError(listener: (error: string) => void): () => void {
+    this.authErrorListeners.add(listener);
+    return () => {
+      this.authErrorListeners.delete(listener);
+    };
+  }
+
+  private notifyAuthError(error: string): void {
+    for (const listener of this.authErrorListeners) {
+      try {
+        listener(error);
+      } catch (err) {
+        console.error('[AuthService] Lỗi trong authErrorListener:', err);
+      }
+    }
+  }
 
   /**
    * Đăng ký lắng nghe sự kiện Deep Link toàn cục khi app khởi động
@@ -122,6 +143,7 @@ export class AuthService {
       if (error) {
         pkce.getAndClearVerifier();
         console.warn(`[AuthService] Đăng nhập không thành công: ${error}`);
+        this.notifyAuthError(error);
         return false;
       }
 
@@ -129,6 +151,7 @@ export class AuthService {
 
       if (!code) {
         console.warn('[AuthService] Deep link không chứa mã code xác thực:', urlStr);
+        this.notifyAuthError('MISSING_CODE');
         return false;
       }
 
@@ -138,6 +161,7 @@ export class AuthService {
         console.error(
           '[AuthService] Không tìm thấy PKCE Verifier hợp lệ. Phiên đăng nhập có thể đã hết hạn.',
         );
+        this.notifyAuthError('EXPIRED_VERIFIER');
         return false;
       }
 
@@ -156,6 +180,7 @@ export class AuthService {
       return true;
     } catch (err) {
       console.error('[AuthService] Lỗi trong quá trình đổi mã xác thực:', err);
+      this.notifyAuthError('EXCHANGE_FAILED');
       return false;
     }
   }

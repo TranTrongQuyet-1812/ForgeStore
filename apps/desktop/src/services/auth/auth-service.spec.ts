@@ -130,6 +130,21 @@ describe('AuthService (P3-04 - GitHub OAuth Deep Link & PKCE Exchange)', () => {
     expect(res2).toBe(false);
   });
 
+  it('handleDeepLinkUrl kích hoạt onAuthError khi nhận deep link lỗi hoặc hủy cấp quyền', async () => {
+    const errorListener = vi.fn();
+    const unsubscribe = authService.onAuthError(errorListener);
+
+    // Giả lập người dùng bấm Hủy trên Google hoặc GitHub
+    const res = await authService.handleDeepLinkUrl('forgestore://auth?error=access_denied');
+    expect(res).toBe(false);
+    expect(errorListener).toHaveBeenCalledWith('access_denied');
+
+    // Hủy đăng ký listener
+    unsubscribe();
+    await authService.handleDeepLinkUrl('forgestore://auth?error=another_error');
+    expect(errorListener).toHaveBeenCalledTimes(1);
+  });
+
   it('logout dọn sạch phiên đăng nhập trên UI và storage', async () => {
     tokenStorage.setAccessToken('active-token');
     await tokenStorage.setRefreshToken('active-refresh');
