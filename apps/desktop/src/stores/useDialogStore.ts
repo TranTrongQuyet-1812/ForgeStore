@@ -28,22 +28,39 @@ export const useDialogStore = create<DialogState>((set) => ({
   close: () => set({ isOpen: false, options: null }),
 }));
 
+let activeDialogResolver: ((value: boolean) => void) | null = null;
+
 /**
  * Hàm tiện ích mở hộp thoại xác nhận trả về Promise<boolean>.
  * Thay thế drop-in cho `window.confirm(...)` dạng `if (await confirmDialog(...))`.
+ * Tự động giải phóng (resolve false) cho dialog cũ nếu có dialog mới mở đè lên (chống dangling promise).
  */
 export function confirmDialog(
   options: Omit<ConfirmDialogOptions, 'onConfirm' | 'onCancel'>,
 ): Promise<boolean> {
+  // Giải phóng an toàn dialog trước đó nếu chưa giải quyết xong
+  if (activeDialogResolver) {
+    activeDialogResolver(false);
+    activeDialogResolver = null;
+  }
+
   return new Promise<boolean>((resolve) => {
+    activeDialogResolver = resolve;
+
     useDialogStore.getState().open({
       ...options,
       onConfirm: () => {
         useDialogStore.getState().close();
+        if (activeDialogResolver === resolve) {
+          activeDialogResolver = null;
+        }
         resolve(true);
       },
       onCancel: () => {
         useDialogStore.getState().close();
+        if (activeDialogResolver === resolve) {
+          activeDialogResolver = null;
+        }
         resolve(false);
       },
     });

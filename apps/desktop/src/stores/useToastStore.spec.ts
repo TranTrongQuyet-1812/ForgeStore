@@ -64,4 +64,32 @@ describe('useToastStore & toast utility (Mục 69 - In-App Toast System)', () =>
     expect(useToastStore.getState().toasts).toHaveLength(3);
     expect(useToastStore.getState().toasts.map((t) => t.message)).toEqual(['2', '3', '4']);
   });
+
+  it('stress test: nạp 20 toast dồn dập vẫn giữ vững tối đa 3 toast và dọn dẹp sạch sẽ', () => {
+    for (let i = 1; i <= 20; i++) {
+      toast.error(`Lỗi ${i}`);
+    }
+
+    const toasts = useToastStore.getState().toasts;
+    expect(toasts).toHaveLength(3);
+    expect(toasts.map((t) => t.message)).toEqual(['Lỗi 18', 'Lỗi 19', 'Lỗi 20']);
+
+    // Tua hết 3500ms
+    vi.advanceTimersByTime(3500);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('xóa sớm qua removeToast không gây lỗi khi timer 3.5s kết thúc', () => {
+    toast.info('Toast tạm');
+    const id = useToastStore.getState().toasts[0].id;
+
+    // Xóa sớm tại 1000ms
+    vi.advanceTimersByTime(1000);
+    useToastStore.getState().removeToast(id);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+
+    // Tua nốt thời gian còn lại
+    vi.advanceTimersByTime(2500);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
 });

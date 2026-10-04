@@ -1,26 +1,64 @@
-import React, { useEffect, useRef } from 'react';
-import { LogOut, Trash2, AlertTriangle, Info, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { LogOut, Trash2, AlertTriangle, Info, X, Loader2 } from 'lucide-react';
 import { useDialogStore } from '../../stores/useDialogStore';
 
 export const ConfirmDialog: React.FC = () => {
   const { isOpen, options, close } = useDialogStore();
   const cardRef = useRef<HTMLDivElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
+  const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Auto-focus nút Hủy để tránh người dùng nhấn Enter nhầm
   useEffect(() => {
     if (isOpen) {
-      cancelBtnRef.current?.focus();
+      setIsSubmitting(false);
+      // Timeout ngắn đảm bảo DOM đã render hoàn chỉnh
+      const timer = setTimeout(() => {
+        cancelBtnRef.current?.focus();
+      }, 30);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  // Phím tắt bàn phím: Escape để Hủy
+  // Phím tắt bàn phím: Escape để Hủy và Focus Trap (Tab navigation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen || !options) return;
+
       if (e.key === 'Escape') {
-        options.onCancel?.();
-        close();
+        if (!isSubmitting) {
+          options.onCancel?.();
+          close();
+        }
+        return;
+      }
+
+      // Focus Trap giữa [Nút Đóng (X) <-> Nút Hủy <-> Nút Xác Nhận]
+      if (e.key === 'Tab') {
+        const focusableElements = [
+          closeBtnRef.current,
+          cancelBtnRef.current,
+          confirmBtnRef.current,
+        ].filter(Boolean) as HTMLButtonElement[];
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
@@ -30,7 +68,7 @@ export const ConfirmDialog: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, options, close]);
+  }, [isOpen, options, close, isSubmitting]);
 
   if (!isOpen || !options) return null;
 
@@ -46,15 +84,24 @@ export const ConfirmDialog: React.FC = () => {
   } = options;
 
   const handleCancel = () => {
+    if (isSubmitting) return;
     onCancel?.();
     close();
   };
 
   const handleConfirm = async () => {
-    if (onConfirm) {
-      await onConfirm();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (onConfirm) {
+        await onConfirm();
+      }
+      close();
+    } catch (err) {
+      console.error('[ConfirmDialog] Lỗi khi thực thi xác nhận:', err);
+    } finally {
+      setIsSubmitting(false);
     }
-    close();
   };
 
   const renderIcon = () => {
@@ -80,7 +127,7 @@ export const ConfirmDialog: React.FC = () => {
         return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
       case 'primary':
       default:
-        return 'bg-forge-500/10 text-forge-500 border-forge-500/20';
+        return 'bg-accent-forge/10 text-accent-forge border-accent-forge/20';
     }
   };
 
@@ -89,16 +136,17 @@ export const ConfirmDialog: React.FC = () => {
       case 'danger':
         return 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/20';
       case 'warning':
-        return 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-900/20';
+        // Chuẩn hóa tương phản 10.5:1 (WCAG AAA)
+        return 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-amber-900/10';
       case 'primary':
       default:
-        return 'bg-forge-500 hover:bg-forge-600 text-white shadow-forge-900/20';
+        return 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/20';
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md animate-fade-in select-none"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/65 backdrop-blur-md animate-fade-in select-none"
       onClick={(e) => {
         if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
           handleCancel();
@@ -115,8 +163,11 @@ export const ConfirmDialog: React.FC = () => {
       >
         {/* Nút đóng góc phải */}
         <button
+          ref={closeBtnRef}
+          type="button"
+          disabled={isSubmitting}
           onClick={handleCancel}
-          className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+          className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           title="Đóng (Esc)"
         >
           <X className="w-4 h-4" />
@@ -137,12 +188,14 @@ export const ConfirmDialog: React.FC = () => {
           >
             {title}
           </h3>
-          <p
-            id="confirm-dialog-description"
-            className="text-xs text-secondary mt-2 leading-relaxed whitespace-pre-line"
-          >
-            {description}
-          </p>
+          <div className="max-h-[60vh] overflow-y-auto pr-1 mt-2">
+            <p
+              id="confirm-dialog-description"
+              className="text-xs text-secondary leading-relaxed whitespace-pre-line"
+            >
+              {description}
+            </p>
+          </div>
         </div>
 
         {/* Cụm 2 nút hành động căn phải */}
@@ -150,16 +203,20 @@ export const ConfirmDialog: React.FC = () => {
           <button
             ref={cancelBtnRef}
             type="button"
+            disabled={isSubmitting}
             onClick={handleCancel}
-            className="h-9 px-4 rounded-xl bg-surface hover:bg-surface-hover text-secondary hover:text-primary border border-border text-xs font-semibold transition-colors cursor-pointer active:scale-[0.99]"
+            className="h-9 px-4 rounded-xl bg-surface hover:bg-surface-hover text-secondary hover:text-primary border border-border text-xs font-semibold transition-colors cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelLabel}
           </button>
           <button
+            ref={confirmBtnRef}
             type="button"
+            disabled={isSubmitting}
             onClick={handleConfirm}
-            className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.99] ${getConfirmButtonClass()}`}
+            className={`h-9 px-4 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.99] disabled:opacity-60 disabled:cursor-wait flex items-center gap-1.5 ${getConfirmButtonClass()}`}
           >
+            {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {confirmLabel}
           </button>
         </div>

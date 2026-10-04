@@ -14,25 +14,48 @@ interface ToastState {
   removeToast: (id: string) => void;
 }
 
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearToastTimer(id: string) {
+  const timer = toastTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    toastTimers.delete(id);
+  }
+}
+
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (type, message) => {
     const id = Math.random().toString(36).substring(2, 9);
-    set((state) => ({
-      // Giới hạn tối đa 3 toasts cùng lúc để tránh che khuất màn hình
-      toasts: [...state.toasts.slice(-2), { id, type, message }],
-    }));
+    set((state) => {
+      // Dọn dẹp timer cho các toast bị đẩy ra ngoài bởi slice(-2)
+      if (state.toasts.length >= 3) {
+        const evicted = state.toasts.slice(0, state.toasts.length - 2);
+        evicted.forEach((t) => clearToastTimer(t.id));
+      }
 
-    setTimeout(() => {
+      return {
+        // Giới hạn tối đa 3 toasts cùng lúc để tránh che khuất màn hình
+        toasts: [...state.toasts.slice(-2), { id, type, message }],
+      };
+    });
+
+    const timer = setTimeout(() => {
+      clearToastTimer(id);
       set((state) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
     }, 3500);
+
+    toastTimers.set(id, timer);
   },
-  removeToast: (id) =>
+  removeToast: (id) => {
+    clearToastTimer(id);
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
-    })),
+    }));
+  },
 }));
 
 /**

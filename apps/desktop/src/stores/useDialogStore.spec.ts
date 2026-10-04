@@ -63,4 +63,33 @@ describe('useDialogStore & confirmDialog (Mục 69 - In-App Confirmation System)
     expect(result).toBe(false);
     expect(useDialogStore.getState().isOpen).toBe(false);
   });
+
+  it('xử lý concurrent invocations: dialog mới giải phóng dialog cũ an toàn (không dangling promise)', async () => {
+    const promise1 = confirmDialog({
+      title: 'Dialog 1',
+      description: 'Hành động 1',
+    });
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.title).toBe('Dialog 1');
+
+    // Dialog 2 kích hoạt khi Dialog 1 chưa được tương tác
+    const promise2 = confirmDialog({
+      title: 'Dialog 2',
+      description: 'Hành động 2',
+    });
+
+    // Dialog 1 phải được tự động resolve false ngay lập tức
+    const result1 = await promise1;
+    expect(result1).toBe(false);
+
+    // Dialog 2 đang mở và hoạt động bình thường
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.title).toBe('Dialog 2');
+
+    // Xác nhận Dialog 2
+    useDialogStore.getState().options?.onConfirm?.();
+    const result2 = await promise2;
+    expect(result2).toBe(true);
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
 });

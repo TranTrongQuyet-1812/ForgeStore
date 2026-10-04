@@ -436,8 +436,10 @@ export const DetailPage: React.FC = () => {
   // Sao chép câu lệnh CLI kèm hiệu ứng Checkmark Pop (DELIV-33.3, FE-V3-05 & EC-04)
   const handleCopyCommand = (lenh: string, id: string) => {
     if (!lenh) return;
+    // Khử khuẩn ký tự xuống dòng chống Pastejacking nguy hiểm
+    const sanitizedLenh = lenh.trim().replace(/[\r\n]+/g, ' ');
     navigator.clipboard
-      .writeText(lenh)
+      .writeText(sanitizedLenh)
       .then(() => {
         setCopiedCommandId(id);
         if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
