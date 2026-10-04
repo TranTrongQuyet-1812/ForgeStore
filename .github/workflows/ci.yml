@@ -10,7 +10,36 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  guard:
+    name: Chặn lọt tài liệu nội bộ & bí mật
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Không cho docs/ và .env nằm trong Git
+        run: |
+          bad=$(git ls-files | grep -E '^docs/|(^|/)\.env($|\.)' | grep -vE '\.env\.example$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Phát hiện file nội bộ hoặc file môi trường bị commit:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "✅ Không có docs/ hay .env trong Git."
+
+      - name: Quét chuỗi giống khóa bí mật
+        run: |
+          pattern='AIza[0-9A-Za-z_-]{35}|GOCSPX-[0-9A-Za-z_-]{20,}|gh[pousr]_[0-9A-Za-z]{36}|github_pat_[0-9A-Za-z_]{40,}|nvapi-[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|hosting\.tranquyet\.id\.vn/api/deploy/[A-Za-z0-9_-]{10,}'
+          if git grep -nIE "$pattern" -- . ':!pnpm-lock.yaml'; then
+            echo "::error::Phát hiện chuỗi giống khóa bí mật ở các dòng trên. Gỡ ra và đổi khóa ngay."
+            exit 1
+          fi
+          echo "✅ Không phát hiện khóa bí mật."
+
   lint-and-typecheck:
     name: Lint, Build, Typecheck & Test
     runs-on: ubuntu-latest
@@ -34,7 +63,6 @@ jobs:
         run: pnpm --filter @forgestore/backend run prisma:generate
 
       - name: Check code formatting
-
         run: pnpm format:check
 
       - name: Run ESLint
@@ -61,3 +89,87 @@ jobs:
             echo "✅ Verified: No migration drops idx_phan_tich_ai_vector."
           fi
 
+  docker:
+    name: Build thử Docker image backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (không push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: forgestore-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  desktop:
+    name: Desktop (Vite build + Rust check & test)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies (desktop)
+        run: pnpm install --frozen-lockfile --filter "@forgestore/desktop..."
+
+      - name: Build shared types
+        run: pnpm --filter @forgestore/types run build
+
+      # tauri::generate_context! cần thư mục apps/desktop/dist có sẵn lúc biên dịch Rust
+      - name: Build desktop frontend
+        run: pnpm build:desktop
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Cargo check
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --locked
+
+      - name: Cargo test
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+
+  # CD: chỉ khi mọi job xanh trên main mới đẩy commit sang nhánh `production`.
+  # Dokploy theo dõi nhánh `production` (Auto Deploy) nên deploy luôn đi sau CI.
+  # Rollback: git push origin <sha-cũ>:production --force
+  deploy:
+    name: Đẩy sang nhánh production (Dokploy tự deploy)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [guard, lint-and-typecheck, docker, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cập nhật nhánh production
+        run: |
+          git push origin "${GITHUB_SHA}:refs/heads/production"
+          echo "✅ production -> ${GITHUB_SHA}"
