@@ -1,5 +1,8 @@
 # ⚒️ ForgeStore
 
+[![CI](https://github.com/TranTrongQuyet-1812/ForgeStore_Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TranTrongQuyet-1812/ForgeStore_Project/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > **The Next-Gen Open-Source App Ecosystem**  
 > _"Where Open-Source Craftsmanship Meets Seamless Discovery"_
 
