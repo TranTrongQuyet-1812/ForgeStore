@@ -9,11 +9,48 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { GithubAuthQueryDto } from './dto/github-auth-query.dto';
 import { GoogleAuthQueryDto } from './dto/google-auth-query.dto';
 import { UserSessionContext } from './interfaces/jwt-payload.interface';
+import { dungTrangQuayLaiApp, TrangThaiQuayLai } from './trang-quay-lai-app';
 
 @ApiTags('Xác thực (Auth)')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  /**
+   * Trả trang HTML trung gian (thay cho 302 thẳng sang deep link) để trình duyệt hiển thị
+   * trang có thương hiệu, dọn URL callback khỏi thanh địa chỉ và tự mở lại app.
+   */
+  private traVeApp(res: Response, trangThai: TrangThaiQuayLai, deepLink?: string) {
+    const { html, nonce } = dungTrangQuayLaiApp(trangThai, deepLink);
+    return res
+      .status(HttpStatus.OK)
+      .set({
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+      })
+      .send(html);
+  }
+
+  private traVeLoi(res: Response, redirectTarget: string, errCode: string) {
+    const sep = redirectTarget.includes('?') ? '&' : '?';
+    const deepLink = `${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`;
+    return this.traVeApp(res, errCode === 'access_denied' ? 'da-huy' : 'that-bai', deepLink);
+  }
+
+  @CongKhai()
+  @Get('xong')
+  @ApiOperation({
+    summary: 'Trang kết thúc đăng nhập',
+    description:
+      'Trang tĩnh hiển thị sau khi trang callback đã mở lại app (đường dẫn sạch trên thanh địa chỉ, tránh 404 khi người dùng tải lại trang).',
+  })
+  @ApiResponse({ status: 200, description: 'Trang HTML hướng dẫn quay lại ứng dụng' })
+  xong(@Res() res: Response) {
+    return this.traVeApp(res, 'xong');
+  }
 
   @CongKhai()
   @Get('github')
@@ -35,8 +72,11 @@ export class AuthController {
     description:
       'Nhận code và state từ GitHub, xác thực state 1 lần, lấy thông tin người dùng GitHub, sinh mã exchange code (TTL 60s) và chuyển hướng về app native qua deep link.',
   })
-  @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
-  @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Trang HTML tự mở lại native app qua deep link kèm mã 1 lần ?code=... (hoặc ?error=...)',
+  })
   async xuLyCallback(@Query() query: Record<string, string | undefined>, @Res() res: Response) {
     try {
       // Chuẩn hóa ép kiểu an toàn chống HTTP Parameter Pollution (HPP)
@@ -72,21 +112,20 @@ export class AuthController {
             // Nuốt lỗi Redis để luôn redirect về client
           }
         }
-        const errCode = error || 'DANG_NHAP_BI_HUY';
-        const sep = redirectTarget.includes('?') ? '&' : '?';
-        return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+        return this.traVeLoi(res, redirectTarget, error || 'DANG_NHAP_BI_HUY');
       }
 
       // 2. Luồng bình thường: Đổi code lấy GitHub token và sinh exchange code
       const deepLinkUrl = await this.authService.xuLyGithubCallback(code, state);
-      return res.redirect(deepLinkUrl);
+      return this.traVeApp(res, 'thanh-cong', deepLinkUrl);
     } catch (err: unknown) {
-      // 3. Bắt các lỗi trong quá trình callback và redirect về deep-link để UI client không bị treo
-      const redirectTarget = 'forgestore://auth';
+      // 3. Bắt các lỗi trong quá trình callback và trả về deep-link để UI client không bị treo
       const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
-      const errCode = errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI';
-      const sep = redirectTarget.includes('?') ? '&' : '?';
-      return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+      return this.traVeLoi(
+        res,
+        'forgestore://auth',
+        errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI',
+      );
     }
   }
 
@@ -110,8 +149,11 @@ export class AuthController {
     description:
       'Nhận code và state từ Google, xác thực state 1 lần, lấy thông tin người dùng Google, sinh mã exchange code (TTL 60s) và chuyển hướng về app native qua deep link.',
   })
-  @ApiResponse({ status: 302, description: 'Chuyển hướng về native app kèm mã 1 lần ?code=...' })
-  @ApiResponse({ status: 400, description: 'State hoặc code không hợp lệ hoặc hết hạn' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Trang HTML tự mở lại native app qua deep link kèm mã 1 lần ?code=... (hoặc ?error=...)',
+  })
   async xuLyGoogleCallback(
     @Query() query: Record<string, string | undefined>,
     @Res() res: Response,
@@ -149,19 +191,18 @@ export class AuthController {
             // Nuốt lỗi Redis để luôn redirect về client
           }
         }
-        const errCode = error || 'DANG_NHAP_BI_HUY';
-        const sep = redirectTarget.includes('?') ? '&' : '?';
-        return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+        return this.traVeLoi(res, redirectTarget, error || 'DANG_NHAP_BI_HUY');
       }
 
       const deepLinkUrl = await this.authService.xuLyGoogleCallback(code, state);
-      return res.redirect(deepLinkUrl);
+      return this.traVeApp(res, 'thanh-cong', deepLinkUrl);
     } catch (err: unknown) {
-      const redirectTarget = 'forgestore://auth';
       const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
-      const errCode = errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI';
-      const sep = redirectTarget.includes('?') ? '&' : '?';
-      return res.redirect(`${redirectTarget}${sep}error=${encodeURIComponent(errCode)}`);
+      return this.traVeLoi(
+        res,
+        'forgestore://auth',
+        errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI',
+      );
     }
   }
 
