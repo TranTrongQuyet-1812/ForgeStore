@@ -83,11 +83,11 @@ export const AuthModal: React.FC = () => {
         </button>
 
         {/* Logo chính thức của ForgeStore (đồng bộ với Sidebar) */}
-        <div className="w-13 h-13 rounded-2xl bg-surface border border-border flex items-center justify-center p-2 mx-auto mb-4 shadow-md shadow-black/10 dark:shadow-black/40">
+        <div className="w-12 h-12 rounded-2xl bg-surface border border-border flex items-center justify-center p-2 mx-auto mb-4 shrink-0 shadow-md shadow-black/10 dark:shadow-black/40">
           <img
             src="/logo.png"
             alt="ForgeStore Logo"
-            className="w-full h-full object-contain drop-shadow"
+            className="w-full h-full object-contain drop-shadow pointer-events-none"
           />
         </div>
 
