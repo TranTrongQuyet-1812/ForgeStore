@@ -295,9 +295,9 @@ export const Titlebar: React.FC = () => {
           <button
             onClick={() => setAuthModalOpen(true)}
             disabled={isLoading}
-            className="h-8 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border hover:border-border-focus text-xs text-primary font-medium flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            className="h-8 px-3 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border hover:border-border-focus text-xs text-primary font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50 active:scale-[0.98]"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span>
+            <UserIcon className="w-3.5 h-3.5 text-muted" />
             <span>{isLoading ? 'Đang kết nối...' : 'Đăng nhập'}</span>
           </button>
         )}
