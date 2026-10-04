@@ -20,6 +20,8 @@ import { deviceService, DeviceInfo } from '../services/device/device-service';
 import { installService } from '../services/install/install-service';
 import type { ThongTinUngDungRegistry } from '../services/install/install-types';
 import { authService } from '../services/auth/auth-service';
+import { confirmDialog } from '../stores/useDialogStore';
+import { toast } from '../stores/useToastStore';
 
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
@@ -419,8 +421,8 @@ export const LibraryPage: React.FC = () => {
     }
 
     // Nếu hoàn toàn không thể định vị file/folder thực thi: Thông báo rõ ràng cho người dùng
-    alert(
-      `Ứng dụng "${app.tenApp}" đã được cài đặt vào hệ thống Windows.\n\nBạn có thể khởi chạy trực tiếp từ Start Menu hoặc lối tắt trên Desktop!`,
+    toast.info(
+      `Ứng dụng "${app.tenApp}" đã được cài đặt vào hệ thống Windows. Bạn có thể khởi chạy trực tiếp từ Start Menu hoặc Desktop!`,
     );
   };
 
@@ -434,7 +436,7 @@ export const LibraryPage: React.FC = () => {
     if (dir) {
       installService.moThuMuc(dir);
     } else {
-      alert(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
+      toast.error(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
     }
   };
 
@@ -449,11 +451,15 @@ export const LibraryPage: React.FC = () => {
   }) => {
     // Trường hợp 1: Phần mềm đã bị người dùng gỡ bên ngoài Windows (A4)
     if (app.daBiGoBenNgoai) {
-      if (
-        confirm(
-          `Phần mềm "${app.tenApp}" đã được gỡ cài đặt bên ngoài Windows.\n\nBạn có muốn dọn bản ghi này khỏi Thư viện của máy?`,
-        )
-      ) {
+      const xacNhanDon = await confirmDialog({
+        title: 'Dọn dẹp Thư viện máy',
+        description: `Phần mềm "${app.tenApp}" đã được gỡ cài đặt bên ngoài Windows.\n\nBạn có muốn dọn bản ghi này khỏi Thư viện của máy?`,
+        confirmLabel: 'Dọn dẹp',
+        cancelLabel: 'Hủy',
+        variant: 'warning',
+        icon: 'trash',
+      });
+      if (xacNhanDon) {
         try {
           setIsUninstallingId(app.maUngDung);
           goCaiDatLocal(app.maUngDung);
@@ -475,9 +481,14 @@ export const LibraryPage: React.FC = () => {
     const displayVersion = app.regInfo?.display_version || app.phienBanHienTai;
     const publisher = app.regInfo?.publisher ? ` (Nhà phát triển: ${app.regInfo.publisher})` : '';
 
-    const xacNhan = confirm(
-      `Bạn có chắc chắn muốn gỡ cài đặt phần mềm "${displayName}"${publisher} - Phiên bản ${displayVersion} khỏi máy tính này không?\n\nThao tác này sẽ khởi chạy trình gỡ cài đặt chính chủ của phần mềm.`,
-    );
+    const xacNhan = await confirmDialog({
+      title: 'Gỡ cài đặt phần mềm',
+      description: `Bạn có chắc chắn muốn gỡ cài đặt phần mềm "${displayName}"${publisher} - Phiên bản ${displayVersion} khỏi máy tính này không?\n\nThao tác này sẽ khởi chạy trình gỡ cài đặt chính chủ của phần mềm.`,
+      confirmLabel: 'Gỡ cài đặt',
+      cancelLabel: 'Hủy',
+      variant: 'danger',
+      icon: 'trash',
+    });
 
     if (!xacNhan) return;
 
@@ -504,18 +515,22 @@ export const LibraryPage: React.FC = () => {
         if (errorMsg.includes('NGUOI_DUNG_HUY')) {
           // Người dùng chủ động bấm Cancel ở hộp UAC hoặc uninstaller: không làm gì
         } else {
-          alert(`Không thể hoàn tất gỡ cài đặt: ${errorMsg}`);
+          toast.error(`Không thể hoàn tất gỡ cài đặt: ${errorMsg}`);
         }
       } finally {
         setIsUninstallingId(null);
       }
     } else {
       // Nếu không tìm thấy UninstallString trong registry: hỏi dọn bản ghi
-      if (
-        confirm(
-          `Không tìm thấy lệnh gỡ cài đặt trong Registry Windows cho "${app.tenApp}". Bạn có muốn xóa phần mềm này khỏi danh sách quản lý?`,
-        )
-      ) {
+      const xacNhanXoa = await confirmDialog({
+        title: 'Xóa khỏi danh sách quản lý',
+        description: `Không tìm thấy lệnh gỡ cài đặt trong Registry Windows cho "${app.tenApp}".\n\nBạn có muốn xóa phần mềm này khỏi danh sách quản lý?`,
+        confirmLabel: 'Xóa bỏ',
+        cancelLabel: 'Hủy',
+        variant: 'warning',
+        icon: 'trash',
+      });
+      if (xacNhanXoa) {
         try {
           setIsUninstallingId(app.maUngDung);
           goCaiDatLocal(app.maUngDung);

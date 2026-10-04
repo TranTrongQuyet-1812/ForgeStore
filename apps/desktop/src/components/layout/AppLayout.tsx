@@ -10,6 +10,8 @@ import { CategoriesPage } from '../../pages/CategoriesPage';
 import { SettingsPage } from '../../pages/SettingsPage';
 import { SearchModal } from '../search/SearchModal';
 import { AuthModal } from '../auth/AuthModal';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { ToastContainer } from '../common/ToastContainer';
 
 export const AppLayout: React.FC = () => {
   const { currentTab } = useNavStore();
@@ -57,6 +59,12 @@ export const AppLayout: React.FC = () => {
 
       {/* 4. Hộp thoại xác thực tài khoản trung tâm (Toàn cục) */}
       <AuthModal />
+
+      {/* 5. Hộp thoại xác nhận hành động toàn cục (Thay thế triệt để window.confirm) */}
+      <ConfirmDialog />
+
+      {/* 6. Hệ thống thông báo nhanh toàn cục (Thay thế triệt để window.alert) */}
+      <ToastContainer />
     </div>
   );
 };

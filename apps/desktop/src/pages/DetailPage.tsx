@@ -33,6 +33,7 @@ import { useNavStore } from '../stores/useNavStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useInstallStore } from '../stores/useInstallStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { toast } from '../stores/useToastStore';
 import { installService } from '../services/install/install-service';
 import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
@@ -215,7 +216,7 @@ function parseFeatureText(text: string): { title?: string; desc: string } {
 
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { selectedAppId, navigateTo } = useNavStore();
+  const { selectedAppId, navigateTo, setAuthModalOpen } = useNavStore();
   const { isAuthenticated, user, maThietBi } = useAuthStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
   // Cờ `laYeuThich` trong chi tiết app phụ thuộc người đang đăng nhập, nên khóa cache phải gắn với
@@ -315,7 +316,8 @@ export const DetailPage: React.FC = () => {
   const handleToggleFavorite = async () => {
     if (isTogglingFavorite) return;
     if (!isAuthenticated) {
-      alert('Vui lòng đăng nhập tài khoản ở thanh trên cùng để lưu ứng dụng vào Kho yêu thích!');
+      setAuthModalOpen(true);
+      toast.info('Vui lòng đăng nhập để lưu ứng dụng vào Kho yêu thích');
       return;
     }
 
@@ -550,7 +552,7 @@ export const DetailPage: React.FC = () => {
     }
 
     if (!selectedAsset) {
-      alert('Không tìm thấy tệp cài đặt phù hợp.');
+      toast.error('Không tìm thấy tệp cài đặt phù hợp cho thiết bị.');
       return;
     }
 

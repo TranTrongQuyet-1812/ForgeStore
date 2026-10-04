@@ -12,6 +12,7 @@ import {
 import { useThemeStore } from '../stores/useThemeStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useAuthStore } from '../stores/useAuthStore';
+import { toast } from '../stores/useToastStore';
 import { deviceService, type DeviceInfo } from '../services/device/device-service';
 
 export const SettingsPage: React.FC = () => {
@@ -46,9 +47,9 @@ export const SettingsPage: React.FC = () => {
         const freed = await invoke<number>('don_dep_thu_muc_downloads');
         await fetchDownloadSize();
         if (freed > 0) {
-          alert(`Đã dọn dẹp ${formatBytes(freed)} tệp cài đặt tạm thời.`);
+          toast.success(`Đã dọn dẹp ${formatBytes(freed)} tệp cài đặt tạm thời.`);
         } else {
-          alert('Thư mục tải về đã sạch sẽ, không có tệp thừa cần dọn.');
+          toast.info('Thư mục tải về đã sạch sẽ, không có tệp thừa cần dọn.');
         }
       } catch (err) {
         console.error('Lỗi khi dọn dẹp downloads:', err);
@@ -57,7 +58,7 @@ export const SettingsPage: React.FC = () => {
       }
     } else {
       setDownloadSize(0);
-      alert('Đã dọn dẹp bộ nhớ tạm (môi trường web test).');
+      toast.success('Đã dọn dẹp bộ nhớ tạm thành công.');
     }
   };
 

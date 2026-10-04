@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { toast } from './useToastStore';
 
 interface SettingsState {
   /** Thư mục lưu trữ các ứng dụng portable (.zip), nếu rỗng thì dùng mặc định */
@@ -55,9 +56,7 @@ export const useSettingsStore = create<SettingsState>()(
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           // L-07: Hiển thị lý do từ chối thư mục hệ thống hoặc không có quyền ghi, giữ nguyên giá trị cũ
-          if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-            window.alert(errMsg || 'Thư mục không hợp lệ hoặc không có quyền ghi.');
-          }
+          toast.error(errMsg || 'Thư mục không hợp lệ hoặc không có quyền ghi.');
           console.error('[useSettingsStore] Lỗi khi mở hộp thoại chọn thư mục:', err);
           return null;
         }

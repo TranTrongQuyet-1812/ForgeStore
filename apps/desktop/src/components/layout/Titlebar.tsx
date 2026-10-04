@@ -19,6 +19,7 @@ import {
 import { useThemeStore } from '../../stores/useThemeStore';
 import { useNavStore } from '../../stores/useNavStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { confirmDialog } from '../../stores/useDialogStore';
 import { authService } from '../../services/auth/auth-service';
 import { isTauri } from '../../services/auth/token-storage';
 
@@ -258,13 +259,18 @@ export const Titlebar: React.FC = () => {
                 {/* 3. Action Logout */}
                 <div className="p-1.5 pt-0 border-t border-border/60">
                   <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Bạn có chắc chắn muốn đăng xuất khỏi ForgeStore trên thiết bị này?',
-                        )
-                      ) {
-                        setIsUserMenuOpen(false);
+                    onClick={async () => {
+                      setIsUserMenuOpen(false);
+                      const confirmed = await confirmDialog({
+                        title: 'Đăng xuất khỏi ForgeStore',
+                        description:
+                          'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên thiết bị này không? Các ứng dụng yêu thích vẫn được lưu an toàn trên đám mây.',
+                        confirmLabel: 'Đăng xuất',
+                        cancelLabel: 'Hủy',
+                        variant: 'danger',
+                        icon: 'logout',
+                      });
+                      if (confirmed) {
                         authService.logout();
                       }
                     }}
