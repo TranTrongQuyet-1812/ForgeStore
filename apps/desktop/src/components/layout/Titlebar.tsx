@@ -199,61 +199,47 @@ export const Titlebar: React.FC = () => {
               />
             </button>
 
-            {/* User Profile Dropdown Menu (w-72) */}
+            {/* User Profile Dropdown Menu (Raycast / Linear / macOS Account Menu) */}
             {isUserMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 p-2 rounded-2xl bg-surface-elevated border border-border shadow-2xl z-50 animate-fade-in select-none">
-                {/* 1. Header Profile Card */}
-                <div className="p-3 rounded-xl bg-surface/70 border border-border/60 mb-2">
+              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-surface-elevated border border-border shadow-[0_16px_40px_rgba(0,0,0,0.35)] z-50 animate-fade-in select-none overflow-hidden backdrop-blur-xl">
+                {/* 1. Header Profile Info */}
+                <div className="px-3.5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-3">
                     {user.duongDanAvatar && !avatarError ? (
                       <img
                         src={user.duongDanAvatar}
                         alt={user.tenDangNhap}
-                        className="w-10 h-10 rounded-xl object-cover border border-border shrink-0 shadow-2xs"
+                        className="w-9 h-9 rounded-full object-cover ring-1 ring-border shadow-xs shrink-0"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl bg-surface-elevated border border-border flex items-center justify-center text-muted shrink-0 shadow-2xs">
-                        <UserIcon className="w-5 h-5" />
+                      <div className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center text-muted shrink-0 shadow-xs">
+                        <UserIcon className="w-4 h-4" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-primary truncate leading-tight">
+                      <h4 className="text-xs font-bold text-primary truncate leading-tight tracking-tight">
                         {user.tenHienThi || user.tenDangNhap}
                       </h4>
-                      <p className="text-[11px] font-mono text-muted truncate">
-                        @{user.tenDangNhap}
+                      <p
+                        className="text-[11px] text-muted truncate mt-0.5 font-normal"
+                        title={user.thuDienTu || `@${user.tenDangNhap}`}
+                      >
+                        {user.thuDienTu || `@${user.tenDangNhap}`}
                       </p>
-                      {user.thuDienTu && (
-                        <p
-                          className="text-[10px] text-muted/80 truncate mt-0.5"
-                          title={user.thuDienTu}
-                        >
-                          {user.thuDienTu}
-                        </p>
-                      )}
                     </div>
-                  </div>
-
-                  {/* Trạng thái đồng bộ thiết bị */}
-                  <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-between text-[10px]">
-                    <span className="text-muted">Đồng bộ thiết bị</span>
-                    <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Đang hoạt động
-                    </span>
                   </div>
                 </div>
 
                 {/* 2. Quick Navigation Shortcuts */}
-                <div className="space-y-0.5 mb-1.5">
+                <div className="p-1.5 space-y-0.5">
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);
                       navigateTo('favorites');
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
                   >
-                    <Heart className="w-4 h-4 text-muted group-hover:text-rose-500 transition-colors shrink-0" />
+                    <Heart className="w-3.5 h-3.5 text-muted group-hover:text-rose-500 transition-colors shrink-0" />
                     <span className="flex-1">Kho yêu thích của tôi</span>
                   </button>
 
@@ -262,15 +248,15 @@ export const Titlebar: React.FC = () => {
                       setIsUserMenuOpen(false);
                       navigateTo('settings');
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
                   >
-                    <Settings className="w-4 h-4 text-muted group-hover:text-accent-forge transition-colors shrink-0" />
+                    <Settings className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge transition-colors shrink-0" />
                     <span className="flex-1">Cài đặt & Giao diện</span>
                   </button>
                 </div>
 
                 {/* 3. Action Logout */}
-                <div className="pt-1.5 border-t border-border/50">
+                <div className="p-1.5 pt-0 border-t border-border/60">
                   <button
                     onClick={() => {
                       if (
@@ -282,9 +268,9 @@ export const Titlebar: React.FC = () => {
                         authService.logout();
                       }
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-xs font-medium"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 mt-1 rounded-lg text-left hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-xs font-medium group"
                   >
-                    <LogOut className="w-4 h-4 shrink-0" />
+                    <LogOut className="w-3.5 h-3.5 text-rose-500/80 group-hover:text-rose-500 transition-colors shrink-0" />
                     <span>Đăng xuất</span>
                   </button>
                 </div>
