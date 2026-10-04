@@ -68,7 +68,7 @@ export const AuthModal: React.FC = () => {
     >
       <div
         ref={modalRef}
-        className="w-full max-w-[360px] sm:max-w-[380px] rounded-2xl bg-surface-elevated border border-border shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.5)] p-6 sm:p-7 relative overflow-hidden"
+        className="w-full max-w-[380px] rounded-2xl bg-surface-elevated border border-border shadow-2xl p-7 relative overflow-hidden"
       >
         {/* Nút đóng góc phải */}
         <button
@@ -82,43 +82,35 @@ export const AuthModal: React.FC = () => {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Brand Mark Tối Giản */}
-        <div className="w-10 h-10 rounded-xl bg-surface border border-border shadow-xs flex items-center justify-center mx-auto mb-3.5 text-accent-forge">
-          <svg
-            className="w-5 h-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 17 12 22 22 17" />
-            <polyline points="2 12 12 17 22 12" />
-          </svg>
+        {/* Logo chính thức của ForgeStore (đồng bộ với Sidebar) */}
+        <div className="w-13 h-13 rounded-2xl bg-surface border border-border flex items-center justify-center p-2 mx-auto mb-4 shadow-md shadow-black/10 dark:shadow-black/40">
+          <img
+            src="/logo.png"
+            alt="ForgeStore Logo"
+            className="w-full h-full object-contain drop-shadow"
+          />
         </div>
 
-        {/* Tiêu đề & Phụ đề súc tích */}
+        {/* Tiêu đề & Phụ đề */}
         <div className="text-center mb-6">
-          <h2 className="text-lg font-bold text-primary font-display tracking-tight">
+          <h2 className="text-xl font-black font-display text-primary tracking-tight">
             Đăng nhập vào ForgeStore
           </h2>
-          <p className="text-xs text-muted mt-1 leading-normal">
+          <p className="text-xs text-secondary mt-1.5 max-w-[280px] mx-auto leading-relaxed">
             Đồng bộ kho ứng dụng và thiết bị của bạn
           </p>
         </div>
 
-        {/* 2 Nút Đăng nhập Chuẩn Raycast / Linear */}
-        <div className="space-y-2.5">
-          {/* Nút Google */}
+        {/* 2 Nút Đăng nhập Chuẩn SSO cao cấp */}
+        <div className="space-y-3">
+          {/* Nút Google - Nền trắng chữ đen chuẩn Google Identity Brand */}
           <button
             onClick={handleLoginGoogle}
             disabled={loadingProvider !== null}
-            className="w-full h-10.5 px-4 rounded-xl bg-surface hover:bg-surface-hover border border-border hover:border-border-focus flex items-center justify-center gap-2.5 text-xs font-semibold text-primary transition-all duration-150 cursor-pointer shadow-xs active:scale-[0.99] disabled:opacity-60"
+            className="w-full h-11 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 border border-slate-200/80 flex items-center justify-center gap-3 text-xs font-bold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.99] disabled:opacity-60"
           >
             {loadingProvider === 'google' ? (
-              <Loader2 className="w-4 h-4 text-accent-forge animate-spin" />
+              <Loader2 className="w-4 h-4 text-slate-700 animate-spin" />
             ) : (
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -142,16 +134,16 @@ export const AuthModal: React.FC = () => {
             <span>Tiếp tục với Google</span>
           </button>
 
-          {/* Nút GitHub */}
+          {/* Nút GitHub - Chuẩn Dark Slate GitHub #24292F */}
           <button
             onClick={handleLoginGithub}
             disabled={loadingProvider !== null}
-            className="w-full h-10.5 px-4 rounded-xl bg-surface hover:bg-surface-hover border border-border hover:border-border-focus flex items-center justify-center gap-2.5 text-xs font-semibold text-primary transition-all duration-150 cursor-pointer shadow-xs active:scale-[0.99] disabled:opacity-60"
+            className="w-full h-11 px-4 rounded-xl bg-[#24292F] hover:bg-[#1C2128] text-white border border-white/10 flex items-center justify-center gap-3 text-xs font-bold transition-all duration-150 cursor-pointer shadow-sm active:scale-[0.99] disabled:opacity-60"
           >
             {loadingProvider === 'github' ? (
-              <Loader2 className="w-4 h-4 text-accent-forge animate-spin" />
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
             ) : (
-              <svg className="w-4 h-4 fill-current text-primary shrink-0" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 fill-current text-white shrink-0" viewBox="0 0 24 24">
                 <path
                   fillRule="evenodd"
                   clipRule="evenodd"
@@ -163,8 +155,8 @@ export const AuthModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Footer bảo mật kín đáo, không khoe code */}
-        <div className="mt-6 pt-4 border-t border-border/40 text-center flex items-center justify-center gap-1.5 text-[11px] text-muted">
+        {/* Footer bảo mật kín đáo, không có đường kẻ thô cắt ngang */}
+        <div className="mt-6 text-center text-[11px] text-muted flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-muted shrink-0" />
           <span>Xác thực an toàn qua trình duyệt hệ thống</span>
         </div>
