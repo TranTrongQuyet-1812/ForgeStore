@@ -73,6 +73,31 @@ export const TrangThaiThamDinhJev = {
 } as const;
 export type TrangThaiThamDinhJev = (typeof TrangThaiThamDinhJev)[keyof typeof TrangThaiThamDinhJev];
 
+export const TrangThaiDichReadme = {
+  DANG_DICH: 'DANG_DICH',
+  HOAN_TAT: 'HOAN_TAT',
+  THAT_BAI: 'THAT_BAI',
+  DA_CU: 'DA_CU',
+} as const;
+export type TrangThaiDichReadme = (typeof TrangThaiDichReadme)[keyof typeof TrangThaiDichReadme];
+
+export const TrangThaiUngVienRepo = {
+  CHO_SANG_LOC: 'CHO_SANG_LOC',
+  BI_LOAI: 'BI_LOAI',
+  DA_NAP: 'DA_NAP',
+} as const;
+export type TrangThaiUngVienRepo = (typeof TrangThaiUngVienRepo)[keyof typeof TrangThaiUngVienRepo];
+
+export const LyDoLoaiUngVien = {
+  KHONG_CO_BAN_PHAT_HANH: 'KHONG_CO_BAN_PHAT_HANH',
+  KHONG_CO_FILE_CAI: 'KHONG_CO_FILE_CAI',
+  CHI_CO_CAI_CLI: 'CHI_CO_CAI_CLI',
+  DA_LUU_TRU: 'DA_LUU_TRU',
+  GIAY_PHEP_KHONG_MO: 'GIAY_PHEP_KHONG_MO',
+  LOI_KHI_SANG_LOC: 'LOI_KHI_SANG_LOC',
+} as const;
+export type LyDoLoaiUngVien = (typeof LyDoLoaiUngVien)[keyof typeof LyDoLoaiUngVien];
+
 export const NhomCachCai = {
   WINGET: 'WINGET',
   SCOOP: 'SCOOP',

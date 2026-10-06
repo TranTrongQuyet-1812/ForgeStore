@@ -99,7 +99,16 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
         count: vi.fn(),
-        update: vi.fn(),
+        update: vi
+          .fn()
+          .mockImplementation(
+            (args: { where?: { maUngDung?: string }; data?: Record<string, unknown> }) =>
+              Promise.resolve({
+                maUngDung: args?.where?.maUngDung || 'app-uuid-rustdesk',
+                tenRepoDayDu: 'rustdesk/rustdesk',
+                ...args?.data,
+              }),
+          ),
         groupBy: vi.fn(),
       },
       phanTichAI: {
@@ -109,8 +118,8 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       },
       banPhatHanh: {
         upsert: vi.fn(),
-        deleteMany: vi.fn(),
-        findMany: vi.fn(),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        findMany: vi.fn().mockResolvedValue([]),
         update: vi.fn(),
       },
       tepCaiDat: {
@@ -1677,6 +1686,156 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       // Khi tải README lỗi, KHÔNG ĐƯỢC update phanTichAI với khongCoHuongDan: true!
       expect(mockPrisma.phanTichAI.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Task P3B-03: Tính Sẵn Thịnh Hành & Tối Ưu Truy Vấn CSDL (P3B-03.1 -> P3B-03.5)', () => {
+    it('dongBoRepo lấy 15 releases và dọn dẹp các bản phát hành vượt quá 15 bản (P3B-03.5)', async () => {
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        id: 111,
+        name: 'test-app',
+        full_name: 'test/test-app',
+        owner: { login: 'test', avatar_url: null },
+        html_url: 'https://github.com/test/test-app',
+        description: 'Test application',
+        stargazers_count: 500,
+        forks_count: 50,
+        topics: ['utility'],
+      });
+
+      mockGithubService.layDanhSachRelease.mockResolvedValueOnce([
+        {
+          id: 1,
+          tag_name: 'v1.0.0',
+          name: 'v1.0.0',
+          published_at: new Date().toISOString(),
+          assets: [
+            {
+              id: 101,
+              name: 'app-setup.exe',
+              browser_download_url: 'https://github.com/.../app-setup.exe',
+              size: 1000000,
+            },
+          ],
+        },
+      ]);
+
+      mockPrisma.ungDung.upsert.mockResolvedValueOnce({
+        maUngDung: 'app-uuid-15',
+        tenRepoDayDu: 'test/test-app',
+      });
+
+      mockPrisma.banPhatHanh.upsert.mockResolvedValueOnce({
+        maPhatHanh: 'rel-1',
+        maUngDung: 'app-uuid-15',
+        tenPhienBan: 'v1.0.0',
+      });
+
+      // Giả lập DB có 2 bản phát hành cũ vượt quá 15 bản
+      mockPrisma.banPhatHanh.findMany
+        .mockResolvedValueOnce([{ maPhatHanh: 'excess-1' }, { maPhatHanh: 'excess-2' }]) // lần gọi skip: 15
+        .mockResolvedValueOnce([
+          {
+            maPhatHanh: 'rel-1',
+            tenPhienBan: 'v1.0.0',
+            ngayPhatHanh: new Date(),
+            laBanThuNghiem: false,
+            danhSachTepCaiDat: [
+              {
+                dinhDangTep: DinhDangTep.EXE,
+                kienTrucChip: KienTrucChip.X86_64,
+              },
+            ],
+          },
+        ]); // lần gọi lấy 15 bản mới nhất để tính toán
+
+      vi.spyOn(service, 'layChiTietApp').mockResolvedValueOnce({
+        maUngDung: 'app-uuid-15',
+        tenRepoDayDu: 'test/test-app',
+      } as unknown as UngDungChiTietDto);
+
+      await service.dongBoRepo('test', 'test-app');
+
+      // Xác nhận lấy đúng 15 releases từ GitHub
+      expect(mockGithubService.layDanhSachRelease).toHaveBeenCalledWith('test', 'test-app', 15);
+
+      // Xác nhận xóa các bản phát hành vượt quá 15 bản
+      expect(mockPrisma.tepCaiDat.deleteMany).toHaveBeenCalledWith({
+        where: { maPhatHanh: { in: ['excess-1', 'excess-2'] } },
+      });
+      expect(mockPrisma.banPhatHanh.deleteMany).toHaveBeenCalledWith({
+        where: { maPhatHanh: { in: ['excess-1', 'excess-2'] } },
+      });
+
+      // Xác nhận tính sẵn và lưu các cột D-19 vào CSDL
+      expect(mockPrisma.ungDung.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { maUngDung: 'app-uuid-15' },
+          data: expect.objectContaining({
+            banMoiNhatWindows: 'v1.0.0',
+            dinhDangCoSan: [DinhDangTep.EXE],
+            kienTrucCoSan: [KienTrucChip.X86_64],
+            diemThinhHanh: expect.any(Number),
+          }),
+        }),
+      );
+    });
+
+    it('layDanhSachApps đẩy trực tiếp orderBy diemThinhHanh xuống PostgreSQL và đọc từ cột tính sẵn (P3B-03.3, P3B-03.4)', async () => {
+      mockCacheService.lay.mockResolvedValueOnce(null);
+
+      const mockAppCalculated = {
+        maUngDung: 'app-calc-1',
+        tenRepoDayDu: 'fast/app',
+        chuSoHuu: 'fast',
+        tenKhoChua: 'app',
+        duongDanGithub: 'https://github.com/fast/app',
+        duongDanIcon: null,
+        soSaoGithub: 2000,
+        danhMucChinh: 'Tiện ích hệ thống',
+        nenTangHoTro: NenTangHoTro.WINDOWS,
+        duocNoiBat: false,
+        daXacMinh: true,
+        tenGoiAndroid: null,
+        dongBoLanCuoi: new Date(),
+        diemThinhHanh: 12.5,
+        banMoiNhatWindows: 'v3.2.1',
+        banMoiNhatAndroid: null,
+        dinhDangCoSan: [DinhDangTep.EXE, DinhDangTep.MSI],
+        kienTrucCoSan: [KienTrucChip.X86_64],
+        phanTichAI: {
+          khauHieuTiengViet: 'App tối ưu cực nhanh',
+          diemUyTin: 98,
+          mucDoAnToan: 'AN_TOAN_TUYET_DOI',
+        },
+      };
+
+      mockPrisma.ungDung.findMany.mockResolvedValueOnce([mockAppCalculated]);
+      mockPrisma.ungDung.count.mockResolvedValueOnce(1);
+
+      const res = await service.layDanhSachApps({
+        sort: AppSortOption.TRENDING,
+        platform: PlatformFilter.WINDOWS,
+        page: 1,
+        limit: 20,
+      });
+
+      // Kiểm tra findMany được gọi trực tiếp với orderBy diemThinhHanh
+      expect(mockPrisma.ungDung.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ diemThinhHanh: 'desc' }, { soSaoGithub: 'desc' }],
+          skip: 0,
+          take: 20,
+        }),
+      );
+
+      // Kiểm tra kết quả map chính xác từ các cột tính sẵn mà không cần join release
+      expect(res.duLieu).toHaveLength(1);
+      const app = res.duLieu[0];
+      expect(app.phienBanMoiNhat).toBe('v3.2.1');
+      expect(app.dinhDangCoSan).toEqual(['EXE', 'MSI']);
+      expect(app.kienTrucCoSan).toEqual(['x64']);
+      expect(app.khauHieuTiengViet).toBe('App tối ưu cực nhanh');
     });
   });
 });

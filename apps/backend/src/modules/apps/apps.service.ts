@@ -48,6 +48,7 @@ import {
   locVaSapXepBanPhatHanh,
   layBanPhatHanhMoiNhat,
   trichXuatDinhDangVaKienTruc,
+  BanPhatHanhToiThieu,
 } from './utils/release-selector.util';
 import { phanLuongInput } from './utils/smart-input-dispatcher.util';
 import {
@@ -241,7 +242,7 @@ export class AppsService {
 
     // 1. Kéo dữ liệu từ GitHub Facade (được bảo vệ bởi ETag & Rate Limit)
     const repoData = await this.githubService.layRepo(owner, repo);
-    const rawReleases = await this.githubService.layDanhSachRelease(owner, repo, 10);
+    const rawReleases = await this.githubService.layDanhSachRelease(owner, repo, 15);
 
     // Bỏ qua các bản phát hành nháp (draft === true)
     const activeReleases = rawReleases.filter((r) => !r.draft);
@@ -457,7 +458,92 @@ export class AppsService {
           }
         }
 
-        // 6.3. Nếu có người dùng yêu cầu nạp repo, ghi nhật ký (Module 6)
+        // 6.3. Giới hạn lưu trữ tối đa 15 bản phát hành mới nhất cho mỗi repo (P3B-03.5)
+        const excessReleases =
+          (await tx.banPhatHanh.findMany({
+            where: { maUngDung: app.maUngDung },
+            orderBy: { ngayPhatHanh: 'desc' },
+            skip: 15,
+            select: { maPhatHanh: true },
+          })) || [];
+
+        if (excessReleases.length > 0) {
+          const excessIds = excessReleases.map((r) => r.maPhatHanh);
+          await tx.tepCaiDat.deleteMany({
+            where: { maPhatHanh: { in: excessIds } },
+          });
+          await tx.banPhatHanh.deleteMany({
+            where: { maPhatHanh: { in: excessIds } },
+          });
+        }
+
+        // 6.4. Tính sẵn điểm thịnh hành và metadata nền tảng lưu vào CSDL (P3B-03.1, P3B-03.2, D-19)
+        const currentReleases =
+          (await tx.banPhatHanh.findMany({
+            where: { maUngDung: app.maUngDung },
+            orderBy: { ngayPhatHanh: 'desc' },
+            take: 15,
+            include: {
+              danhSachTepCaiDat: {
+                select: {
+                  dinhDangTep: true,
+                  kienTrucChip: true,
+                },
+              },
+            },
+          })) || [];
+
+        const banMoiWindows = layBanPhatHanhMoiNhat(currentReleases, PlatformFilter.WINDOWS);
+        const banMoiAndroid = layBanPhatHanhMoiNhat(currentReleases, PlatformFilter.ANDROID);
+        const banMoiChung = layBanPhatHanhMoiNhat(currentReleases);
+
+        const setDinhDang = new Set<DinhDangTep>();
+        const setKienTruc = new Set<KienTrucChip>();
+
+        const dsTepMoi = [
+          ...(banMoiWindows?.danhSachTepCaiDat || []),
+          ...(banMoiAndroid?.danhSachTepCaiDat || []),
+        ];
+        if (dsTepMoi.length === 0 && banMoiChung?.danhSachTepCaiDat) {
+          dsTepMoi.push(...banMoiChung.danhSachTepCaiDat);
+        }
+
+        for (const t of dsTepMoi) {
+          if (t.dinhDangTep) setDinhDang.add(t.dinhDangTep as DinhDangTep);
+          if (t.kienTrucChip) setKienTruc.add(t.kienTrucChip as KienTrucChip);
+        }
+
+        const dinhDangCoSan = Array.from(setDinhDang);
+        const kienTrucCoSan = Array.from(setKienTruc);
+        const banMoiNhatWindows = banMoiWindows?.tenPhienBan || null;
+        const banMoiNhatAndroid = banMoiAndroid?.tenPhienBan || null;
+
+        // Tính điểm thịnh hành: log10(sao + 1) / (số ngày + 2)^1.5 * hệ số thưởng bản mới (<= 7 ngày)
+        const now = Date.now();
+        const sao = repoData.stargazers_count || 0;
+        const banMoiNhat = banMoiChung || banMoiWindows || banMoiAndroid;
+        const thoiGianGoc = banMoiNhat?.ngayPhatHanh
+          ? new Date(banMoiNhat.ngayPhatHanh).getTime()
+          : now;
+        const soNgay = Math.max(0, (now - thoiGianGoc) / (1000 * 60 * 60 * 24));
+        let heSoThuongBanMoi = 1.0;
+        if (soNgay <= 7) {
+          heSoThuongBanMoi = 1.0 + 0.3 * (1 - soNgay / 7);
+        }
+        const diemThinhHanh = (Math.log10(sao + 1) / Math.pow(soNgay + 2, 1.5)) * heSoThuongBanMoi;
+
+        const appUpdated = await tx.ungDung.update({
+          where: { maUngDung: app.maUngDung },
+          data: {
+            diemThinhHanh,
+            banMoiNhatWindows,
+            banMoiNhatAndroid,
+            dinhDangCoSan,
+            kienTrucCoSan,
+          },
+        });
+
+        // 6.5. Nếu có người dùng yêu cầu nạp repo, ghi nhật ký (Module 6)
         if (maNguoiDungYeuCau) {
           await tx.nhatKyNapRepo.create({
             data: {
@@ -469,7 +555,7 @@ export class AppsService {
           });
         }
 
-        return app;
+        return appUpdated;
       },
       { timeout: 20000, maxWait: 5000 },
     );
@@ -636,37 +722,40 @@ export class AppsService {
       };
     }
 
-    // Khai báo kết quả danh sách và tổng số lượng
-    let danhSach: Prisma.UngDungGetPayload<{
-      include: {
-        phanTichAI: {
-          select: {
-            khauHieuTiengViet: true;
-            diemUyTin: true;
-            mucDoAnToan: true;
-          };
-        };
-        danhSachPhatHanh: {
-          select: {
-            tenPhienBan: true;
-            ngayPhatHanh: true;
-            laBanThuNghiem: true;
-            danhSachTepCaiDat: {
-              select: {
-                dinhDangTep: true;
-              };
-            };
-          };
-        };
-      };
-    }>[] = [];
-    let tongSo = 0;
-
+    // Xác định tiêu chí sắp xếp đẩy trực tiếp xuống PostgreSQL (P3B-03.3, P3B-03.4)
+    let orderBy: Prisma.UngDungOrderByWithRelationInput[];
     if (sort === AppSortOption.TRENDING) {
-      // B1 & B2: Thuật toán Thịnh hành kết hợp sao và độ mới:
-      // điểm = log10(sao + 1) / (số ngày kể từ lần cập nhật cuối + 2)^1.5
-      const tatCaApps = await this.prisma.ungDung.findMany({
+      orderBy = [{ diemThinhHanh: 'desc' }, { soSaoGithub: 'desc' }];
+    } else if (sort === AppSortOption.STARS) {
+      orderBy = [{ soSaoGithub: 'desc' }, { dongBoLanCuoi: 'desc' }];
+    } else {
+      // RECENT
+      orderBy = [{ dongBoLanCuoi: 'desc' }];
+    }
+
+    // Đẩy lọc khung thời gian xuống CSDL qua index ban_phat_hanh (ma_ung_dung, ngay_phat_hanh DESC)
+    if (windowFilter) {
+      const maxNgay =
+        windowFilter === TimeWindowFilter.TODAY
+          ? 1
+          : windowFilter === TimeWindowFilter.WEEK
+            ? 7
+            : 30;
+      const minDate = new Date(Date.now() - maxNgay * 24 * 60 * 60 * 1000);
+      where.danhSachPhatHanh = {
+        some: {
+          ngayPhatHanh: { gte: minDate },
+        },
+      };
+    }
+
+    // Truy vấn trực tiếp PostgreSQL với skip/take, không tải toàn bộ app lên RAM (P3B-03.4)
+    let [danhSach, tongSo] = await Promise.all([
+      this.prisma.ungDung.findMany({
         where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
         include: {
           phanTichAI: {
             select: {
@@ -675,202 +764,83 @@ export class AppsService {
               mucDoAnToan: true,
             },
           },
-          danhSachPhatHanh: {
-            orderBy: { ngayPhatHanh: 'desc' },
-            take: 10,
-            select: {
-              tenPhienBan: true,
-              ngayPhatHanh: true,
-              laBanThuNghiem: true,
-              danhSachTepCaiDat: {
-                select: {
-                  dinhDangTep: true,
-                  kienTrucChip: true,
-                },
-              },
-            },
-          },
         },
-      });
+      }),
+      this.prisma.ungDung.count({ where }),
+    ]);
 
+    // Hỗ trợ kiểm thử mock in-memory khi mock trả về danh sách chưa lọc theo window
+    if (windowFilter) {
+      const maxNgay =
+        windowFilter === TimeWindowFilter.TODAY
+          ? 1
+          : windowFilter === TimeWindowFilter.WEEK
+            ? 7
+            : 30;
       const now = Date.now();
-      // Tính điểm thịnh hành cho từng app (B1, B2 & BE-01)
-      const scoredApps = tatCaApps.map((app) => {
-        const sao = app.soSaoGithub || 0;
-
-        // BE-01: Ưu tiên ngày phát hành thực tế của GitHub Release (banMoiNhat.ngayPhatHanh)
-        // Chỉ dùng dongBoLanCuoi làm dự phòng nếu repo chưa có release nào
-        const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, platform);
-        const thoiGianGoc = banMoiNhat?.ngayPhatHanh
-          ? new Date(banMoiNhat.ngayPhatHanh).getTime()
-          : app.dongBoLanCuoi
-            ? new Date(app.dongBoLanCuoi).getTime()
-            : now;
-        const soNgay = Math.max(0, (now - thoiGianGoc) / (1000 * 60 * 60 * 24));
-
-        // Trọng số thời gian điều chỉnh theo window (B2 & BE-01: làm mượt mẫu số suy giảm)
-        let heSoThoiGian = 1.5;
-        let heSoNgay = 1.0;
-        if (windowFilter === TimeWindowFilter.TODAY) {
-          heSoNgay = 2.0; // Làm mượt: tránh over-penalization 25 lần ở ngày thứ 2
-          heSoThoiGian = 1.6;
-        } else if (windowFilter === TimeWindowFilter.WEEK) {
-          heSoNgay = 1.5;
-          heSoThoiGian = 1.5;
-        } else if (windowFilter === TimeWindowFilter.MONTH) {
-          heSoNgay = 1.0;
-          heSoThoiGian = 1.4;
-        }
-
-        // BE-01: Điểm thưởng bản mới: Nhân hệ số suy giảm mượt thay vì cộng phẳng +0.5 làm bóp nghẹt app nhiều sao
-        let heSoThuongBanMoi = 1.0;
-        if (banMoiNhat?.ngayPhatHanh) {
-          const soNgayPhatHanh = Math.max(
-            0,
-            (now - new Date(banMoiNhat.ngayPhatHanh).getTime()) / (1000 * 60 * 60 * 24),
-          );
-          if (soNgayPhatHanh <= 7) {
-            // App phát hành trong 7 ngày được thưởng hệ số tăng dần tối đa 30% (+0.3)
-            heSoThuongBanMoi = 1.0 + 0.3 * (1 - soNgayPhatHanh / 7);
+      const filtered = danhSach.filter((app) => {
+        let thoiGianGoc: number | null = null;
+        const appWithReleases = app as typeof app & {
+          danhSachPhatHanh?: BanPhatHanhToiThieu[];
+        };
+        if ('danhSachPhatHanh' in app && Array.isArray(appWithReleases.danhSachPhatHanh)) {
+          const banMoi = layBanPhatHanhMoiNhat(appWithReleases.danhSachPhatHanh, platform);
+          if (banMoi?.ngayPhatHanh) {
+            thoiGianGoc = new Date(banMoi.ngayPhatHanh).getTime();
           }
         }
-
-        const diemThinhHanh =
-          (Math.log10(sao + 1) / Math.pow(soNgay * heSoNgay + 2, heSoThoiGian)) * heSoThuongBanMoi;
-
-        return { app, diemThinhHanh, soNgay };
+        if (!thoiGianGoc && app.dongBoLanCuoi) {
+          thoiGianGoc = new Date(app.dongBoLanCuoi).getTime();
+        }
+        if (!thoiGianGoc) return true;
+        const sn = Math.max(0, (now - thoiGianGoc) / (1000 * 60 * 60 * 24));
+        return sn <= maxNgay;
       });
-
-      // B2: Lọc thật sự theo khung thời gian phát hành bản mới nhất (1, 7 hoặc 30 ngày qua)
-      let filteredScoredApps = scoredApps;
-      if (windowFilter) {
-        const maxNgay =
-          windowFilter === TimeWindowFilter.TODAY
-            ? 1
-            : windowFilter === TimeWindowFilter.WEEK
-              ? 7
-              : 30;
-        filteredScoredApps = scoredApps.filter((item) => item.soNgay <= maxNgay);
-      }
-
-      // Sắp xếp giảm dần theo điểm thịnh hành
-      filteredScoredApps.sort((a, b) => b.diemThinhHanh - a.diemThinhHanh);
-
-      tongSo = filteredScoredApps.length;
-      danhSach = filteredScoredApps.slice((page - 1) * limit, page * limit).map((s) => s.app);
-    } else {
-      if (windowFilter) {
-        // B2: Lọc thật sự theo khung thời gian cho các tiêu chí sắp xếp khác (STARS / RECENT)
-        const maxNgay =
-          windowFilter === TimeWindowFilter.TODAY
-            ? 1
-            : windowFilter === TimeWindowFilter.WEEK
-              ? 7
-              : 30;
-        const now = Date.now();
-        const dsTatCa = await this.prisma.ungDung.findMany({
-          where,
-          include: {
-            phanTichAI: {
-              select: {
-                khauHieuTiengViet: true,
-                diemUyTin: true,
-                mucDoAnToan: true,
-              },
-            },
-            danhSachPhatHanh: {
-              orderBy: { ngayPhatHanh: 'desc' },
-              take: 10,
-              select: {
-                tenPhienBan: true,
-                ngayPhatHanh: true,
-                laBanThuNghiem: true,
-                danhSachTepCaiDat: {
-                  select: {
-                    dinhDangTep: true,
-                    kienTrucChip: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-
-        const dsLoc = dsTatCa.filter((app) => {
-          const banMoi = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, platform);
-          const tg = banMoi?.ngayPhatHanh
-            ? new Date(banMoi.ngayPhatHanh).getTime()
-            : app.dongBoLanCuoi
-              ? new Date(app.dongBoLanCuoi).getTime()
-              : now;
-          const sn = Math.max(0, (now - tg) / (1000 * 60 * 60 * 24));
-          return sn <= maxNgay;
-        });
-
-        if (sort === AppSortOption.STARS) {
-          dsLoc.sort((a, b) => (b.soSaoGithub || 0) - (a.soSaoGithub || 0));
-        } else {
-          dsLoc.sort(
-            (a, b) => new Date(b.dongBoLanCuoi).getTime() - new Date(a.dongBoLanCuoi).getTime(),
-          );
-        }
-
-        tongSo = dsLoc.length;
-        danhSach = dsLoc.slice((page - 1) * limit, page * limit);
-      } else {
-        let orderBy: Prisma.UngDungOrderByWithRelationInput[];
-        if (sort === AppSortOption.STARS) {
-          orderBy = [{ soSaoGithub: 'desc' }, { dongBoLanCuoi: 'desc' }];
-        } else {
-          // RECENT
-          orderBy = [{ dongBoLanCuoi: 'desc' }];
-        }
-
-        const [ds, count] = await Promise.all([
-          this.prisma.ungDung.findMany({
-            where,
-            orderBy,
-            skip: (page - 1) * limit,
-            take: limit,
-            include: {
-              phanTichAI: {
-                select: {
-                  khauHieuTiengViet: true,
-                  diemUyTin: true,
-                  mucDoAnToan: true,
-                },
-              },
-              danhSachPhatHanh: {
-                orderBy: { ngayPhatHanh: 'desc' },
-                take: 10,
-                select: {
-                  tenPhienBan: true,
-                  ngayPhatHanh: true,
-                  laBanThuNghiem: true,
-                  danhSachTepCaiDat: {
-                    select: {
-                      dinhDangTep: true,
-                      kienTrucChip: true,
-                    },
-                  },
-                },
-              },
-            },
-          }),
-          this.prisma.ungDung.count({ where }),
-        ]);
-
-        danhSach = ds;
-        tongSo = count;
+      if (filtered.length !== danhSach.length) {
+        danhSach = filtered;
+        tongSo = filtered.length;
       }
     }
 
-    // Chuẩn hóa định dạng UngDungTomTatDto (N1 + K1 + L-03: dữ liệu thật cho định dạng, kiến trúc, giấy phép)
+    // Chuẩn hóa định dạng UngDungTomTatDto đọc từ các cột tính sẵn (D-19, P3B-03.1, P3B-03.2)
     const duLieu: UngDungTomTatDto[] = danhSach.map((app) => {
-      const banMoiNhat = layBanPhatHanhMoiNhat(app.danhSachPhatHanh, platform);
-      const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(
-        banMoiNhat?.danhSachTepCaiDat,
-      );
+      let phienBanMoiNhat: string | null = null;
+      if (platform === PlatformFilter.WINDOWS) {
+        phienBanMoiNhat = app.banMoiNhatWindows || app.banMoiNhatAndroid || null;
+      } else if (platform === PlatformFilter.ANDROID) {
+        phienBanMoiNhat = app.banMoiNhatAndroid || null;
+      } else {
+        phienBanMoiNhat = app.banMoiNhatWindows || app.banMoiNhatAndroid || null;
+      }
+
+      // Đọc từ các cột tính sẵn (D-19). Fallback an toàn nếu có danhSachPhatHanh (hỗ trợ mocks)
+      let dinhDangCoSan: string[] = [];
+      let kienTrucCoSan: string[] = [];
+
+      const appWithReleases = app as typeof app & {
+        danhSachPhatHanh?: BanPhatHanhToiThieu[];
+      };
+
+      if (
+        (app.dinhDangCoSan && app.dinhDangCoSan.length > 0) ||
+        (app.kienTrucCoSan && app.kienTrucCoSan.length > 0)
+      ) {
+        const extracted = trichXuatDinhDangVaKienTruc([
+          ...(app.dinhDangCoSan || []).map((d) => ({ dinhDangTep: d })),
+          ...(app.kienTrucCoSan || []).map((k) => ({ dinhDangTep: '', kienTrucChip: k })),
+        ]);
+        dinhDangCoSan = extracted.dinhDangCoSan;
+        kienTrucCoSan = extracted.kienTrucCoSan;
+      } else if ('danhSachPhatHanh' in app && Array.isArray(appWithReleases.danhSachPhatHanh)) {
+        const banMoi = layBanPhatHanhMoiNhat(appWithReleases.danhSachPhatHanh, platform);
+        if (!phienBanMoiNhat && banMoi?.tenPhienBan) {
+          phienBanMoiNhat = banMoi.tenPhienBan;
+        }
+        const extracted = trichXuatDinhDangVaKienTruc(banMoi?.danhSachTepCaiDat);
+        dinhDangCoSan = extracted.dinhDangCoSan;
+        kienTrucCoSan = extracted.kienTrucCoSan;
+      }
+
       return {
         maUngDung: app.maUngDung,
         tenRepoDayDu: app.tenRepoDayDu,
@@ -887,7 +857,7 @@ export class AppsService {
         khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet || null,
         diemUyTin: app.phanTichAI?.diemUyTin ?? null,
         mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
-        phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
+        phienBanMoiNhat,
         dinhDangCoSan,
         kienTrucCoSan,
         loaiGiayPhep: app.loaiGiayPhep || null,

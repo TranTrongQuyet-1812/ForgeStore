@@ -68,6 +68,28 @@ enum TrangThaiThamDinhJev {
   CHUA_THAM_DINH
 }
 
+enum TrangThaiDichReadme {
+  DANG_DICH
+  HOAN_TAT
+  THAT_BAI
+  DA_CU
+}
+
+enum TrangThaiUngVienRepo {
+  CHO_SANG_LOC
+  BI_LOAI
+  DA_NAP
+}
+
+enum LyDoLoaiUngVien {
+  KHONG_CO_BAN_PHAT_HANH
+  KHONG_CO_FILE_CAI
+  CHI_CO_CAI_CLI
+  DA_LUU_TRU
+  GIAY_PHEP_KHONG_MO
+  LOI_KHI_SANG_LOC
+}
+
 // =============================================================
 // 11 BẢNG DỮ LIỆU THUẦN VIỆT
 // =============================================================
@@ -163,6 +185,27 @@ model UngDung {
   daXacMinh         Boolean           @default(false) @map("da_xac_minh")
   tenGoiAndroid     String?           @map("ten_goi_android") // Package name Android (VD: org.videolan.vlc - D-13)
   trangThai         String            @default("HOAT_DONG") @map("trang_thai")
+
+  // Bản dịch mô tả (D-17)
+  moTaVi            String?           @map("mo_ta_vi") @db.Text
+  maBamMoTa         String?           @map("ma_bam_mo_ta")
+
+  // Cột tính sẵn (D-19)
+  diemThinhHanh     Float             @default(0) @map("diem_thinh_hanh")
+  banMoiNhatWindows String?           @map("ban_moi_nhat_windows")
+  banMoiNhatAndroid String?           @map("ban_moi_nhat_android")
+  dinhDangCoSan     DinhDangTep[]     @default([]) @map("dinh_dang_co_san")
+  kienTrucCoSan     KienTrucChip[]    @default([]) @map("kien_truc_co_san")
+
+  // Phát hiện thay đổi (D-18)
+  pushedAt          DateTime?         @map("pushed_at")
+  readmeSha         String?           @map("readme_sha")
+  etagRepo          String?           @map("etag_repo")
+  etagReleases      String?           @map("etag_releases")
+  etagReadme        String?           @map("etag_readme")
+  lanKiemTiepTheo   DateTime?         @map("lan_kiem_tiep_theo")
+  mucDoNong         String            @default("BINH_THUONG") @map("muc_do_nong")
+
   dongBoLanCuoi     DateTime          @default(now()) @map("dong_bo_lan_cuoi")
   ngayTao           DateTime          @default(now()) @map("ngay_tao")
   ngayCapNhat       DateTime          @updatedAt @map("ngay_cap_nhat")
@@ -170,6 +213,7 @@ model UngDung {
   // Quan hệ nghiệp vụ
   phanTichAI        PhanTichAI?
   danhSachPhatHanh  BanPhatHanh[]
+  danhSachBanDichReadme BanDichReadme[]
   danhSachYeuThich  KhoYeuThich[]
   danhSachDaCai     UngDungDaCai[]
   danhSachDanhGia   DanhGiaUngDung[]
@@ -179,6 +223,9 @@ model UngDung {
   @@index([nenTangHoTro, duocNoiBat])
   @@index([soSaoGithub(sort: Desc)])
   @@index([tenGoiAndroid])
+  @@index([diemThinhHanh(sort: Desc)])
+  @@index([nenTangHoTro, danhMucChinh, diemThinhHanh(sort: Desc)])
+  @@index([trangThai, lanKiemTiepTheo])
   @@map("ung_dung")
 }
 
@@ -188,8 +235,8 @@ model UngDung {
 model PhanTichAI {
   maPhanTich          String          @id @default(uuid()) @map("ma_phan_tich") @db.Uuid
   maUngDung           String          @unique @map("ma_ung_dung") @db.Uuid
-  khauHieuTiengViet   String          @map("khau_hieu_tieng_viet") // Gemini Slogan
-  tomTatTinhNangVi    String          @map("tom_tat_tinh_nang_vi") @db.Text // Gemini 3 bullet points
+  khauHieuTiengViet   String          @map("khau_hieu_tieng_viet") // Gemini Slogan (lấy từ moTaVi - D-17)
+  tomTatTinhNangVi    String?         @map("tom_tat_tinh_nang_vi") @db.Text // Không dùng nữa (D-17) - giữ nguyên dữ liệu cũ
   diemUyTin           Int             @default(80) @map("diem_uy_tin") // Bộ luật + Jev (0 - 100)
   mucDoAnToan         MucDoUyTin      @default(AN_TOAN_CAO) @map("muc_do_an_toan") // Khớp logic: 80 thuộc AN_TOAN_CAO
   daThamDinhJev       Boolean              @default(false) @map("da_tham_dinh_jev") // false = chỉ có điểm từ bộ luật dự phòng hoặc không cần thiết (tương thích ngược)
@@ -201,7 +248,7 @@ model PhanTichAI {
   
   // Vector 768 chiều phục vụ tìm kiếm ý định tự nhiên với PostgreSQL pgvector
   vectorNguNghia      Unsupported("vector(768)")? @map("vector_ngu_nghia")
-  moHinhTomTat        String?         @map("mo_hinh_tom_tat") // D-15: Gemini / NVIDIA NIM / DU_PHONG
+  moHinhTomTat        String?         @map("mo_hinh_tom_tat") // D-15: Gemini / NVIDIA NIM / DU_PHONG (không dùng nữa - D-17)
   thoiGianPhanTich    DateTime        @default(now()) @map("thoi_gian_phan_tich")
   ngayTao             DateTime        @default(now()) @map("ngay_tao")
   ngayCapNhat         DateTime        @updatedAt @map("ngay_cap_nhat")
@@ -222,7 +269,8 @@ model BanPhatHanh {
   tenPhienBan         String          @map("ten_phien_ban") // VD: "v1.2.4"
   tieuDePhatHanh      String?         @map("tieu_de_phat_hanh")
   nhatKyThayDoiGoc    String?         @map("nhat_ky_thay_doi_goc") @db.Text
-  tomTatNangCapVi     String?         @map("tom_tat_nang_cap_vi") @db.Text // Gemini tóm tắt cập nhật
+  nhatKyThayDoiVi     String?         @map("nhat_ky_thay_doi_vi") @db.Text // Changelog dịch tiếng Việt (D-17)
+  tomTatNangCapVi     String?         @map("tom_tat_nang_cap_vi") @db.Text // Gemini tóm tắt cập nhật (không dùng nữa - D-17)
   laBanThuNghiem      Boolean         @default(false) @map("la_ban_thu_nghiem")
   ngayPhatHanh        DateTime        @map("ngay_phat_hanh")
   ngayTao             DateTime        @default(now()) @map("ngay_tao")
@@ -349,3 +397,54 @@ model NhatKyNapRepo {
   @@index([maUngDungTaoRa])
   @@map("nhat_ky_nap_repo")
 }
+
+// -------------------------------------------------------------
+// BẢNG 12: BẢN DỊCH README (APP README TRANSLATIONS - P3B)
+// -------------------------------------------------------------
+model BanDichReadme {
+  maBanDich         String              @id @default(uuid()) @map("ma_ban_dich") @db.Uuid
+  maUngDung         String              @map("ma_ung_dung") @db.Uuid
+  ngonNgu           String              @default("vi") @map("ngon_ngu")
+  readmeSha         String              @map("readme_sha")
+  noiDungDich       String              @map("noi_dung_dich") @db.Text
+  moHinhDich        String              @map("mo_hinh_dich")
+  trangThai         TrangThaiDichReadme @default(HOAN_TAT) @map("trang_thai")
+  thoiGianDich      DateTime            @default(now()) @map("thoi_gian_dich")
+
+  ungDung           UngDung             @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
+
+  @@unique([maUngDung, ngonNgu])
+  @@map("ban_dich_readme")
+}
+
+// -------------------------------------------------------------
+// BẢNG 13: BỘ NHỚ DỊCH DÙNG CHUNG (SHARED TRANSLATION MEMORY - P3B)
+// -------------------------------------------------------------
+model BoNhoDichChung {
+  maBam             String              @map("ma_bam") // MD5 / SHA-256 đoạn gốc
+  ngonNgu           String              @default("vi") @map("ngon_ngu")
+  doanGoc           String              @map("doan_goc") @db.Text
+  doanDich          String              @map("doan_dich") @db.Text
+  moHinhDich        String              @map("mo_hinh_dich")
+  ngayTao           DateTime            @default(now()) @map("ngay_tao")
+
+  @@id([maBam, ngonNgu])
+  @@map("bo_nho_dich_chung")
+}
+
+// -------------------------------------------------------------
+// BẢNG 14: HÀNG ĐỢI ỨNG VIÊN REPO (INGESTION QUEUE - P3B)
+// -------------------------------------------------------------
+model UngVienRepo {
+  maUngVien         String               @id @default(uuid()) @map("ma_ung_vien") @db.Uuid
+  tenRepoDayDu      String               @unique @map("ten_repo_day_du")
+  nguonKhamPha      String               @map("nguon_kham_pha")
+  trangThai         TrangThaiUngVienRepo @default(CHO_SANG_LOC) @map("trang_thai")
+  lyDoLoai          LyDoLoaiUngVien?     @map("ly_do_loai")
+  ngayTao           DateTime             @default(now()) @map("ngay_tao")
+  ngayCapNhat       DateTime             @updatedAt @map("ngay_cap_nhat")
+
+  @@index([trangThai, ngayTao(sort: Asc)])
+  @@map("ung_vien_repo")
+}
+

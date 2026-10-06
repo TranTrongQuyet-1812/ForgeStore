@@ -6,6 +6,7 @@ import type {
   TrangThaiThamDinhJev,
 } from '../enums.js';
 import type { HuongDanCaiDatDto } from './huong-dan-cli.dto.js';
+import type { BanDichReadmeDto } from './ban-dich.dto.js';
 
 /**
  * Mục chi tiết cảnh báo / điểm trừ trong Trust Score.
@@ -27,14 +28,14 @@ export interface PhanTichAiDto {
   maPhanTich?: string;
   maUngDung?: string;
   khauHieuTiengViet: string; // Slogan Gemini tiếng Việt
-  tomTatTinhNangVi: string; // 3 gạch đầu dòng tiếng Việt
+  tomTatTinhNangVi?: string | null; // Không dùng nữa (D-17) - giữ nguyên tương thích ngược
   diemUyTin: number; // 0 - 100
   mucDoAnToan: MucDoUyTin;
   daThamDinhJev: boolean; // false nếu mới qua bộ luật dự phòng hoặc không cần thiết (tương thích ngược)
   trangThaiThamDinhJev?: TrangThaiThamDinhJev; // Phân tách rõ: DA_THAM_DINH | KHONG_CAN_THIET | CHUA_THAM_DINH
   yeuToRuiRo: YeuToRuiRoItem[];
   quyenHanDaKiemTra: string[]; // Danh sách quyền Android trích xuất từ APK Range Request
-  moHinhTomTat?: string | null; // Tên model (gemini-3.1-flash-lite, NVIDIA NIM, DU_PHONG)
+  moHinhTomTat?: string | null; // Tên model (không dùng nữa - D-17)
   huongDanCaiDat?: HuongDanCaiDatDto | null; // Hướng dẫn cài đặt CLI bóc tách từ README (Phase 3)
   thoiGianPhanTich?: string | Date;
 }
@@ -67,7 +68,8 @@ export interface BanPhatHanhDto {
   tenPhienBan: string;
   tieuDePhatHanh?: string | null;
   nhatKyThayDoiGoc?: string | null;
-  tomTatNangCapVi?: string | null;
+  nhatKyThayDoiVi?: string | null; // Changelog dịch tiếng Việt (D-17)
+  tomTatNangCapVi?: string | null; // Không dùng nữa (D-17)
   laBanThuNghiem: boolean;
   ngayPhatHanh: string | Date;
   danhSachTepCaiDat: TepCaiDatDto[];
@@ -98,6 +100,22 @@ export interface UngDungTomTatDto {
   loaiGiayPhep?: string | null; // Giấy phép bản quyền thật từ kho mã (L-03)
   ngayCapNhat?: string | Date;
   chuaThamDinh?: boolean; // Cờ đánh dấu repo từ GitHub chưa thẩm định vào Store
+
+  // Bản dịch mô tả & tính sẵn (D-17, D-19)
+  moTaVi?: string | null;
+  maBamMoTa?: string | null;
+  diemThinhHanh?: number;
+  banMoiNhatWindows?: string | null;
+  banMoiNhatAndroid?: string | null;
+
+  // Phát hiện thay đổi (D-18)
+  pushedAt?: string | Date | null;
+  readmeSha?: string | null;
+  etagRepo?: string | null;
+  etagReleases?: string | null;
+  etagReadme?: string | null;
+  lanKiemTiepTheo?: string | Date | null;
+  mucDoNong?: string;
 }
 
 /**
@@ -116,6 +134,7 @@ export interface UngDungChiTietDto extends UngDungTomTatDto {
   huongDanCaiDat?: HuongDanCaiDatDto | null; // Hướng dẫn cài đặt CLI đã lọc theo nền tảng
   banPhatHanhMoiNhat?: BanPhatHanhDto | null;
   danhSachBanPhatHanh?: BanPhatHanhDto[];
+  danhSachBanDichReadme?: BanDichReadmeDto[];
   laYeuThich?: boolean;
 }
 

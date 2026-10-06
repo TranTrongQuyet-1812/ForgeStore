@@ -11,6 +11,7 @@ import { ReposController } from './controllers/repos.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { AppsService } from './apps.service';
 import { ReleaseScannerJob } from './jobs/release-scanner.job';
+import { TrendingDecayJob } from './jobs/trending-decay.job';
 
 @Module({
   imports: [PrismaModule, RedisModule, GithubModule, AiModule, FavoritesModule],
@@ -21,7 +22,7 @@ import { ReleaseScannerJob } from './jobs/release-scanner.job';
     ReposController,
     CategoriesController,
   ],
-  providers: [AppsService, ReleaseScannerJob],
-  exports: [AppsService, ReleaseScannerJob],
+  providers: [AppsService, ReleaseScannerJob, TrendingDecayJob],
+  exports: [AppsService, ReleaseScannerJob, TrendingDecayJob],
 })
 export class AppsModule {}
