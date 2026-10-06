@@ -1,0 +1,15 @@
+name = "forgestore-translate"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Kết nối Workers AI. Gói miễn phí: 10.000 neuron mỗi ngày, tính chung cho cả tài khoản Cloudflare.
+[ai]
+binding = "AI"
+
+# Biến không bí mật: đổi mô hình dịch mà không cần sửa mã.
+[vars]
+TRANSLATE_MODEL = "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
+# Đặt "1" nếu mô hình có chế độ suy luận lai và trả kết quả rỗng.
+# TRANSLATE_DISABLE_THINKING = "1"
+
+# KHÔNG đặt khóa bí mật ở đây. Đặt bằng lệnh:  npx wrangler secret put TRANSLATE_SECRET
