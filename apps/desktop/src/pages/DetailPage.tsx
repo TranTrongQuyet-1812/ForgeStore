@@ -5,7 +5,6 @@ import {
   Star,
   Heart,
   Download,
-  Sparkles,
   ShieldCheck,
   Check,
   Copy,
@@ -13,9 +12,7 @@ import {
   Github,
   FileArchive,
   CheckCircle2,
-  Radio,
   Shield,
-  Zap,
   AlertCircle,
   RefreshCw,
   AlertTriangle,
@@ -27,8 +24,11 @@ import {
   Loader2,
   FolderOpen,
   Terminal,
+  BookOpen,
+  Languages,
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
+import { MarkdownView } from '../components/common/MarkdownView';
 import { useNavStore } from '../stores/useNavStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useInstallStore } from '../stores/useInstallStore';
@@ -203,17 +203,6 @@ export function tinhTrangThaiHieuLuc(params: {
   }
 }
 
-/**
- * Phân tích text tính năng từ AI: nếu có dạng **Tiêu đề**: Nội dung thì tách riêng tiêu đề
- */
-function parseFeatureText(text: string): { title?: string; desc: string } {
-  const match = text.match(/^\*\*(.*?)\*\*[:\s-]*(.*)$/s);
-  if (match) {
-    return { title: match[1].trim(), desc: match[2].trim() };
-  }
-  return { desc: text.replace(/\*\*/g, '').trim() };
-}
-
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo, setAuthModalOpen } = useNavStore();
@@ -295,6 +284,40 @@ export const DetailPage: React.FC = () => {
       maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
     enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
+  });
+
+  // P3B-05.7 / P3B-05.9 / Lỗi 4: Nạp tài liệu README song ngữ từ backend kèm timeout polling 2 phút (40 lần)
+  const [readmeLang, setReadmeLang] = useState<'vi' | 'en'>('vi');
+  const pollCountRef = useRef(0);
+  const [isPollTimedOut, setIsPollTimedOut] = useState(false);
+
+  // Reset bộ đếm polling khi chuyển app
+  useEffect(() => {
+    pollCountRef.current = 0;
+    setIsPollTimedOut(false);
+  }, [appId]);
+
+  const {
+    data: readmeData,
+    isLoading: isReadmeLoading,
+    refetch: refetchReadme,
+  } = useQuery({
+    queryKey: ['app-readme', appId],
+    queryFn: () => storeService.layReadmeApp(appId),
+    enabled: Boolean(appId),
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.trangThai === 'DANG_DICH' || data.trangThai === 'CHUA_DICH')) {
+        pollCountRef.current += 1;
+        if (pollCountRef.current > 40) {
+          setIsPollTimedOut(true);
+          return false; // Dừng polling sau 2 phút (40 x 3s)
+        }
+        return 3000;
+      }
+      return false;
+    },
   });
 
   // Đồng bộ trạng thái yêu thích từ backend hoặc danh sách user-favorites
@@ -582,19 +605,6 @@ export const DetailPage: React.FC = () => {
     }
   };
 
-  // Bóc tách 3 tính năng từ tomTatTinhNangVi
-  const featureList = (appDetail?.phanTichAi?.tomTatTinhNangVi || '')
-    .split('\n')
-    .map((l) => l.replace(/^[-•*0-9.]+\s*/, '').trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  const featureIcons = [
-    <Shield key="f1" className="w-4 h-4 text-cyan-400" />,
-    <Zap key="f2" className="w-4 h-4 text-orange-400" />,
-    <Radio key="f3" className="w-4 h-4 text-emerald-400" />,
-  ];
-
   // Điểm an toàn & xếp hạng
   const trustScore = appDetail?.phanTichAi?.diemUyTin ?? appDetail?.diemUyTin ?? 100;
   const riskItems = appDetail?.phanTichAi?.yeuToRuiRo || [];
@@ -787,67 +797,122 @@ export const DetailPage: React.FC = () => {
               </div>
 
               <p className="text-xs text-secondary mt-3 leading-relaxed">
-                {appDetail.moTaGocTiengAnh ||
+                {appDetail.moTaVi ||
+                  appDetail.moTaGocTiengAnh ||
                   'Ứng dụng mã nguồn mở minh bạch, được đồng bộ trực tiếp từ GitHub.'}
               </p>
             </div>
           </div>
 
-          {/* Giới thiệu nhanh (L-10: chuẩn hóa ngôn ngữ đời thường) */}
-          <div className="tactile-card p-6 rounded-2xl border-l-4 border-l-accent-ai flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-accent-ai text-xs font-bold font-display uppercase tracking-wider">
-                <Sparkles className="w-4 h-4" />
-                <span>Giới thiệu nhanh</span>
+          {/* Slogan định vị ứng dụng (nếu có) */}
+          {appDetail.phanTichAi?.khauHieuTiengViet && (
+            <div className="tactile-card px-5 py-3.5 rounded-2xl border-l-4 border-l-accent-forge bg-surface-elevated/30">
+              <blockquote className="text-sm font-semibold text-primary italic">
+                "{appDetail.phanTichAi.khauHieuTiengViet}"
+              </blockquote>
+            </div>
+          )}
+
+          {/* Tài liệu & Giới thiệu chi tiết (README Song Ngữ - P3B-05.9) */}
+          <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2 text-primary font-display font-bold text-sm">
+                <BookOpen className="w-4 h-4 text-accent-forge" />
+                <span>Tài liệu & Hướng dẫn (README)</span>
+              </div>
+
+              {/* Nút chuyển đổi song ngữ hai chiều */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-elevated border border-border">
+                <button
+                  type="button"
+                  onClick={() => setReadmeLang('vi')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    readmeLang === 'vi'
+                      ? 'bg-accent-forge text-white shadow-sm'
+                      : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                  }`}
+                >
+                  <Languages className="w-3.5 h-3.5" />
+                  <span>Tiếng Việt</span>
+                  {readmeData?.trangThai === 'HOAN_TAT' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReadmeLang('en')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    readmeLang === 'en'
+                      ? 'bg-accent-forge text-white shadow-sm'
+                      : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>Bản gốc</span>
+                </button>
               </div>
             </div>
 
-            {/* Slogan AI tiếng Việt hoặc skeleton đang chờ */}
-            {appDetail.phanTichAi?.khauHieuTiengViet ? (
-              <blockquote className="text-base font-semibold text-primary italic pl-3 border-l-2 border-accent-ai/40">
-                "{appDetail.phanTichAi.khauHieuTiengViet}"
-              </blockquote>
-            ) : (
-              <div className="p-4 rounded-xl bg-surface-elevated/50 border border-border/50 flex items-center gap-3 animate-pulse">
-                <Sparkles className="w-5 h-5 text-accent-ai animate-spin" />
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-primary">
-                    Đang phân tích thông tin ứng dụng...
-                  </span>
-                  <span className="text-[11px] text-muted font-mono">
-                    Hệ thống đang tự động phân tích mã nguồn và giấy phép (tự động cập nhật).
-                  </span>
+            {/* Nội dung README theo ngôn ngữ (Lỗi 5) */}
+            {isReadmeLoading ? (
+              <div className="p-8 flex flex-col items-center justify-center gap-2 text-muted animate-pulse">
+                <Loader2 className="w-6 h-6 animate-spin text-accent-forge" />
+                <span className="text-xs font-mono">Đang tải tài liệu README...</span>
+              </div>
+            ) : readmeLang === 'vi' ? (
+              readmeData?.banDich ? (
+                <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                  <MarkdownView content={readmeData.banDich} />
                 </div>
-              </div>
-            )}
-
-            {/* 3 Thẻ tính năng cốt lõi có icon chuyên biệt (P3-06.2) */}
-            {featureList.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
-                {featureList.map((feature, idx) => {
-                  const parsed = parseFeatureText(feature);
-                  return (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-xl bg-surface-elevated/40 hover:bg-surface-elevated border border-border hover:border-border-focus transition-all flex flex-col gap-2.5"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center border border-border text-accent-ai shrink-0">
-                        {featureIcons[idx] || <CheckCircle2 className="w-4 h-4 text-primary" />}
-                      </div>
-                      <h4 className="text-xs font-bold text-primary font-display">
-                        {parsed.title || `Tính Năng #${idx + 1}`}
-                      </h4>
-                      <p className="text-[11px] text-secondary leading-relaxed">{parsed.desc}</p>
+              ) : readmeData?.trangThai === 'THAT_BAI' || isPollTimedOut ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-surface-elevated border border-border text-xs text-secondary">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Chưa có bản dịch tiếng Việt, đang xem bản gốc tiếng Anh.</span>
                     </div>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pollCountRef.current = 0;
+                        setIsPollTimedOut(false);
+                        refetchReadme();
+                      }}
+                      className="text-xs font-semibold text-accent-forge hover:underline shrink-0 ml-2"
+                    >
+                      Dịch lại
+                    </button>
+                  </div>
+                  {readmeData?.banGoc && (
+                    <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      <MarkdownView content={readmeData.banGoc} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+                      <span>
+                        Đang dịch tài liệu sang tiếng Việt... Tạm thời hiển thị bản gốc bên dưới.
+                      </span>
+                    </div>
+                  </div>
+                  {readmeData?.banGoc && (
+                    <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      <MarkdownView content={readmeData.banGoc} />
+                    </div>
+                  )}
+                </div>
+              )
+            ) : readmeData?.banGoc ? (
+              <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                <MarkdownView content={readmeData.banGoc} />
               </div>
             ) : (
-              appDetail.phanTichAi?.tomTatTinhNangVi && (
-                <p className="text-xs text-secondary leading-relaxed whitespace-pre-line">
-                  {appDetail.phanTichAi.tomTatTinhNangVi}
-                </p>
-              )
+              <p className="text-xs text-muted italic">
+                Không tìm thấy tài liệu README trong kho mã nguồn.
+              </p>
             )}
           </div>
 

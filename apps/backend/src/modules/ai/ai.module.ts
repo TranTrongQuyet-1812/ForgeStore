@@ -23,6 +23,8 @@ import { NvidiaTranslationProvider } from './translation/providers/nvidia-transl
 import { CloudflareTranslationProvider } from './translation/providers/cloudflare-translation.provider';
 import { GroqTranslationProvider } from './translation/providers/groq-translation.provider';
 import { TranslationRotationService } from './translation/services/translation-rotation.service';
+import { AppDescriptionTranslationService } from './translation/services/app-description-translation.service';
+import { ReadmeTranslationService } from './translation/services/readme-translation.service';
 
 @Module({
   imports: [ConfigModule, PrismaModule, RedisModule, GithubModule],
@@ -46,6 +48,8 @@ import { TranslationRotationService } from './translation/services/translation-r
     CloudflareTranslationProvider,
     GroqTranslationProvider,
     TranslationRotationService,
+    AppDescriptionTranslationService,
+    ReadmeTranslationService,
   ],
   exports: [
     LlmRateLimiterService,
@@ -58,6 +62,8 @@ import { TranslationRotationService } from './translation/services/translation-r
     SearchTranslatorService,
     JevBenchmarkService,
     TranslationRotationService,
+    AppDescriptionTranslationService,
+    ReadmeTranslationService,
   ],
 })
 export class AiModule {}

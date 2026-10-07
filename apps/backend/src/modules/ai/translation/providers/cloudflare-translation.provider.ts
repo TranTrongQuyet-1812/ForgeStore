@@ -194,4 +194,21 @@ export class CloudflareTranslationProvider implements ITranslationProvider {
       clearTimeout(timeoutId);
     }
   }
+
+  /**
+   * P3B-04 / Lỗi 2: Cloudflare Workers AI chuyên tâm dịch Markdown phân đoạn của README.
+   * Không hỗ trợ translateBatchJson để phòng chống prompt injection và tối ưu tài nguyên.
+   */
+  public async translateBatchJson(
+    _items: Array<{ id: string; text: string }>,
+    _options?: { timeoutMs?: number },
+  ): Promise<import('../interfaces/translation-provider.interface').KetQuaDichBatchJson> {
+    return {
+      data: null,
+      lyDoLoi: 'not_configured',
+      provider: this.providerName,
+      model: this.modelName,
+      thoiGianMs: 0,
+    };
+  }
 }

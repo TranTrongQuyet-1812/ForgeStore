@@ -38,3 +38,16 @@ export interface UngVienRepoDto {
   ngayTao: string | Date;
   ngayCapNhat: string | Date;
 }
+
+/**
+ * DTO phản hồi API chi tiết README (P3B-05.7).
+ */
+export interface ChiTietReadmeResponseDto {
+  maUngDung: string;
+  tenRepoDayDu: string;
+  banGoc: string;
+  banDich: string | null;
+  trangThai: TrangThaiDichReadme | 'CHUA_DICH';
+  moHinhDich?: string | null;
+  readmeSha?: string | null;
+}

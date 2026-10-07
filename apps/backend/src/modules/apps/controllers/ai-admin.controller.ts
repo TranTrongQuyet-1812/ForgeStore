@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { VaiTro } from '@prisma/client';
 import { AppsService } from '../apps.service';
+import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { VaiTroYeuCau } from '../../../common/decorators/vai-tro.decorator';
 
 export class PrewarmAiDto {
@@ -19,7 +20,10 @@ export class PrewarmAiDto {
 @ApiBearerAuth()
 @Controller('admin/ai')
 export class AiAdminController {
-  constructor(private readonly appsService: AppsService) {}
+  constructor(
+    private readonly appsService: AppsService,
+    private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
+  ) {}
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
   @Post('prewarm')
@@ -33,5 +37,18 @@ export class AiAdminController {
   @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
   async prewarm(@Body() body?: PrewarmAiDto) {
     return this.appsService.chayPrewarmAI(body?.danhSachAppIds);
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Post('translate-descriptions')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Dịch gom lô mô tả toàn bộ ứng dụng sang tiếng Việt (P3B-04)',
+    description: 'Quét và dịch mô tả các ứng dụng chưa có bản dịch hoặc mô tả đã thay đổi.',
+  })
+  @ApiResponse({ status: 200, description: 'Kết quả số app đã quét và dịch thành công' })
+  @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
+  async translateDescriptions(@Body('forceAll') forceAll?: boolean) {
+    return this.appDescriptionTranslationService.dichMoTaCacApp(Boolean(forceAll));
   }
 }

@@ -353,4 +353,148 @@ export class TranslationRotationService {
       ketQua,
     };
   }
+
+  /**
+   * P3B-04: Dịch gom lô danh sách mục sang JSON { [id]: "bản dịch tiếng Việt" }.
+   * Áp dụng chia chunk theo batchSize (mặc định 25), xoay tua 4 nhà và bù đắp các ID bị sót.
+   * TUYỆT ĐỐI KHÔNG BAO GIỜ gán bản gốc tiếng Anh làm bản dịch khi thất bại.
+   */
+  public async dichGomLoJson(
+    items: Array<{ id: string; text: string }>,
+    options?: { batchSize?: number; timeoutMs?: number },
+  ): Promise<KetQuaDichGomLoJson> {
+    if (!items || items.length === 0) {
+      return {
+        thanhCong: true,
+        ketQua: {},
+        thieuIds: [],
+        provider: null,
+        model: null,
+        chiTietLoi: [],
+      };
+    }
+
+    const batchSize = Math.max(1, options?.batchSize ?? 25);
+    const ketQuaTong: Record<string, string> = {};
+    const chiTietLoi: ChiTietLoiProvider[] = [];
+    let lastProvider: NhaCungCapDich | null = null;
+    let lastModel: string | null = null;
+
+    // 1. Chia thành các batch nhỏ
+    const chunks: Array<Array<{ id: string; text: string }>> = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      chunks.push(items.slice(i, i + batchSize));
+    }
+
+    // 2. Xử lý từng chunk
+    for (const chunk of chunks) {
+      let mucChuaDich = [...chunk];
+
+      for (const provider of this.providers) {
+        if (mucChuaDich.length === 0) break;
+
+        if (!provider.isAvailable() || typeof provider.translateBatchJson !== 'function') {
+          chiTietLoi.push({
+            provider: provider.providerName,
+            model: provider.modelName,
+            lyDoLoi: 'not_configured',
+          });
+          continue;
+        }
+
+        const isUnhealthy = await this.kiemTraUnhealthy(provider.providerName);
+        if (isUnhealthy) {
+          chiTietLoi.push({
+            provider: provider.providerName,
+            model: provider.modelName,
+            lyDoLoi: 'unhealthy',
+          });
+          continue;
+        }
+
+        const isCooldown = await this.kiemTraCooldown(provider.providerName);
+        if (isCooldown) {
+          chiTietLoi.push({
+            provider: provider.providerName,
+            model: provider.modelName,
+            lyDoLoi: 'rate_limited',
+          });
+          continue;
+        }
+
+        this.logger.log(
+          `Bắt đầu dịch gom lô ${mucChuaDich.length} mục bằng [${provider.providerName}] (model: ${provider.modelName})`,
+        );
+
+        const res = await provider.translateBatchJson(mucChuaDich, options);
+
+        if (res.lyDoLoi === 'rate_limited') {
+          const retrySec = await this.tinhCooldownBackoff(provider.providerName, res.retryAfterSec);
+          await this.khoaCooldown(provider.providerName, retrySec);
+          chiTietLoi.push({
+            provider: provider.providerName,
+            model: provider.modelName,
+            lyDoLoi: 'rate_limited',
+            thoiGianMs: res.thoiGianMs,
+          });
+          continue;
+        }
+
+        if (res.lyDoLoi !== null || res.data === null) {
+          // Lỗi 3: Không làm tăng bộ đếm consecutive_errors chung để tránh dính lây ngắt mạch dịch README
+          chiTietLoi.push({
+            provider: provider.providerName,
+            model: provider.modelName,
+            lyDoLoi: res.lyDoLoi ?? 'ai_error',
+            thoiGianMs: res.thoiGianMs,
+          });
+          continue;
+        }
+
+        // Nhận được dữ liệu JSON
+        lastProvider = provider.providerName;
+        lastModel = provider.modelName;
+
+        // Lỗi 6: Validate ID hợp lệ, kiểu string (chống [object Object]) và khác bản gốc tiếng Anh
+        const chunkMap = new Map(chunk.map((item) => [item.id, item.text]));
+
+        for (const [id, translatedVal] of Object.entries(res.data)) {
+          // 1. ID phải nằm trong chunk hiện tại
+          if (!chunkMap.has(id)) continue;
+
+          // 2. Giá trị phải là string
+          if (typeof translatedVal !== 'string') continue;
+
+          const banDichTrim = translatedVal.trim();
+          if (!banDichTrim) continue;
+
+          // 3. Chốt chặn Claude: Bản dịch phải khác bản gốc tiếng Anh
+          const textGoc = chunkMap.get(id) || '';
+          if (banDichTrim.toLowerCase() === textGoc.trim().toLowerCase()) {
+            this.logger.warn(
+              `Bản dịch cho mục [${id}] trùng 100% bản gốc tiếng Anh. Bỏ qua không nhận làm bản dịch.`,
+            );
+            continue;
+          }
+
+          ketQuaTong[id] = banDichTrim;
+        }
+
+        // Kiểm tra xem còn mục nào chưa có bản dịch không
+        mucChuaDich = mucChuaDich.filter((m) => !ketQuaTong[m.id]);
+      }
+    }
+
+    const thieuIds = items.map((i) => i.id).filter((id) => !ketQuaTong[id]);
+    const thanhCong = thieuIds.length === 0;
+
+    return {
+      thanhCong,
+      ketQua: ketQuaTong,
+      thieuIds,
+      provider: lastProvider,
+      model: lastModel,
+      chiTietLoi,
+    };
+  }
 }

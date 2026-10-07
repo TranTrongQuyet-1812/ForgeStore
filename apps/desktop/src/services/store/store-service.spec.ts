@@ -435,4 +435,79 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/categories?platform=windows');
     expect(result).toEqual(mockCategories);
   });
+
+  it('layReadmeApp gọi đúng endpoint theo UUID hoặc slug owner/repo (P3B-05.7 / P3B-05.9)', async () => {
+    const mockReadmeRes = {
+      banGoc: '# Readme Original',
+      banDich: '# Tài liệu tiếng Việt',
+      trangThai: 'HOAN_TAT',
+      moHinhDich: 'gemini-3.1-flash-lite',
+    };
+
+    // Kiểm tra gọi qua UUID
+    vi.mocked(apiClient.get).mockResolvedValueOnce(mockReadmeRes);
+    const resId = await service.layReadmeApp('uuid-123');
+    expect(apiClient.get).toHaveBeenCalledWith('/apps/uuid-123/readme');
+    expect(resId.trangThai).toBe('HOAN_TAT');
+
+    // Kiểm tra gọi qua Slug owner/repo
+    vi.mocked(apiClient.get).mockResolvedValueOnce(mockReadmeRes);
+    const resSlug = await service.layReadmeApp('rustdesk/rustdesk');
+    expect(apiClient.get).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme');
+    expect(resSlug.banDich).toBe('# Tài liệu tiếng Việt');
+  });
+
+  it('mapDtoToAppCard ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {
+    const dto: UngDungTomTatDto = {
+      maUngDung: 'app-sample',
+      tenRepoDayDu: 'sample/app',
+      chuSoHuu: 'sample',
+      tenKhoChua: 'app',
+      duongDanGithub: 'https://github.com/sample/app',
+      soSaoGithub: 100,
+      danhMucChinh: 'Tiện ích hệ thống',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: false,
+      moTaVi: 'Bản dịch mô tả tiếng Việt chuẩn xác chất lượng cao',
+      khauHieuTiengViet: 'Khẩu hiệu tóm tắt AI cũ',
+    };
+
+    const card = service.mapDtoToAppCard(dto);
+    expect(card.moTaNgan).toBe('Bản dịch mô tả tiếng Việt chuẩn xác chất lượng cao');
+  });
+
+  it('mapChiTietToAppCard ưu tiên moTaVi hơn phanTichAi.khauHieuTiengViet và moTaGocTiengAnh (P3B-04)', () => {
+    const detailDto: UngDungChiTietDto = {
+      maUngDung: 'app-sample-detail',
+      tenRepoDayDu: 'sample/app-detail',
+      chuSoHuu: 'sample',
+      tenKhoChua: 'app-detail',
+      duongDanGithub: 'https://github.com/sample/app-detail',
+      soSaoGithub: 100,
+      soLuotFork: 10,
+      danhMucChinh: 'Tiện ích hệ thống',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: false,
+      danhSachChuDe: [],
+      trangThai: 'HOAT_DONG',
+      dongBoLanCuoi: new Date().toISOString(),
+      ngayTao: new Date().toISOString(),
+      moTaGocTiengAnh: 'Original English description',
+      moTaVi: 'Mô tả tiếng Việt được dịch từ gom lô JSON',
+      phanTichAi: {
+        khauHieuTiengViet: 'Khẩu hiệu tóm tắt cũ',
+        tomTatTinhNangVi: 'Tính năng cũ',
+        diemUyTin: 90,
+        mucDoAnToan: MucDoUyTin.AN_TOAN_CAO,
+        daThamDinhJev: true,
+        yeuToRuiRo: [],
+        quyenHanDaKiemTra: [],
+      },
+    };
+
+    const card = service.mapChiTietToAppCard(detailDto);
+    expect(card.moTaNgan).toBe('Mô tả tiếng Việt được dịch từ gom lô JSON');
+  });
 });

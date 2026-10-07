@@ -189,4 +189,147 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
       clearTimeout(timeoutId);
     }
   }
+
+  /**
+   * P3B-04: Dịch gom lô JSON danh sách mô tả app qua NVIDIA NIM với response_format = json_object.
+   */
+  public async translateBatchJson(
+    items: Array<{ id: string; text: string }>,
+    options?: { timeoutMs?: number },
+  ): Promise<import('../interfaces/translation-provider.interface').KetQuaDichBatchJson> {
+    const startTime = Date.now();
+    if (!this.isAvailable() || !this.apiKey) {
+      return {
+        data: null,
+        lyDoLoi: 'not_configured',
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: 0,
+      };
+    }
+
+    if (!items || items.length === 0) {
+      return {
+        data: {},
+        lyDoLoi: null,
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: 0,
+      };
+    }
+
+    const timeoutMs = options?.timeoutMs ?? 45_000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo, trichXuatJsonTuPhanHoi } =
+      await import('../prompts/translation.prompt');
+
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: [
+            { role: 'system', content: DICH_MO_TA_SYSTEM_PROMPT },
+            { role: 'user', content: taoPromptDichGomLo(items) },
+          ],
+          temperature: 0.1,
+          max_tokens: 4096,
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.status === 429) {
+        this.logger.warn('NVIDIA NIM gom lô chạm giới hạn tỷ lệ (429)');
+        return {
+          data: null,
+          lyDoLoi: 'rate_limited',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        this.logger.warn(
+          sanitizeLogMessage(`NVIDIA NIM gom lô trả về HTTP ${response.status}: ${errText}`),
+        );
+        return {
+          data: null,
+          lyDoLoi: 'ai_error',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      const json = (await response.json()) as Record<string, unknown>;
+      const choices =
+        (json.choices as Array<{ message?: { content?: string }; finish_reason?: string }>) ?? [];
+      const finishReason = choices[0]?.finish_reason;
+      if (finishReason === 'length') {
+        this.logger.warn(
+          `NVIDIA NIM gom lô dịch bị cắt cụt do chạm giới hạn token (finish_reason === 'length')`,
+        );
+        return {
+          data: null,
+          lyDoLoi: 'ai_error',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      const rawContent = choices[0]?.message?.content ?? '';
+      const parsedJson = trichXuatJsonTuPhanHoi(rawContent);
+
+      if (!parsedJson || Object.keys(parsedJson).length === 0) {
+        return {
+          data: null,
+          lyDoLoi: 'empty_output',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      return {
+        data: parsedJson,
+        lyDoLoi: null,
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: Date.now() - startTime,
+      };
+    } catch (err: unknown) {
+      const duration = Date.now() - startTime;
+      const error = err as { name?: string; message?: string };
+
+      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+        this.logger.warn(`NVIDIA NIM dịch gom lô thất bại: Hết thời gian chờ (${timeoutMs}ms)`);
+        return {
+          data: null,
+          lyDoLoi: 'timeout',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: duration,
+        };
+      }
+
+      this.logger.warn(sanitizeLogMessage(`NVIDIA NIM dịch gom lô gặp lỗi: ${error.message}`));
+      return {
+        data: null,
+        lyDoLoi: 'ai_error',
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: duration,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 }

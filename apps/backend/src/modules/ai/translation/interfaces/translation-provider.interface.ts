@@ -36,6 +36,15 @@ export interface ChiTietLoiProvider {
   thoiGianMs?: number;
 }
 
+export interface KetQuaDichBatchJson {
+  data: Record<string, string> | null;
+  lyDoLoi: LyDoLoiDich | null;
+  provider: NhaCungCapDich;
+  model: string;
+  thoiGianMs?: number;
+  retryAfterSec?: number;
+}
+
 export interface ITranslationProvider {
   readonly providerName: NhaCungCapDich;
   readonly modelName: string;
@@ -55,4 +64,13 @@ export interface ITranslationProvider {
    * TUYỆT ĐỐI KHÔNG BAO GIỜ trả về văn bản gốc làm bản dịch khi thất bại.
    */
   translate(text: string, options?: { timeoutMs?: number }): Promise<KetQuaDichDoan>;
+
+  /**
+   * Thực hiện dịch gom lô danh sách mục sang JSON { [id]: "bản dịch tiếng Việt" } (P3B-04).
+   * Giúp tiết kiệm hạn ngạch RPM khi dịch hàng loạt mô tả app ngắn.
+   */
+  translateBatchJson?(
+    items: Array<{ id: string; text: string }>,
+    options?: { timeoutMs?: number },
+  ): Promise<KetQuaDichBatchJson>;
 }

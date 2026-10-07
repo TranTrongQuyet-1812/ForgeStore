@@ -340,4 +340,226 @@ describe('TranslationRotationService', () => {
       );
     });
   });
+
+  describe('dichGomLoJson (P3B-04)', () => {
+    it('dịch gom lô thành công khi Gemini trả về đầy đủ JSON các ID', async () => {
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: {
+          app1: 'Ứng dụng điều khiển từ xa mã nguồn mở',
+          app2: 'Trình quản lý mật khẩu an toàn',
+        },
+        lyDoLoi: null,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+
+      const items = [
+        { id: 'app1', text: 'Open source remote desktop application' },
+        { id: 'app2', text: 'Secure password manager' },
+      ];
+
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(true);
+      expect(res.thieuIds).toHaveLength(0);
+      expect(res.ketQua).toEqual({
+        app1: 'Ứng dụng điều khiển từ xa mã nguồn mở',
+        app2: 'Trình quản lý mật khẩu an toàn',
+      });
+      expect(mockGemini.translateBatchJson).toHaveBeenCalledTimes(1);
+    });
+
+    it('chia batch theo batchSize và gộp trọn vẹn kết quả', async () => {
+      mockGemini.translateBatchJson = vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: { app1: 'Bản dịch 1', app2: 'Bản dịch 2' },
+          lyDoLoi: null,
+          provider: 'gemini',
+          model: 'gemini-3.1-flash-lite',
+        })
+        .mockResolvedValueOnce({
+          data: { app3: 'Bản dịch 3' },
+          lyDoLoi: null,
+          provider: 'gemini',
+          model: 'gemini-3.1-flash-lite',
+        });
+
+      const items = [
+        { id: 'app1', text: 'Text 1' },
+        { id: 'app2', text: 'Text 2' },
+        { id: 'app3', text: 'Text 3' },
+      ];
+
+      const res = await service.dichGomLoJson(items, { batchSize: 2 });
+
+      expect(res.thanhCong).toBe(true);
+      expect(res.thieuIds).toHaveLength(0);
+      expect(Object.keys(res.ketQua)).toHaveLength(3);
+      expect(mockGemini.translateBatchJson).toHaveBeenCalledTimes(2);
+    });
+
+    it('tự động bù đắp ID bị sót qua provider tiếp theo (Gemini thiếu ID -> NVIDIA dịch nốt)', async () => {
+      // Gemini chỉ trả app1, thiếu app2
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: { app1: 'Bản dịch app1 từ Gemini' },
+        lyDoLoi: null,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+
+      // NVIDIA được gọi cho mục còn thiếu (app2)
+      mockNvidia.translateBatchJson = vi.fn().mockResolvedValue({
+        data: { app2: 'Bản dịch app2 từ NVIDIA' },
+        lyDoLoi: null,
+        provider: 'nvidia',
+        model: 'google/diffusiongemma-26b-a4b-it',
+      });
+
+      const items = [
+        { id: 'app1', text: 'Text 1' },
+        { id: 'app2', text: 'Text 2' },
+      ];
+
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(true);
+      expect(res.thieuIds).toHaveLength(0);
+      expect(res.ketQua).toEqual({
+        app1: 'Bản dịch app1 từ Gemini',
+        app2: 'Bản dịch app2 từ NVIDIA',
+      });
+      expect(mockGemini.translateBatchJson).toHaveBeenCalledWith(items, undefined);
+      expect(mockNvidia.translateBatchJson).toHaveBeenCalledWith(
+        [{ id: 'app2', text: 'Text 2' }],
+        undefined,
+      );
+    });
+
+    it('khi toàn bộ 4 nhà đều lỗi: thanhCong = false, thieuIds chứa toàn bộ ID, không gán văn bản gốc', async () => {
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'ai_error',
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+      mockNvidia.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'timeout',
+        provider: 'nvidia',
+        model: 'google/diffusiongemma-26b-a4b-it',
+      });
+      mockCloudflare.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'empty_output',
+        provider: 'cloudflare',
+        model: '@cf/aisingapore/gemma-sea-lion-v4-27b-it',
+      });
+      mockGroq.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'ai_error',
+        provider: 'groq',
+        model: 'qwen/qwen3.8-27b',
+      });
+
+      const items = [
+        { id: 'app1', text: 'English description 1' },
+        { id: 'app2', text: 'English description 2' },
+      ];
+
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(false);
+      expect(res.thieuIds).toEqual(['app1', 'app2']);
+      expect(res.ketQua).toEqual({});
+      expect(res.ketQua['app1']).toBeUndefined();
+      expect(res.ketQua['app2']).toBeUndefined();
+    });
+
+    it('xử lý 429 khi gom lô và kích hoạt cooldown', async () => {
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'rate_limited',
+        retryAfterSec: 90,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+      mockNvidia.translateBatchJson = vi.fn().mockResolvedValue({
+        data: { app1: 'Bản dịch từ NVIDIA' },
+        lyDoLoi: null,
+        provider: 'nvidia',
+        model: 'google/diffusiongemma-26b-a4b-it',
+      });
+
+      const items = [{ id: 'app1', text: 'Desc 1' }];
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(true);
+      expect(res.ketQua['app1']).toBe('Bản dịch từ NVIDIA');
+      expect(mockCacheService.set).toHaveBeenCalledWith(
+        'fs:ai:translation:cooldown:gemini',
+        true,
+        90,
+      );
+    });
+
+    it('Lỗi 3: gom lô thất bại KHÔNG gọi danhDauLoiLienTiep làm ảnh hưởng đến dịch README', async () => {
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: null,
+        lyDoLoi: 'ai_error',
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+      mockNvidia.translateBatchJson = vi.fn().mockResolvedValue({
+        data: { app1: 'Bản dịch app1' },
+        lyDoLoi: null,
+        provider: 'nvidia',
+        model: 'google/diffusiongemma-26b-a4b-it',
+      });
+
+      const spyDanhDau = vi.spyOn(service, 'danhDauLoiLienTiep');
+
+      const items = [{ id: 'app1', text: 'Text 1' }];
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(true);
+      // Không được gọi đánh dấu lỗi liên tiếp làm dính lây sang dịch README
+      expect(spyDanhDau).not.toHaveBeenCalled();
+    });
+
+    it('Lỗi 6: lọc bỏ ID lạ, bỏ giá trị non-string và không nhận bản dịch trùng 100% gốc tiếng Anh', async () => {
+      mockGemini.translateBatchJson = vi.fn().mockResolvedValue({
+        data: {
+          app1: 'Text 1', // Trùng 100% gốc tiếng Anh -> loại bỏ
+          app2: { nested: 'object' } as unknown as string, // Không phải string -> loại bỏ
+          hacker_id: 'Injection payload', // ID lạ không có trong batch -> loại bỏ
+        },
+        lyDoLoi: null,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+      });
+
+      mockNvidia.translateBatchJson = vi.fn().mockResolvedValue({
+        data: {
+          app1: 'Văn bản số 1 tiếng Việt',
+          app2: 'Văn bản số 2 tiếng Việt',
+        },
+        lyDoLoi: null,
+        provider: 'nvidia',
+        model: 'google/diffusiongemma-26b-a4b-it',
+      });
+
+      const items = [
+        { id: 'app1', text: 'Text 1' },
+        { id: 'app2', text: 'Text 2' },
+      ];
+
+      const res = await service.dichGomLoJson(items);
+
+      expect(res.thanhCong).toBe(true);
+      expect(res.ketQua['hacker_id']).toBeUndefined();
+      expect(res.ketQua['app1']).toBe('Văn bản số 1 tiếng Việt');
+      expect(res.ketQua['app2']).toBe('Văn bản số 2 tiếng Việt');
+    });
+  });
 });

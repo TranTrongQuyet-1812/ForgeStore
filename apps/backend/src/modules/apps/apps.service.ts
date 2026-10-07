@@ -861,6 +861,8 @@ export class AppsService {
         dinhDangCoSan,
         kienTrucCoSan,
         loaiGiayPhep: app.loaiGiayPhep || null,
+        moTaVi: app.moTaVi || null,
+        maBamMoTa: app.maBamMoTa || null,
         ngayCapNhat: app.dongBoLanCuoi.toISOString(),
       };
     });
@@ -1023,6 +1025,8 @@ export class AppsService {
       dongBoLanCuoi: app.dongBoLanCuoi.toISOString(),
       ngayTao: app.ngayTao.toISOString(),
       moTaGocTiengAnh: app.moTaGocTiengAnh,
+      moTaVi: app.moTaVi || null,
+      maBamMoTa: app.maBamMoTa || null,
       khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet || null,
       diemUyTin: app.phanTichAI?.diemUyTin ?? null,
       mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,

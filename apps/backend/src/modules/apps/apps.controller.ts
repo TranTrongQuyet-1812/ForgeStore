@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from 
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
+  ChiTietReadmeResponseDto,
   DanhMucDto,
   ResolveAssetResponseDto,
   TrangKetQua,
@@ -10,6 +11,7 @@ import {
 } from '@forgestore/types';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { AppsService } from './apps.service';
+import { ReadmeTranslationService } from '../ai/translation/services/readme-translation.service';
 import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
 import { ResolveAssetDto } from './dto/resolve-asset.dto';
 
@@ -18,7 +20,10 @@ import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 @ApiTags('Apps - Kho Ứng Dụng')
 @Controller('apps')
 export class AppsController {
-  constructor(private readonly appsService: AppsService) {}
+  constructor(
+    private readonly appsService: AppsService,
+    private readonly readmeTranslationService: ReadmeTranslationService,
+  ) {}
 
   @CongKhai()
   @Get('categories')
@@ -84,6 +89,42 @@ export class AppsController {
   })
   async giaiQuyetFileCaiDat(@Body() dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
     return this.appsService.giaiQuyetFileCaiDat(dto);
+  }
+
+  @CongKhai()
+  @Get(':owner/:repo/readme')
+  @ApiOperation({
+    summary: 'Lấy tài liệu README song ngữ (bản gốc & bản dịch tiếng Việt) theo slug (P3B-05.7)',
+    description:
+      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Nếu chưa có, tự động kích hoạt dịch chạy nền non-blocking.',
+  })
+  @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
+  @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nội dung README gốc và bản dịch tiếng Việt kèm trạng thái',
+  })
+  async layReadmeTheoSlug(
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+  ): Promise<ChiTietReadmeResponseDto> {
+    return this.readmeTranslationService.layHoacKichHoatDichReadme(`${owner}/${repo}`);
+  }
+
+  @CongKhai()
+  @Get(':id/readme')
+  @ApiOperation({
+    summary: 'Lấy tài liệu README song ngữ theo UUID (P3B-05.7)',
+    description:
+      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Tự động kích hoạt dịch nền nếu chưa có.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID hoặc slug ứng dụng', example: 'rustdesk/rustdesk' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nội dung README gốc và bản dịch tiếng Việt kèm trạng thái',
+  })
+  async layReadmeTheoId(@Param('id') id: string): Promise<ChiTietReadmeResponseDto> {
+    return this.readmeTranslationService.layHoacKichHoatDichReadme(id);
   }
 
   @CongKhai()

@@ -1,5 +1,6 @@
 import { apiClient } from '../api/api-client';
 import type {
+  ChiTietReadmeResponseDto,
   DanhMucDto,
   TrangKetQua,
   UngDungTomTatDto,
@@ -104,8 +105,18 @@ export class StoreService {
   }
 
   /**
-   * Ánh xạ từ UngDungTomTatDto (Backend) sang AppCardData (Desktop UI) (L-03)
-   * Sử dụng 100% dữ liệu thật từ backend, triệt tiêu toàn bộ giá trị bịa đặt
+   * Lấy tài liệu README song ngữ của ứng dụng (P3B-05.7 / P3B-05.9)
+   */
+  async layReadmeApp(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
+    const basePath = maUngDungHoacSlug.includes('/')
+      ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
+      : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme`;
+    return apiClient.get<ChiTietReadmeResponseDto>(basePath);
+  }
+
+  /**
+   * Ánh xạ từ UngDungTomTatDto (Backend) sang AppCardData (Desktop UI) (L-03, P3B-04)
+   * Ưu tiên moTaVi (bản dịch tiếng Việt chuẩn xác), fallback sang khauHieuTiengViet
    */
   mapDtoToAppCard(dto: UngDungTomTatDto): AppCardData {
     const parts = dto.tenRepoDayDu.split('/');
@@ -117,6 +128,7 @@ export class StoreService {
       repoHandle: dto.tenRepoDayDu,
       tacGia: dto.chuSoHuu,
       moTaNgan:
+        dto.moTaVi ||
         dto.khauHieuTiengViet ||
         'Ứng dụng mã nguồn mở chất lượng cao được đồng bộ trực tiếp từ GitHub.',
       iconUrl: dto.duongDanIcon,
@@ -133,13 +145,14 @@ export class StoreService {
   }
 
   /**
-   * Ánh xạ từ UngDungChiTietDto sang AppCardData (L-03)
+   * Ánh xạ từ UngDungChiTietDto sang AppCardData (L-03, P3B-04)
    */
   mapChiTietToAppCard(dto: UngDungChiTietDto): AppCardData {
     const base = this.mapDtoToAppCard(dto);
     return {
       ...base,
       moTaNgan:
+        dto.moTaVi ||
         dto.phanTichAi?.khauHieuTiengViet ||
         dto.khauHieuTiengViet ||
         dto.moTaGocTiengAnh ||

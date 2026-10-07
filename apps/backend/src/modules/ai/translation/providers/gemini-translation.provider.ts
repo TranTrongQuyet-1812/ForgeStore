@@ -204,4 +204,152 @@ export class GeminiTranslationProvider implements ITranslationProvider {
       };
     }
   }
+
+  /**
+   * P3B-04: Dịch gom lô JSON danh sách mô tả app qua Gemini với responseMimeType = application/json.
+   */
+  public async translateBatchJson(
+    items: Array<{ id: string; text: string }>,
+    options?: { timeoutMs?: number },
+  ): Promise<import('../interfaces/translation-provider.interface').KetQuaDichBatchJson> {
+    const startTime = Date.now();
+    if (!this.isAvailable() || !this.client) {
+      return {
+        data: null,
+        lyDoLoi: 'not_configured',
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: 0,
+      };
+    }
+
+    if (!items || items.length === 0) {
+      return {
+        data: {},
+        lyDoLoi: null,
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: 0,
+      };
+    }
+
+    if (this.rateLimiterService) {
+      const tokenResult = await this.rateLimiterService.layToken('gemini');
+      if (!tokenResult.chapNhan) {
+        const waitSec = Math.ceil((tokenResult.thoiGianChoMs || 5000) / 1000);
+        this.logger.warn(
+          `Gemini gom lô bị chặn bởi Token Bucket Rate Limiter (cần chờ ${waitSec}s)`,
+        );
+        return {
+          data: null,
+          lyDoLoi: 'rate_limited',
+          retryAfterSec: waitSec,
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+    }
+
+    const timeoutMs = options?.timeoutMs ?? 45_000;
+    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo, trichXuatJsonTuPhanHoi } =
+      await import('../prompts/translation.prompt');
+
+    try {
+      const callPromise = this.client.models.generateContent({
+        model: this.modelName,
+        contents: taoPromptDichGomLo(items),
+        config: {
+          systemInstruction: DICH_MO_TA_SYSTEM_PROMPT,
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
+        },
+      });
+
+      let timeoutTimer: NodeJS.Timeout;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutTimer = setTimeout(() => {
+          const timeoutErr = new Error('TIMEOUT');
+          (timeoutErr as unknown as { code: string }).code = 'TIMEOUT';
+          reject(timeoutErr);
+        }, timeoutMs);
+      });
+
+      const response = await Promise.race([callPromise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutTimer);
+      });
+
+      const candidate = (response as { candidates?: Array<{ finishReason?: string }> })
+        ?.candidates?.[0];
+      if (candidate?.finishReason === 'MAX_TOKENS') {
+        this.logger.warn(`Gemini dịch gom lô bị cắt cụt do chạm giới hạn token (MAX_TOKENS)`);
+        return {
+          data: null,
+          lyDoLoi: 'ai_error',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      const rawText = StructureValidator.extractText(response);
+      const parsedJson = trichXuatJsonTuPhanHoi(rawText);
+
+      if (!parsedJson || Object.keys(parsedJson).length === 0) {
+        return {
+          data: null,
+          lyDoLoi: 'empty_output',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: Date.now() - startTime,
+        };
+      }
+
+      return {
+        data: parsedJson,
+        lyDoLoi: null,
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: Date.now() - startTime,
+      };
+    } catch (err: unknown) {
+      const duration = Date.now() - startTime;
+      const error = err as { code?: string; message?: string; status?: number };
+      const errMsg = error.message || '';
+
+      if (error.code === 'TIMEOUT' || errMsg.includes('TIMEOUT')) {
+        this.logger.warn(`Gemini dịch gom lô thất bại: Hết thời gian chờ (${timeoutMs}ms)`);
+        return {
+          data: null,
+          lyDoLoi: 'timeout',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: duration,
+        };
+      }
+
+      if (error.status === 429 || errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+        this.logger.warn('Gemini gom lô chạm hạn mức (429 / RESOURCE_EXHAUSTED)');
+        return {
+          data: null,
+          lyDoLoi: 'rate_limited',
+          provider: this.providerName,
+          model: this.modelName,
+          thoiGianMs: duration,
+        };
+      }
+
+      this.logger.warn(sanitizeLogMessage(`Gemini dịch gom lô gặp lỗi: ${errMsg}`));
+      return {
+        data: null,
+        lyDoLoi: 'ai_error',
+        provider: this.providerName,
+        model: this.modelName,
+        thoiGianMs: duration,
+      };
+    }
+  }
 }
