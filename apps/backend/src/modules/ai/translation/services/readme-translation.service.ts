@@ -289,6 +289,14 @@ export class ReadmeTranslationService {
   }
 
   /**
+   * Yêu cầu dịch lại README khi gặp lỗi thất bại (nút "Dịch lại" - P3B-05.7).
+   * Chạy qua endpoint POST chuyên biệt với rate-limit riêng (Fix Claude DELIV-77.7).
+   */
+  public async yeuCauDichLaiReadme(idOrSlug: string): Promise<ChiTietReadmeResponseDto> {
+    return this.layHoacKichHoatDichReadme(idOrSlug, true);
+  }
+
+  /**
    * Lấy chi tiết README của một ứng dụng (bản gốc + bản dịch nếu có).
    * Nếu chưa dịch: Kích hoạt tác vụ dịch nền (non-blocking) và trả về bản gốc ngay lập tức (P3B-05.7).
    * Hỗ trợ cờ force = true cho nút "Dịch lại" vượt qua cooldown 15 phút (Fix Lỗi 1).
@@ -415,10 +423,9 @@ export class ReadmeTranslationService {
       let choPhepForce = false;
       if (force) {
         const forceCooldownKey = `fs:ai:translation:force_cooldown:${app.maUngDung}`;
-        // Redis SET NX 60s: mỗi app chỉ được ép dịch lại tối đa 1 lần / phút
-        const daKhoaCooldown = await this.cacheService.lay<boolean>(forceCooldownKey);
-        if (!daKhoaCooldown) {
-          await this.cacheService.luu(forceCooldownKey, true, 60);
+        // Redis SET NX 60s nguyên tử: mỗi app chỉ được ép dịch lại tối đa 1 lần / phút (Fix Claude DELIV-77.7)
+        const daLayKhoa = await this.cacheService.setNx(forceCooldownKey, 60);
+        if (daLayKhoa) {
           choPhepForce = true;
         } else {
           this.logger.warn(

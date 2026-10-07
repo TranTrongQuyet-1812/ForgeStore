@@ -246,6 +246,28 @@ export class CacheService {
   }
 
   /**
+   * Khóa nguyên tử SET key value EX ttlSeconds NX.
+   * Trả về true nếu lấy khóa thành công (key chưa tồn tại), false nếu key đã tồn tại.
+   * Dùng cho cooldown, single-flight limiter hoặc mutex nguyên tử (Fix Claude DELIV-77.7).
+   */
+  async setNx(key: string, ttlSeconds: number): Promise<boolean> {
+    try {
+      const result = await this.redisClient.set(key, '1', 'EX', ttlSeconds, 'NX');
+      return result === 'OK';
+    } catch (error) {
+      this.logger.warn(`Lỗi SET NX key [${key}], chuyển fallback: ${(error as Error).message}`);
+      this.cleanExpiredMemoryKeys();
+      const existing = this.memoryFallback.get(key);
+      if (existing && existing.expiresAt > Date.now()) {
+        return false;
+      }
+      const expiresAt = Date.now() + ttlSeconds * 1000;
+      this.memoryFallback.set(key, { data: '"1"', expiresAt });
+      return true;
+    }
+  }
+
+  /**
    * Distributed Lock phân tán dùng SET key token NX PX ttlMs (P2-05.3, P2-31).
    * Đảm bảo chỉ 1 tác vụ được thực thi đồng thời trên cùng một tài nguyên.
    */

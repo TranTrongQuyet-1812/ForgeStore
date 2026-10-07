@@ -42,6 +42,7 @@ describe('ReadmeTranslationService', () => {
       lay: vi.fn().mockResolvedValue(null),
       luu: vi.fn().mockResolvedValue(true),
       xoa: vi.fn().mockResolvedValue(true),
+      setNx: vi.fn().mockResolvedValue(true),
     } as unknown as CacheService;
 
     service = new ReadmeTranslationService(
@@ -520,14 +521,37 @@ MIT License.`;
         thoiGianDich: new Date(Date.now() - 2 * 60 * 1000), // 2 phút trước
       } as any);
 
-      // Đã có khóa Redis 60s cooldown (chỉ trả về true cho force_cooldown)
-      vi.mocked(mockCacheService.lay).mockImplementation(async (key: string) => {
-        if (key.includes('force_cooldown')) return true;
-        return null;
-      });
+      // Đã có khóa Redis 60s cooldown nguyên tử (setNx trả về false vì key đã tồn tại)
+      vi.mocked(mockCacheService.setNx).mockResolvedValue(false);
 
       const res = await service.layHoacKichHoatDichReadme('test/app', true);
       expect(res.trangThai).toBe(TrangThaiDichReadme.THAT_BAI);
+    });
+
+    it('yeuCauDichLaiReadme gọi layHoacKichHoatDichReadme với force = true (Fix Claude DELIV-77.7)', async () => {
+      const banGoc = '# App Title\nContent';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.ungDung.findFirst).mockResolvedValue({
+        maUngDung: 'app-uuid',
+        tenRepoDayDu: 'test/app',
+        chuSoHuu: 'test',
+        tenKhoChua: 'app',
+        readmeSha: hash,
+      } as any);
+      vi.mocked(mockGithub.layReadme).mockResolvedValue(banGoc);
+      vi.mocked(mockPrisma.banDichReadme.findUnique).mockResolvedValue({
+        maBanDich: 'bd-1',
+        maUngDung: 'app-uuid',
+        ngonNgu: 'vi',
+        noiDungDich: null,
+        trangThai: TrangThaiDichReadme.THAT_BAI,
+        readmeSha: hash,
+        thoiGianDich: new Date(Date.now() - 2 * 60 * 1000),
+      } as any);
+      vi.mocked(mockCacheService.setNx).mockResolvedValue(true);
+
+      const res = await service.yeuCauDichLaiReadme('test/app');
+      expect(res.trangThai).toBe(TrangThaiDichReadme.DANG_DICH);
     });
   });
 });

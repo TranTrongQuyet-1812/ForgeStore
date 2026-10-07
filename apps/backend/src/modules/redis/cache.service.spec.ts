@@ -130,4 +130,33 @@ describe('CacheService (Resilience & Atomic GETDEL)', () => {
       expect(v2).toBe(80);
     });
   });
+
+  describe('setNx (Atomic Lock & Cooldown)', () => {
+    it('trả về true khi Redis SET NX thành công (key chưa tồn tại)', async () => {
+      mockRedis.set.mockResolvedValue('OK');
+
+      const res = await service.setNx('fs:test:cooldown', 60);
+      expect(res).toBe(true);
+      expect(mockRedis.set).toHaveBeenCalledWith('fs:test:cooldown', '1', 'EX', 60, 'NX');
+    });
+
+    it('trả về false khi Redis SET NX trả về null (key đã tồn tại)', async () => {
+      mockRedis.set.mockResolvedValue(null);
+
+      const res = await service.setNx('fs:test:cooldown', 60);
+      expect(res).toBe(false);
+    });
+
+    it('fallback In-Memory SET NX khi Redis lỗi', async () => {
+      mockRedis.set.mockRejectedValue(new Error('Redis offline'));
+
+      // Lần 1: Chưa có key -> Phải trả về true
+      const res1 = await service.setNx('fs:test:mem_lock', 60);
+      expect(res1).toBe(true);
+
+      // Lần 2: Key đã tồn tại -> Phải trả về false
+      const res2 = await service.setNx('fs:test:mem_lock', 60);
+      expect(res2).toBe(false);
+    });
+  });
 });

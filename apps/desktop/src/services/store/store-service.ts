@@ -105,18 +105,31 @@ export class StoreService {
   }
 
   /**
-   * Lấy tài liệu README song ngữ của ứng dụng (P3B-05.7 / P3B-05.9)
-   * Hỗ trợ force = true cho nút "Dịch lại" vượt qua cooldown 15 phút (Fix Lỗi 1).
+   * Lấy tài liệu README song ngữ của ứng dụng (P3B-05.7 / P3B-05.9).
+   * Nếu có cờ force = true, tự động ủy quyền sang dichLaiReadmeApp (Fix Claude DELIV-77.7).
    */
   async layReadmeApp(
     maUngDungHoacSlug: string,
     force?: boolean,
   ): Promise<ChiTietReadmeResponseDto> {
+    if (force) {
+      return this.dichLaiReadmeApp(maUngDungHoacSlug);
+    }
     const basePath = maUngDungHoacSlug.includes('/')
       ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
       : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme`;
-    const fullPath = force ? `${basePath}?force=true` : basePath;
-    return apiClient.get<ChiTietReadmeResponseDto>(fullPath);
+    return apiClient.get<ChiTietReadmeResponseDto>(basePath);
+  }
+
+  /**
+   * Yêu cầu dịch lại README khi gặp lỗi thất bại (P3B-05.7 / Fix Claude DELIV-77.7).
+   * Gọi tới endpoint POST /apps/.../readme/retry chuyên biệt với rate-limit riêng.
+   */
+  async dichLaiReadmeApp(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
+    const retryPath = maUngDungHoacSlug.includes('/')
+      ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme/retry`
+      : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme/retry`;
+    return apiClient.post<ChiTietReadmeResponseDto>(retryPath, {});
   }
 
   /**

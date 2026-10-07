@@ -86,4 +86,46 @@ describe('AppsController', () => {
       expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1', true);
     });
   });
+
+  describe('POST :owner/:repo/readme/retry (Fix Claude DELIV-77.7)', () => {
+    it('gọi yeuCauDichLaiReadme với slug owner/repo', async () => {
+      const mockResult = {
+        maUngDung: 'uuid-1',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+        banGoc: '# RustDesk',
+        banDich: null,
+        trangThai: TrangThaiDichReadme.DANG_DICH,
+        moHinhDich: null,
+        readmeSha: 'sha256',
+      };
+
+      mockReadmeService.yeuCauDichLaiReadme = vi.fn().mockResolvedValue(mockResult);
+
+      const res = await controller.retryReadmeTheoSlug('rustdesk', 'rustdesk');
+
+      expect(res).toEqual(mockResult);
+      expect(mockReadmeService.yeuCauDichLaiReadme).toHaveBeenCalledWith('rustdesk/rustdesk');
+    });
+  });
+
+  describe('POST :id/readme/retry (Fix Claude DELIV-77.7)', () => {
+    it('gọi yeuCauDichLaiReadme với id hoặc slug', async () => {
+      const mockResult = {
+        maUngDung: 'uuid-1',
+        tenRepoDayDu: 'rustdesk/rustdesk',
+        banGoc: '# RustDesk',
+        banDich: null,
+        trangThai: TrangThaiDichReadme.DANG_DICH,
+        moHinhDich: null,
+        readmeSha: 'sha256',
+      };
+
+      mockReadmeService.yeuCauDichLaiReadme = vi.fn().mockResolvedValue(mockResult);
+
+      const res = await controller.retryReadmeTheoId('uuid-1');
+
+      expect(res).toEqual(mockResult);
+      expect(mockReadmeService.yeuCauDichLaiReadme).toHaveBeenCalledWith('uuid-1');
+    });
+  });
 });

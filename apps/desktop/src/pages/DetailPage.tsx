@@ -894,8 +894,8 @@ export const DetailPage: React.FC = () => {
                             setIsRetryingReadme(true);
                             pollCountRef.current = 0;
                             setIsPollTimedOut(false);
-                            // Gửi cờ force=true để vượt qua cooldown 15 phút (Fix Lỗi 1)
-                            await storeService.layReadmeApp(appId, true);
+                            // Gọi endpoint POST retry chuyên biệt với rate-limit riêng (Fix Claude DELIV-77.7)
+                            await storeService.dichLaiReadmeApp(appId);
                             refetchReadme();
                           } finally {
                             setIsRetryingReadme(false);
@@ -929,8 +929,8 @@ export const DetailPage: React.FC = () => {
                           setIsRetryingReadme(true);
                           pollCountRef.current = 0;
                           setIsPollTimedOut(false);
-                          // Gửi cờ force=true để vượt qua cooldown 15 phút (Fix Lỗi 1)
-                          await storeService.layReadmeApp(appId, true);
+                          // Gọi endpoint POST retry chuyên biệt với rate-limit riêng (Fix Claude DELIV-77.7)
+                          await storeService.dichLaiReadmeApp(appId);
                           refetchReadme();
                         } finally {
                           setIsRetryingReadme(false);

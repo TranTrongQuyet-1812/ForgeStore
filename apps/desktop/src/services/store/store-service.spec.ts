@@ -455,6 +455,16 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     const resSlug = await service.layReadmeApp('rustdesk/rustdesk');
     expect(apiClient.get).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme');
     expect(resSlug.banDich).toBe('# Tài liệu tiếng Việt');
+
+    // Kiểm tra dichLaiReadmeApp gọi POST /retry chuyên biệt (Fix Claude DELIV-77.7)
+    vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
+    await service.dichLaiReadmeApp('rustdesk/rustdesk');
+    expect(apiClient.post).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme/retry', {});
+
+    // Kiểm tra layReadmeApp với force = true ủy quyền sang dichLaiReadmeApp
+    vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
+    await service.layReadmeApp('uuid-123', true);
+    expect(apiClient.post).toHaveBeenCalledWith('/apps/uuid-123/readme/retry', {});
   });
 
   it('mapDtoToAppCard ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {

@@ -92,12 +92,11 @@ export class AppsController {
   }
 
   @CongKhai()
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get(':owner/:repo/readme')
   @ApiOperation({
     summary: 'Lấy tài liệu README song ngữ (bản gốc & bản dịch tiếng Việt) theo slug (P3B-05.7)',
     description:
-      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Nếu chưa có, tự động kích hoạt dịch chạy nền non-blocking. Hỗ trợ ?force=true để dịch lại tức thì.',
+      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Nếu chưa có, tự động kích hoạt dịch chạy nền non-blocking.',
   })
   @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
   @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
@@ -115,12 +114,33 @@ export class AppsController {
   }
 
   @CongKhai()
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post(':owner/:repo/readme/retry')
+  @ApiOperation({
+    summary:
+      'Yêu cầu dịch lại README theo slug khi bản dịch trước đó thất bại (P3B-05.7 / Fix Claude DELIV-77.7)',
+    description:
+      'Chỉ áp dụng khi trạng thái là THAT_BAI. Áp dụng rate limit 3 req/phút và khóa Redis 60s per-app chống spam.',
+  })
+  @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
+  @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
+  @ApiResponse({
+    status: 200,
+    description: 'Kích hoạt dịch lại và trả về thông tin trạng thái README',
+  })
+  async retryReadmeTheoSlug(
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+  ): Promise<ChiTietReadmeResponseDto> {
+    return this.readmeTranslationService.yeuCauDichLaiReadme(`${owner}/${repo}`);
+  }
+
+  @CongKhai()
   @Get(':id/readme')
   @ApiOperation({
     summary: 'Lấy tài liệu README song ngữ theo UUID (P3B-05.7)',
     description:
-      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Tự động kích hoạt dịch nền nếu chưa có. Hỗ trợ ?force=true để dịch lại tức thì.',
+      'Trả về nội dung Markdown gốc và bản dịch tiếng Việt nếu có. Tự động kích hoạt dịch nền nếu chưa có.',
   })
   @ApiParam({ name: 'id', description: 'UUID hoặc slug ứng dụng', example: 'rustdesk/rustdesk' })
   @ApiResponse({
@@ -133,6 +153,24 @@ export class AppsController {
   ): Promise<ChiTietReadmeResponseDto> {
     const isForce = force === 'true' || force === '1';
     return this.readmeTranslationService.layHoacKichHoatDichReadme(id, isForce);
+  }
+
+  @CongKhai()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post(':id/readme/retry')
+  @ApiOperation({
+    summary:
+      'Yêu cầu dịch lại README theo ID/Slug khi bản dịch trước đó thất bại (P3B-05.7 / Fix Claude DELIV-77.7)',
+    description:
+      'Chỉ áp dụng khi trạng thái là THAT_BAI. Áp dụng rate limit 3 req/phút và khóa Redis 60s per-app chống spam.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID hoặc slug ứng dụng', example: 'rustdesk/rustdesk' })
+  @ApiResponse({
+    status: 200,
+    description: 'Kích hoạt dịch lại và trả về thông tin trạng thái README',
+  })
+  async retryReadmeTheoId(@Param('id') id: string): Promise<ChiTietReadmeResponseDto> {
+    return this.readmeTranslationService.yeuCauDichLaiReadme(id);
   }
 
   @CongKhai()
