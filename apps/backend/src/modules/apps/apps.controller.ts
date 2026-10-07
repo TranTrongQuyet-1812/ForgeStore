@@ -107,10 +107,8 @@ export class AppsController {
   async layReadmeTheoSlug(
     @Param('owner') owner: string,
     @Param('repo') repo: string,
-    @Query('force') force?: string,
   ): Promise<ChiTietReadmeResponseDto> {
-    const isForce = force === 'true' || force === '1';
-    return this.readmeTranslationService.layHoacKichHoatDichReadme(`${owner}/${repo}`, isForce);
+    return this.readmeTranslationService.layHoacKichHoatDichReadme(`${owner}/${repo}`);
   }
 
   @CongKhai()
@@ -147,12 +145,8 @@ export class AppsController {
     status: 200,
     description: 'Nội dung README gốc và bản dịch tiếng Việt kèm trạng thái',
   })
-  async layReadmeTheoId(
-    @Param('id') id: string,
-    @Query('force') force?: string,
-  ): Promise<ChiTietReadmeResponseDto> {
-    const isForce = force === 'true' || force === '1';
-    return this.readmeTranslationService.layHoacKichHoatDichReadme(id, isForce);
+  async layReadmeTheoId(@Param('id') id: string): Promise<ChiTietReadmeResponseDto> {
+    return this.readmeTranslationService.layHoacKichHoatDichReadme(id);
   }
 
   @CongKhai()

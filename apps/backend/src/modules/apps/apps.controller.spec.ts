@@ -24,7 +24,7 @@ describe('AppsController', () => {
   });
 
   describe('GET :owner/:repo/readme', () => {
-    it('gọi layHoacKichHoatDichReadme với slug owner/repo', async () => {
+    it('gọi layHoacKichHoatDichReadme với slug owner/repo (idempotent read)', async () => {
       const mockResult = {
         maUngDung: 'uuid-1',
         tenRepoDayDu: 'rustdesk/rustdesk',
@@ -40,26 +40,12 @@ describe('AppsController', () => {
       const res = await controller.layReadmeTheoSlug('rustdesk', 'rustdesk');
 
       expect(res).toEqual(mockResult);
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
-        'rustdesk/rustdesk',
-        false,
-      );
-    });
-
-    it('gọi layHoacKichHoatDichReadme với cờ isForce = true khi query force=true', async () => {
-      vi.mocked(mockReadmeService.layHoacKichHoatDichReadme).mockResolvedValue({} as any);
-
-      await controller.layReadmeTheoSlug('rustdesk', 'rustdesk', 'true');
-
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
-        'rustdesk/rustdesk',
-        true,
-      );
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('rustdesk/rustdesk');
     });
   });
 
   describe('GET :id/readme', () => {
-    it('gọi layHoacKichHoatDichReadme với id hoặc uuid', async () => {
+    it('gọi layHoacKichHoatDichReadme với id hoặc uuid (idempotent read)', async () => {
       const mockResult = {
         maUngDung: 'uuid-1',
         tenRepoDayDu: 'rustdesk/rustdesk',
@@ -75,15 +61,7 @@ describe('AppsController', () => {
       const res = await controller.layReadmeTheoId('uuid-1');
 
       expect(res).toEqual(mockResult);
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1', false);
-    });
-
-    it('gọi layHoacKichHoatDichReadme với cờ isForce = true khi query force=true', async () => {
-      vi.mocked(mockReadmeService.layHoacKichHoatDichReadme).mockResolvedValue({} as any);
-
-      await controller.layReadmeTheoId('uuid-1', 'true');
-
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1', true);
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1');
     });
   });
 
