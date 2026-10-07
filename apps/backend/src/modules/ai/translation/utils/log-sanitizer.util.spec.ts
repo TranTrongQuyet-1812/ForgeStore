@@ -28,10 +28,11 @@ describe('sanitizeLogMessage', () => {
       'OpenRouter HTTP 401: Key sk-or-v1-[REDACTED] is invalid',
     );
 
-    const nvidiaErr = 'NVIDIA auth failed: nvapi-abcdef1234567890abcdef1234567890';
+    // Khóa giả ghép từ hai nửa để mã nguồn không chứa chuỗi giống khóa thật (CI quét bí mật sẽ báo nhầm).
+    const nvidiaErr = `NVIDIA auth failed: ${'nvapi-'}${'abcdef1234567890abcdef1234567890'}`;
     expect(sanitizeLogMessage(nvidiaErr)).toBe('NVIDIA auth failed: nvapi-[REDACTED]');
 
-    const googleErr = 'Google AI request with key AIzaSyD1234567890abcdef1234567890abcdef';
+    const googleErr = `Google AI request with key ${'AIza'}${'SyD1234567890abcdef1234567890abcdef'}`;
     expect(sanitizeLogMessage(googleErr)).toBe('Google AI request with key AIza[REDACTED]');
   });
 
