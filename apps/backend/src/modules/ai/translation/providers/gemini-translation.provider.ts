@@ -10,6 +10,7 @@ import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.pr
 import { StructureValidator } from '../utils/structure-validator.util';
 import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
 import { LlmRateLimiterService } from '../../services/llm-rate-limiter.service';
+import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../utils/batch-translation.util';
 
 @Injectable()
 export class GeminiTranslationProvider implements ITranslationProvider {
@@ -286,7 +287,6 @@ export class GeminiTranslationProvider implements ITranslationProvider {
         ?.candidates?.[0];
       const finishReason = candidate?.finishReason;
       const rawText = StructureValidator.extractText(response);
-      const { phanTichKetQuaBatchJson } = await import('../utils/batch-translation.util');
 
       return phanTichKetQuaBatchJson(
         rawText,
@@ -296,7 +296,6 @@ export class GeminiTranslationProvider implements ITranslationProvider {
         finishReason,
       );
     } catch (err: unknown) {
-      const { phanLoaiLoiBatchJson } = await import('../utils/batch-translation.util');
       return phanLoaiLoiBatchJson(
         err,
         this.providerName,

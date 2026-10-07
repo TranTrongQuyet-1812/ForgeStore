@@ -82,9 +82,10 @@ export function phanLoaiLoiBatchJson(
 
   if (
     error?.status === 429 ||
-    errMsg.includes('429') ||
+    /\b429\b/.test(errMsg) ||
     errMsg.includes('RESOURCE_EXHAUSTED') ||
-    errMsg.includes('rate limit')
+    errMsg.toLowerCase().includes('rate limit') ||
+    errMsg.toLowerCase().includes('too many requests')
   ) {
     logger.warn(`[${provider}] Dịch gom lô chạm giới hạn tỷ lệ (429)`);
     return {

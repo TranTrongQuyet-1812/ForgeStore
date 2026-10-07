@@ -8,6 +8,7 @@ import {
 import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.prompt';
 import { StructureValidator } from '../utils/structure-validator.util';
 import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../utils/batch-translation.util';
 
 @Injectable()
 export class GroqTranslationProvider implements ITranslationProvider {
@@ -286,8 +287,6 @@ export class GroqTranslationProvider implements ITranslationProvider {
       const finishReason = choices[0]?.finish_reason;
       const rawContent = choices[0]?.message?.content ?? '';
 
-      const { phanTichKetQuaBatchJson } = await import('../utils/batch-translation.util');
-
       return phanTichKetQuaBatchJson(
         rawContent,
         this.providerName,
@@ -296,7 +295,6 @@ export class GroqTranslationProvider implements ITranslationProvider {
         finishReason,
       );
     } catch (err: unknown) {
-      const { phanLoaiLoiBatchJson } = await import('../utils/batch-translation.util');
       return phanLoaiLoiBatchJson(
         err,
         this.providerName,

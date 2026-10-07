@@ -877,6 +877,37 @@ export const DetailPage: React.FC = () => {
                       </span>
                     </div>
                   )}
+                  {readmeData?.trangThai === 'THAT_BAI' && (
+                    <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>
+                          Tài liệu vừa cập nhật trên GitHub nhưng cập nhật bản dịch tiếng Việt mới
+                          thất bại (tạm thời hiển thị bản dịch trước đó).
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isRetryingReadme}
+                        onClick={async () => {
+                          try {
+                            setIsRetryingReadme(true);
+                            pollCountRef.current = 0;
+                            setIsPollTimedOut(false);
+                            // Gửi cờ force=true để vượt qua cooldown 15 phút (Fix Lỗi 1)
+                            await storeService.layReadmeApp(appId, true);
+                            refetchReadme();
+                          } finally {
+                            setIsRetryingReadme(false);
+                          }
+                        }}
+                        className="text-xs font-semibold text-accent-forge hover:underline shrink-0 ml-2 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
+                      >
+                        {isRetryingReadme && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+                        Dịch lại
+                      </button>
+                    </div>
+                  )}
                   <MarkdownView
                     content={readmeData.banDich}
                     owner={appDetail?.chuSoHuu}

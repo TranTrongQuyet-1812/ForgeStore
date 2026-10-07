@@ -5,6 +5,7 @@ import { GithubService } from '../../../github/github.service';
 import { CacheService } from '../../../redis/cache.service';
 import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { MarkdownMasker } from '../utils/markdown-masker.util';
 import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types';
 
 @Injectable()
@@ -23,7 +24,9 @@ export class ReadmeTranslationService {
    * Tính mã băm SHA-256 cho chuỗi văn bản.
    */
   public tinhMaBam(text: string): string {
-    return createHash('sha256').update(text.trim()).digest('hex');
+    return createHash('sha256')
+      .update(String(text ?? '').trim())
+      .digest('hex');
   }
 
   /**
@@ -61,10 +64,11 @@ export class ReadmeTranslationService {
       if (doan) doanList.push(doan);
     }
 
-    // Nếu một phân đoạn vẫn quá dài (> maxChunkLength), chia tiếp theo heading ### hoặc ngắt đoạn kép \n\n
+    // 2. Với các phân đoạn có độ dài sau khi che > maxChunkLength, chia tiếp theo ### hoặc ngắt đoạn kép \n\n
     const ketQua: string[] = [];
     for (const doan of doanList) {
-      if (doan.length <= maxChunkLength) {
+      // Claude Lỗi Đỏ 2: Đo độ dài sau khi che code block (khối code dài > 5k ký tự sau khi che chỉ còn 6 ký tự)
+      if (this.tinhDoDaiSauChe(doan) <= maxChunkLength) {
         ketQua.push(doan);
       } else {
         const subLines = doan.split('\n');
@@ -89,9 +93,9 @@ export class ReadmeTranslationService {
           if (sub) subDoanList.push(sub);
         }
 
-        // Kiểm tra tiếp: nếu vẫn có đoạn > 5000 ký tự (Cloudflare Worker limit), chia tiếp theo \n\n ngoài khối code
+        // Kiểm tra tiếp: nếu vẫn có đoạn sau khi che > 4500 ký tự, chia tiếp theo \n\n ngoài khối code
         for (const subDoan of subDoanList) {
-          if (subDoan.length <= 5000) {
+          if (this.tinhDoDaiSauChe(subDoan) <= 4500) {
             ketQua.push(subDoan);
           } else {
             const pLines = subDoan.split('\n');
@@ -107,11 +111,7 @@ export class ReadmeTranslationService {
               if (!pInCodeBlock && pLine.trim() === '' && currentLen >= 2500) {
                 const chunk = pBuffer.join('\n').trim();
                 if (chunk) {
-                  if (chunk.length > 5000) {
-                    ketQua.push(...this.chiaNhoVanXuoiDai(chunk, 4500));
-                  } else {
-                    ketQua.push(chunk);
-                  }
+                  ketQua.push(...this.chiaNhoDoanAnToanCodeBlock(chunk, 4500));
                 }
                 pBuffer = [];
                 currentLen = 0;
@@ -124,12 +124,7 @@ export class ReadmeTranslationService {
             if (pBuffer.length > 0) {
               const chunk = pBuffer.join('\n').trim();
               if (chunk) {
-                // Lỗi 2: Văn xuôi dài trên 5000 ký tự không có dòng trống được chia nhỏ triệt để
-                if (chunk.length > 5000) {
-                  ketQua.push(...this.chiaNhoVanXuoiDai(chunk, 4500));
-                } else {
-                  ketQua.push(chunk);
-                }
+                ketQua.push(...this.chiaNhoDoanAnToanCodeBlock(chunk, 4500));
               }
             }
           }
@@ -137,19 +132,100 @@ export class ReadmeTranslationService {
       }
     }
 
-    // Bảo hiểm lần cuối: đảm bảo 100% các phân đoạn không vượt quá 5000 ký tự
+    // 3. Bảo hiểm lần cuối: đảm bảo không phân đoạn nào có độ dài sau khi che vượt quá 4500 ký tự
     const ketQuaCuoi: string[] = [];
     for (const d of ketQua) {
       const trimmed = d.trim();
       if (!trimmed) continue;
-      if (trimmed.length > 5000) {
-        ketQuaCuoi.push(...this.chiaNhoVanXuoiDai(trimmed, 4500));
+      if (this.tinhDoDaiSauChe(trimmed) > 4500) {
+        ketQuaCuoi.push(...this.chiaNhoDoanAnToanCodeBlock(trimmed, 4500));
       } else {
         ketQuaCuoi.push(trimmed);
       }
     }
 
     return ketQuaCuoi.filter((d) => d.trim().length > 0);
+  }
+
+  /**
+   * Tính độ dài của văn bản sau khi đã che khối code và các thành phần kỹ thuật (Lỗi 2 Claude).
+   */
+  public tinhDoDaiSauChe(text: string): number {
+    return MarkdownMasker.mask(text).maskedText.length;
+  }
+
+  /**
+   * Chia nhỏ phân đoạn văn bản mà TUYỆT ĐỐI không cắt bên trong khối code fence ``` (Fix Lỗi 2 Claude).
+   * Khối code dù dài > 5.000 ký tự vẫn được giữ nguyên vẹn vì sau khi che chỉ còn 6 ký tự (⟦C1⟧).
+   */
+  public chiaNhoDoanAnToanCodeBlock(doan: string, maxLen = 4500): string[] {
+    const trimmed = doan.trim();
+    if (!trimmed) return [];
+
+    // Nếu sau khi che độ dài <= maxLen, giữ nguyên vẹn 100%
+    if (this.tinhDoDaiSauChe(trimmed) <= maxLen) {
+      return [trimmed];
+    }
+
+    // Nếu không chứa khối code, chia nhỏ văn xuôi an toàn
+    if (!/```/.test(trimmed)) {
+      return this.chiaNhoVanXuoiDai(trimmed, maxLen);
+    }
+
+    // Tách văn xuôi và khối code theo dòng để bảo toàn trọn vẹn khối code
+    const lines = trimmed.split('\n');
+    const result: string[] = [];
+    let currentLines: string[] = [];
+    let inCode = false;
+
+    for (const line of lines) {
+      if (/^\s*```/.test(line)) {
+        inCode = !inCode;
+        currentLines.push(line);
+        // Khi vừa đóng khối code
+        if (!inCode) {
+          const blockText = currentLines.join('\n').trim();
+          if (this.tinhDoDaiSauChe(blockText) >= 2500) {
+            result.push(blockText);
+            currentLines = [];
+          }
+        }
+        continue;
+      }
+
+      if (inCode) {
+        // Đang trong khối code: gom nguyên vẹn, không cắt
+        currentLines.push(line);
+      } else {
+        // Ngoài khối code: ngắt theo dòng trống nếu buffer đã lớn
+        if (line.trim() === '' && currentLines.length > 0) {
+          const currentText = currentLines.join('\n').trim();
+          if (this.tinhDoDaiSauChe(currentText) >= 2000) {
+            result.push(currentText);
+            currentLines = [];
+            continue;
+          }
+        }
+        currentLines.push(line);
+      }
+    }
+
+    if (currentLines.length > 0) {
+      const rest = currentLines.join('\n').trim();
+      if (rest) result.push(rest);
+    }
+
+    // Lọc lại: phần nào không chứa code mà dài > maxLen thì chia tiếp bằng chiaNhoVanXuoiDai
+    const finalResult: string[] = [];
+    for (const r of result) {
+      if (!/```/.test(r) && r.length > maxLen) {
+        finalResult.push(...this.chiaNhoVanXuoiDai(r, maxLen));
+      } else {
+        finalResult.push(r);
+      }
+    }
+
+    return finalResult;
   }
 
   /**
@@ -267,9 +343,8 @@ export class ReadmeTranslationService {
       },
     });
 
-    // 1. Nếu đã dịch xong và hash khớp với nội dung gốc
+    // 1. Nếu đã dịch xong và hash khớp với nội dung gốc (bỏ qua cờ force vì bản dịch đã hoàn tất và mới nhất)
     if (
-      !force &&
       banDichDb &&
       banDichDb.trangThai === TrangThaiDichReadme.HOAN_TAT &&
       banDichDb.readmeSha === hashGoc
@@ -285,12 +360,12 @@ export class ReadmeTranslationService {
       };
     }
 
-    // 2. FS-SEC-02 & Lỗi 4: Kiểm tra trạng thái DANG_DICH
+    // 2. FS-SEC-02 & Lỗi 4: Kiểm tra trạng thái DANG_DICH (bỏ qua cờ force để giữ chốt chặn chạy trùng in-flight)
     const isDangDichInMemory = this.dangDichSet.has(app.maUngDung);
     const isDangDichInDb =
       banDichDb?.trangThai === TrangThaiDichReadme.DANG_DICH && banDichDb.readmeSha === hashGoc;
 
-    if (!force && isDangDichInMemory) {
+    if (isDangDichInMemory) {
       return {
         maUngDung: app.maUngDung,
         tenRepoDayDu: app.tenRepoDayDu,
@@ -302,7 +377,7 @@ export class ReadmeTranslationService {
       };
     }
 
-    if (!force && isDangDichInDb) {
+    if (isDangDichInDb) {
       const msDangDich = banDichDb?.thoiGianDich
         ? Date.now() - new Date(banDichDb.thoiGianDich).getTime()
         : 0;
@@ -327,21 +402,39 @@ export class ReadmeTranslationService {
       );
     }
 
-    // 3. FS-SEC-02: Nếu vừa thất bại trong vòng 15 phút, áp dụng cooldown chống spam DoS (trừ khi người dùng bấm Dịch lại có force=true)
+    // 3. FS-SEC-02 & Lỗi Đỏ 1 Claude: Nếu vừa thất bại trong vòng 15 phút, áp dụng cooldown chống spam DoS.
+    // Cờ force=true CHỈ có hiệu lực khi trạng thái hiện tại là THAT_BAI, và phải tuân thủ khóa Redis 60s cooldown.
     if (
-      !force &&
       banDichDb &&
       banDichDb.trangThai === TrangThaiDichReadme.THAT_BAI &&
       banDichDb.readmeSha === hashGoc
     ) {
       const msSinceLastFail = Date.now() - new Date(banDichDb.thoiGianDich).getTime();
       const COOLDOWN_THAT_BAI_MS = 15 * 60 * 1000;
-      if (msSinceLastFail < COOLDOWN_THAT_BAI_MS) {
+
+      let choPhepForce = false;
+      if (force) {
+        const forceCooldownKey = `fs:ai:translation:force_cooldown:${app.maUngDung}`;
+        // Redis SET NX 60s: mỗi app chỉ được ép dịch lại tối đa 1 lần / phút
+        const daKhoaCooldown = await this.cacheService.lay<boolean>(forceCooldownKey);
+        if (!daKhoaCooldown) {
+          await this.cacheService.luu(forceCooldownKey, true, 60);
+          choPhepForce = true;
+        } else {
+          this.logger.warn(
+            sanitizeLogMessage(
+              `Yêu cầu force dịch lại cho app [${app.tenRepoDayDu}] bị từ chối do đang trong 60s cooldown`,
+            ),
+          );
+        }
+      }
+
+      if (!choPhepForce && msSinceLastFail < COOLDOWN_THAT_BAI_MS) {
         return {
           maUngDung: app.maUngDung,
           tenRepoDayDu: app.tenRepoDayDu,
           banGoc,
-          banDich: null,
+          banDich: banDichDb.noiDungDich || null,
           trangThai: TrangThaiDichReadme.THAT_BAI,
           moHinhDich: banDichDb.moHinhDich,
           readmeSha: hashGoc,
@@ -349,29 +442,13 @@ export class ReadmeTranslationService {
       }
     }
 
-    // 4. Nếu README gốc đã thay đổi (hash khác), chuyển trạng thái sang DA_CU nhưng vẫn cho đọc bản cũ (P3B-05.8 & Fix Lỗi 1)
+    // 4. Nếu README gốc đã thay đổi (hash khác), trạng thái hiển thị là DA_CU kèm bản dịch cũ (P3B-05.8)
     const isReadmeThayDoi = Boolean(
       banDichDb && banDichDb.readmeSha !== hashGoc && banDichDb.noiDungDich,
     );
-    if (isReadmeThayDoi && banDichDb && banDichDb.trangThai !== TrangThaiDichReadme.DA_CU) {
-      try {
-        await this.prisma.banDichReadme.update({
-          where: { maBanDich: banDichDb.maBanDich },
-          data: { trangThai: TrangThaiDichReadme.DA_CU },
-        });
-      } catch (err) {
-        this.logger.warn(
-          sanitizeLogMessage(`Không thể cập nhật trạng thái DA_CU cho bản dịch: ${err}`),
-        );
-      }
-      banDichDb.trangThai = TrangThaiDichReadme.DA_CU;
-    }
 
     // 5. Kích hoạt dịch chạy nền non-blocking cho bản mới
-    if (force) {
-      this.dangDichSet.delete(app.maUngDung);
-    }
-
+    // Tuyệt đối không xóa dangDichSet để bảo toàn chốt chặn chạy trùng in-flight (Lỗi Đỏ 1 Claude)
     this.kichHoatDichReadmeNen(app.maUngDung, app.chuSoHuu, app.tenKhoChua, banGoc, hashGoc).catch(
       (err: unknown) => {
         this.logger.error(

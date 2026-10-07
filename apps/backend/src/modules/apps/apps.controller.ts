@@ -92,6 +92,7 @@ export class AppsController {
   }
 
   @CongKhai()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get(':owner/:repo/readme')
   @ApiOperation({
     summary: 'Lấy tài liệu README song ngữ (bản gốc & bản dịch tiếng Việt) theo slug (P3B-05.7)',
@@ -114,6 +115,7 @@ export class AppsController {
   }
 
   @CongKhai()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get(':id/readme')
   @ApiOperation({
     summary: 'Lấy tài liệu README song ngữ theo UUID (P3B-05.7)',
