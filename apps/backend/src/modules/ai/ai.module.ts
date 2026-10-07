@@ -18,6 +18,11 @@ import { TrustScoreService } from './services/trust-score.service';
 import { SemanticSearchService } from './services/semantic-search.service';
 import { SearchTranslatorService } from './services/search-translator.service';
 import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
+import { GeminiTranslationProvider } from './translation/providers/gemini-translation.provider';
+import { NvidiaTranslationProvider } from './translation/providers/nvidia-translation.provider';
+import { CloudflareTranslationProvider } from './translation/providers/cloudflare-translation.provider';
+import { GroqTranslationProvider } from './translation/providers/groq-translation.provider';
+import { TranslationRotationService } from './translation/services/translation-rotation.service';
 
 @Module({
   imports: [ConfigModule, PrismaModule, RedisModule, GithubModule],
@@ -35,6 +40,12 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
     SemanticSearchService,
     SearchTranslatorService,
     JevBenchmarkService,
+    // Lớp Dịch Dùng Chung Đa Tầng (Shared Translation Engine)
+    GeminiTranslationProvider,
+    NvidiaTranslationProvider,
+    CloudflareTranslationProvider,
+    GroqTranslationProvider,
+    TranslationRotationService,
   ],
   exports: [
     LlmRateLimiterService,
@@ -46,6 +57,7 @@ import { JevBenchmarkService } from './benchmark/jev-benchmark.service';
     SemanticSearchService,
     SearchTranslatorService,
     JevBenchmarkService,
+    TranslationRotationService,
   ],
 })
 export class AiModule {}

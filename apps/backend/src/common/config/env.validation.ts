@@ -52,8 +52,14 @@ export const envSchema = z.object({
     .default(true)
     .transform((v) => v === true || v === 'true' || v === '1'),
   NVIDIA_API_KEY: z.string().optional(),
-
   NVIDIA_NIM_MODEL: z.string().optional(),
+
+  // Shared Translation Engine (4 Tầng Nhà Cung Cấp)
+  CLOUDFLARE_TRANSLATE_URL: z.string().optional(),
+  CLOUDFLARE_TRANSLATE_SECRET: z.string().optional(),
+  CLOUDFLARE_TRANSLATE_MODEL: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().optional(),
 
   // Google OAuth (Tùy chọn)
   GOOGLE_CLIENT_ID: z.string().optional(),
