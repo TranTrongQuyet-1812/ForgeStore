@@ -861,7 +861,11 @@ export const DetailPage: React.FC = () => {
             ) : readmeLang === 'vi' ? (
               readmeData?.banDich ? (
                 <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                  <MarkdownView content={readmeData.banDich} />
+                  <MarkdownView
+                    content={readmeData.banDich}
+                    owner={appDetail?.chuSoHuu}
+                    repo={appDetail?.tenKhoChua}
+                  />
                 </div>
               ) : readmeData?.trangThai === 'THAT_BAI' || isPollTimedOut ? (
                 <div className="flex flex-col gap-3">
@@ -884,7 +888,11 @@ export const DetailPage: React.FC = () => {
                   </div>
                   {readmeData?.banGoc && (
                     <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                      <MarkdownView content={readmeData.banGoc} />
+                      <MarkdownView
+                        content={readmeData.banGoc}
+                        owner={appDetail?.chuSoHuu}
+                        repo={appDetail?.tenKhoChua}
+                      />
                     </div>
                   )}
                 </div>
@@ -900,14 +908,22 @@ export const DetailPage: React.FC = () => {
                   </div>
                   {readmeData?.banGoc && (
                     <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                      <MarkdownView content={readmeData.banGoc} />
+                      <MarkdownView
+                        content={readmeData.banGoc}
+                        owner={appDetail?.chuSoHuu}
+                        repo={appDetail?.tenKhoChua}
+                      />
                     </div>
                   )}
                 </div>
               )
             ) : readmeData?.banGoc ? (
               <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                <MarkdownView content={readmeData.banGoc} />
+                <MarkdownView
+                  content={readmeData.banGoc}
+                  owner={appDetail?.chuSoHuu}
+                  repo={appDetail?.tenKhoChua}
+                />
               </div>
             ) : (
               <p className="text-xs text-muted italic">

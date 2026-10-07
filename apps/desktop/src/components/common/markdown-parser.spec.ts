@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMarkdownBlocks } from './MarkdownView';
+import { parseMarkdownBlocks, resolveGitHubUrl, customSanitizeSchema } from './MarkdownView';
 
 describe('Markdown Parser Logic (P3B-05.9)', () => {
   it('xử lý chuỗi rỗng hoặc undefined trả về mảng rỗng', () => {
@@ -132,5 +132,95 @@ winget install rustdesk
       alt: 'ForgeStore Preview',
       src: 'https://raw.githubusercontent.com/test/preview.png',
     });
+  });
+});
+
+describe('Thuật toán resolveGitHubUrl & An ninh Markdown (P3B-05.9)', () => {
+  const repoCtx = { owner: 'rustdesk', repo: 'rustdesk' };
+
+  it('xử lý chuỗi rỗng hoặc undefined trả về rỗng', () => {
+    expect(resolveGitHubUrl('')).toBe('');
+    expect(resolveGitHubUrl('   ')).toBe('');
+  });
+
+  it('triệt tiêu các scheme nguy hiểm (javascript:, vbscript:, data:text/)', () => {
+    expect(resolveGitHubUrl('javascript:alert(1)', repoCtx)).toBe('');
+    expect(resolveGitHubUrl('JAVASCRIPT:alert("xss")', repoCtx)).toBe('');
+    expect(resolveGitHubUrl('vbscript:msgbox("hi")', repoCtx)).toBe('');
+    expect(resolveGitHubUrl('data:text/html;base64,...', repoCtx)).toBe('');
+  });
+
+  it('giữ nguyên các URL tuyệt đối an toàn và anchor trong trang', () => {
+    expect(resolveGitHubUrl('https://rustdesk.com', repoCtx)).toBe('https://rustdesk.com');
+    expect(resolveGitHubUrl('http://example.com/api', repoCtx)).toBe('http://example.com/api');
+    expect(resolveGitHubUrl('mailto:support@rustdesk.com', repoCtx)).toBe(
+      'mailto:support@rustdesk.com',
+    );
+    expect(resolveGitHubUrl('#features', repoCtx)).toBe('#features');
+  });
+
+  it('giữ nguyên data:image/ cho ảnh khi isImage = true', () => {
+    const base64Img =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    expect(resolveGitHubUrl(base64Img, repoCtx, true)).toBe(base64Img);
+  });
+
+  it('biến đổi đường dẫn ảnh tương đối thành URL raw GitHub', () => {
+    // Không có dấu ./
+    expect(resolveGitHubUrl('res/logo-header.svg', repoCtx, true)).toBe(
+      'https://raw.githubusercontent.com/rustdesk/rustdesk/HEAD/res/logo-header.svg',
+    );
+    // Có dấu ./
+    expect(resolveGitHubUrl('./assets/screenshot.png', repoCtx, true)).toBe(
+      'https://raw.githubusercontent.com/rustdesk/rustdesk/HEAD/assets/screenshot.png',
+    );
+    // Có dấu /
+    expect(resolveGitHubUrl('/docs/images/arch.jpg', repoCtx, true)).toBe(
+      'https://raw.githubusercontent.com/rustdesk/rustdesk/HEAD/docs/images/arch.jpg',
+    );
+  });
+
+  it('biến đổi đường dẫn link tương đối thành URL blob GitHub', () => {
+    expect(resolveGitHubUrl('docs/README.md', repoCtx, false)).toBe(
+      'https://github.com/rustdesk/rustdesk/blob/HEAD/docs/README.md',
+    );
+    expect(resolveGitHubUrl('./LICENSE', repoCtx, false)).toBe(
+      'https://github.com/rustdesk/rustdesk/blob/HEAD/LICENSE',
+    );
+    // Kiểm tra làm sạch ../ và ../../ (Lỗi 3 phản hồi từ Claude)
+    expect(resolveGitHubUrl('../LICENSE', repoCtx, false)).toBe(
+      'https://github.com/rustdesk/rustdesk/blob/HEAD/LICENSE',
+    );
+    expect(resolveGitHubUrl('../../docs/ARCHITECTURE.md', repoCtx, false)).toBe(
+      'https://github.com/rustdesk/rustdesk/blob/HEAD/docs/ARCHITECTURE.md',
+    );
+  });
+
+  it('tôn trọng nhánh tuỳ chỉnh nếu được cung cấp', () => {
+    const customCtx = { owner: 'rustdesk', repo: 'rustdesk', branch: 'master' };
+    expect(resolveGitHubUrl('res/logo.svg', customCtx, true)).toBe(
+      'https://raw.githubusercontent.com/rustdesk/rustdesk/master/res/logo.svg',
+    );
+  });
+});
+
+describe('Cấu hình customSanitizeSchema (An ninh & Lọc mã độc)', () => {
+  it('không cho phép thẻ script và iframe', () => {
+    expect(customSanitizeSchema.tagNames).not.toContain('script');
+    expect(customSanitizeSchema.tagNames).not.toContain('iframe');
+    expect(customSanitizeSchema.tagNames).not.toContain('object');
+    expect(customSanitizeSchema.tagNames).not.toContain('embed');
+  });
+
+  it('cho phép thuộc tính align cho p, div, img để hiển thị căn giữa chuẩn', () => {
+    expect(customSanitizeSchema.attributes?.p).toContain('align');
+    expect(customSanitizeSchema.attributes?.div).toContain('align');
+    expect(customSanitizeSchema.attributes?.img).toContain('align');
+  });
+
+  it('chỉ cho phép các protocol an toàn cho href và src', () => {
+    expect(customSanitizeSchema.protocols.href).toEqual(['http', 'https', 'mailto']);
+    expect(customSanitizeSchema.protocols.src).toEqual(['http', 'https', 'data']);
+    expect(customSanitizeSchema.protocols.href).not.toContain('javascript');
   });
 });
