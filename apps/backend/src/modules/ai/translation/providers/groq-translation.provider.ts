@@ -226,7 +226,7 @@ export class GroqTranslationProvider implements ITranslationProvider {
     const timeoutMs = options?.timeoutMs ?? 45_000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo, trichXuatJsonTuPhanHoi } =
+    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo } =
       await import('../prompts/translation.prompt');
 
     try {
@@ -284,62 +284,26 @@ export class GroqTranslationProvider implements ITranslationProvider {
       const choices =
         (json.choices as Array<{ message?: { content?: string }; finish_reason?: string }>) ?? [];
       const finishReason = choices[0]?.finish_reason;
-      if (finishReason === 'length') {
-        this.logger.warn(
-          `Groq gom lô dịch bị cắt cụt do chạm giới hạn token (finish_reason === 'length')`,
-        );
-        return {
-          data: null,
-          lyDoLoi: 'ai_error',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: Date.now() - startTime,
-        };
-      }
-
       const rawContent = choices[0]?.message?.content ?? '';
-      const parsedJson = trichXuatJsonTuPhanHoi(rawContent);
 
-      if (!parsedJson || Object.keys(parsedJson).length === 0) {
-        return {
-          data: null,
-          lyDoLoi: 'empty_output',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: Date.now() - startTime,
-        };
-      }
+      const { phanTichKetQuaBatchJson } = await import('../utils/batch-translation.util');
 
-      return {
-        data: parsedJson,
-        lyDoLoi: null,
-        provider: this.providerName,
-        model: this.modelName,
-        thoiGianMs: Date.now() - startTime,
-      };
+      return phanTichKetQuaBatchJson(
+        rawContent,
+        this.providerName,
+        this.modelName,
+        Date.now() - startTime,
+        finishReason,
+      );
     } catch (err: unknown) {
-      const duration = Date.now() - startTime;
-      const error = err as { name?: string; message?: string };
-
-      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-        this.logger.warn(`Groq dịch gom lô thất bại: Hết thời gian chờ (${timeoutMs}ms)`);
-        return {
-          data: null,
-          lyDoLoi: 'timeout',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: duration,
-        };
-      }
-
-      this.logger.warn(sanitizeLogMessage(`Groq dịch gom lô gặp lỗi: ${error.message}`));
-      return {
-        data: null,
-        lyDoLoi: 'ai_error',
-        provider: this.providerName,
-        model: this.modelName,
-        thoiGianMs: duration,
-      };
+      const { phanLoaiLoiBatchJson } = await import('../utils/batch-translation.util');
+      return phanLoaiLoiBatchJson(
+        err,
+        this.providerName,
+        this.modelName,
+        Date.now() - startTime,
+        timeoutMs,
+      );
     } finally {
       clearTimeout(timeoutId);
     }

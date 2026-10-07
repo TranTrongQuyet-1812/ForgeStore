@@ -152,23 +152,33 @@ export class CacheService {
   }
 
   /**
-   * Tăng giá trị số nguyên tử (Atomic INCRBY) kèm TTL.
-   * Dùng cho bộ đếm token Jev và rate limit counters.
+   * Tăng giá trị số nguyên tử (Atomic INCRBY) kèm TTL (SEC-05).
+   * Dùng Lua script trên Redis để bảo đảm INCRBY và EXPIRE diễn ra nguyên tử trong 1 shot.
+   * Dùng cho bộ đếm token Jev, rate limit counters và backoff rotation.
    */
   async tangSo(key: string, amount: number = 1, ttlSeconds?: number): Promise<number> {
+    const effectiveTtl = ttlSeconds !== undefined && ttlSeconds > 0 ? ttlSeconds : 0;
+
     try {
-      const newVal = await this.redisClient.incrby(key, amount);
-      if (ttlSeconds && ttlSeconds > 0 && newVal === amount) {
-        await this.redisClient.expire(key, ttlSeconds);
-      }
-      return newVal;
+      const luaScript = `
+        local val = redis.call('INCRBY', KEYS[1], ARGV[1])
+        if tonumber(ARGV[2]) > 0 and redis.call('TTL', KEYS[1]) < 0 then
+          redis.call('EXPIRE', KEYS[1], ARGV[2])
+        end
+        return val
+      `;
+      const res = (await this.redisClient.eval(luaScript, 1, key, amount, effectiveTtl)) as
+        number | string;
+      return typeof res === 'number' ? res : parseInt(res, 10);
     } catch (error) {
       this.logger.warn(
         `Lỗi INCRBY key [${key}], chuyển sang In-Memory Fallback: ${(error as Error).message}`,
       );
     }
 
-    // In-Memory Fallback (Atomic trong Node.js single-threaded event loop)
+    // In-Memory Fallback (Atomic trong Node.js single-threaded event loop kèm dọn dẹp RAM)
+    this.cleanExpiredMemoryKeys();
+
     const memEntry = this.memoryFallback.get(key);
     let cur = 0;
     if (memEntry && memEntry.expiresAt > Date.now()) {
@@ -178,11 +188,24 @@ export class CacheService {
         cur = 0;
       }
     }
+
     const newVal = cur + amount;
-    const effectiveTtl = ttlSeconds !== undefined ? ttlSeconds : 3600;
+    const ramTtl = effectiveTtl > 0 ? effectiveTtl : 3600;
+
+    // Kiểm soát trần bộ nhớ RAM 1.000 key (FIFO eviction)
+    if (
+      !this.memoryFallback.has(key) &&
+      this.memoryFallback.size >= CacheService.GIOI_HAN_KEY_BO_NHO
+    ) {
+      const oldestKey = this.memoryFallback.keys().next().value;
+      if (oldestKey) {
+        this.memoryFallback.delete(oldestKey);
+      }
+    }
+
     this.memoryFallback.set(key, {
       data: JSON.stringify(newVal),
-      expiresAt: Date.now() + effectiveTtl * 1000,
+      expiresAt: Date.now() + ramTtl * 1000,
     });
     return newVal;
   }

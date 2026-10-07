@@ -252,7 +252,7 @@ export class GeminiTranslationProvider implements ITranslationProvider {
     }
 
     const timeoutMs = options?.timeoutMs ?? 45_000;
-    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo, trichXuatJsonTuPhanHoi } =
+    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo } =
       await import('../prompts/translation.prompt');
 
     try {
@@ -284,72 +284,26 @@ export class GeminiTranslationProvider implements ITranslationProvider {
 
       const candidate = (response as { candidates?: Array<{ finishReason?: string }> })
         ?.candidates?.[0];
-      if (candidate?.finishReason === 'MAX_TOKENS') {
-        this.logger.warn(`Gemini dịch gom lô bị cắt cụt do chạm giới hạn token (MAX_TOKENS)`);
-        return {
-          data: null,
-          lyDoLoi: 'ai_error',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: Date.now() - startTime,
-        };
-      }
-
+      const finishReason = candidate?.finishReason;
       const rawText = StructureValidator.extractText(response);
-      const parsedJson = trichXuatJsonTuPhanHoi(rawText);
+      const { phanTichKetQuaBatchJson } = await import('../utils/batch-translation.util');
 
-      if (!parsedJson || Object.keys(parsedJson).length === 0) {
-        return {
-          data: null,
-          lyDoLoi: 'empty_output',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: Date.now() - startTime,
-        };
-      }
-
-      return {
-        data: parsedJson,
-        lyDoLoi: null,
-        provider: this.providerName,
-        model: this.modelName,
-        thoiGianMs: Date.now() - startTime,
-      };
+      return phanTichKetQuaBatchJson(
+        rawText,
+        this.providerName,
+        this.modelName,
+        Date.now() - startTime,
+        finishReason,
+      );
     } catch (err: unknown) {
-      const duration = Date.now() - startTime;
-      const error = err as { code?: string; message?: string; status?: number };
-      const errMsg = error.message || '';
-
-      if (error.code === 'TIMEOUT' || errMsg.includes('TIMEOUT')) {
-        this.logger.warn(`Gemini dịch gom lô thất bại: Hết thời gian chờ (${timeoutMs}ms)`);
-        return {
-          data: null,
-          lyDoLoi: 'timeout',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: duration,
-        };
-      }
-
-      if (error.status === 429 || errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-        this.logger.warn('Gemini gom lô chạm hạn mức (429 / RESOURCE_EXHAUSTED)');
-        return {
-          data: null,
-          lyDoLoi: 'rate_limited',
-          provider: this.providerName,
-          model: this.modelName,
-          thoiGianMs: duration,
-        };
-      }
-
-      this.logger.warn(sanitizeLogMessage(`Gemini dịch gom lô gặp lỗi: ${errMsg}`));
-      return {
-        data: null,
-        lyDoLoi: 'ai_error',
-        provider: this.providerName,
-        model: this.modelName,
-        thoiGianMs: duration,
-      };
+      const { phanLoaiLoiBatchJson } = await import('../utils/batch-translation.util');
+      return phanLoaiLoiBatchJson(
+        err,
+        this.providerName,
+        this.modelName,
+        Date.now() - startTime,
+        timeoutMs,
+      );
     }
   }
 }

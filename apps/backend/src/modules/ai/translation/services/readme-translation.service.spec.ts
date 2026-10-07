@@ -22,7 +22,7 @@ describe('ReadmeTranslationService', () => {
       banDichReadme: {
         findUnique: vi.fn(),
         upsert: vi.fn(),
-        update: vi.fn(),
+        update: vi.fn().mockResolvedValue({}),
       },
       boNhoDichChung: {
         findUnique: vi.fn(),
@@ -334,6 +334,81 @@ MIT License.`;
             trangThai: TrangThaiDichReadme.DANG_DICH,
             thoiGianDich: expect.any(Date),
           }),
+        }),
+      );
+    });
+
+    it('Lỗi 2: chia nhỏ triệt để đoạn văn xuôi dài > 5000 ký tự không có dòng trống', () => {
+      const cau = 'Đây là một câu văn xuôi mô tả tính năng của phần mềm rất chi tiết và dài dòng. ';
+      const vanXuoiDai = cau.repeat(100); // ~8000 ký tự
+      expect(vanXuoiDai.length).toBeGreaterThan(5000);
+
+      const doan = service.phanDoanReadme(vanXuoiDai);
+      expect(doan.length).toBeGreaterThan(1);
+      for (const d of doan) {
+        expect(d.length).toBeLessThanOrEqual(5000);
+      }
+    });
+
+    it('Lỗi 1: cờ force = true cho phép nút Dịch lại kích hoạt dịch ngay dù đang trong cooldown 15 phút', async () => {
+      const banGoc = '# App Title\nSome content';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.ungDung.findFirst).mockResolvedValue({
+        maUngDung: 'app-uuid',
+        tenRepoDayDu: 'test/app',
+        chuSoHuu: 'test',
+        tenKhoChua: 'app',
+        readmeSha: hash,
+      } as any);
+      vi.mocked(mockGithub.layReadme).mockResolvedValue(banGoc);
+
+      // Giả lập trạng thái THAT_BAI vừa xảy ra 2 phút trước
+      vi.mocked(mockPrisma.banDichReadme.findUnique).mockResolvedValue({
+        maBanDich: 'bd-1',
+        maUngDung: 'app-uuid',
+        ngonNgu: 'vi',
+        noiDungDich: null,
+        trangThai: TrangThaiDichReadme.THAT_BAI,
+        readmeSha: hash,
+        thoiGianDich: new Date(Date.now() - 2 * 60 * 1000), // 2 phút trước
+      } as any);
+
+      // Khi gọi thông thường (force = false): bị chặn bởi cooldown
+      const resCooldown = await service.layHoacKichHoatDichReadme('test/app', false);
+      expect(resCooldown.trangThai).toBe(TrangThaiDichReadme.THAT_BAI);
+
+      // Khi bấm nút "Dịch lại" (force = true): vượt qua cooldown và chuyển sang DANG_DICH
+      const resForce = await service.layHoacKichHoatDichReadme('test/app', true);
+      expect(resForce.trangThai).toBe(TrangThaiDichReadme.DANG_DICH);
+    });
+
+    it('Lỗi 1: khi README gốc đổi hash, trả về trạng thái DA_CU kèm bản dịch cũ và cập nhật DB', async () => {
+      const banGocMoi = '# App Title Updated\nNew content added';
+      vi.mocked(mockPrisma.ungDung.findFirst).mockResolvedValue({
+        maUngDung: 'app-uuid',
+        tenRepoDayDu: 'test/app',
+        chuSoHuu: 'test',
+        tenKhoChua: 'app',
+        readmeSha: 'hash-cu',
+      } as any);
+      vi.mocked(mockGithub.layReadme).mockResolvedValue(banGocMoi);
+
+      vi.mocked(mockPrisma.banDichReadme.findUnique).mockResolvedValue({
+        maBanDich: 'bd-1',
+        maUngDung: 'app-uuid',
+        ngonNgu: 'vi',
+        noiDungDich: '# Bản dịch cũ tiếng Việt',
+        trangThai: TrangThaiDichReadme.HOAN_TAT,
+        readmeSha: 'hash-cu',
+      } as any);
+
+      const res = await service.layHoacKichHoatDichReadme('test/app');
+      expect(res.trangThai).toBe(TrangThaiDichReadme.DA_CU);
+      expect(res.banDich).toBe('# Bản dịch cũ tiếng Việt');
+      expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { maBanDich: 'bd-1' },
+          data: { trangThai: TrangThaiDichReadme.DA_CU },
         }),
       );
     });

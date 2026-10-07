@@ -290,6 +290,7 @@ export const DetailPage: React.FC = () => {
   const [readmeLang, setReadmeLang] = useState<'vi' | 'en'>('vi');
   const pollCountRef = useRef(0);
   const [isPollTimedOut, setIsPollTimedOut] = useState(false);
+  const [isRetryingReadme, setIsRetryingReadme] = useState(false);
 
   // Reset bộ đếm polling khi chuyển app
   useEffect(() => {
@@ -308,7 +309,12 @@ export const DetailPage: React.FC = () => {
     staleTime: 2 * 60 * 1000,
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (data && (data.trangThai === 'DANG_DICH' || data.trangThai === 'CHUA_DICH')) {
+      if (
+        data &&
+        (data.trangThai === 'DANG_DICH' ||
+          data.trangThai === 'CHUA_DICH' ||
+          data.trangThai === 'DA_CU')
+      ) {
         pollCountRef.current += 1;
         if (pollCountRef.current > 40) {
           setIsPollTimedOut(true);
@@ -852,7 +858,7 @@ export const DetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Nội dung README theo ngôn ngữ (Lỗi 5) */}
+            {/* Nội dung README theo ngôn ngữ (Lỗi 5 & Fix Lỗi 1) */}
             {isReadmeLoading ? (
               <div className="p-8 flex flex-col items-center justify-center gap-2 text-muted animate-pulse">
                 <Loader2 className="w-6 h-6 animate-spin text-accent-forge" />
@@ -860,7 +866,17 @@ export const DetailPage: React.FC = () => {
               </div>
             ) : readmeLang === 'vi' ? (
               readmeData?.banDich ? (
-                <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar flex flex-col gap-3">
+                  {(readmeData?.trangThai === 'DA_CU' ||
+                    (readmeData?.trangThai === 'DANG_DICH' && Boolean(readmeData?.banDich))) && (
+                    <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+                      <span>
+                        Tài liệu vừa cập nhật trên GitHub. Đang cập nhật bản dịch tiếng Việt mới
+                        (tạm thời hiển thị bản dịch trước đó)...
+                      </span>
+                    </div>
+                  )}
                   <MarkdownView
                     content={readmeData.banDich}
                     owner={appDetail?.chuSoHuu}
@@ -876,13 +892,22 @@ export const DetailPage: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        pollCountRef.current = 0;
-                        setIsPollTimedOut(false);
-                        refetchReadme();
+                      disabled={isRetryingReadme}
+                      onClick={async () => {
+                        try {
+                          setIsRetryingReadme(true);
+                          pollCountRef.current = 0;
+                          setIsPollTimedOut(false);
+                          // Gửi cờ force=true để vượt qua cooldown 15 phút (Fix Lỗi 1)
+                          await storeService.layReadmeApp(appId, true);
+                          refetchReadme();
+                        } finally {
+                          setIsRetryingReadme(false);
+                        }
                       }}
-                      className="text-xs font-semibold text-accent-forge hover:underline shrink-0 ml-2"
+                      className="text-xs font-semibold text-accent-forge hover:underline shrink-0 ml-2 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1"
                     >
+                      {isRetryingReadme && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
                       Dịch lại
                     </button>
                   </div>

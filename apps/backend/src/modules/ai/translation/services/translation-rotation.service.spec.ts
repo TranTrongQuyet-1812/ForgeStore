@@ -14,6 +14,7 @@ describe('TranslationRotationService', () => {
   let mockCloudflare: CloudflareTranslationProvider;
   let mockGroq: GroqTranslationProvider;
   let mockCacheService: CacheService;
+  let cacheStore: Map<string, unknown>;
 
   beforeEach(() => {
     mockGemini = {
@@ -48,7 +49,7 @@ describe('TranslationRotationService', () => {
       translate: vi.fn(),
     } as unknown as GroqTranslationProvider;
 
-    const cacheStore = new Map<string, unknown>();
+    cacheStore = new Map<string, unknown>();
     mockCacheService = {
       get: vi
         .fn()
@@ -61,6 +62,12 @@ describe('TranslationRotationService', () => {
         const list = Array.isArray(keys) ? keys : [keys];
         for (const k of list) cacheStore.delete(k);
         return Promise.resolve();
+      }),
+      tangSo: vi.fn().mockImplementation((key: string, amount: number = 1) => {
+        const cur = Number(cacheStore.get(key) ?? 0);
+        const next = cur + amount;
+        cacheStore.set(key, next);
+        return Promise.resolve(next);
       }),
     } as unknown as CacheService;
 
@@ -326,13 +333,14 @@ describe('TranslationRotationService', () => {
       );
 
       // Giả lập cooldown hết hạn, lần 2 lại bị 429 -> cooldown tăng lên 120s
-      vi.mocked(mockCacheService.get).mockImplementation((k: string) => {
-        if (k === 'fs:ai:translation:cooldown:gemini') return Promise.resolve(null);
-        if (k === 'fs:ai:translation:429_count:gemini') return Promise.resolve(1);
-        return Promise.resolve(null);
-      });
+      cacheStore.delete('fs:ai:translation:cooldown:gemini');
 
       await service.dichVanBan(raw);
+      expect(mockCacheService.tangSo).toHaveBeenCalledWith(
+        'fs:ai:translation:429_count:gemini',
+        1,
+        86400,
+      );
       expect(mockCacheService.set).toHaveBeenCalledWith(
         'fs:ai:translation:cooldown:gemini',
         true,

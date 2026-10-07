@@ -120,8 +120,8 @@ export class TranslationRotationService {
    */
   public async danhDauLoiLienTiep(provider: NhaCungCapDich): Promise<void> {
     const errKey = `${TranslationRotationService.PREFIX_CONSECUTIVE_ERRORS}${provider}`;
-    const currentCount = ((await this.cacheService.get<number>(errKey)) ?? 0) + 1;
-    await this.cacheService.set(errKey, currentCount, 3600); // Lưu bộ đếm trong 1 giờ
+    // Dùng tangSo nguyên tử an toàn khi chạy song song đa luồng (Fix Lỗi 3)
+    const currentCount = await this.cacheService.tangSo(errKey, 1, 3600); // Lưu bộ đếm trong 1 giờ
 
     if (currentCount >= 3) {
       const unhealthyKey = `${TranslationRotationService.PREFIX_UNHEALTHY}${provider}`;
@@ -152,8 +152,8 @@ export class TranslationRotationService {
     baseRetrySec?: number,
   ): Promise<number> {
     const countKey = `${TranslationRotationService.PREFIX_429_COUNT}${provider}`;
-    const current429Count = ((await this.cacheService.get<number>(countKey)) ?? 0) + 1;
-    await this.cacheService.set(countKey, current429Count, 86400); // Lưu trong 24h
+    // Dùng tangSo nguyên tử an toàn khi chạy song song đa luồng (Fix Lỗi 3)
+    const current429Count = await this.cacheService.tangSo(countKey, 1, 86400); // Lưu trong 24h
 
     if (baseRetrySec && baseRetrySec > 60) {
       return baseRetrySec;

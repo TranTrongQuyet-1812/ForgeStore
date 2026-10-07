@@ -106,12 +106,17 @@ export class StoreService {
 
   /**
    * Lấy tài liệu README song ngữ của ứng dụng (P3B-05.7 / P3B-05.9)
+   * Hỗ trợ force = true cho nút "Dịch lại" vượt qua cooldown 15 phút (Fix Lỗi 1).
    */
-  async layReadmeApp(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
+  async layReadmeApp(
+    maUngDungHoacSlug: string,
+    force?: boolean,
+  ): Promise<ChiTietReadmeResponseDto> {
     const basePath = maUngDungHoacSlug.includes('/')
       ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
       : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme`;
-    return apiClient.get<ChiTietReadmeResponseDto>(basePath);
+    const fullPath = force ? `${basePath}?force=true` : basePath;
+    return apiClient.get<ChiTietReadmeResponseDto>(fullPath);
   }
 
   /**

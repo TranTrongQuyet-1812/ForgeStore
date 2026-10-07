@@ -59,4 +59,58 @@ describe('GeminiTranslationProvider', () => {
     expect(res.lyDoLoi).toBe('rate_limited');
     expect(res.retryAfterSec).toBe(8);
   });
+
+  it('Fix Lỗi 5: xử lý và trả về ai_error khi Gemini translate() bị cắt cụt do MAX_TOKENS', async () => {
+    provider = new GeminiTranslationProvider(mockConfigService);
+    (provider as any).client = {
+      models: {
+        generateContent: vi.fn().mockResolvedValue({
+          candidates: [{ finishReason: 'MAX_TOKENS' }],
+          text: 'Một đoạn dịch dở dang...',
+        }),
+      },
+    };
+
+    const res = await provider.translate('Tài liệu hướng dẫn dài ngoằng...');
+    expect(res.text).toBeNull();
+    expect(res.lyDoLoi).toBe('ai_error');
+    expect(res.provider).toBe('gemini');
+  });
+
+  it('Fix Lỗi 5: xử lý và trả về ai_error khi Gemini translateBatchJson() bị cắt cụt do MAX_TOKENS', async () => {
+    provider = new GeminiTranslationProvider(mockConfigService);
+    (provider as any).client = {
+      models: {
+        generateContent: vi.fn().mockResolvedValue({
+          candidates: [{ finishReason: 'MAX_TOKENS' }],
+          text: '{"app1": "Dịch dở...',
+        }),
+      },
+    };
+
+    const res = await provider.translateBatchJson([
+      { id: 'app1', text: 'An awesome open source application' },
+    ]);
+    expect(res.data).toBeNull();
+    expect(res.lyDoLoi).toBe('ai_error');
+    expect(res.provider).toBe('gemini');
+  });
+
+  it('dịch gom lô JSON thành công khi trả về cấu trúc hợp lệ', async () => {
+    provider = new GeminiTranslationProvider(mockConfigService);
+    (provider as any).client = {
+      models: {
+        generateContent: vi.fn().mockResolvedValue({
+          candidates: [{ finishReason: 'STOP' }],
+          text: '```json\n{"app1": "Ứng dụng mã nguồn mở tuyệt vời"}\n```',
+        }),
+      },
+    };
+
+    const res = await provider.translateBatchJson([
+      { id: 'app1', text: 'An awesome open source application' },
+    ]);
+    expect(res.data).toEqual({ app1: 'Ứng dụng mã nguồn mở tuyệt vời' });
+    expect(res.lyDoLoi).toBeNull();
+  });
 });

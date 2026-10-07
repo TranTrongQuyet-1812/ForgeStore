@@ -106,7 +106,13 @@ export class ReadmeTranslationService {
               // Ngắt theo dòng trống khi vượt ngưỡng 2500 và ngoài code block
               if (!pInCodeBlock && pLine.trim() === '' && currentLen >= 2500) {
                 const chunk = pBuffer.join('\n').trim();
-                if (chunk) ketQua.push(chunk);
+                if (chunk) {
+                  if (chunk.length > 5000) {
+                    ketQua.push(...this.chiaNhoVanXuoiDai(chunk, 4500));
+                  } else {
+                    ketQua.push(chunk);
+                  }
+                }
                 pBuffer = [];
                 currentLen = 0;
               } else {
@@ -117,21 +123,104 @@ export class ReadmeTranslationService {
 
             if (pBuffer.length > 0) {
               const chunk = pBuffer.join('\n').trim();
-              if (chunk) ketQua.push(chunk);
+              if (chunk) {
+                // Lỗi 2: Văn xuôi dài trên 5000 ký tự không có dòng trống được chia nhỏ triệt để
+                if (chunk.length > 5000) {
+                  ketQua.push(...this.chiaNhoVanXuoiDai(chunk, 4500));
+                } else {
+                  ketQua.push(chunk);
+                }
+              }
             }
           }
         }
       }
     }
 
-    return ketQua.filter((d) => d.trim().length > 0);
+    // Bảo hiểm lần cuối: đảm bảo 100% các phân đoạn không vượt quá 5000 ký tự
+    const ketQuaCuoi: string[] = [];
+    for (const d of ketQua) {
+      const trimmed = d.trim();
+      if (!trimmed) continue;
+      if (trimmed.length > 5000) {
+        ketQuaCuoi.push(...this.chiaNhoVanXuoiDai(trimmed, 4500));
+      } else {
+        ketQuaCuoi.push(trimmed);
+      }
+    }
+
+    return ketQuaCuoi.filter((d) => d.trim().length > 0);
+  }
+
+  /**
+   * Chia nhỏ đoạn văn xuôi dài không có dòng trống đảm bảo không bao giờ vượt quá maxLen (4500 ký tự).
+   * Ưu tiên ngắt theo câu (. ! ?), ngắt dòng đơn (\n), hoặc khoảng trắng từ (Fix Lỗi 2).
+   */
+  public chiaNhoVanXuoiDai(text: string, maxLen = 4500): string[] {
+    if (!text || text.length <= maxLen) return text ? [text] : [];
+    const chunks: string[] = [];
+    let conLai = text;
+
+    while (conLai.length > maxLen) {
+      const vungCat = conLai.slice(0, maxLen);
+      let diemCat = -1;
+
+      // 1. Thử tìm ngắt câu (dấu chấm câu . ! ? theo sau là khoảng trắng hoặc xuống dòng)
+      const regexCau = /.*[.!?](\s+|\n)/s;
+      const matchCau = vungCat.match(regexCau);
+      if (matchCau && matchCau[0].length >= 1000) {
+        diemCat = matchCau[0].length;
+      } else {
+        // 2. Thử tìm ngắt dòng đơn \n
+        const matchXuongDong = vungCat.lastIndexOf('\n');
+        if (matchXuongDong >= 1000) {
+          diemCat = matchXuongDong + 1;
+        } else {
+          // 3. Thử tìm dấu phẩy / chấm phẩy
+          const matchDauPhay = vungCat.lastIndexOf(', ');
+          if (matchDauPhay >= 1000) {
+            diemCat = matchDauPhay + 2;
+          } else {
+            // 4. Thử tìm khoảng trắng (ngắt từ)
+            const matchKhoangTrang = vungCat.lastIndexOf(' ');
+            if (matchKhoangTrang >= 500) {
+              diemCat = matchKhoangTrang + 1;
+            } else {
+              // 5. Chuỗi liền hoàn toàn (không khoảng trắng), cắt cứng tại maxLen
+              diemCat = maxLen;
+            }
+          }
+        }
+      }
+
+      // Bảo vệ chống cắt đứt UTF-16 surrogate pair (emoji / astral characters) (SEC-03)
+      if (diemCat > 0 && diemCat < conLai.length) {
+        const charCode = conLai.charCodeAt(diemCat - 1);
+        if (charCode >= 0xd800 && charCode <= 0xdbff) {
+          diemCat--;
+        }
+      }
+
+      const phanCat = conLai.slice(0, diemCat).trim();
+      if (phanCat) chunks.push(phanCat);
+      conLai = conLai.slice(diemCat).trim();
+    }
+
+    if (conLai.length > 0) {
+      chunks.push(conLai);
+    }
+    return chunks;
   }
 
   /**
    * Lấy chi tiết README của một ứng dụng (bản gốc + bản dịch nếu có).
    * Nếu chưa dịch: Kích hoạt tác vụ dịch nền (non-blocking) và trả về bản gốc ngay lập tức (P3B-05.7).
+   * Hỗ trợ cờ force = true cho nút "Dịch lại" vượt qua cooldown 15 phút (Fix Lỗi 1).
    */
-  public async layHoacKichHoatDichReadme(idOrSlug: string): Promise<ChiTietReadmeResponseDto> {
+  public async layHoacKichHoatDichReadme(
+    idOrSlug: string,
+    force = false,
+  ): Promise<ChiTietReadmeResponseDto> {
     // Lỗi 8: Bọc decodeURIComponent chống ném lỗi 500 khi gặp URL malformed
     let cleanId = idOrSlug.trim();
     try {
@@ -180,6 +269,7 @@ export class ReadmeTranslationService {
 
     // 1. Nếu đã dịch xong và hash khớp với nội dung gốc
     if (
+      !force &&
       banDichDb &&
       banDichDb.trangThai === TrangThaiDichReadme.HOAN_TAT &&
       banDichDb.readmeSha === hashGoc
@@ -200,7 +290,7 @@ export class ReadmeTranslationService {
     const isDangDichInDb =
       banDichDb?.trangThai === TrangThaiDichReadme.DANG_DICH && banDichDb.readmeSha === hashGoc;
 
-    if (isDangDichInMemory) {
+    if (!force && isDangDichInMemory) {
       return {
         maUngDung: app.maUngDung,
         tenRepoDayDu: app.tenRepoDayDu,
@@ -212,7 +302,7 @@ export class ReadmeTranslationService {
       };
     }
 
-    if (isDangDichInDb) {
+    if (!force && isDangDichInDb) {
       const msDangDich = banDichDb?.thoiGianDich
         ? Date.now() - new Date(banDichDb.thoiGianDich).getTime()
         : 0;
@@ -237,8 +327,9 @@ export class ReadmeTranslationService {
       );
     }
 
-    // 3. FS-SEC-02: Nếu vừa thất bại trong vòng 15 phút, áp dụng cooldown chống spam DoS
+    // 3. FS-SEC-02: Nếu vừa thất bại trong vòng 15 phút, áp dụng cooldown chống spam DoS (trừ khi người dùng bấm Dịch lại có force=true)
     if (
+      !force &&
       banDichDb &&
       banDichDb.trangThai === TrangThaiDichReadme.THAT_BAI &&
       banDichDb.readmeSha === hashGoc
@@ -258,7 +349,29 @@ export class ReadmeTranslationService {
       }
     }
 
-    // 4. Nếu bản dịch đã cũ hoặc chưa có: Kích hoạt dịch chạy nền non-blocking
+    // 4. Nếu README gốc đã thay đổi (hash khác), chuyển trạng thái sang DA_CU nhưng vẫn cho đọc bản cũ (P3B-05.8 & Fix Lỗi 1)
+    const isReadmeThayDoi = Boolean(
+      banDichDb && banDichDb.readmeSha !== hashGoc && banDichDb.noiDungDich,
+    );
+    if (isReadmeThayDoi && banDichDb && banDichDb.trangThai !== TrangThaiDichReadme.DA_CU) {
+      try {
+        await this.prisma.banDichReadme.update({
+          where: { maBanDich: banDichDb.maBanDich },
+          data: { trangThai: TrangThaiDichReadme.DA_CU },
+        });
+      } catch (err) {
+        this.logger.warn(
+          sanitizeLogMessage(`Không thể cập nhật trạng thái DA_CU cho bản dịch: ${err}`),
+        );
+      }
+      banDichDb.trangThai = TrangThaiDichReadme.DA_CU;
+    }
+
+    // 5. Kích hoạt dịch chạy nền non-blocking cho bản mới
+    if (force) {
+      this.dangDichSet.delete(app.maUngDung);
+    }
+
     this.kichHoatDichReadmeNen(app.maUngDung, app.chuSoHuu, app.tenKhoChua, banGoc, hashGoc).catch(
       (err: unknown) => {
         this.logger.error(
@@ -269,13 +382,17 @@ export class ReadmeTranslationService {
       },
     );
 
-    // Trả ngay về bản gốc cho client không bị gián đoạn trải nghiệm
+    // Trả về bản dịch cũ kèm trạng thái DA_CU hoặc DANG_DICH cho client
     return {
       maUngDung: app.maUngDung,
       tenRepoDayDu: app.tenRepoDayDu,
       banGoc,
       banDich: banDichDb?.noiDungDich || null,
-      trangThai: banDichDb ? TrangThaiDichReadme.DANG_DICH : 'CHUA_DICH',
+      trangThai: isReadmeThayDoi
+        ? TrangThaiDichReadme.DA_CU
+        : banDichDb
+          ? TrangThaiDichReadme.DANG_DICH
+          : 'CHUA_DICH',
       moHinhDich: banDichDb?.moHinhDich || null,
       readmeSha: hashGoc,
     };

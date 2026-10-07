@@ -40,7 +40,21 @@ describe('AppsController', () => {
       const res = await controller.layReadmeTheoSlug('rustdesk', 'rustdesk');
 
       expect(res).toEqual(mockResult);
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('rustdesk/rustdesk');
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
+        'rustdesk/rustdesk',
+        false,
+      );
+    });
+
+    it('gọi layHoacKichHoatDichReadme với cờ isForce = true khi query force=true', async () => {
+      vi.mocked(mockReadmeService.layHoacKichHoatDichReadme).mockResolvedValue({} as any);
+
+      await controller.layReadmeTheoSlug('rustdesk', 'rustdesk', 'true');
+
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
+        'rustdesk/rustdesk',
+        true,
+      );
     });
   });
 
@@ -61,7 +75,15 @@ describe('AppsController', () => {
       const res = await controller.layReadmeTheoId('uuid-1');
 
       expect(res).toEqual(mockResult);
-      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1');
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1', false);
+    });
+
+    it('gọi layHoacKichHoatDichReadme với cờ isForce = true khi query force=true', async () => {
+      vi.mocked(mockReadmeService.layHoacKichHoatDichReadme).mockResolvedValue({} as any);
+
+      await controller.layReadmeTheoId('uuid-1', 'true');
+
+      expect(mockReadmeService.layHoacKichHoatDichReadme).toHaveBeenCalledWith('uuid-1', true);
     });
   });
 });
