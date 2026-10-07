@@ -7,7 +7,10 @@ import { AppsService } from '../apps.service';
 import { TrendingDecayJob } from '../jobs/trending-decay.job';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { ReadmeTranslationService } from '../../ai/translation/services/readme-translation.service';
-import { trichMucCaiDat } from '../../ai/utils/cli-guide-extractor.util';
+import {
+  trichMucCaiDat,
+  trichXuatHuongDanCliBangQuyTac,
+} from '../../ai/utils/cli-guide-extractor.util';
 import { phanLoaiTep } from '../utils/file-classifier.util';
 import {
   TrangThaiUngVienRepo,
@@ -361,7 +364,14 @@ export class RepoIngestionPipelineService {
         } catch {
           readme = null;
         }
-        const hasCli = Boolean(readme && trichMucCaiDat(readme));
+        const hasCli = Boolean(
+          readme &&
+          (trichXuatHuongDanCliBangQuyTac(
+            readme,
+            `https://github.com/${candidate.tenRepoDayDu}#readme`,
+          ) ||
+            trichMucCaiDat(readme)),
+        );
 
         if (hasCli) {
           // Chốt chặn 1: Giữ repo CHI_CO_CAI_CLI lại cho P3B-16, tuyệt đối không xóa!
@@ -404,7 +414,14 @@ export class RepoIngestionPipelineService {
         } catch {
           readme = null;
         }
-        const hasCli = Boolean(readme && trichMucCaiDat(readme));
+        const hasCli = Boolean(
+          readme &&
+          (trichXuatHuongDanCliBangQuyTac(
+            readme,
+            `https://github.com/${candidate.tenRepoDayDu}#readme`,
+          ) ||
+            trichMucCaiDat(readme)),
+        );
 
         if (hasCli) {
           // Chốt chặn 1: Giữ repo CHI_CO_CAI_CLI lại cho P3B-16, tuyệt đối không xóa!

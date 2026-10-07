@@ -27,6 +27,12 @@ export interface UngDungDaCaiDto {
   duongDanThuMuc?: string | null;
   khoaRegistry?: string | null;
   tenHienThiRegistry?: string | null;
+  trinhQuanLyGoi?: string | null;
+  tenGoiCli?: string | null;
+  lenhGoCli?: string | null;
+  lenhCapNhatCli?: string | null;
+  trangThaiXacNhan?: string | null;
+  thoiGianHetHan?: string | null;
   ngayCaiDat: string | Date;
   ngayCapNhatCuoi?: string | Date;
   coBanMoi?: boolean;
@@ -61,6 +67,26 @@ export interface GhiNhanCaiDatRequest {
 export interface CapNhatKhoaRegistryRequest {
   khoaRegistry: string;
   tenHienThiRegistry?: string;
+}
+
+/**
+ * Request ghi nhận ứng dụng cài đặt qua dòng lệnh CLI ("Tôi đã cài" - P3B-16.5).
+ */
+export interface GhiNhanCaiDatCliRequest {
+  maUngDung: string;
+  trinhQuanLy: string;
+  tenGoi: string;
+  phienBan?: string;
+}
+
+/**
+ * Kết quả xác nhận lại ứng dụng CLI ("Xác nhận đã cài" - P3B-16.5).
+ */
+export interface XacNhanCaiDatCliResponse {
+  maBanGhi: string;
+  maUngDung: string;
+  trangThaiXacNhan: string;
+  thanhCong: boolean;
 }
 
 /**

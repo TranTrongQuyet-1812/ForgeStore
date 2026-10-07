@@ -26,6 +26,7 @@ import {
   Terminal,
   BookOpen,
   Languages,
+  Library,
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
 import { MarkdownView } from '../components/common/MarkdownView';
@@ -39,7 +40,13 @@ import { storeService } from '../services/store/store-service';
 import { favoritesService } from '../services/favorites/favorites-service';
 import { libraryService } from '../services/library/library-service';
 import { ApiError } from '../services/api/api-client';
-import type { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
+import {
+  CachCaiDto,
+  MaTrinhQuanLyGoi,
+  trichTenGoiTuLenhTho,
+  type TrangKetQua,
+  type UngDungTomTatDto,
+} from '@forgestore/types';
 
 /**
  * Thuật toán chọn tệp cài đặt tối ưu cho máy tính Windows (P3-FIX)
@@ -227,6 +234,8 @@ export const DetailPage: React.FC = () => {
   const [moThuMucLoi, setMoThuMucLoi] = useState<string | null>(null);
   const [activeCliMethodIndex, setActiveCliMethodIndex] = useState<number>(0);
   const [copiedCommandId, setCopiedCommandId] = useState<string | null>(null);
+  const [isRecordingCli, setIsRecordingCli] = useState<boolean>(false);
+  const [isConfirmingCli, setIsConfirmingCli] = useState<boolean>(false);
 
   // Reset trạng thái cục bộ khi chuyển sang xem ứng dụng khác
   useEffect(() => {
@@ -237,6 +246,8 @@ export const DetailPage: React.FC = () => {
     setLoiYeuThich(null);
     setZipExtractToast(null);
     setMoThuMucLoi(null);
+    setIsRecordingCli(false);
+    setIsConfirmingCli(false);
   }, [appId]);
 
   // Cấu hình thư mục lưu bản portable từ trang Cài đặt (L-08: Chỗ duy nhất chọn thư mục portable)
@@ -541,6 +552,107 @@ export const DetailPage: React.FC = () => {
         item.ungDung?.tenKhoChua === appId,
     );
   }, [installedAppsOnDevice, isAuthenticated, maThietBi, appDetail?.maUngDung, appId]);
+
+  // Kiểm tra riêng bản ghi cài đặt qua dòng lệnh CLI trên thiết bị (P3B-16)
+  const installedCliRecord = useMemo(() => {
+    if (!isAuthenticated || !maThietBi) return null;
+    return (
+      installedAppsOnDevice.find(
+        (item) =>
+          (item.maUngDung === appDetail?.maUngDung ||
+            item.ungDung?.tenRepoDayDu === appId ||
+            item.ungDung?.tenKhoChua === appId) &&
+          Boolean(item.trinhQuanLyGoi),
+      ) || null
+    );
+  }, [installedAppsOnDevice, isAuthenticated, maThietBi, appDetail?.maUngDung, appId]);
+
+  // Ghi nhận "Tôi đã cài" qua dòng lệnh CLI (P3B-16.5)
+  const handleRecordCliInstall = async (currentMethod?: CachCaiDto | null) => {
+    if (!isAuthenticated) {
+      setAuthModalOpen(true);
+      toast.info('Vui lòng đăng nhập tài khoản để lưu ứng dụng vào Thư viện của máy.');
+      return;
+    }
+    if (!maThietBi) {
+      toast.info('Chưa xác định được mã thiết bị máy trạm. Vui lòng thử lại sau.');
+      return;
+    }
+    if (!appDetail?.maUngDung) return;
+
+    try {
+      setIsRecordingCli(true);
+      const nhomLow = ((currentMethod?.nhom || '') as string).toLowerCase();
+      let trinhQuanLy: MaTrinhQuanLyGoi = MaTrinhQuanLyGoi.WINGET;
+      if (nhomLow.includes('winget')) trinhQuanLy = MaTrinhQuanLyGoi.WINGET;
+      else if (nhomLow.includes('scoop')) trinhQuanLy = MaTrinhQuanLyGoi.SCOOP;
+      else if (nhomLow.includes('npm')) trinhQuanLy = MaTrinhQuanLyGoi.NPM;
+      else if (nhomLow.includes('pip')) trinhQuanLy = MaTrinhQuanLyGoi.PIP;
+      else if (nhomLow.includes('docker')) trinhQuanLy = MaTrinhQuanLyGoi.DOCKER;
+      else if (currentMethod?.trinhQuanLy)
+        trinhQuanLy = currentMethod.trinhQuanLy as MaTrinhQuanLyGoi;
+
+      let tenGoi = currentMethod?.tenGoi;
+      if (!tenGoi && currentMethod?.buoc?.[0]?.lenh) {
+        const trich = trichTenGoiTuLenhTho(currentMethod.buoc[0].lenh);
+        if (trich) {
+          tenGoi = trich.tenGoi;
+          trinhQuanLy = trich.trinhQuanLy;
+        }
+      }
+      if (!tenGoi) {
+        tenGoi = appDetail.tenKhoChua || appDetail.tenRepoDayDu.split('/')[1];
+      }
+
+      const phienBan =
+        appDetail.banPhatHanhMoiNhat?.tenPhienBan ||
+        appDetail.danhSachBanPhatHanh?.[0]?.tenPhienBan ||
+        undefined;
+
+      const res = await libraryService.ghiNhanCaiDatCli(maThietBi, {
+        maUngDung: appDetail.maUngDung,
+        trinhQuanLy,
+        tenGoi,
+        phienBan,
+      });
+
+      if (res) {
+        toast.success(
+          `Đã ghi nhận "${appDetail.tenKhoChua}" vào Thư viện máy (Trạng thái: Chờ xác nhận trong 24h).`,
+        );
+        queryClient.invalidateQueries({
+          queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+        });
+      } else {
+        toast.error('Không thể ghi nhận cài đặt: Tên gói không hợp lệ hoặc lỗi máy chủ.');
+      }
+    } catch (err) {
+      toast.error(`Lỗi khi ghi nhận cài đặt: ${(err as Error).message}`);
+    } finally {
+      setIsRecordingCli(false);
+    }
+  };
+
+  // Xác nhận lại ứng dụng CLI đã cài (P3B-16.5)
+  const handleConfirmCliInstall = async () => {
+    if (!maThietBi || !appDetail?.maUngDung) return;
+    try {
+      setIsConfirmingCli(true);
+      const res = await libraryService.xacNhanCaiDatCli(maThietBi, appDetail.maUngDung);
+      if (res?.thanhCong) {
+        toast.success('Đã xác nhận cài đặt thành công! Bản ghi sẽ không bị hết hạn.');
+        queryClient.invalidateQueries({
+          queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+        });
+      } else {
+        toast.error('Không thể xác nhận cài đặt.');
+      }
+    } catch (err) {
+      toast.error(`Lỗi xác nhận: ${(err as Error).message}`);
+    } finally {
+      setIsConfirmingCli(false);
+    }
+  };
 
   // Xác định định dạng tệp đang chọn có phải bản nén Portable .zip không
   const isZipTab =
@@ -1247,6 +1359,87 @@ export const DetailPage: React.FC = () => {
                       })}
                     </div>
 
+                    {/* Action Bar: "Tôi đã cài" hoặc Trạng thái đã ghi nhận trong Thư viện máy (P3B-16.5) */}
+                    <div className="p-4 rounded-xl bg-surface/60 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                      {installedCliRecord ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-primary">
+                                Đã lưu trong Thư viện máy
+                              </span>
+                              {installedCliRecord.trangThaiXacNhan === 'CHO_XAC_NHAN' ? (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                                  Chờ xác nhận (24h)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                                  Đã xác nhận
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] font-mono text-muted">
+                              Trình quản lý: {installedCliRecord.trinhQuanLyGoi} • Gói:{' '}
+                              {installedCliRecord.tenGoiCli}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-secondary">
+                          <Terminal className="w-4 h-4 text-accent-forge shrink-0" />
+                          <span>Bạn đã chạy xong câu lệnh trên trong Terminal cá nhân?</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {installedCliRecord?.trangThaiXacNhan === 'CHO_XAC_NHAN' && (
+                          <button
+                            type="button"
+                            onClick={handleConfirmCliInstall}
+                            disabled={isConfirmingCli}
+                            className="btn-tactile h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                            title="Xác nhận bạn đã cài phần mềm này và hủy đếm ngược 24h"
+                          >
+                            {isConfirmingCli ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>Xác nhận đã cài</span>
+                          </button>
+                        )}
+
+                        {!installedCliRecord ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRecordCliInstall(currentMethod)}
+                            disabled={isRecordingCli}
+                            className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-bold text-xs flex items-center gap-2 shadow-sm"
+                            title="Ghi nhận ứng dụng vào Thư viện máy này (Chờ xác nhận sau 24h)"
+                          >
+                            {isRecordingCli ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4" />
+                            )}
+                            <span>Tôi đã cài</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => navigateTo('library')}
+                            className="btn-tactile h-9 px-3.5 rounded-xl border border-border hover:bg-surface-elevated text-secondary hover:text-primary text-xs font-medium flex items-center gap-1.5"
+                          >
+                            <Library className="w-3.5 h-3.5" />
+                            <span>Mở Thư viện</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Banner an toàn hiển thị & README gốc */}
                     <div className="p-3.5 rounded-xl bg-surface/40 border border-border text-xs text-muted flex items-start sm:items-center justify-between gap-3 leading-relaxed flex-col sm:flex-row">
                       <div className="flex items-start gap-2">
@@ -1392,18 +1585,54 @@ export const DetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  document
-                    .getElementById('cli-guide-section')
-                    ?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40"
-              >
-                <Terminal className="w-4 h-4" />
-                <span>Xem Hướng Dẫn Cài Đặt CLI</span>
-              </button>
+              {installedCliRecord ? (
+                <div className="flex flex-col gap-2">
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5 text-xs text-emerald-400 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Đã lưu trong Thư viện máy ({installedCliRecord.trinhQuanLyGoi})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('library')}
+                    className="btn-tactile w-full h-11 rounded-xl bg-surface-elevated hover:bg-surface border border-border text-primary font-display font-bold text-xs flex items-center justify-center gap-2 shadow-xs"
+                  >
+                    <Library className="w-4 h-4" />
+                    <span>Xem Trong Thư Viện</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      document
+                        .getElementById('cli-guide-section')
+                        ?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40"
+                  >
+                    <Terminal className="w-4 h-4" />
+                    <span>Xem Hướng Dẫn Cài Đặt CLI</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleRecordCliInstall(
+                        huongDanCli.cachCai[activeCliMethodIndex] || huongDanCli.cachCai[0],
+                      )
+                    }
+                    disabled={isRecordingCli}
+                    className="btn-tactile w-full h-9 rounded-xl border border-border hover:bg-surface-elevated text-secondary hover:text-primary text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                  >
+                    {isRecordingCli ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Tôi đã cài qua CLI</span>
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-muted text-center leading-normal">
                 <Shield className="w-3.5 h-3.5 text-accent-forge shrink-0" />

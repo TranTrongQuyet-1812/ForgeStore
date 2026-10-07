@@ -10,6 +10,12 @@ import {
   Laptop,
   Compass,
   FolderOpen,
+  Check,
+  Copy,
+  Terminal,
+  AlertTriangle,
+  Shield,
+  Loader2,
 } from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
@@ -37,6 +43,22 @@ export const LibraryPage: React.FC = () => {
   );
   const [isCheckingRegistry, setIsCheckingRegistry] = useState(false);
   const [isUninstallingId, setIsUninstallingId] = useState<string | null>(null);
+  const [isConfirmingCliId, setIsConfirmingCliId] = useState<string | null>(null);
+  const [cliUninstallModalApp, setCliUninstallModalApp] = useState<{
+    maUngDung: string;
+    tenApp: string;
+    trinhQuanLyGoi?: string | null;
+    tenGoiCli?: string | null;
+    lenhGo: string;
+  } | null>(null);
+  const [cliUpdateModalApp, setCliUpdateModalApp] = useState<{
+    maUngDung: string;
+    tenApp: string;
+    phienBanMoi?: string;
+    lenhCapNhatCli: string;
+  } | null>(null);
+  const [copiedCliId, setCopiedCliId] = useState<string | null>(null);
+  const [isUninstallingCli, setIsUninstallingCli] = useState(false);
   const syncedRegistryKeysRef = useRef<Set<string>>(new Set());
 
   // 1. Lấy thông tin thiết bị máy trạm
@@ -78,6 +100,11 @@ export const LibraryPage: React.FC = () => {
 
     Promise.all(
       backendInstalledApps.map(async (app) => {
+        // P3B-16.6: Không quét registry đối với ứng dụng cài qua dòng lệnh CLI
+        if (app.trinhQuanLyGoi) {
+          return { maUngDung: app.maUngDung, regInfo: null };
+        }
+
         const ten = app.ungDung?.tenKhoChua || app.ungDung?.tenRepoDayDu || app.maUngDung;
         const currentCaiDatMap = useInstallStore.getState().caiDatMap;
         const localApp = currentCaiDatMap[app.maUngDung];
@@ -140,6 +167,13 @@ export const LibraryPage: React.FC = () => {
       tenHienThiRegistry?: string | null;
       regInfo?: ThongTinUngDungRegistry | null;
       daBiGoBenNgoai: boolean;
+      trinhQuanLyGoi?: string | null;
+      tenGoiCli?: string | null;
+      lenhGoCli?: string | null;
+      lenhCapNhatCli?: string | null;
+      trangThaiXacNhan?: string | null;
+      thoiGianHetHan?: string | null;
+      laAppCli: boolean;
     }
   >();
 
@@ -148,10 +182,12 @@ export const LibraryPage: React.FC = () => {
     const updateItem = updatesMap.get(bApp.maUngDung);
     const localApp = caiDatMap[bApp.maUngDung];
     const regInfo = registryMap[bApp.maUngDung];
+    const laAppCli = Boolean(bApp.trinhQuanLyGoi);
 
     // Phát hiện app đã bị gỡ ngoài Windows:
-    // Khi đã quét xong registry (registryMap có phần tử), regInfo trả về null và không có phiên vừa cài local
+    // P3B-16.6: Không áp dụng cho app CLI vì app CLI không ghi vào Windows Registry Uninstaller
     const daBiGoBenNgoai =
+      !laAppCli &&
       !isCheckingRegistry &&
       Object.keys(registryMap).length > 0 &&
       registryMap[bApp.maUngDung] === null &&
@@ -164,12 +200,19 @@ export const LibraryPage: React.FC = () => {
       duongDanThuMuc: bApp.duongDanThuMuc ?? undefined,
       duongDanThucThi: localApp?.duongDanThucThi ?? undefined,
       iconUrl: bApp.ungDung?.duongDanIcon ?? undefined,
-      coBanMoi: Boolean(updateItem?.coBanCapNhat),
-      phienBanMoi: updateItem?.phienBanMoiNhat,
+      coBanMoi: Boolean(updateItem?.coBanCapNhat || bApp.coBanMoi),
+      phienBanMoi: updateItem?.phienBanMoiNhat || bApp.phienBanMoiNhat || undefined,
       khoaRegistry: bApp.khoaRegistry ?? localApp?.registryKey,
       tenHienThiRegistry: bApp.tenHienThiRegistry ?? localApp?.registryDisplayName,
       regInfo,
       daBiGoBenNgoai,
+      trinhQuanLyGoi: bApp.trinhQuanLyGoi ?? null,
+      tenGoiCli: bApp.tenGoiCli ?? null,
+      lenhGoCli: bApp.lenhGoCli ?? null,
+      lenhCapNhatCli: bApp.lenhCapNhatCli ?? null,
+      trangThaiXacNhan: bApp.trangThaiXacNhan ?? null,
+      thoiGianHetHan: bApp.thoiGianHetHan ?? null,
+      laAppCli,
     });
   }
 
@@ -440,7 +483,63 @@ export const LibraryPage: React.FC = () => {
     }
   };
 
-  // Xử lý gỡ cài đặt thật và đồng bộ danh sách (A4)
+  // Xử lý xác nhận lại ứng dụng CLI ("Xác nhận đã cài" - P3B-16.5)
+  const handleConfirmCli = async (app: { maUngDung: string; tenApp: string }) => {
+    if (!maThietBi) return;
+    try {
+      setIsConfirmingCliId(app.maUngDung);
+      const res = await libraryService.xacNhanCaiDatCli(maThietBi, app.maUngDung);
+      if (res?.thanhCong) {
+        toast.success(`Đã xác nhận cài đặt "${app.tenApp}". Bản ghi sẽ không bị hết hạn.`);
+        queryClient.invalidateQueries({
+          queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+        });
+      } else {
+        toast.error('Không thể xác nhận cài đặt ứng dụng.');
+      }
+    } catch (err) {
+      toast.error(`Lỗi xác nhận: ${(err as Error).message}`);
+    } finally {
+      setIsConfirmingCliId(null);
+    }
+  };
+
+  // Sao chép lệnh CLI trong modal (Chống Pastejacking)
+  const handleCopyCliCommand = (cmd: string, id: string) => {
+    if (!cmd) return;
+    const sanitizedCmd = cmd.trim().replace(/[\r\n]+/g, ' ');
+    navigator.clipboard
+      .writeText(sanitizedCmd)
+      .then(() => {
+        setCopiedCliId(id);
+        toast.success('Đã sao chép câu lệnh vào Clipboard!');
+        setTimeout(() => setCopiedCliId(null), 2500);
+      })
+      .catch(() => {
+        toast.error('Không thể sao chép vào Clipboard.');
+      });
+  };
+
+  // Xác nhận đã gỡ ứng dụng CLI khỏi máy tính (P3B-16.6)
+  const handleConfirmCliUninstalled = async () => {
+    if (!cliUninstallModalApp || !maThietBi) return;
+    try {
+      setIsUninstallingCli(true);
+      await libraryService.goCaiDat(maThietBi, cliUninstallModalApp.maUngDung);
+      goCaiDatLocal(cliUninstallModalApp.maUngDung);
+      queryClient.invalidateQueries({
+        queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
+      });
+      toast.success(`Đã xóa "${cliUninstallModalApp.tenApp}" khỏi Thư viện máy.`);
+      setCliUninstallModalApp(null);
+    } catch (err) {
+      toast.error(`Lỗi khi xóa khỏi Thư viện: ${(err as Error).message}`);
+    } finally {
+      setIsUninstallingCli(false);
+    }
+  };
+
+  // Xử lý gỡ cài đặt thật và đồng bộ danh sách (A4 & P3B-16.6)
   const handleUninstallApp = async (app: {
     maUngDung: string;
     tenApp: string;
@@ -448,7 +547,25 @@ export const LibraryPage: React.FC = () => {
     khoaRegistry?: string | null;
     regInfo?: ThongTinUngDungRegistry | null;
     daBiGoBenNgoai: boolean;
+    laAppCli?: boolean;
+    trinhQuanLyGoi?: string | null;
+    tenGoiCli?: string | null;
+    lenhGoCli?: string | null;
   }) => {
+    // Trường hợp 0: Phần mềm cài bằng dòng lệnh CLI (P3B-16.6)
+    if (app.laAppCli) {
+      const lenhGo = app.lenhGoCli || `${app.trinhQuanLyGoi} uninstall ${app.tenGoiCli}`;
+
+      setCliUninstallModalApp({
+        maUngDung: app.maUngDung,
+        tenApp: app.tenApp,
+        trinhQuanLyGoi: app.trinhQuanLyGoi,
+        tenGoiCli: app.tenGoiCli,
+        lenhGo,
+      });
+      return;
+    }
+
     // Trường hợp 1: Phần mềm đã bị người dùng gỡ bên ngoài Windows (A4)
     if (app.daBiGoBenNgoai) {
       const xacNhanDon = await confirmDialog({
@@ -676,11 +793,21 @@ export const LibraryPage: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm font-bold font-display text-primary truncate group-hover:text-accent-forge transition-colors">
                       {app.tenApp}
                     </h3>
-                    {app.daBiGoBenNgoai ? (
+                    {app.laAppCli && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-accent-forge font-mono text-[10px] font-bold shrink-0">
+                        CLI: {app.trinhQuanLyGoi}
+                      </span>
+                    )}
+                    {app.laAppCli && app.trangThaiXacNhan === 'CHO_XAC_NHAN' ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[10px] font-bold flex items-center gap-1 shrink-0">
+                        <AlertTriangle className="w-3 h-3" />
+                        Chờ xác nhận (24h)
+                      </span>
+                    ) : app.daBiGoBenNgoai ? (
                       <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono text-[10px] font-bold shrink-0">
                         Đã bị gỡ bên ngoài Windows
                       </span>
@@ -692,30 +819,42 @@ export const LibraryPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted font-mono truncate">
                     <span>Phiên bản: {app.phienBanHienTai}</span>
-                    {(() => {
-                      const thuMuc = layThuMucCaiDatThucTe(app);
-                      if (thuMuc) {
+                    {app.laAppCli ? (
+                      <>
+                        <span>•</span>
+                        <span
+                          className="text-accent-ai font-medium truncate max-w-[280px]"
+                          title={app.tenGoiCli || ''}
+                        >
+                          Gói: {app.tenGoiCli}
+                        </span>
+                      </>
+                    ) : (
+                      (() => {
+                        const thuMuc = layThuMucCaiDatThucTe(app);
+                        if (thuMuc) {
+                          return (
+                            <>
+                              <span>•</span>
+                              <span className="truncate max-w-[280px]" title={thuMuc}>
+                                {thuMuc}
+                              </span>
+                            </>
+                          );
+                        }
                         return (
                           <>
                             <span>•</span>
-                            <span className="truncate max-w-[280px]" title={thuMuc}>
-                              {thuMuc}
-                            </span>
+                            <span className="text-muted/80">Đã cài trên Windows</span>
                           </>
                         );
-                      }
-                      return (
-                        <>
-                          <span>•</span>
-                          <span className="text-muted/80">Đã cài trên Windows</span>
-                        </>
-                      );
-                    })()}
+                      })()
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Cụm nút hành động (A4, L-01: Tách riêng Mở Ứng Dụng & Mở Thư Mục) */}
+              {/* Cụm nút hành động (A4, L-01, P3B-16) */}
               <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                 {app.daBiGoBenNgoai ? (
                   /* App đã bị gỡ ngoài Windows: Nút dọn khỏi thư viện (EC-07) */
@@ -732,6 +871,63 @@ export const LibraryPage: React.FC = () => {
                     )}
                     <span>Dọn Khỏi Thư Viện</span>
                   </button>
+                ) : app.laAppCli ? (
+                  /* App cài bằng dòng lệnh CLI: Xác nhận đã cài, Cập nhật qua lệnh, Lệnh gỡ (P3B-16) */
+                  <>
+                    {app.trangThaiXacNhan === 'CHO_XAC_NHAN' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmCli(app);
+                        }}
+                        disabled={isConfirmingCliId === app.maUngDung}
+                        className="btn-tactile h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                        title="Xác nhận bạn đã cài phần mềm này và hủy tự động hết hạn 24h"
+                      >
+                        {isConfirmingCliId === app.maUngDung ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Xác nhận đã cài</span>
+                      </button>
+                    )}
+
+                    {app.coBanMoi && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (app.lenhCapNhatCli) {
+                            setCliUpdateModalApp({
+                              maUngDung: app.maUngDung,
+                              tenApp: app.tenApp,
+                              phienBanMoi: app.phienBanMoi,
+                              lenhCapNhatCli: app.lenhCapNhatCli,
+                            });
+                          } else {
+                            openAppDetail(app.maUngDung);
+                          }
+                        }}
+                        className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                        title="Xem lệnh cập nhật phiên bản mới"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Cập Nhật</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUninstallApp(app);
+                      }}
+                      className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-rose-500/10 hover:border-rose-500/30 text-muted hover:text-rose-400 font-medium text-xs flex items-center gap-1.5 transition-colors"
+                      title="Xem lệnh gỡ cài đặt CLI"
+                    >
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>Lệnh Gỡ</span>
+                    </button>
+                  </>
                 ) : (
                   <>
                     {/* Nút cập nhật nếu có bản mới */}
@@ -824,6 +1020,178 @@ export const LibraryPage: React.FC = () => {
       {!isLoading && allInstalledApps.length > 0 && filteredApps.length === 0 && (
         <div className="p-8 rounded-2xl bg-surface border border-border/60 text-center text-xs text-muted">
           Không tìm thấy ứng dụng nào khớp với từ khóa "{searchFilter}".
+        </div>
+      )}
+
+      {/* Modal Lệnh Gỡ Cài Đặt CLI (P3B-16.6) */}
+      {cliUninstallModalApp && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                  <Terminal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold font-display text-primary">
+                    Lệnh Gỡ Cài Đặt Phần Mềm
+                  </h3>
+                  <span className="text-[11px] font-mono text-muted">
+                    {cliUninstallModalApp.tenApp} ({cliUninstallModalApp.trinhQuanLyGoi})
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCliUninstallModalApp(null)}
+                className="btn-tactile w-7 h-7 rounded-lg border border-border flex items-center justify-center text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-secondary leading-relaxed">
+              ForgeStore <strong className="text-primary">tuyệt đối không tự chạy lệnh</strong> trên
+              máy tính của bạn. Hãy mở Terminal / PowerShell cá nhân, sao chép và thực thi câu lệnh
+              dưới đây để gỡ phần mềm:
+            </p>
+
+            {/* Khung lệnh gỡ */}
+            <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
+              <pre className="p-3.5 pr-28 text-xs font-mono text-rose-400 overflow-x-auto leading-relaxed select-text font-medium">
+                <code>{cliUninstallModalApp.lenhGo}</code>
+              </pre>
+              <button
+                type="button"
+                onClick={() => handleCopyCliCommand(cliUninstallModalApp.lenhGo, 'cli-uninstall')}
+                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm"
+              >
+                {copiedCliId === 'cli-uninstall' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
+                    <span className="text-emerald-400 font-semibold">Đã chép</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Chép lệnh</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface/50 border border-border text-[11px] text-muted flex items-start gap-2 leading-relaxed">
+              <Shield className="w-4 h-4 text-accent-forge shrink-0 mt-0.5" />
+              <span>
+                Sau khi bạn đã hoàn tất gỡ cài đặt trong Terminal, hãy bấm nút{' '}
+                <strong>"Xác nhận đã gỡ"</strong> bên dưới để xóa bản ghi khỏi Thư viện máy này.
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setCliUninstallModalApp(null)}
+                className="btn-tactile h-9 px-4 rounded-xl border border-border hover:bg-surface text-secondary hover:text-primary text-xs font-medium"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCliUninstalled}
+                disabled={isUninstallingCli}
+                className="btn-tactile h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                {isUninstallingCli ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>Xác nhận đã gỡ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lệnh Cập Nhật CLI (P3B-16.7) */}
+      {cliUpdateModalApp && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold font-display text-primary">
+                    Lệnh Cập Nhật Phần Mềm
+                  </h3>
+                  <span className="text-[11px] font-mono text-muted">
+                    {cliUpdateModalApp.tenApp} • Lên bản{' '}
+                    {cliUpdateModalApp.phienBanMoi || 'mới nhất'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCliUpdateModalApp(null)}
+                className="btn-tactile w-7 h-7 rounded-lg border border-border flex items-center justify-center text-muted hover:text-primary"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-secondary leading-relaxed">
+              Mở Terminal / PowerShell cá nhân và chạy câu lệnh cập nhật an toàn dưới đây:
+            </p>
+
+            {/* Khung lệnh cập nhật */}
+            <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
+              <pre className="p-3.5 pr-28 text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed select-text font-medium">
+                <code>{cliUpdateModalApp.lenhCapNhatCli}</code>
+              </pre>
+              <button
+                type="button"
+                onClick={() => handleCopyCliCommand(cliUpdateModalApp.lenhCapNhatCli, 'cli-update')}
+                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm"
+              >
+                {copiedCliId === 'cli-update' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
+                    <span className="text-emerald-400 font-semibold">Đã chép</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Chép lệnh</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setCliUpdateModalApp(null)}
+                className="btn-tactile h-9 px-4 rounded-xl border border-border hover:bg-surface text-secondary hover:text-primary text-xs font-medium"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCliUpdateModalApp(null);
+                  if (maThietBi) kiemTraCapNhat(maThietBi);
+                  refetch();
+                }}
+                className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Đã cập nhật xong</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

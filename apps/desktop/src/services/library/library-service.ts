@@ -1,8 +1,10 @@
 import { apiClient } from '../api/api-client';
 import type {
   CapNhatKhoaRegistryRequest,
+  GhiNhanCaiDatCliRequest,
   GhiNhanCaiDatRequest,
   UngDungDaCaiDto,
+  XacNhanCaiDatCliResponse,
 } from '@forgestore/types';
 
 export const libraryService = {
@@ -34,6 +36,40 @@ export const libraryService = {
   },
 
   /**
+   * Ghi nhận ứng dụng cài đặt qua dòng lệnh CLI ("Tôi đã cài" - P3B-16.5)
+   * Tạo bản ghi ở trạng thái CHO_XAC_NHAN, tự hết hạn sau 24 giờ.
+   */
+  async ghiNhanCaiDatCli(
+    deviceId: string,
+    dto: GhiNhanCaiDatCliRequest,
+  ): Promise<UngDungDaCaiDto | null> {
+    try {
+      return await apiClient.post<UngDungDaCaiDto>(`/devices/${deviceId}/installed/cli`, dto);
+    } catch (err) {
+      console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt CLI lên backend:', err);
+      return null;
+    }
+  },
+
+  /**
+   * Xác nhận lại ứng dụng CLI đã cài ("Xác nhận đã cài" - P3B-16.5)
+   * Chuyển trạng thái sang DA_XAC_NHAN và hủy đếm ngược 24h.
+   */
+  async xacNhanCaiDatCli(
+    deviceId: string,
+    appId: string,
+  ): Promise<XacNhanCaiDatCliResponse | null> {
+    try {
+      return await apiClient.patch<XacNhanCaiDatCliResponse>(
+        `/devices/${deviceId}/installed/${appId}/confirm-cli`,
+      );
+    } catch (err) {
+      console.warn('[LibraryService] Lỗi khi xác nhận cài đặt CLI lên backend:', err);
+      return null;
+    }
+  },
+
+  /**
    * Cập nhật riêng khóa Registry Windows cho ứng dụng đã cài đặt (DELIV-40.2)
    * Giữ nguyên mã tệp đã cài và phiên bản hiện tại trên CSDL backend.
    */
@@ -52,7 +88,7 @@ export const libraryService = {
   },
 
   /**
-   * Gỡ ứng dụng khỏi danh sách thiết bị (P3-12.2)
+   * Gỡ ứng dụng khỏi danh sách thiết bị (P3-12.2 & P3B-16.6)
    */
   async goCaiDat(deviceId: string, appId: string): Promise<boolean> {
     try {

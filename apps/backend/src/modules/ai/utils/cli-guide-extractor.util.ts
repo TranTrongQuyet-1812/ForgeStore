@@ -5,6 +5,8 @@ import {
   BuocCaiDto,
   NhomCachCai,
   PhanCungYeuCau,
+  trichTenGoiTuLenhTho,
+  ghepLenhCliAnToan,
 } from '@forgestore/types';
 
 /**
@@ -342,10 +344,14 @@ export function kiemTraLenhNguyenVan(lenh: string, rawReadme: string): boolean {
 
   const readmeLines = normalizedReadme.split('\n').map(chuanHoaDongLenh);
 
-  // 1. Lệnh 1 dòng: Phải khớp nguyên vẹn với một dòng lệnh trong README
+  // 1. Lệnh 1 dòng: Phải khớp nguyên vẹn với một dòng lệnh trong README hoặc nằm trong inline code `...`
   if (lenhLines.length === 1) {
     const target = lenhLines[0];
     if (readmeLines.some((rLine) => rLine === target)) {
+      return true;
+    }
+    // Hỗ trợ trường hợp lệnh xuất hiện nguyên vẹn trong inline code `...` trên văn xuôi README
+    if (target && normalizedReadme.includes('`' + target + '`')) {
       return true;
     }
     // ARCH-04: Hỗ trợ trường hợp README bẻ dòng bằng \ nhưng lệnh đã được nối liền mạch (vẫn so khớp nguyên dòng)
@@ -455,6 +461,21 @@ export function locVaChuanHoaHuongDanCaiDat(
     // Xác định nhóm chuẩn xác nếu AI phân loại sai
     const nhomSuyDuan = nhanDienNhomLenh(buocHopLe[0]?.lenh || '') || cach.nhom;
 
+    // P3B-16.3: Bóc tách tên gói và ghép lệnh cập nhật/gỡ từ manifest
+    const pkgInfo = trichTenGoiTuLenhTho(buocHopLe[0]?.lenh || '');
+    const trinhQuanLy = pkgInfo?.trinhQuanLy || cach.trinhQuanLy;
+    const tenGoi = pkgInfo?.tenGoi || cach.tenGoi;
+    let lenhCapNhat = cach.lenhCapNhat;
+    let lenhGo = cach.lenhGo;
+
+    if (trinhQuanLy && tenGoi) {
+      const ghep = ghepLenhCliAnToan(trinhQuanLy, tenGoi);
+      if (ghep.hopLe) {
+        lenhCapNhat = lenhCapNhat || ghep.lenhCapNhat;
+        lenhGo = lenhGo || ghep.lenhGo;
+      }
+    }
+
     cachCaiHopLe.push({
       ten: cach.ten?.trim() || `Cài đặt (${nhomSuyDuan})`,
       nhom: nhomSuyDuan,
@@ -464,6 +485,10 @@ export function locVaChuanHoaHuongDanCaiDat(
         ? cach.yeuCau.map((y) => String(y).trim()).filter(Boolean)
         : [],
       buoc: buocHopLe,
+      trinhQuanLy,
+      tenGoi,
+      lenhCapNhat,
+      lenhGo,
     });
   }
 
@@ -475,6 +500,7 @@ export function locVaChuanHoaHuongDanCaiDat(
     cachCai: sapXepCachCai(cachCaiHopLe),
     coRuiRoCao: coBatKyRuiRoNao,
     duongDanReadmeGoc,
+    nguon: 'README',
   };
 }
 
@@ -556,6 +582,17 @@ export function bocTachHuongDanTuCodeBlocks(
       };
     });
 
+    const pkgInfo = trichTenGoiTuLenhTho(items[0]?.lenh || '');
+    let lenhCapNhat: string | undefined;
+    let lenhGo: string | undefined;
+    if (pkgInfo) {
+      const ghep = ghepLenhCliAnToan(pkgInfo.trinhQuanLy, pkgInfo.tenGoi);
+      if (ghep.hopLe) {
+        lenhCapNhat = ghep.lenhCapNhat;
+        lenhGo = ghep.lenhGo;
+      }
+    }
+
     cachCai.push({
       ten: `Cài đặt qua ${nhom}`,
       nhom,
@@ -563,8 +600,65 @@ export function bocTachHuongDanTuCodeBlocks(
       phanCung: PhanCungYeuCau.KHONG_RO,
       yeuCau: [],
       buoc,
+      trinhQuanLy: pkgInfo?.trinhQuanLy,
+      tenGoi: pkgInfo?.tenGoi,
+      lenhCapNhat,
+      lenhGo,
     });
   }
 
   return locVaChuanHoaHuongDanCaiDat({ cachCai }, rawReadme, duongDanReadmeGoc);
+}
+
+/**
+ * Trích xuất hướng dẫn cài đặt dòng lệnh hoàn toàn bằng quy tắc thuần từ README (P3B-16.3).
+ * Tuyệt đối không dùng AI. Coi là gợi ý, ghi rõ nguồn là README.
+ */
+export function trichXuatHuongDanCliBangQuyTac(
+  rawReadme: string,
+  duongDanReadmeGoc?: string,
+): HuongDanCaiDatDto | null {
+  if (!rawReadme || typeof rawReadme !== 'string') return null;
+
+  // 1. Tìm mục cài đặt trong README
+  let section = trichMucCaiDat(rawReadme);
+
+  // 2. Nếu không tìm thấy mục riêng, lấy 12.000 ký tự đầu của README để quét
+  if (!section) {
+    section = rawReadme.slice(0, 12000);
+  }
+
+  // 3. Thử trích xuất từ các code blocks trong mục
+  let result = bocTachHuongDanTuCodeBlocks(section, rawReadme, duongDanReadmeGoc);
+  if (result && result.cachCai.length > 0) {
+    return { ...result, nguon: 'README' };
+  }
+
+  // 4. Fallback: Nếu không có code block ``` mà có inline code hoặc dòng lệnh trực tiếp
+  const lines = rawReadme.split(/\r?\n/);
+  const matchedLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Kiểm tra inline code `...`
+    const inlineMatch = trimmed.match(/`([^`]{5,200})`/);
+    const candidate = inlineMatch && inlineMatch[1] ? inlineMatch[1].trim() : trimmed;
+
+    const nhom = nhanDienNhomLenh(candidate);
+    if (nhom) {
+      matchedLines.push(candidate);
+    }
+  }
+
+  if (matchedLines.length > 0) {
+    const syntheticSection = '```bash\n' + matchedLines.join('\n') + '\n```';
+    result = bocTachHuongDanTuCodeBlocks(syntheticSection, rawReadme, duongDanReadmeGoc);
+    if (result && result.cachCai.length > 0) {
+      return { ...result, nguon: 'README' };
+    }
+  }
+
+  return null;
 }

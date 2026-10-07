@@ -135,4 +135,77 @@ describe('LibraryService (P3-12.2)', () => {
 
     expect(ok).toBe(false);
   });
+
+  describe('CLI Installation Flow (P3B-16)', () => {
+    it('ghi nhận "Tôi đã cài" qua CLI thành công lưu trạng thái CHO_XAC_NHAN', async () => {
+      const mockResult: UngDungDaCaiDto = {
+        maBanGhi: 'rec-cli-1',
+        maNguoiDung: 'user-1',
+        maThietBi: 'device-123',
+        maUngDung: 'app-fastfetch',
+        phienBanHienTai: '2.30.0',
+        trinhQuanLyGoi: 'winget',
+        tenGoiCli: 'Fastfetch-cli.Fastfetch',
+        trangThaiXacNhan: 'CHO_XAC_NHAN',
+        ngayCaiDat: '2026-10-08T00:00:00.000Z',
+      };
+
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockResult as never);
+
+      const res = await libraryService.ghiNhanCaiDatCli('device-123', {
+        maUngDung: 'app-fastfetch',
+        trinhQuanLy: 'winget',
+        tenGoi: 'Fastfetch-cli.Fastfetch',
+        phienBan: '2.30.0',
+      });
+
+      expect(postSpy).toHaveBeenCalledWith('/devices/device-123/installed/cli', {
+        maUngDung: 'app-fastfetch',
+        trinhQuanLy: 'winget',
+        tenGoi: 'Fastfetch-cli.Fastfetch',
+        phienBan: '2.30.0',
+      });
+      expect(res).toEqual(mockResult);
+      expect(res?.trangThaiXacNhan).toBe('CHO_XAC_NHAN');
+    });
+
+    it('trả về null khi ghi nhận CLI gặp lỗi', async () => {
+      vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Bad request'));
+
+      const res = await libraryService.ghiNhanCaiDatCli('device-123', {
+        maUngDung: 'app-fastfetch',
+        trinhQuanLy: 'winget',
+        tenGoi: 'Fastfetch-cli.Fastfetch',
+      });
+
+      expect(res).toBeNull();
+    });
+
+    it('xác nhận lại ứng dụng CLI đã cài thành công qua PATCH endpoint', async () => {
+      const mockResult = {
+        maBanGhi: 'rec-cli-1',
+        maUngDung: 'app-fastfetch',
+        trangThaiXacNhan: 'DA_XAC_NHAN',
+        thanhCong: true,
+      };
+
+      const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce(mockResult as never);
+
+      const res = await libraryService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
+
+      expect(patchSpy).toHaveBeenCalledWith(
+        '/devices/device-123/installed/app-fastfetch/confirm-cli',
+      );
+      expect(res).toEqual(mockResult);
+      expect(res?.trangThaiXacNhan).toBe('DA_XAC_NHAN');
+    });
+
+    it('trả về null khi xác nhận CLI thất bại', async () => {
+      vi.spyOn(apiClient, 'patch').mockRejectedValueOnce(new Error('Not found'));
+
+      const res = await libraryService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
+
+      expect(res).toBeNull();
+    });
+  });
 });

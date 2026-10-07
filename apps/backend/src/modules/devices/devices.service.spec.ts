@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoaiThietBi } from '@prisma/client';
@@ -30,7 +30,7 @@ describe('DevicesService', () => {
         findUnique: vi.fn(),
         update: vi.fn(),
         upsert: vi.fn(),
-        deleteMany: vi.fn(),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       ungDung: {
         findUnique: vi.fn(),
@@ -440,6 +440,64 @@ describe('DevicesService', () => {
         });
         expect(mockCacheService.del).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
       });
+
+      it('P3B-16.5: Tự động dọn dẹp các bản ghi CLI CHO_XAC_NHAN quá hạn 24 giờ', async () => {
+        mockCacheService.get.mockResolvedValue(null);
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([]);
+
+        await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(mockPrisma.ungDungDaCai.deleteMany).toHaveBeenCalledWith({
+          where: {
+            maThietBi,
+            trangThaiXacNhan: 'CHO_XAC_NHAN',
+            thoiGianHetHan: { lt: expect.any(Date) },
+          },
+        });
+      });
+
+      it('P3B-16.7: Trả về lenhCapNhatCli an toàn khi ứng dụng CLI có bản mới', async () => {
+        mockCacheService.get.mockResolvedValue(null);
+        const mockItem = {
+          maBanGhi: 'rec-cli-1',
+          maNguoiDung,
+          maUngDung,
+          maThietBi,
+          phienBanHienTai: '1.0.0',
+          trinhQuanLyGoi: 'winget',
+          tenGoiCli: 'Fastfetch-cli.Fastfetch',
+          lenhGoCli: 'winget uninstall --id Fastfetch-cli.Fastfetch',
+          trangThaiXacNhan: 'DA_XAC_NHAN',
+          thoiGianHetHan: null,
+          ngayCaiDat: new Date(),
+          ngayCapNhatCuoi: new Date(),
+          ungDung: {
+            maUngDung,
+            tenKhoChua: 'fastfetch',
+            tenRepoDayDu: 'fastfetch-cli/fastfetch',
+            danhMucChinh: 'TienIch',
+            nenTangHoTro: ['windows'],
+            danhSachPhatHanh: [
+              {
+                maPhatHanh: 'rel-2',
+                tenPhienBan: '2.0.0',
+                ngayPhatHanh: new Date(),
+                laBanThuNghiem: false,
+                danhSachTepCaiDat: [
+                  { maTep: 'file-1', tenTep: 'fastfetch-win.exe', dinhDangTep: 'EXE' },
+                ],
+              },
+            ],
+          },
+        };
+        mockPrisma.ungDungDaCai.findMany.mockResolvedValue([mockItem]);
+
+        const res = await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
+
+        expect(res[0].coBanMoi).toBe(true);
+        expect(res[0].phienBanMoiNhat).toBe('2.0.0');
+        expect(res[0].lenhCapNhatCli).toBe('winget upgrade --id Fastfetch-cli.Fastfetch');
+      });
     });
 
     describe('ghiNhanCaiDat (P2-51.2)', () => {
@@ -684,6 +742,126 @@ describe('DevicesService', () => {
         expect(res).toEqual({ daGo: true, soLuong: 1 });
         expect(mockPrisma.ungDungDaCai.deleteMany).toHaveBeenCalledWith({
           where: { maThietBi, maUngDung },
+        });
+      });
+    });
+
+    describe('ghiNhanCaiDatCli (P3B-16)', () => {
+      it('từ chối khi tên gói chứa ký tự độc hại', async () => {
+        await expect(
+          service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+            maUngDung,
+            trinhQuanLy: 'winget',
+            tenGoi: 'Fastfetch; rm -rf /',
+          }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('từ chối khi phiên bản chứa ký tự độc hại', async () => {
+        await expect(
+          service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+            maUngDung,
+            trinhQuanLy: 'winget',
+            tenGoi: 'Fastfetch-cli.Fastfetch',
+            phienBan: '1.0.0 && whoami',
+          }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('ném NotFoundException nếu không tìm thấy ứng dụng', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue(null);
+
+        await expect(
+          service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+            maUngDung,
+            trinhQuanLy: 'winget',
+            tenGoi: 'Fastfetch-cli.Fastfetch',
+          }),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('ghi nhận thành công trạng thái CHO_XAC_NHAN với thời gian hết hạn sau 24 giờ', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'fastfetch-cli/fastfetch',
+        });
+
+        const mockExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const mockCreated = {
+          maBanGhi: 'rec-cli-1',
+          maUngDung,
+          maThietBi,
+          phienBanHienTai: '2.30.0',
+          trinhQuanLyGoi: 'winget',
+          tenGoiCli: 'Fastfetch-cli.Fastfetch',
+          lenhGoCli: 'winget uninstall --id Fastfetch-cli.Fastfetch',
+          trangThaiXacNhan: 'CHO_XAC_NHAN',
+          thoiGianHetHan: mockExpiry,
+          ngayCaiDat: new Date(),
+        };
+        mockPrisma.ungDungDaCai.upsert.mockResolvedValue(mockCreated);
+
+        const res = await service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+          maUngDung,
+          trinhQuanLy: 'winget',
+          tenGoi: 'Fastfetch-cli.Fastfetch',
+          phienBan: '2.30.0',
+        });
+
+        expect(res.trangThaiXacNhan).toBe('CHO_XAC_NHAN');
+        expect(res.lenhGo).toBe('winget uninstall --id Fastfetch-cli.Fastfetch');
+        expect(res.lenhCapNhat).toBe('winget upgrade --id Fastfetch-cli.Fastfetch');
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              trangThaiXacNhan: 'CHO_XAC_NHAN',
+              tenGoiCli: 'Fastfetch-cli.Fastfetch',
+              trinhQuanLyGoi: 'winget',
+              lenhGoCli: 'winget uninstall --id Fastfetch-cli.Fastfetch',
+            }),
+          }),
+        );
+      });
+    });
+
+    describe('xacNhanCaiDatCli (P3B-16)', () => {
+      it('ném NotFoundException nếu không tìm thấy bản ghi cài đặt', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue(null);
+
+        await expect(service.xacNhanCaiDatCli(maNguoiDung, maThietBi, maUngDung)).rejects.toThrow(
+          NotFoundException,
+        );
+      });
+
+      it('chuyển trạng thái sang DA_XAC_NHAN và xóa thời gian hết hạn', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({
+          maBanGhi: 'rec-cli-1',
+          maThietBi,
+          maUngDung,
+          trangThaiXacNhan: 'CHO_XAC_NHAN',
+        });
+        mockPrisma.ungDungDaCai.update.mockResolvedValue({
+          maBanGhi: 'rec-cli-1',
+          maUngDung,
+          trangThaiXacNhan: 'DA_XAC_NHAN',
+          thoiGianHetHan: null,
+        });
+
+        const res = await service.xacNhanCaiDatCli(maNguoiDung, maThietBi, maUngDung);
+
+        expect(res.thanhCong).toBe(true);
+        expect(res.trangThaiXacNhan).toBe('DA_XAC_NHAN');
+        expect(mockPrisma.ungDungDaCai.update).toHaveBeenCalledWith({
+          where: {
+            maThietBi_maUngDung: {
+              maThietBi,
+              maUngDung,
+            },
+          },
+          data: {
+            trangThaiXacNhan: 'DA_XAC_NHAN',
+            thoiGianHetHan: null,
+          },
         });
       });
     });

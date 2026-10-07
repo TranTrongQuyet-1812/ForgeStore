@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ForbiddenException,
@@ -10,6 +11,13 @@ import { CacheService } from '../redis/cache.service';
 import { LoaiThietBi } from '@prisma/client';
 import { layBanPhatHanhMoiNhat, BanPhatHanhToiThieu } from '../apps/utils/release-selector.util';
 import { coBanMoiHon } from '../updater/utils/version-comparator.util';
+import {
+  kiemTraTenGoiHopLe,
+  kiemTraPhienBanHopLe,
+  ghepLenhCliAnToan,
+  MaTrinhQuanLyGoi,
+} from '@forgestore/types';
+import { GhiNhanCaiDatCliDto } from './dto/installed-app.dto';
 
 export interface DangKyThietBiParams {
   dinhDanhPhanCung: string;
@@ -168,6 +176,19 @@ export class DevicesService {
 
     const platform = thietBi.loaiThietBi === LoaiThietBi.DIEN_THOAI_ANDROID ? 'android' : 'windows';
 
+    // P3B-16.5: Tự động dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ
+    await this.prisma.ungDungDaCai
+      .deleteMany({
+        where: {
+          maThietBi,
+          trangThaiXacNhan: 'CHO_XAC_NHAN',
+          thoiGianHetHan: { lt: new Date() },
+        },
+      })
+      .catch((err) => {
+        this.logger.warn(`Lỗi dọn dẹp bản ghi CLI hết hạn: ${(err as Error).message}`);
+      });
+
     const danhSach = await this.prisma.ungDungDaCai.findMany({
       where: { maThietBi },
       select: {
@@ -180,6 +201,11 @@ export class DevicesService {
         duongDanThuMuc: true,
         khoaRegistry: true,
         tenHienThiRegistry: true,
+        trinhQuanLyGoi: true,
+        tenGoiCli: true,
+        lenhGoCli: true,
+        trangThaiXacNhan: true,
+        thoiGianHetHan: true,
         ngayCaiDat: true,
         ngayCapNhatCuoi: true,
         ungDung: {
@@ -235,6 +261,19 @@ export class DevicesService {
       // Cờ có bản mới: so sánh SemVer bằng coBanMoiHon theo nền tảng
       const coBanMoi = Boolean(phienBanMoi && coBanMoiHon(item.phienBanHienTai, phienBanMoi));
 
+      // P3B-16.7: Tính câu lệnh cập nhật an toàn cho ứng dụng cài bằng dòng lệnh CLI
+      let lenhCapNhatCli: string | null = null;
+      if (item.trinhQuanLyGoi && item.tenGoiCli && coBanMoi) {
+        const ghep = ghepLenhCliAnToan(
+          item.trinhQuanLyGoi as MaTrinhQuanLyGoi,
+          item.tenGoiCli,
+          phienBanMoi || undefined,
+        );
+        if (ghep.hopLe) {
+          lenhCapNhatCli = ghep.lenhCapNhat || null;
+        }
+      }
+
       return {
         maBanGhi: item.maBanGhi,
         maNguoiDung: item.maNguoiDung,
@@ -245,6 +284,12 @@ export class DevicesService {
         duongDanThuMuc: item.duongDanThuMuc,
         khoaRegistry: item.khoaRegistry ?? null,
         tenHienThiRegistry: item.tenHienThiRegistry ?? null,
+        trinhQuanLyGoi: item.trinhQuanLyGoi ?? null,
+        tenGoiCli: item.tenGoiCli ?? null,
+        lenhGoCli: item.lenhGoCli ?? null,
+        lenhCapNhatCli,
+        trangThaiXacNhan: item.trangThaiXacNhan ?? 'DA_XAC_NHAN',
+        thoiGianHetHan: item.thoiGianHetHan ? item.thoiGianHetHan.toISOString() : null,
         ngayCaiDat: item.ngayCaiDat.toISOString(),
         ngayCapNhatCuoi: item.ngayCapNhatCuoi.toISOString(),
         coBanMoi,
@@ -431,5 +476,139 @@ export class DevicesService {
     await this.xoaCacheThietBi(maThietBi);
 
     return ketQua;
+  }
+
+  /**
+   * Ghi nhận người dùng cài đặt ứng dụng qua dòng lệnh CLI ("Tôi đã cài" - P3B-16.5).
+   * Tạo bản ghi ở trạng thái CHO_XAC_NHAN, tự hết hạn sau 24 giờ.
+   */
+  async ghiNhanCaiDatCli(maNguoiDung: string, maThietBi: string, dto: GhiNhanCaiDatCliDto) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    // Kiểm tra tên gói và phiên bản trước khi ghép lệnh (P3B-16.2)
+    if (!kiemTraTenGoiHopLe(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.tenGoi)) {
+      throw new BadRequestException(
+        `Tên gói [${dto.tenGoi}] không hợp lệ hoặc chứa ký tự bị cấm đối với trình quản lý [${dto.trinhQuanLy}].`,
+      );
+    }
+    if (dto.phienBan && !kiemTraPhienBanHopLe(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.phienBan)) {
+      throw new BadRequestException(
+        `Phiên bản [${dto.phienBan}] không hợp lệ hoặc chứa ký tự bị cấm.`,
+      );
+    }
+
+    const ungDung = await this.prisma.ungDung.findUnique({
+      where: { maUngDung: dto.maUngDung },
+      select: { maUngDung: true, tenRepoDayDu: true },
+    });
+    if (!ungDung) {
+      throw new NotFoundException(`Không tìm thấy ứng dụng với mã [${dto.maUngDung}]`);
+    }
+
+    // Ghép lệnh gỡ an toàn từ manifest
+    const ghep = ghepLenhCliAnToan(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.tenGoi, dto.phienBan);
+    if (!ghep.hopLe || !ghep.lenhGo) {
+      throw new BadRequestException(`Không thể ghép lệnh an toàn: ${ghep.lyDoKhongHopLe}`);
+    }
+
+    const thoiGianHetHan = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ kể từ khi ghi nhận
+
+    const daCai = await this.prisma.ungDungDaCai.upsert({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung: dto.maUngDung,
+        },
+      },
+      create: {
+        maNguoiDung,
+        maThietBi,
+        maUngDung: dto.maUngDung,
+        phienBanHienTai: dto.phienBan || 'latest',
+        trinhQuanLyGoi: dto.trinhQuanLy,
+        tenGoiCli: dto.tenGoi,
+        lenhGoCli: ghep.lenhGo,
+        trangThaiXacNhan: 'CHO_XAC_NHAN',
+        thoiGianHetHan,
+      },
+      update: {
+        phienBanHienTai: dto.phienBan || undefined,
+        trinhQuanLyGoi: dto.trinhQuanLy,
+        tenGoiCli: dto.tenGoi,
+        lenhGoCli: ghep.lenhGo,
+        trangThaiXacNhan: 'CHO_XAC_NHAN',
+        thoiGianHetHan,
+        ngayCapNhatCuoi: new Date(),
+      },
+    });
+
+    await this.xoaCacheThietBi(maThietBi);
+
+    this.logger.log(
+      `Đã ghi nhận "Tôi đã cài" qua CLI [${ungDung.tenRepoDayDu}] (${dto.trinhQuanLy}: ${dto.tenGoi}) trên thiết bị [${maThietBi}] - Trạng thái: CHO_XAC_NHAN (24h)`,
+    );
+
+    return {
+      maBanGhi: daCai.maBanGhi,
+      maUngDung: daCai.maUngDung,
+      maThietBi: daCai.maThietBi,
+      trinhQuanLy: dto.trinhQuanLy,
+      tenGoi: dto.tenGoi,
+      phienBan: daCai.phienBanHienTai,
+      lenhGo: ghep.lenhGo,
+      lenhCapNhat: ghep.lenhCapNhat,
+      trangThaiXacNhan: daCai.trangThaiXacNhan,
+      thoiGianHetHan: daCai.thoiGianHetHan?.toISOString(),
+      ngayCaiDat: daCai.ngayCaiDat.toISOString(),
+    };
+  }
+
+  /**
+   * Xác nhận lại ứng dụng CLI đã cài ("Xác nhận đã cài" - P3B-16.5).
+   * Chuyển trạng thái sang DA_XAC_NHAN và hủy đếm ngược 24h.
+   */
+  async xacNhanCaiDatCli(maNguoiDung: string, maThietBi: string, maUngDung: string) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const tonTai = await this.prisma.ungDungDaCai.findUnique({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+    });
+
+    if (!tonTai) {
+      throw new NotFoundException(
+        `Không tìm thấy bản ghi cài đặt của ứng dụng [${maUngDung}] trên thiết bị [${maThietBi}]`,
+      );
+    }
+
+    const capNhat = await this.prisma.ungDungDaCai.update({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung,
+        },
+      },
+      data: {
+        trangThaiXacNhan: 'DA_XAC_NHAN',
+        thoiGianHetHan: null,
+      },
+    });
+
+    await this.xoaCacheThietBi(maThietBi);
+
+    this.logger.log(
+      `Đã chuyển trạng thái xác nhận ứng dụng CLI [${maUngDung}] sang DA_XAC_NHAN trên thiết bị [${maThietBi}]`,
+    );
+
+    return {
+      maBanGhi: capNhat.maBanGhi,
+      maUngDung: capNhat.maUngDung,
+      trangThaiXacNhan: capNhat.trangThaiXacNhan,
+      thanhCong: true,
+    };
   }
 }

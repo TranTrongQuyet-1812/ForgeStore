@@ -53,8 +53,8 @@ import {
 import { phanLuongInput } from './utils/smart-input-dispatcher.util';
 import {
   trichMucCaiDat,
-  bocTachHuongDanTuCodeBlocks,
   sapXepCachCai,
+  trichXuatHuongDanCliBangQuyTac,
 } from '../ai/utils/cli-guide-extractor.util';
 import {
   AppSortOption,
@@ -237,6 +237,7 @@ export class AppsService {
     owner: string,
     repo: string,
     maNguoiDungYeuCau?: string,
+    laUngDungCli = false,
   ): Promise<UngDungChiTietDto> {
     this.logger.log(`Bắt đầu đồng bộ repository [${owner}/${repo}]...`);
 
@@ -326,7 +327,8 @@ export class AppsService {
       nenTangHoTro = NenTangHoTro.WINDOWS;
     } else {
       // L1: Không có file cài đặt hợp lệ nào cho Windows hoặc Android (như VLC, RetroArch)
-      trangThai = 'KHONG_CO_BAN_CAI';
+      // P3B-16: Nếu là ứng dụng chỉ có cài CLI (laUngDungCli === true), nạp vào Store ở trạng thái HOAT_DONG
+      trangThai = laUngDungCli ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
       const topics = (repoData.topics || []).map((t) => t.toLowerCase());
       if (topics.includes('android')) {
         nenTangHoTro = NenTangHoTro.ANDROID;
@@ -1442,28 +1444,8 @@ export class AppsService {
             if (installSection) {
               try {
                 const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
-                const cacDinhDangHopLe: DinhDangTep[] = [
-                  DinhDangTep.EXE,
-                  DinhDangTep.MSI,
-                  DinhDangTep.ZIP_PORTABLE,
-                  DinhDangTep.APK,
-                ];
-                const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
-                  r.danhSachTepCaiDat.some((f) =>
-                    cacDinhDangHopLe.includes(f.dinhDangTep as DinhDangTep),
-                  ),
-                );
-
-                if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
-                  huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
-                    installSection,
-                    app.tenRepoDayDu,
-                    readme,
-                    readmeUrl,
-                  );
-                } else {
-                  huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
-                }
+                // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
+                huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
               } catch (err: unknown) {
                 aiBiLoi = true;
                 this.logger.warn(
@@ -1621,33 +1603,10 @@ export class AppsService {
             const installSection = trichMucCaiDat(readme);
             if (installSection) {
               try {
-                const coFileCaiDat = app.danhSachPhatHanh.some((r) =>
-                  r.danhSachTepCaiDat.some((f) =>
-                    (
-                      [
-                        DinhDangTep.EXE,
-                        DinhDangTep.MSI,
-                        DinhDangTep.ZIP_PORTABLE,
-                        DinhDangTep.APK,
-                      ] as DinhDangTep[]
-                    ).includes(f.dinhDangTep),
-                  ),
-                );
-
                 const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
 
-                // Repo không có bộ cài (L1) -> Ưu tiên gọi LLM bóc tách chi tiết có tiếng Việt
-                if (!coFileCaiDat || app.trangThai === 'KHONG_CO_BAN_CAI') {
-                  huongDanCaiDat = await this.llmRotationService.trichXuatHuongDanCaiDat(
-                    installSection,
-                    app.tenRepoDayDu,
-                    readme,
-                    readmeUrl,
-                  );
-                } else {
-                  // Repo đã có bộ cài 1-chạm -> Bóc tách nhanh qua code blocks để tiết kiệm token
-                  huongDanCaiDat = bocTachHuongDanTuCodeBlocks(installSection, readme, readmeUrl);
-                }
+                // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
+                huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
               } catch (err: unknown) {
                 aiCliBiLoi = true;
                 this.logger.warn(
@@ -2297,9 +2256,11 @@ export class AppsService {
         // bỏ qua
       }
 
-      const installSection = trichMucCaiDat(readme);
-      if (installSection) {
-        const newApp = await this.dongBoRepo(owner, repo);
+      const cliGuide = readme
+        ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
+        : null;
+      if (cliGuide && cliGuide.cachCai.length > 0) {
+        const newApp = await this.dongBoRepo(owner, repo, undefined, true);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
         });
@@ -2381,9 +2342,11 @@ export class AppsService {
         // bỏ qua
       }
 
-      const installSection = trichMucCaiDat(readme);
-      if (installSection) {
-        const newApp = await this.dongBoRepo(owner, repo);
+      const cliGuide = readme
+        ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
+        : null;
+      if (cliGuide && cliGuide.cachCai.length > 0) {
+        const newApp = await this.dongBoRepo(owner, repo, undefined, true);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
         });

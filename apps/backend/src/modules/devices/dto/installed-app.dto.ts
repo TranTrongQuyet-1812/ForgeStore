@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { MaTrinhQuanLyGoi } from '@forgestore/types';
 
 export class GhiNhanCaiDatDto {
   @ApiProperty({
@@ -71,4 +72,42 @@ export class CapNhatKhoaRegistryDto {
   @IsString({ message: 'Tên hiển thị Registry phải là chuỗi ký tự' })
   @MaxLength(255, { message: 'Tên hiển thị Registry không được vượt quá 255 ký tự' })
   tenHienThiRegistry?: string;
+}
+
+export class GhiNhanCaiDatCliDto {
+  @ApiProperty({
+    description: 'Mã UUID của ứng dụng trong Store',
+    example: 'd3b07384-d113-4c91-9e79-50c2668e1c6b',
+  })
+  @IsNotEmpty({ message: 'Mã ứng dụng không được để trống' })
+  @IsUUID('4', { message: 'Mã ứng dụng phải là UUID hợp lệ' })
+  maUngDung!: string;
+
+  @ApiProperty({
+    description: 'Trình quản lý gói đã sử dụng',
+    example: 'winget',
+    enum: Object.values(MaTrinhQuanLyGoi),
+  })
+  @IsNotEmpty({ message: 'Trình quản lý gói không được để trống' })
+  @IsString({ message: 'Trình quản lý gói phải là chuỗi' })
+  @IsIn(Object.values(MaTrinhQuanLyGoi), { message: 'Trình quản lý gói không hợp lệ' })
+  trinhQuanLy!: MaTrinhQuanLyGoi;
+
+  @ApiProperty({
+    description: 'Tên gói đã dùng để cài qua dòng lệnh',
+    example: 'Microsoft.PowerToys',
+  })
+  @IsNotEmpty({ message: 'Tên gói không được để trống' })
+  @IsString({ message: 'Tên gói phải là chuỗi' })
+  @MaxLength(256, { message: 'Tên gói không được vượt quá 256 ký tự' })
+  tenGoi!: string;
+
+  @ApiPropertyOptional({
+    description: 'Phiên bản vừa cài đặt (nếu có)',
+    example: '0.85.0',
+  })
+  @IsOptional()
+  @IsString({ message: 'Phiên bản phải là chuỗi' })
+  @MaxLength(64, { message: 'Phiên bản không được vượt quá 64 ký tự' })
+  phienBan?: string;
 }

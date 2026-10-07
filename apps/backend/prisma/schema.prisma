@@ -338,6 +338,11 @@ model UngDungDaCai {
   duongDanThuMuc    String?           @map("duong_dan_thu_muc") // Cho Windows Portable
   khoaRegistry      String?           @map("khoa_registry") // Khóa Registry Windows lưu thông tin gỡ cài đặt (A4)
   tenHienThiRegistry String?          @map("ten_hien_thi_registry") // Tên hiển thị Registry Windows (DisplayName)
+  trinhQuanLyGoi    String?           @map("trinh_quan_ly_goi") // winget, scoop, npm, pip, docker (P3B-16)
+  tenGoiCli         String?           @map("ten_goi_cli") // Tên gói đã cài qua CLI (P3B-16)
+  lenhGoCli         String?           @map("lenh_go_cli") // Lệnh gỡ từ manifest (P3B-16)
+  trangThaiXacNhan  String?           @default("DA_XAC_NHAN") @map("trang_thai_xac_nhan") // CHO_XAC_NHAN | DA_XAC_NHAN (P3B-16)
+  thoiGianHetHan    DateTime?         @map("thoi_gian_het_han") // Tự hết hạn sau 24h nếu CHO_XAC_NHAN (P3B-16)
   ngayCaiDat        DateTime          @default(now()) @map("ngay_cai_dat")
   ngayCapNhatCuoi   DateTime          @updatedAt @map("ngay_cap_nhat_cuoi")
 

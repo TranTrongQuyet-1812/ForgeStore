@@ -8,6 +8,7 @@ import {
   nhanDienNhomLenh,
   sapXepCachCai,
   trichMucCaiDat,
+  trichXuatHuongDanCliBangQuyTac,
   xacDinhHeDieuHanhLenh,
 } from './cli-guide-extractor.util';
 
@@ -383,6 +384,105 @@ MIT
       expect(nhoms).toContain(NhomCachCai.PIP);
       expect(nhoms).toContain(NhomCachCai.DOCKER);
       expect(res?.coRuiRoCao).toBe(true); // có lệnh curl | sh
+    });
+  });
+
+  describe('P3B-16.3 & P3B-16.9: trichXuatHuongDanCliBangQuyTac (README thật & quy tắc thuần)', () => {
+    it('trích xuất thành công README có winget và scoop của Fastfetch', () => {
+      const fastfetchReadme = `# Fastfetch
+A neofetch-like tool for fetching system information and displaying them prettily.
+
+## Installation
+
+### Windows
+Via winget:
+\`\`\`cmd
+winget install --id Fastfetch-cli.Fastfetch -e
+\`\`\`
+
+Via Scoop:
+\`\`\`powershell
+scoop install fastfetch
+\`\`\`
+
+## Usage
+\`\`\`bash
+fastfetch
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(
+        fastfetchReadme,
+        'https://github.com/fastfetch-cli/fastfetch',
+      );
+
+      expect(res).not.toBeNull();
+      expect(res?.nguon).toBe('README');
+      expect(res?.cachCai.length).toBe(2);
+
+      // Winget
+      const wingetMethod = res?.cachCai.find((c) => c.trinhQuanLy === 'winget');
+      expect(wingetMethod).toBeDefined();
+      expect(wingetMethod?.tenGoi).toBe('Fastfetch-cli.Fastfetch');
+      expect(wingetMethod?.lenhCapNhat).toBe('winget upgrade --id Fastfetch-cli.Fastfetch');
+      expect(wingetMethod?.lenhGo).toBe('winget uninstall --id Fastfetch-cli.Fastfetch');
+
+      // Scoop
+      const scoopMethod = res?.cachCai.find((c) => c.trinhQuanLy === 'scoop');
+      expect(scoopMethod).toBeDefined();
+      expect(scoopMethod?.tenGoi).toBe('fastfetch');
+      expect(scoopMethod?.lenhCapNhat).toBe('scoop update fastfetch');
+      expect(scoopMethod?.lenhGo).toBe('scoop uninstall fastfetch');
+    });
+
+    it('trích xuất thành công README Oh My Posh với winget và lệnh rủi ro cao irm|iex', () => {
+      const ohMyPoshReadme = `# Oh My Posh
+A prompt theme engine for any shell.
+
+## Setup
+
+\`\`\`powershell
+winget install JanDeDobbeleer.OhMyPosh -s winget
+\`\`\`
+
+Manual install:
+\`\`\`powershell
+irm https://ohmyposh.dev/install.ps1 | iex
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(ohMyPoshReadme);
+      expect(res).not.toBeNull();
+      expect(res?.coRuiRoCao).toBe(true);
+
+      const wingetMethod = res?.cachCai.find((c) => c.trinhQuanLy === 'winget');
+      expect(wingetMethod?.tenGoi).toBe('JanDeDobbeleer.OhMyPosh');
+      expect(wingetMethod?.lenhGo).toBe('winget uninstall --id JanDeDobbeleer.OhMyPosh');
+
+      const irmMethod = res?.cachCai.find((c) => c.buoc.some((b) => b.ruiRoCao));
+      expect(irmMethod).toBeDefined();
+      expect(irmMethod?.buoc[0].lenh).toContain('irm https://ohmyposh.dev/install.ps1 | iex');
+      expect(irmMethod?.buoc[0].canhBaoRuiRo).toBeDefined();
+    });
+
+    it('trích xuất thành công từ dòng inline code khi không có code fence', () => {
+      const inlineReadme = `# Cool CLI App
+To install, simply run \`pip install cool-cli\` on your terminal.
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(inlineReadme);
+      expect(res).not.toBeNull();
+      expect(res?.cachCai[0]?.trinhQuanLy).toBe('pip');
+      expect(res?.cachCai[0]?.tenGoi).toBe('cool-cli');
+      expect(res?.cachCai[0]?.lenhGo).toBe('pip uninstall -y cool-cli');
+    });
+
+    it('từ chối sinh lệnh nếu câu lệnh cài trong README chứa injection', () => {
+      const maliciousReadme = `## Install
+\`\`\`bash
+winget install --id bad; rm -rf / -e
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(maliciousReadme);
+      // Lệnh bị loại hoặc không có trinhQuanLy/tenGoi hợp lệ
+      expect(res?.cachCai.some((c) => c.tenGoi === 'bad; rm -rf /')).toBe(false);
     });
   });
 });

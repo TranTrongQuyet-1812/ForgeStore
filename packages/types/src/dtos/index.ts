@@ -7,3 +7,4 @@ export * from './repo.dto.js';
 export * from './tim-kiem.dto.js';
 export * from './huong-dan-cli.dto.js';
 export * from './ban-dich.dto.js';
+export * from './cli-manifest.dto.js';
