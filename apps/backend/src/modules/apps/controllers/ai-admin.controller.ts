@@ -1,9 +1,11 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { VaiTro } from '@prisma/client';
 import { AppsService } from '../apps.service';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
+import { RepoIngestionPipelineService } from '../services/repo-ingestion-pipeline.service';
 import { VaiTroYeuCau } from '../../../common/decorators/vai-tro.decorator';
 
 export class PrewarmAiDto {
@@ -16,6 +18,26 @@ export class PrewarmAiDto {
   danhSachAppIds?: string[];
 }
 
+export class IngestionDiscoverDto {
+  @IsOptional()
+  @IsArray({ message: 'repos phải là một mảng chuỗi' })
+  @IsString({ each: true, message: 'Mỗi phần tử phải là chuỗi owner/repo' })
+  repos?: string[];
+}
+
+export class IngestionRunDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'batchSize phải là số nguyên' })
+  @Min(1, { message: 'batchSize tối thiểu là 1' })
+  @Max(100, { message: 'batchSize tối đa là 100' })
+  batchSize?: number;
+
+  @IsOptional()
+  @IsBoolean({ message: 'forceRun phải là kiểu boolean' })
+  forceRun?: boolean;
+}
+
 @ApiTags('Admin AI')
 @ApiBearerAuth()
 @Controller('admin/ai')
@@ -23,6 +45,7 @@ export class AiAdminController {
   constructor(
     private readonly appsService: AppsService,
     private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
+    private readonly repoIngestionPipelineService: RepoIngestionPipelineService,
   ) {}
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
@@ -50,5 +73,34 @@ export class AiAdminController {
   @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
   async translateDescriptions(@Body('forceAll') forceAll?: boolean) {
     return this.appDescriptionTranslationService.dichMoTaCacApp(Boolean(forceAll));
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Post('ingestion/discover')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Nạp danh sách repo ứng viên vào hàng đợi sàng lọc (P3B-06.1)',
+  })
+  async discoverCandidates(@Body() body?: IngestionDiscoverDto) {
+    return this.repoIngestionPipelineService.khamPhaUngVien(body?.repos);
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Post('ingestion/run')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Kích hoạt một chu kỳ sàng lọc, nạp lô nhỏ và dịch nền theo ngân sách (P3B-06 & P3B-05.4)',
+  })
+  async runIngestionBatch(@Body() body?: IngestionRunDto) {
+    const ketQuaNap = await this.repoIngestionPipelineService.sangLocVaNapLauNho(
+      body?.batchSize,
+      Boolean(body?.forceRun),
+    );
+    const ketQuaDich = await this.repoIngestionPipelineService.dichNenTheoNganSachNgay(
+      undefined,
+      Boolean(body?.forceRun),
+    );
+    return { ketQuaNap, ketQuaDich };
   }
 }

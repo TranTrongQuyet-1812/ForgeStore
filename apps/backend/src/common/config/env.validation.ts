@@ -70,6 +70,17 @@ export const envSchema = z.object({
   APP_DEEP_LINK_SCHEME: z.string().default('forgestore'),
   DESKTOP_ORIGIN: z.string().default('tauri://localhost'),
   LANDING_ORIGIN: z.string().default('http://localhost:3000'),
+
+  // Dây chuyền nạp Repo & Hàng đợi dịch (P3B-06 & P3B-05.4)
+  INGESTION_ENABLED: z
+    .preprocess(
+      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+      z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]),
+    )
+    .default(false)
+    .transform((v) => v === true || v === 'true' || v === '1'),
+  INGESTION_BATCH_SIZE: z.coerce.number().default(30),
+  INGESTION_DAILY_README_BUDGET: z.coerce.number().default(50),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
