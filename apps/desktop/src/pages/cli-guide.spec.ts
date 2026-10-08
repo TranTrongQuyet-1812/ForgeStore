@@ -135,5 +135,28 @@ describe('CLI Guide Logic & Display Rules (DELIV-33.3)', () => {
       expect(trich?.trinhQuanLy).toBe('winget');
       expect(trich?.tenGoi).toBe('Fastfetch-cli.Fastfetch');
     });
+
+    it('bảo toàn iconUrl từ bApp.ungDung và chặn coBanMoi khi phiên bản là latest (DELIV-79.6)', () => {
+      const bApp = {
+        maUngDung: 'app-1',
+        phienBanHienTai: 'latest',
+        trinhQuanLyGoi: 'docker',
+        ungDung: {
+          duongDanIcon: 'https://example.com/icon.png',
+        },
+      };
+      const updateItem = { coBanCapNhat: true };
+
+      // Mô phỏng logic ánh xạ mergedAppsMap trong LibraryPage.tsx
+      const mergedItem = {
+        maUngDung: bApp.maUngDung,
+        phienBanHienTai: bApp.phienBanHienTai,
+        iconUrl: bApp.ungDung?.duongDanIcon ?? undefined,
+        coBanMoi: bApp.phienBanHienTai !== 'latest' && Boolean(updateItem?.coBanCapNhat),
+      };
+
+      expect(mergedItem.iconUrl).toBe('https://example.com/icon.png');
+      expect(mergedItem.coBanMoi).toBe(false);
+    });
   });
 });

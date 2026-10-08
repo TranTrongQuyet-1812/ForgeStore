@@ -6,6 +6,7 @@ import {
   Logger,
   Optional,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { LoaiThietBi } from '@prisma/client';
@@ -626,8 +627,9 @@ export class DevicesService {
 
   /**
    * Dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ (P3B-16.5).
-   * Được gọi từ Cron Job định kỳ hoặc quản trị viên; không chạy trong luồng GET để đảm bảo Idempotent.
+   * Được gọi từ Cron Job định kỳ mỗi ngày lúc nửa đêm; không chạy trong luồng GET để đảm bảo Idempotent.
    */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async donDepBanGhiCliQuaHan(): Promise<number> {
     const ketQua = await this.prisma.ungDungDaCai.deleteMany({
       where: {

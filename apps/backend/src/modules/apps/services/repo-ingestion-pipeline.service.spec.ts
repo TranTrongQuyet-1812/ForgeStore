@@ -312,6 +312,41 @@ describe('RepoIngestionPipelineService (P3B-06 & P3B-05.4)', () => {
       });
     });
 
+    it('Chốt chặn 1: loại repo chỉ có lệnh dev (pip install -r requirements.txt) gán KHONG_CO_FILE_CAI, không gán CHI_CO_CAI_CLI (D-23)', async () => {
+      mockGithubService.getRateLimitInfo.mockReturnValue({
+        remaining: 4500,
+        limit: 5000,
+        reset: 123456,
+      });
+      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
+        { maUngVien: 'uv-dev-only', tenRepoDayDu: 'dev/python-lib' },
+      ]);
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        archived: false,
+        license: { key: 'mit' },
+      });
+      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce({
+        tag_name: 'v1.0.0',
+        assets: [{ name: 'source.tar.gz' }],
+      });
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '# Dev Guide\n## Development\npip install -r requirements.txt\npython main.py',
+      );
+
+      const res = await service.sangLocVaNapLauNho(30, true);
+
+      expect(res.soLuongBiLoai).toBe(1);
+      expect(res.chiTietBiLoai[LyDoLoaiUngVien.KHONG_CO_FILE_CAI]).toBe(1);
+      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
+        where: { maUngVien: 'uv-dev-only' },
+        data: {
+          trangThai: TrangThaiUngVienRepo.BI_LOAI,
+          lyDoLoai: LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
+        },
+      });
+      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
+    });
+
     it('nạp thành công repo có file cài đặt Windows và tính lại Thịnh hành 1 lần', async () => {
       mockGithubService.getRateLimitInfo.mockReturnValue({
         remaining: 4500,

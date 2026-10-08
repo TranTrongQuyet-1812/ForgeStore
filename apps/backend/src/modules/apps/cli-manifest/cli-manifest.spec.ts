@@ -8,6 +8,7 @@ import {
   trichTenGoiTuLenhTho,
   laKyTuDocHai,
   taoTenContainerTuImage,
+  coCachCaiCliHopLe,
 } from '@forgestore/types';
 
 describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Injection Defense', () => {
@@ -296,6 +297,41 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         trinhQuanLy: 'docker',
         tenGoi: 'ghcr.io/open-webui/open-webui:main',
       });
+    });
+  });
+
+  describe('P3B-16 & D-23: coCachCaiCliHopLe', () => {
+    it('trả về true khi có ít nhất một cách cài có trinhQuanLy và tenGoi hợp lệ', () => {
+      const hdHopLe = {
+        cachCai: [{ trinhQuanLy: 'winget', tenGoi: 'Fastfetch-cli.Fastfetch' }],
+      };
+      expect(coCachCaiCliHopLe(hdHopLe)).toBe(true);
+
+      const hdNhieuCach = {
+        cachCai: [
+          { trinhQuanLy: null, tenGoi: null },
+          { trinhQuanLy: 'docker', tenGoi: 'ghcr.io/open-webui/open-webui:main' },
+        ],
+      };
+      expect(coCachCaiCliHopLe(hdNhieuCach)).toBe(true);
+    });
+
+    it('trả về false khi chỉ có hướng dẫn thô không có trinhQuanLy/tenGoi (pip install -r requirements.txt)', () => {
+      const hdTho = {
+        cachCai: [{ trinhQuanLy: undefined, tenGoi: undefined }],
+      };
+      expect(coCachCaiCliHopLe(hdTho)).toBe(false);
+
+      const hdNull = {
+        cachCai: [{ trinhQuanLy: null, tenGoi: null }],
+      };
+      expect(coCachCaiCliHopLe(hdNull)).toBe(false);
+    });
+
+    it('trả về false khi hướng dẫn rỗng hoặc null/undefined', () => {
+      expect(coCachCaiCliHopLe(null)).toBe(false);
+      expect(coCachCaiCliHopLe(undefined)).toBe(false);
+      expect(coCachCaiCliHopLe({ cachCai: [] })).toBe(false);
     });
   });
 });

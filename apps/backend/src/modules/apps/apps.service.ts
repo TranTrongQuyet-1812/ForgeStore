@@ -26,6 +26,7 @@ import {
   UngDungChiTietDto,
   UngDungTomTatDto,
   YeuToRuiRoItem,
+  coCachCaiCliHopLe,
 } from '@forgestore/types';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -1464,12 +1465,12 @@ export class AppsService {
             }
 
             // Chỉ lưu khi đã đọc được README thành công và xác nhận:
-            // 1. Có hướng dẫn CLI trích xuất thành công -> lưu huongDanCaiDat
-            // 2. Không có install section hoặc bóc tách thành công nhưng không có lệnh CLI -> lưu marker { khongCoHuongDan: true, cachCai: [] }
-            const giaTriLuu =
-              huongDanCaiDat && huongDanCaiDat.cachCai.length > 0
-                ? huongDanCaiDat
-                : { khongCoHuongDan: true, cachCai: [] };
+            // 1. Có hướng dẫn CLI trích xuất thành công và có ít nhất 1 cách cài hợp lệ có trinhQuanLy và tenGoi (D-23) -> lưu huongDanCaiDat
+            // 2. Không có install section hoặc bóc tách thành công nhưng không có lệnh CLI hợp lệ -> lưu marker { khongCoHuongDan: true, cachCai: [] }
+            const coCachCaiHopLe = coCachCaiCliHopLe(huongDanCaiDat);
+            const giaTriLuu = coCachCaiHopLe
+              ? huongDanCaiDat
+              : { khongCoHuongDan: true, cachCai: [] };
 
             await this.prisma.phanTichAI.update({
               where: { maUngDung },
@@ -1477,10 +1478,12 @@ export class AppsService {
                 huongDanCaiDat: giaTriLuu as unknown as Prisma.InputJsonValue,
               },
             });
-            if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
+            if (coCachCaiHopLe) {
               this.logger.log(`✅ Đã cập nhật bổ sung hướng dẫn CLI cho app [${app.tenRepoDayDu}]`);
             } else {
-              this.logger.log(`ℹ️ [${app.tenRepoDayDu}] không có hướng dẫn CLI, đã đánh dấu cache`);
+              this.logger.log(
+                `ℹ️ [${app.tenRepoDayDu}] không có hướng dẫn CLI hợp lệ, đã đánh dấu cache`,
+              );
             }
             return;
           }
@@ -1623,7 +1626,8 @@ export class AppsService {
 
           let giaTriLuuCli: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
             Prisma.DbNull;
-          if (huongDanCaiDat && huongDanCaiDat.cachCai.length > 0) {
+          const coCachCaiHopLe = coCachCaiCliHopLe(huongDanCaiDat);
+          if (coCachCaiHopLe) {
             giaTriLuuCli = huongDanCaiDat as unknown as Prisma.InputJsonValue;
           } else if (!fetchReadmeLoi && readme && !aiCliBiLoi) {
             // Chỉ đánh dấu khi đã đọc được README thành công và AI/bóc tách không bị lỗi
@@ -2259,7 +2263,7 @@ export class AppsService {
       const cliGuide = readme
         ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
         : null;
-      if (cliGuide && cliGuide.cachCai.length > 0) {
+      if (coCachCaiCliHopLe(cliGuide)) {
         const newApp = await this.dongBoRepo(owner, repo, undefined, true);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
@@ -2268,7 +2272,7 @@ export class AppsService {
         const appChiTiet = await this.layChiTietApp(newApp.maUngDung, userId, dto.nenTang);
         const huongDanCli = locHuongDanCaiDatTheoNenTang(appChiTiet.huongDanCaiDat, dto.nenTang);
 
-        if (huongDanCli && huongDanCli.cachCai.length > 0) {
+        if (coCachCaiCliHopLe(huongDanCli)) {
           await this.ghiNhatKyNapRepo({
             duongDan: rawUrl,
             trangThai: TrangThaiNapRepo.THANH_CONG,
@@ -2283,7 +2287,7 @@ export class AppsService {
               'Ứng dụng không có bộ cài 1-chạm nhưng có hướng dẫn cài đặt qua dòng lệnh (CLI).',
             ungDung: appChiTiet,
             chiCoHuongDanCli: true,
-            huongDanCaiDat: huongDanCli,
+            huongDanCaiDat: huongDanCli ?? undefined,
           };
         }
       }
@@ -2345,7 +2349,7 @@ export class AppsService {
       const cliGuide = readme
         ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
         : null;
-      if (cliGuide && cliGuide.cachCai.length > 0) {
+      if (coCachCaiCliHopLe(cliGuide)) {
         const newApp = await this.dongBoRepo(owner, repo, undefined, true);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
@@ -2354,7 +2358,7 @@ export class AppsService {
         const appChiTiet = await this.layChiTietApp(newApp.maUngDung, userId, dto.nenTang);
         const huongDanCli = locHuongDanCaiDatTheoNenTang(appChiTiet.huongDanCaiDat, dto.nenTang);
 
-        if (huongDanCli && huongDanCli.cachCai.length > 0) {
+        if (coCachCaiCliHopLe(huongDanCli)) {
           await this.ghiNhatKyNapRepo({
             duongDan: rawUrl,
             trangThai: TrangThaiNapRepo.THANH_CONG,
@@ -2369,7 +2373,7 @@ export class AppsService {
               'Ứng dụng không có bộ cài 1-chạm nhưng có hướng dẫn cài đặt qua dòng lệnh (CLI).',
             ungDung: appChiTiet,
             chiCoHuongDanCli: true,
-            huongDanCaiDat: huongDanCli,
+            huongDanCaiDat: huongDanCli ?? undefined,
           };
         }
       }

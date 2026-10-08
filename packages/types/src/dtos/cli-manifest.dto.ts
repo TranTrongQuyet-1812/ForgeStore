@@ -517,3 +517,17 @@ export interface GhiNhanCaiDatCliDto {
   tenGoi: string;
   phienBan?: string;
 }
+
+/**
+ * Kiểm tra xem một Hướng dẫn cài đặt có chứa ít nhất một cách cài đặt CLI hợp lệ
+ * (có trinhQuanLy và tenGoi được hỗ trợ) hay không (P3B-16 & Quyết định D-23).
+ * Dùng để phân biệt ứng dụng CLI thực thụ với các repo chỉ có câu lệnh chạy phát triển dev (pip install -r requirements.txt, python main.py).
+ */
+export function coCachCaiCliHopLe<
+  T extends { cachCai?: Array<{ trinhQuanLy?: string | null; tenGoi?: string | null }> },
+>(huongDan: T | null | undefined): huongDan is T {
+  if (!huongDan || !Array.isArray(huongDan.cachCai) || huongDan.cachCai.length === 0) {
+    return false;
+  }
+  return huongDan.cachCai.some((c) => Boolean(c.trinhQuanLy && c.tenGoi));
+}
