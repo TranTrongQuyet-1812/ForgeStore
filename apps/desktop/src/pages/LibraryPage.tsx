@@ -199,8 +199,9 @@ export const LibraryPage: React.FC = () => {
       phienBanHienTai: bApp.phienBanHienTai,
       duongDanThuMuc: bApp.duongDanThuMuc ?? undefined,
       duongDanThucThi: localApp?.duongDanThucThi ?? undefined,
-      iconUrl: bApp.ungDung?.duongDanIcon ?? undefined,
-      coBanMoi: Boolean(updateItem?.coBanCapNhat || bApp.coBanMoi),
+      // P3B-16 & Review: App CLI không có phiên bản (lưu 'latest') thì không hứa hẹn tính năng cập nhật
+      coBanMoi:
+        bApp.phienBanHienTai !== 'latest' && Boolean(updateItem?.coBanCapNhat || bApp.coBanMoi),
       phienBanMoi: updateItem?.phienBanMoiNhat || bApp.phienBanMoiNhat || undefined,
       khoaRegistry: bApp.khoaRegistry ?? localApp?.registryKey,
       tenHienThiRegistry: bApp.tenHienThiRegistry ?? localApp?.registryDisplayName,

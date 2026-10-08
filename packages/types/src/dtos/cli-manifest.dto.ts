@@ -104,15 +104,34 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     ma: MaTrinhQuanLyGoi.DOCKER,
     tenHienThi: 'Docker Container Image',
     bieuTuong: 'Container',
-    mauLenhCai: 'docker run -d --name {tenGoi} {tenGoi}',
+    mauLenhCai: 'docker run -d --name {tenContainer} {tenGoi}',
     mauLenhCapNhat: 'docker pull {tenGoi}',
-    mauLenhGo: 'docker rm -f {tenGoi}',
+    mauLenhGo: 'docker rm -f {tenContainer}',
     // Docker Image Tag (VD: ghcr.io/open-webui/open-webui:main, nginx:latest, postgres:16-alpine)
     regexTenGoi:
       '^(?:(?:[a-zA-Z0-9][a-zA-Z0-9_.-]*(?:\\:[0-9]+)?\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)?$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
   },
 };
+
+/**
+ * Tạo tên container Docker an toàn và hợp lệ từ tên Image (P3B-16.2).
+ * Docker cấm ký tự '/' và ':' trong tên container (--name).
+ * Ví dụ:
+ *  - "ghcr.io/open-webui/open-webui:main" -> "open-webui"
+ *  - "ghcr.io/foo/bar:latest" -> "bar"
+ *  - "nginx:alpine" -> "nginx"
+ */
+export function taoTenContainerTuImage(image: string): string {
+  if (!image || typeof image !== 'string') return 'app';
+  // 1. Lấy phần cuối cùng sau dấu '/' (bỏ registry domain & repo namespace)
+  const phanCuoi = image.split('/').pop() || image;
+  // 2. Loại bỏ tag (:tag) hoặc digest (@sha256:...)
+  const tenGoc = phanCuoi.split(':')[0]?.split('@')[0] || phanCuoi;
+  // 3. Làm sạch ký tự không hợp lệ cho Docker container name [a-zA-Z0-9_.-]
+  const lamSach = tenGoc.replace(/[^a-zA-Z0-9_.-]/g, '-').replace(/^[^a-zA-Z0-9]+/, '');
+  return lamSach.length > 0 ? lamSach : 'app';
+}
 
 /**
  * Danh sách ký tự nguy hiểm tuyệt đối không được phép xuất hiện trong tên gói hoặc phiên bản
@@ -146,7 +165,22 @@ export function kiemTraTenGoiHopLe(trinhQuanLy: MaTrinhQuanLyGoi, tenGoi: string
   // 1. Chống ký tự độc hại
   if (laKyTuDocHai(trimmed)) return false;
 
-  // 2. Đối chiếu Whitelist Regex của trình quản lý gói
+  // 2. Quy tắc riêng từng trình quản lý gói
+  if (trinhQuanLy === MaTrinhQuanLyGoi.PIP) {
+    // Tên gói Python trên PyPI không bao giờ là tệp mở rộng (.txt, .py, .whl, .tar.gz, etc.)
+    if (/\.(?:txt|py|whl|tar\.gz|zip|toml|cfg|md|json)$/i.test(trimmed)) return false;
+    // Không phải đường dẫn tương đối/tuyệt đối
+    if (
+      trimmed === '.' ||
+      trimmed.startsWith('./') ||
+      trimmed.includes('/') ||
+      trimmed.includes('\\')
+    ) {
+      return false;
+    }
+  }
+
+  // 3. Đối chiếu Whitelist Regex của trình quản lý gói
   const manifest = DANH_SACH_TRINH_QUAN_LY_GOI[trinhQuanLy];
   if (!manifest) return false;
 
@@ -194,6 +228,7 @@ export interface KetQuaGhepLenhCli {
   lenhGo?: string;
   trinhQuanLy?: MaTrinhQuanLyGoi;
   tenGoi?: string;
+  tenContainer?: string;
   phienBan?: string;
 }
 
@@ -230,15 +265,21 @@ export function ghepLenhCliAnToan(
     };
   }
 
-  // Ghép lệnh an toàn (dùng replaceAll để thay thế toàn bộ placeholder {tenGoi} và {phienBan})
+  const cleanTenContainer =
+    trinhQuanLy === MaTrinhQuanLyGoi.DOCKER ? taoTenContainerTuImage(cleanTenGoi) : cleanTenGoi;
+
+  // Ghép lệnh an toàn (dùng replaceAll để thay thế toàn bộ placeholder {tenGoi}, {tenContainer} và {phienBan})
   const lenhCai = manifest.mauLenhCai
     .replaceAll('{tenGoi}', cleanTenGoi)
+    .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
   const lenhCapNhat = manifest.mauLenhCapNhat
     .replaceAll('{tenGoi}', cleanTenGoi)
+    .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
   const lenhGo = manifest.mauLenhGo
     .replaceAll('{tenGoi}', cleanTenGoi)
+    .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
 
   return {
@@ -248,6 +289,7 @@ export function ghepLenhCliAnToan(
     lenhGo,
     trinhQuanLy,
     tenGoi: cleanTenGoi,
+    tenContainer: trinhQuanLy === MaTrinhQuanLyGoi.DOCKER ? cleanTenContainer : undefined,
     phienBan: cleanPhienBan,
   };
 }
@@ -329,7 +371,53 @@ export function trichTenGoiTuLenhTho(
     const installIdx = tokens.findIndex((t) => /^install$/i.test(t));
     if (installIdx !== -1) {
       const sauInstall = tokens.slice(installIdx + 1);
-      const pkgToken = sauInstall.find((t) => !t.startsWith('-'));
+      // Danh sách cờ có tham số đi kèm cần bỏ qua cả cờ lẫn giá trị tiếp theo
+      const flagsWithArgs = new Set([
+        '-r',
+        '--requirement',
+        '-c',
+        '--constraint',
+        '-f',
+        '--find-links',
+        '-i',
+        '--index-url',
+        '--extra-index-url',
+        '-t',
+        '--target',
+        '-e',
+        '--editable',
+        '--prefix',
+        '--root',
+        '--src',
+        '--proxy',
+      ]);
+
+      let pkgToken: string | undefined;
+      for (let i = 0; i < sauInstall.length; i++) {
+        const token = sauInstall[i];
+        if (!token) continue;
+
+        // Cờ dạng --flag=value
+        if (token.startsWith('--') && token.includes('=')) {
+          continue;
+        }
+
+        // Cờ có tham số đi kèm (ví dụ: -r requirements.txt) -> bỏ qua cả cờ và giá trị sau
+        if (flagsWithArgs.has(token.toLowerCase())) {
+          i++; // Nhảy qua giá trị kèm theo
+          continue;
+        }
+
+        // Cờ thông thường (ví dụ: -U, --upgrade, --no-cache-dir)
+        if (token.startsWith('-')) {
+          continue;
+        }
+
+        // Token đầu tiên không phải cờ
+        pkgToken = token;
+        break;
+      }
+
       if (pkgToken && kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, pkgToken)) {
         return { trinhQuanLy: MaTrinhQuanLyGoi.PIP, tenGoi: pkgToken };
       }
@@ -337,13 +425,67 @@ export function trichTenGoiTuLenhTho(
   }
 
   // 5. DOCKER
-  // Mẫu: docker pull <image> hoặc docker run ... <image>
-  if (/^docker\s+(?:pull|run)\b/i.test(l)) {
-    const tokens = l.split(/\s+/);
-    const nonFlags = tokens.slice(2).filter((t) => !t.startsWith('-'));
-    const imageToken = nonFlags[nonFlags.length - 1];
+  // Khuyến nghị Quyết định D-23 & Claude Review:
+  // Ưu tiên cao nhất là 'docker pull <image>'.
+  // Với 'docker run': Chỉ chấp nhận khi xác định chắc chắn được image (không có lệnh chương trình trailing phức tạp).
+  if (/^docker\s+pull\b/i.test(l)) {
+    const tokens = l.split(/\s+/).slice(2);
+    const nonFlags = tokens.filter((t) => !t.startsWith('-'));
+    const imageToken = nonFlags[0];
     if (imageToken && kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.DOCKER, imageToken)) {
       return { trinhQuanLy: MaTrinhQuanLyGoi.DOCKER, tenGoi: imageToken };
+    }
+  }
+
+  if (/^docker\s+run\b/i.test(l)) {
+    const tokens = l.split(/\s+/).slice(2);
+    const dockerRunFlagsWithArgs = new Set([
+      '--name',
+      '-p',
+      '--publish',
+      '-v',
+      '--volume',
+      '-e',
+      '--env',
+      '--env-file',
+      '--network',
+      '--restart',
+      '-w',
+      '--workdir',
+      '-u',
+      '--user',
+      '--entrypoint',
+      '--mount',
+    ]);
+
+    let candidateIdx = -1;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (!token) continue;
+      if (token.startsWith('--') && token.includes('=')) continue;
+      if (dockerRunFlagsWithArgs.has(token.toLowerCase())) {
+        i++; // Nhảy qua giá trị của cờ
+        continue;
+      }
+      if (token.startsWith('-')) continue;
+
+      // Token đầu tiên không phải cờ
+      candidateIdx = i;
+      break;
+    }
+
+    if (candidateIdx !== -1) {
+      const candidateImage = tokens[candidateIdx];
+      // Nếu sau candidateImage CÒN token nào khác (ví dụ: "serve --port 80", "sh", "app.py")
+      // -> Đây là lệnh có tham số chương trình phức tạp, không xác định chắc chắn được image -> TỪ CHỐI!
+      const remainingTokens = tokens.slice(candidateIdx + 1);
+      if (
+        remainingTokens.length === 0 &&
+        candidateImage &&
+        kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.DOCKER, candidateImage)
+      ) {
+        return { trinhQuanLy: MaTrinhQuanLyGoi.DOCKER, tenGoi: candidateImage };
+      }
     }
   }
 

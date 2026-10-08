@@ -319,6 +319,8 @@ export function kiemTraRuiRoCao(lenh: string): { ruiRoCao: boolean; lyDo?: strin
  */
 function chuanHoaDongLenh(line: string): string {
   let l = line.trim().replace(/^[$#>]\s*/, '');
+  // Loại bỏ tiền tố nhãn cài đặt như "Install:", "Installation:", "Setup:", "Cài đặt:"
+  l = l.replace(/^(?:install|installation|setup|cài\s*đặt)\s*:\s*/i, '');
   if (l.startsWith('`') && l.endsWith('`') && l.length >= 2) {
     l = l.slice(1, -1).trim();
   }
@@ -621,30 +623,48 @@ export function trichXuatHuongDanCliBangQuyTac(
   if (!rawReadme || typeof rawReadme !== 'string') return null;
 
   // 1. Tìm mục cài đặt trong README
-  let section = trichMucCaiDat(rawReadme);
+  const installSection = trichMucCaiDat(rawReadme);
 
-  // 2. Nếu không tìm thấy mục riêng, lấy 12.000 ký tự đầu của README để quét
-  if (!section) {
-    section = rawReadme.slice(0, 12000);
-  }
+  // 2. Xác định phạm vi quét an toàn:
+  // - Nếu có mục cài đặt riêng: quét trọn vẹn mục đó.
+  // - Nếu không có: chỉ quét tối đa 4.000 ký tự đầu của README (tránh quét mục dev/contributing phía sau).
+  const targetScope = installSection || rawReadme.slice(0, 4000);
 
-  // 3. Thử trích xuất từ các code blocks trong mục
-  let result = bocTachHuongDanTuCodeBlocks(section, rawReadme, duongDanReadmeGoc);
+  // 3. Thử trích xuất từ các code blocks trong phạm vi quét
+  let result = bocTachHuongDanTuCodeBlocks(targetScope, rawReadme, duongDanReadmeGoc);
   if (result && result.cachCai.length > 0) {
     return { ...result, nguon: 'README' };
   }
 
-  // 4. Fallback: Nếu không có code block ``` mà có inline code hoặc dòng lệnh trực tiếp
-  const lines = rawReadme.split(/\r?\n/);
+  // 4. Fallback: Quét từng dòng trong phạm vi quét an toàn
+  // - Khi có installSection: chấp nhận dòng có inline code, dòng có tiền tố Install:/Setup:, hoặc dòng lệnh trực tiếp.
+  // - Khi KHÔNG có installSection (chỉ trong 4.000 ký tự đầu): TUYỆT ĐỐI chỉ chấp nhận dòng có tiền tố Install:/Setup:/Cài đặt: hoặc inline code `...`
+  const lines = targetScope.split(/\r?\n/);
   const matchedLines: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
 
-    // Kiểm tra inline code `...`
+    // A. Kiểm tra tiền tố Install: / Installation: / Setup: / Cài đặt:
+    const prefixMatch = trimmed.match(/^(?:install|installation|setup|cài\s*đặt)\s*:\s*(.+)$/i);
+    // B. Kiểm tra inline code `...`
     const inlineMatch = trimmed.match(/`([^`]{5,200})`/);
-    const candidate = inlineMatch && inlineMatch[1] ? inlineMatch[1].trim() : trimmed;
+
+    let candidate = '';
+    if (prefixMatch && prefixMatch[1]) {
+      candidate = prefixMatch[1].trim();
+      if (candidate.startsWith('`') && candidate.endsWith('`') && candidate.length >= 2) {
+        candidate = candidate.slice(1, -1).trim();
+      }
+    } else if (inlineMatch && inlineMatch[1]) {
+      candidate = inlineMatch[1].trim();
+    } else if (installSection) {
+      // Khi đã ở trong mục cài đặt rõ ràng, cho phép dòng lệnh trực tiếp
+      candidate = trimmed;
+    }
+
+    if (!candidate) continue;
 
     const nhom = nhanDienNhomLenh(candidate);
     if (nhom) {

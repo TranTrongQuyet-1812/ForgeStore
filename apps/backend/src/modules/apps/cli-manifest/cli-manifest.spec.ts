@@ -7,6 +7,7 @@ import {
   ghepLenhCliAnToan,
   trichTenGoiTuLenhTho,
   laKyTuDocHai,
+  taoTenContainerTuImage,
 } from '@forgestore/types';
 
 describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Injection Defense', () => {
@@ -28,7 +29,11 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         expect(manifest.tenHienThi).toBeTruthy();
         expect(manifest.mauLenhCai).toContain('{tenGoi}');
         expect(manifest.mauLenhCapNhat).toContain('{tenGoi}');
-        expect(manifest.mauLenhGo).toContain('{tenGoi}');
+        if (key === MaTrinhQuanLyGoi.DOCKER) {
+          expect(manifest.mauLenhGo).toContain('{tenContainer}');
+        } else {
+          expect(manifest.mauLenhGo).toContain('{tenGoi}');
+        }
         expect(manifest.regexTenGoi).toBeTruthy();
       }
     });
@@ -46,8 +51,10 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(DANH_SACH_TRINH_QUAN_LY_GOI.pip.mauLenhCai).toBe('pip install {tenGoi}');
       expect(DANH_SACH_TRINH_QUAN_LY_GOI.pip.mauLenhGo).toBe('pip uninstall -y {tenGoi}');
 
-      expect(DANH_SACH_TRINH_QUAN_LY_GOI.docker.mauLenhCai).toContain('docker run');
-      expect(DANH_SACH_TRINH_QUAN_LY_GOI.docker.mauLenhGo).toBe('docker rm -f {tenGoi}');
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.docker.mauLenhCai).toBe(
+        'docker run -d --name {tenContainer} {tenGoi}',
+      );
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.docker.mauLenhGo).toBe('docker rm -f {tenContainer}');
     });
   });
 
@@ -154,18 +161,37 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(kqPip.lenhCapNhat).toBe('pip install --upgrade open-webui');
       expect(kqPip.lenhGo).toBe('pip uninstall -y open-webui');
 
-      // 5. docker (kiểm tra replaceAll thay thế toàn bộ cả 2 placeholder {tenGoi})
+      // 5. docker (🔴 Lỗi Đỏ 2: kiểm tra tên container làm sạch và {tenContainer} trong lệnh)
       const kqDocker = ghepLenhCliAnToan(
         MaTrinhQuanLyGoi.DOCKER,
         'ghcr.io/open-webui/open-webui:main',
       );
       expect(kqDocker.hopLe).toBe(true);
+      expect(kqDocker.tenContainer).toBe('open-webui');
       expect(kqDocker.lenhCai).toBe(
-        'docker run -d --name ghcr.io/open-webui/open-webui:main ghcr.io/open-webui/open-webui:main',
+        'docker run -d --name open-webui ghcr.io/open-webui/open-webui:main',
       );
       expect(kqDocker.lenhCai).not.toContain('{tenGoi}');
+      expect(kqDocker.lenhCai).not.toContain('{tenContainer}');
       expect(kqDocker.lenhCapNhat).toBe('docker pull ghcr.io/open-webui/open-webui:main');
-      expect(kqDocker.lenhGo).toBe('docker rm -f ghcr.io/open-webui/open-webui:main');
+      expect(kqDocker.lenhGo).toBe('docker rm -f open-webui');
+    });
+
+    it('taoTenContainerTuImage làm sạch tên image thành container name hợp lệ (🔴 Lỗi Đỏ 2)', () => {
+      expect(taoTenContainerTuImage('ghcr.io/open-webui/open-webui:main')).toBe('open-webui');
+      expect(taoTenContainerTuImage('ghcr.io/foo/bar:latest')).toBe('bar');
+      expect(taoTenContainerTuImage('docker.io/library/nginx:alpine')).toBe('nginx');
+      expect(taoTenContainerTuImage('redis:7-alpine')).toBe('redis');
+      expect(taoTenContainerTuImage('my-custom-app')).toBe('my-custom-app');
+    });
+
+    it('PIP kiemTraTenGoiHopLe từ chối các tệp mở rộng và đường dẫn (🔴 Lỗi Đỏ 1)', () => {
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, 'requirements.txt')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, 'setup.py')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, 'package.whl')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, 'dist/my_package.whl')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, './local_package')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, '.')).toBe(false);
     });
   });
 
@@ -194,7 +220,7 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(res2).toEqual({ trinhQuanLy: 'npm', tenGoi: 'pnpm' });
     });
 
-    it('trích xuất chính xác tên gói từ lệnh pip', () => {
+    it('trích xuất chính xác tên gói từ lệnh pip thông thường', () => {
       const res1 = trichTenGoiTuLenhTho('pip install open-webui');
       expect(res1).toEqual({ trinhQuanLy: 'pip', tenGoi: 'open-webui' });
 
@@ -205,9 +231,46 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(res3).toEqual({ trinhQuanLy: 'pip', tenGoi: 'black' });
     });
 
+    it('bỏ qua cờ có giá trị kèm theo (-r, -c, -i) và không đọc nhầm requirements.txt (🔴 Lỗi Đỏ 1)', () => {
+      // 1. pip install -r requirements.txt -> Không có gói nào được cài trực tiếp -> trả về null
+      expect(trichTenGoiTuLenhTho('pip install -r requirements.txt')).toBeNull();
+      expect(trichTenGoiTuLenhTho('pip install --requirement requirements.txt')).toBeNull();
+      expect(trichTenGoiTuLenhTho('pip install -c constraints.txt')).toBeNull();
+      expect(trichTenGoiTuLenhTho('pip install -r req.txt -i https://pypi.org/simple')).toBeNull();
+
+      // 2. pip install -r requirements.txt <ten_goi> -> Trích xuất đúng ten_goi
+      const res = trichTenGoiTuLenhTho('pip install -r requirements.txt open-webui');
+      expect(res).toEqual({ trinhQuanLy: 'pip', tenGoi: 'open-webui' });
+
+      // 3. pip install --extra-index-url https://download.pytorch.org/whl/cu118 torch -> torch
+      const resTorch = trichTenGoiTuLenhTho(
+        'pip install --extra-index-url https://download.pytorch.org/whl/cu118 torch',
+      );
+      expect(resTorch).toEqual({ trinhQuanLy: 'pip', tenGoi: 'torch' });
+    });
+
     it('trích xuất chính xác tên image từ lệnh docker pull', () => {
       const res1 = trichTenGoiTuLenhTho('docker pull ghcr.io/open-webui/open-webui:main');
       expect(res1).toEqual({
+        trinhQuanLy: 'docker',
+        tenGoi: 'ghcr.io/open-webui/open-webui:main',
+      });
+    });
+
+    it('từ chối docker run khi có tham số chương trình phía sau (🔴 Lỗi Đỏ 3)', () => {
+      // docker run -d --name x myimage serve --port 80 -> có trailing program args "serve --port 80" -> TỪ CHỐI
+      expect(trichTenGoiTuLenhTho('docker run -d --name x myimage serve --port 80')).toBeNull();
+      expect(trichTenGoiTuLenhTho('docker run -d myimage sh -c "echo 1"')).toBeNull();
+      expect(trichTenGoiTuLenhTho('docker run -it ubuntu bash')).toBeNull();
+
+      // docker run KHÔNG có trailing program args -> trích xuất chuẩn xác tên image
+      const res = trichTenGoiTuLenhTho('docker run -d -p 8080:8080 myimage');
+      expect(res).toEqual({ trinhQuanLy: 'docker', tenGoi: 'myimage' });
+
+      const resNamed = trichTenGoiTuLenhTho(
+        'docker run -d --name open-webui ghcr.io/open-webui/open-webui:main',
+      );
+      expect(resNamed).toEqual({
         trinhQuanLy: 'docker',
         tenGoi: 'ghcr.io/open-webui/open-webui:main',
       });

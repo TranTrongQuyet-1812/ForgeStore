@@ -441,19 +441,21 @@ describe('DevicesService', () => {
         expect(mockCacheService.del).toHaveBeenCalledWith(`device:installed:${maThietBi}`);
       });
 
-      it('P3B-16.5: Tự động dọn dẹp các bản ghi CLI CHO_XAC_NHAN quá hạn 24 giờ', async () => {
+      it('P3B-16.5 & Review: layDanhSachAppDaCai là pure read (CQRS), không gọi deleteMany và lọc ẩn bản ghi hết hạn qua query OR', async () => {
         mockCacheService.get.mockResolvedValue(null);
         mockPrisma.ungDungDaCai.findMany.mockResolvedValue([]);
 
         await service.layDanhSachAppDaCai(maNguoiDung, maThietBi);
 
-        expect(mockPrisma.ungDungDaCai.deleteMany).toHaveBeenCalledWith({
-          where: {
-            maThietBi,
-            trangThaiXacNhan: 'CHO_XAC_NHAN',
-            thoiGianHetHan: { lt: expect.any(Date) },
-          },
-        });
+        expect(mockPrisma.ungDungDaCai.deleteMany).not.toHaveBeenCalled();
+        expect(mockPrisma.ungDungDaCai.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              maThietBi,
+              OR: [{ thoiGianHetHan: null }, { thoiGianHetHan: { gt: expect.any(Date) } }],
+            }),
+          }),
+        );
       });
 
       it('P3B-16.7: Trả về lenhCapNhatCli an toàn khi ứng dụng CLI có bản mới', async () => {
@@ -822,6 +824,29 @@ describe('DevicesService', () => {
           }),
         );
       });
+
+      it('từ chối ghi đè nếu ứng dụng đã có bản ghi cài đặt thật (EXE/MSI/Portable) (🟡 Điểm Vàng 2)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'fastfetch-cli/fastfetch',
+        });
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({
+          maBanGhi: 'rec-real-installer',
+          maThietBi,
+          maUngDung,
+          khoaRegistry: 'Fastfetch',
+          duongDanThuMuc: 'C:\\Program Files\\Fastfetch',
+          trinhQuanLyGoi: null,
+        });
+
+        await expect(
+          service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+            maUngDung,
+            trinhQuanLy: 'winget',
+            tenGoi: 'Fastfetch-cli.Fastfetch',
+          }),
+        ).rejects.toThrow(BadRequestException);
+      });
     });
 
     describe('xacNhanCaiDatCli (P3B-16)', () => {
@@ -861,6 +886,22 @@ describe('DevicesService', () => {
           data: {
             trangThaiXacNhan: 'DA_XAC_NHAN',
             thoiGianHetHan: null,
+          },
+        });
+      });
+    });
+
+    describe('donDepBanGhiCliQuaHan (P3B-16.5 & Review)', () => {
+      it('dọn dẹp các bản ghi CLI CHO_XAC_NHAN đã hết hạn qua deleteMany', async () => {
+        mockPrisma.ungDungDaCai.deleteMany.mockResolvedValue({ count: 5 });
+
+        const count = await service.donDepBanGhiCliQuaHan();
+
+        expect(count).toBe(5);
+        expect(mockPrisma.ungDungDaCai.deleteMany).toHaveBeenCalledWith({
+          where: {
+            trangThaiXacNhan: 'CHO_XAC_NHAN',
+            thoiGianHetHan: { lt: expect.any(Date) },
           },
         });
       });

@@ -474,6 +474,39 @@ To install, simply run \`pip install cool-cli\` on your terminal.
       expect(res?.cachCai[0]?.lenhGo).toBe('pip uninstall -y cool-cli');
     });
 
+    it('trích xuất thành công dòng có tiền tố Install: không có dấu nháy ngược (🟡 Điểm Vàng 1)', () => {
+      const prefixReadme = `# Cool App
+This is a modern terminal tool.
+
+Install: winget install --id Cool.App -e
+
+## License
+MIT
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(prefixReadme);
+      expect(res).not.toBeNull();
+      expect(res?.cachCai[0]?.trinhQuanLy).toBe('winget');
+      expect(res?.cachCai[0]?.tenGoi).toBe('Cool.App');
+      expect(res?.cachCai[0]?.lenhGo).toBe('winget uninstall --id Cool.App');
+    });
+
+    it('không bắt nhầm lệnh dev/contributing trong văn xuôi khi README không có mục cài đặt riêng (🟡 Điểm Vàng 1 & 🔴 Lỗi Đỏ 1)', () => {
+      const proseWithoutInstall = `# Python AI Library
+A powerful machine learning framework.
+
+${'Some description prose here. '.repeat(200)}
+
+## Contributing
+To develop locally, please install dependencies:
+\`\`\`bash
+pip install -r requirements.txt
+\`\`\`
+`;
+      // Section contributing nằm ngoài 4.000 ký tự đầu và không phải mục cài đặt
+      const res = trichXuatHuongDanCliBangQuyTac(proseWithoutInstall);
+      expect(res).toBeNull();
+    });
+
     it('từ chối sinh lệnh nếu câu lệnh cài trong README chứa injection', () => {
       const maliciousReadme = `## Install
 \`\`\`bash

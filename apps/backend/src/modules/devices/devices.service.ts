@@ -176,21 +176,13 @@ export class DevicesService {
 
     const platform = thietBi.loaiThietBi === LoaiThietBi.DIEN_THOAI_ANDROID ? 'android' : 'windows';
 
-    // P3B-16.5: Tự động dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ
-    await this.prisma.ungDungDaCai
-      .deleteMany({
-        where: {
-          maThietBi,
-          trangThaiXacNhan: 'CHO_XAC_NHAN',
-          thoiGianHetHan: { lt: new Date() },
-        },
-      })
-      .catch((err) => {
-        this.logger.warn(`Lỗi dọn dẹp bản ghi CLI hết hạn: ${(err as Error).message}`);
-      });
-
+    // P3B-16.5 & Review: GET là truy vấn đọc thuần túy (CQRS/Idempotent), không thực hiện deleteMany trong luồng GET.
+    // Lọc ẩn các bản ghi CLI chờ xác nhận đã hết hạn qua điều kiện truy vấn OR.
     const danhSach = await this.prisma.ungDungDaCai.findMany({
-      where: { maThietBi },
+      where: {
+        maThietBi,
+        OR: [{ thoiGianHetHan: null }, { thoiGianHetHan: { gt: new Date() } }],
+      },
       select: {
         maBanGhi: true,
         maNguoiDung: true,
@@ -511,6 +503,26 @@ export class DevicesService {
       throw new BadRequestException(`Không thể ghép lệnh an toàn: ${ghep.lyDoKhongHopLe}`);
     }
 
+    // P3B-16.5 & Review: Bảo vệ bản ghi cài đặt thật (EXE/MSI/Portable) không bị ghi đè thành bản ghi tạm CLI
+    const banGhiHienTai = await this.prisma.ungDungDaCai.findUnique({
+      where: {
+        maThietBi_maUngDung: {
+          maThietBi,
+          maUngDung: dto.maUngDung,
+        },
+      },
+    });
+
+    if (
+      banGhiHienTai &&
+      (banGhiHienTai.khoaRegistry || banGhiHienTai.duongDanThuMuc || banGhiHienTai.maTepDaCai) &&
+      !banGhiHienTai.trinhQuanLyGoi
+    ) {
+      throw new BadRequestException(
+        `Ứng dụng này đã được cài đặt qua bộ cài cục bộ (EXE/MSI/Portable). Không thể ghi đè bằng bản ghi tạm CLI.`,
+      );
+    }
+
     const thoiGianHetHan = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ kể từ khi ghi nhận
 
     const daCai = await this.prisma.ungDungDaCai.upsert({
@@ -610,5 +622,24 @@ export class DevicesService {
       trangThaiXacNhan: capNhat.trangThaiXacNhan,
       thanhCong: true,
     };
+  }
+
+  /**
+   * Dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ (P3B-16.5).
+   * Được gọi từ Cron Job định kỳ hoặc quản trị viên; không chạy trong luồng GET để đảm bảo Idempotent.
+   */
+  async donDepBanGhiCliQuaHan(): Promise<number> {
+    const ketQua = await this.prisma.ungDungDaCai.deleteMany({
+      where: {
+        trangThaiXacNhan: 'CHO_XAC_NHAN',
+        thoiGianHetHan: { lt: new Date() },
+      },
+    });
+
+    if (ketQua.count > 0) {
+      this.logger.log(`Đã dọn dẹp ${ketQua.count} bản ghi CLI chờ xác nhận quá hạn 24h`);
+    }
+
+    return ketQua.count;
   }
 }
