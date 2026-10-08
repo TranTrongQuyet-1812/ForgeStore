@@ -1369,6 +1369,20 @@ export class AppsService {
   }
 
   /**
+   * Xóa mọi biến thể cache chi tiết của một app (theo mã và theo tên repo, kể cả đuôi :platform:arch)
+   * để Desktop luôn thấy dữ liệu mới nhất sau khi dữ liệu app thay đổi.
+   */
+  private async xoaCacheChiTietApp(app: {
+    maUngDung: string;
+    tenRepoDayDu: string;
+  }): Promise<void> {
+    await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
+    await this.cacheService.xoaTheoPrefix(
+      `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
+    );
+  }
+
+  /**
    * Phân tích Dual-AI cho ứng dụng (Lazy AI & Distributed Lock - P2-31).
    * Bọc trong withLock("fs:ai:<id>") đảm bảo 10 request đồng thời chỉ chạy AI 1 lần.
    */
@@ -1444,6 +1458,7 @@ export class AppsService {
                   } as unknown as Prisma.InputJsonValue,
                 },
               });
+              await this.xoaCacheChiTietApp(app);
               this.logger.log(
                 `ℹ️ [${app.tenRepoDayDu}] không có README trên GitHub, đã đánh dấu khongCoHuongDan`,
               );
@@ -1490,6 +1505,7 @@ export class AppsService {
                 huongDanCaiDat: giaTriLuu as unknown as Prisma.InputJsonValue,
               },
             });
+            await this.xoaCacheChiTietApp(app);
             if (coCachCaiHopLe) {
               this.logger.log(`✅ Đã cập nhật bổ sung hướng dẫn CLI cho app [${app.tenRepoDayDu}]`);
             } else {
@@ -1716,10 +1732,7 @@ export class AppsService {
           }
 
           // 8. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
-          await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
-          await this.cacheService.xoaTheoPrefix(
-            `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
-          );
+          await this.xoaCacheChiTietApp(app);
           await this.cacheService.del([
             `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,
             `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,

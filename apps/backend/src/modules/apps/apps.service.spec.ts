@@ -1688,6 +1688,37 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       // Khi tải README lỗi, KHÔNG ĐƯỢC update phanTichAI với khongCoHuongDan: true!
       expect(mockPrisma.phanTichAI.update).not.toHaveBeenCalled();
     });
+
+    it('bổ sung CLI cho app cũ (marker lỗi thời) rồi xóa cache chi tiết mọi biến thể', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'rg-id',
+        tenRepoDayDu: 'BurntSushi/ripgrep',
+        chuSoHuu: 'BurntSushi',
+        tenKhoChua: 'ripgrep',
+        danhSachPhatHanh: [],
+      });
+      // Marker do bản cũ ghi: thiếu phienBanBocTach nên phải bóc tách lại
+      mockPrisma.phanTichAI.findUnique.mockResolvedValueOnce({
+        maUngDung: 'rg-id',
+        huongDanCaiDat: { khongCoHuongDan: true, cachCai: [] },
+      });
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '### Installation\n\n```\n$ winget install BurntSushi.ripgrep.MSVC\n```\n',
+      );
+
+      await service.phanTichUngDung('rg-id');
+
+      expect(mockPrisma.phanTichAI.update).toHaveBeenCalledTimes(1);
+      const saved = mockPrisma.phanTichAI.update.mock.calls[0]![0].data.huongDanCaiDat;
+      expect(saved.cachCai[0].tenGoi).toBe('BurntSushi.ripgrep.MSVC');
+      // Cache phải bị xóa theo tiền tố cho cả mã app và slug owner/repo
+      expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith(
+        `${service.CACHE_KEY_DETAIL}rg-id`,
+      );
+      expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith(
+        `${service.CACHE_KEY_DETAIL}burntsushi/ripgrep`,
+      );
+    });
   });
 
   describe('Task P3B-03: Tính Sẵn Thịnh Hành & Tối Ưu Truy Vấn CSDL (P3B-03.1 -> P3B-03.5)', () => {
