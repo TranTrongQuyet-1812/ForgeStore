@@ -623,15 +623,20 @@ pub fn giai_nen_portable_7z(
     let res = sevenz_rust::decompress_file_with_extract_fn(&safe_path, &dest_dir, |entry, reader, dest| {
         let entry_name = entry.name();
 
-        // Chặn lỗ hổng Zip-Slip (P3B-17.6): kiểm tra chặt chẽ .. hoặc path normalization
+        // Chặn lỗ hổng Zip-Slip (P3B-17.6 & SEC-P3B17-01): kiểm tra chặt chẽ absolute path, prefix, root dir và ..
         let raw_path = Path::new(entry_name);
-        for comp in raw_path.components() {
-            if matches!(comp, std::path::Component::ParentDir) {
-                return Err(sevenz_rust::Error::other(format!(
-                    "CẢNH BÁO AN NINH: Phát hiện tệp 7z độc hại (Zip-Slip attempt): '{}'",
-                    entry_name
-                )));
-            }
+        if raw_path.is_absolute()
+            || raw_path.components().any(|c| matches!(
+                c,
+                std::path::Component::Prefix(_)
+                    | std::path::Component::RootDir
+                    | std::path::Component::ParentDir
+            ))
+        {
+            return Err(sevenz_rust::Error::other(format!(
+                "CẢNH BÁO AN NINH: Phát hiện tệp 7z độc hại (Zip-Slip attempt): '{}'",
+                entry_name
+            )));
         }
 
         let outpath = dest.join(entry_name);
@@ -721,6 +726,7 @@ pub fn giai_nen_portable_7z(
     });
 
     if let Err(e) = res {
+        let _ = std::fs::remove_dir_all(&dest_dir);
         return Err(format!("Lỗi khi giải nén tệp .7z: {}", e));
     }
 

@@ -9,5 +9,6 @@ export {
   coBanMoiHon,
   kiemTraCoBanCapNhat,
   laTagKhongCoSo,
+  parseBigIntAnToan,
   type ThongTinBanPhatHanhKiemTra,
 } from '@forgestore/types';

@@ -180,6 +180,24 @@ export function coBanMoiHon(phienBanHienTai: string, phienBanMoi: string): boole
 }
 
 /**
+ * Chuyển đổi an toàn dung lượng tệp sang BigInt (chống SyntaxError và tràn số - SEC-P3B17-03)
+ */
+export function parseBigIntAnToan(val: number | bigint | string | null | undefined): bigint | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === 'bigint') return val;
+  try {
+    if (typeof val === 'number') {
+      if (isNaN(val) || !isFinite(val)) return null;
+      return BigInt(Math.trunc(val));
+    }
+    const str = val.toString().trim().split('.')[0];
+    return str ? BigInt(str) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Kiểm tra toàn diện xem có bản phát hành cập nhật hay không (P3B-17.3 & P3B-17.4).
  * Nhận diện:
  * 1. SemVer mới hơn thông thường.
@@ -223,21 +241,16 @@ export function kiemTraCoBanCapNhat(
 
     // B. Nếu cùng tag (ví dụ cùng 'nightly') hoặc cùng ngày: kiểm tra mã băm SHA-256
     if (infoA.maBamSha256 && infoB.maBamSha256) {
-      if (infoA.maBamSha256.toLowerCase() !== infoB.maBamSha256.toLowerCase()) {
+      if (infoA.maBamSha256.trim().toLowerCase() !== infoB.maBamSha256.trim().toLowerCase()) {
         return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
       }
     }
 
-    // C. Kiểm tra dung lượng tệp nếu khác nhau
-    if (
-      infoA.dungLuongBytes !== undefined &&
-      infoA.dungLuongBytes !== null &&
-      infoB.dungLuongBytes !== undefined &&
-      infoB.dungLuongBytes !== null
-    ) {
-      if (BigInt(infoA.dungLuongBytes.toString()) !== BigInt(infoB.dungLuongBytes.toString())) {
-        return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
-      }
+    // C. Kiểm tra dung lượng tệp nếu khác nhau (SEC-P3B17-03)
+    const bytesA = parseBigIntAnToan(infoA.dungLuongBytes);
+    const bytesB = parseBigIntAnToan(infoB.dungLuongBytes);
+    if (bytesA !== null && bytesB !== null && bytesA !== bytesB) {
+      return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
     }
 
     // Nếu thông tin giống hệt nhau hoặc không xác định được
@@ -250,23 +263,18 @@ export function kiemTraCoBanCapNhat(
     return { coBanCapNhat: true, lyDo: 'PHIEN_BAN_MOI' };
   }
 
-  // 3. Trường hợp cùng số phiên bản nhưng file bị đóng gói lại (P3B-17.4)
+  // 3. Trường hợp cùng số phiên bản nhưng file bị đóng gói lại (P3B-17.4 & SEC-P3B17-03, 05)
   if (cmp === 0) {
     if (infoA.maBamSha256 && infoB.maBamSha256) {
-      if (infoA.maBamSha256.toLowerCase() !== infoB.maBamSha256.toLowerCase()) {
+      if (infoA.maBamSha256.trim().toLowerCase() !== infoB.maBamSha256.trim().toLowerCase()) {
         return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
       }
     }
 
-    if (
-      infoA.dungLuongBytes !== undefined &&
-      infoA.dungLuongBytes !== null &&
-      infoB.dungLuongBytes !== undefined &&
-      infoB.dungLuongBytes !== null
-    ) {
-      if (BigInt(infoA.dungLuongBytes.toString()) !== BigInt(infoB.dungLuongBytes.toString())) {
-        return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
-      }
+    const bytesA = parseBigIntAnToan(infoA.dungLuongBytes);
+    const bytesB = parseBigIntAnToan(infoB.dungLuongBytes);
+    if (bytesA !== null && bytesB !== null && bytesA !== bytesB) {
+      return { coBanCapNhat: true, lyDo: 'FILE_DONG_GOI_LAI' };
     }
   }
 

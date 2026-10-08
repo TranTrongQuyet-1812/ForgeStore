@@ -63,7 +63,7 @@ export const useUpdaterStore = create<UpdaterState>()(
       boQuaPhienBan: (maUngDung, phienBan) => {
         set((state) => {
           const nextBoQua = {
-            ...state.danhSachBoQuaVersion,
+            ...(state.danhSachBoQuaVersion || {}),
             [maUngDung]: phienBan,
           };
           const filtered = state.danhSachCapNhat.filter((item) => {
@@ -80,7 +80,7 @@ export const useUpdaterStore = create<UpdaterState>()(
 
       khoiPhucPhienBan: (maUngDung) => {
         set((state) => {
-          const nextBoQua = { ...state.danhSachBoQuaVersion };
+          const nextBoQua = { ...(state.danhSachBoQuaVersion || {}) };
           delete nextBoQua[maUngDung];
           return { danhSachBoQuaVersion: nextBoQua };
         });
@@ -88,7 +88,7 @@ export const useUpdaterStore = create<UpdaterState>()(
 
       kiemTraDaBoQua: (maUngDung, phienBanMoi) => {
         if (!phienBanMoi) return false;
-        const boQuaVer = get().danhSachBoQuaVersion[maUngDung];
+        const boQuaVer = (get().danhSachBoQuaVersion || {})[maUngDung];
         if (!boQuaVer) return false;
 
         // P3B-17.2: Tự hết tác dụng khi có bản mới hơn

@@ -5,6 +5,7 @@ import {
   chuanHoaPhienBan,
   laTagKhongCoSo,
   kiemTraCoBanCapNhat,
+  parseBigIntAnToan,
 } from './version-comparator.util';
 
 describe('VersionComparatorUtil (P2-52 & P3B-17)', () => {
@@ -315,6 +316,41 @@ describe('VersionComparatorUtil (P2-52 & P3B-17)', () => {
       const res = kiemTraCoBanCapNhat('1.0.0', '1.1.0');
       expect(res.coBanCapNhat).toBe(true);
       expect(res.lyDo).toBe('PHIEN_BAN_MOI');
+    });
+
+    it('không báo cập nhật khi sha256 giống nhau nhưng có khoảng trắng hoặc khác hoa thường (SEC-P3B17-05)', () => {
+      const hienTai = {
+        tenPhienBan: '1.2.3',
+        maBamSha256: '  E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 \n',
+      };
+      const moi = {
+        tenPhienBan: '1.2.3',
+        maBamSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(false);
+      expect(res.lyDo).toBe('KHONG_CO_CAP_NHAT');
+    });
+  });
+
+  describe('parseBigIntAnToan (SEC-P3B17-03)', () => {
+    it('chuyển đổi an toàn number, string, bigint hợp lệ', () => {
+      expect(parseBigIntAnToan(1048576)).toBe(1048576n);
+      expect(parseBigIntAnToan('1048576')).toBe(1048576n);
+      expect(parseBigIntAnToan(1048576n)).toBe(1048576n);
+    });
+
+    it('xử lý an toàn số thực hoặc chuỗi có phần thập phân', () => {
+      expect(parseBigIntAnToan(1048576.89)).toBe(1048576n);
+      expect(parseBigIntAnToan('1048576.89')).toBe(1048576n);
+    });
+
+    it('trả về null an toàn khi dữ liệu rác hoặc không hợp lệ', () => {
+      expect(parseBigIntAnToan(null)).toBeNull();
+      expect(parseBigIntAnToan(undefined)).toBeNull();
+      expect(parseBigIntAnToan('invalid-bytes')).toBeNull();
+      expect(parseBigIntAnToan(NaN)).toBeNull();
+      expect(parseBigIntAnToan(Infinity)).toBeNull();
     });
   });
 });

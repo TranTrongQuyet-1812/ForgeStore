@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckUpdatesDto } from './dto/check-updates.dto';
-import { kiemTraCoBanCapNhat } from './utils/version-comparator.util';
+import { kiemTraCoBanCapNhat, parseBigIntAnToan } from './utils/version-comparator.util';
 import { layBanPhatHanhMoiNhat } from '../apps/utils/release-selector.util';
 import {
   BanPhatHanhDto,
@@ -170,15 +170,15 @@ export class UpdaterService {
               (f: TepCaiDat) =>
                 f.maTep === tepDaCai.maTep || f.dinhDangTep === tepDaCai.dinhDangTep,
             );
+            const hashNew = matchedNewFile?.maBamSha256?.trim().toLowerCase();
+            const hashOld = tepDaCai.maBamSha256?.trim().toLowerCase();
+            const bytesNew = parseBigIntAnToan(matchedNewFile?.dungLuongBytes);
+            const bytesOld = parseBigIntAnToan(tepDaCai.dungLuongBytes);
+
             if (
               matchedNewFile &&
-              ((matchedNewFile.maBamSha256 &&
-                tepDaCai.maBamSha256 &&
-                matchedNewFile.maBamSha256.toLowerCase() !== tepDaCai.maBamSha256.toLowerCase()) ||
-                (matchedNewFile.dungLuongBytes !== undefined &&
-                  tepDaCai.dungLuongBytes !== undefined &&
-                  BigInt(matchedNewFile.dungLuongBytes.toString()) !==
-                    BigInt(tepDaCai.dungLuongBytes.toString())))
+              ((hashNew && hashOld && hashNew !== hashOld) ||
+                (bytesNew !== null && bytesOld !== null && bytesNew !== bytesOld))
             ) {
               coBanMoi = true;
             } else {
