@@ -4,7 +4,7 @@ import { DinhDangTep, KienTrucChip, NenTangHoTro } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GithubService } from '../github/github.service';
 import { CacheService } from '../redis/cache.service';
-import { AppsService } from './apps.service';
+import { AppsService, daCoKetQuaBocTachCli, PHIEN_BAN_BOC_TACH_CLI } from './apps.service';
 import {
   AppSortOption,
   PlatformFilter,
@@ -472,7 +472,8 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       // Xác nhận xóa cache sau khi đồng bộ
       expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith(service.CACHE_KEY_LIST);
-      expect(mockCacheService.xoa).toHaveBeenCalledWith(
+      // Phải xóa THEO TIỀN TỐ để dọn cả khóa có đuôi :platform:arch mà Desktop dùng
+      expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith(
         `${service.CACHE_KEY_DETAIL}app-uuid-rustdesk`,
       );
 
@@ -1837,5 +1838,30 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(app.kienTrucCoSan).toEqual(['x64']);
       expect(app.khauHieuTiengViet).toBe('App tối ưu cực nhanh');
     });
+  });
+});
+
+describe('daCoKetQuaBocTachCli (làm mới dấu "không có CLI" của bản cũ)', () => {
+  it('null/undefined là chưa có kết quả', () => {
+    expect(daCoKetQuaBocTachCli(null)).toBe(false);
+    expect(daCoKetQuaBocTachCli(undefined)).toBe(false);
+  });
+
+  it('dấu khongCoHuongDan do bản cũ ghi (thiếu phienBanBocTach) bị coi là lỗi thời', () => {
+    expect(daCoKetQuaBocTachCli({ khongCoHuongDan: true, cachCai: [] })).toBe(false);
+  });
+
+  it('dấu khongCoHuongDan ở phiên bản hiện tại thì giữ nguyên, không bóc tách lại', () => {
+    expect(
+      daCoKetQuaBocTachCli({
+        khongCoHuongDan: true,
+        phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI,
+        cachCai: [],
+      }),
+    ).toBe(true);
+  });
+
+  it('hướng dẫn thật luôn được coi là đã có kết quả', () => {
+    expect(daCoKetQuaBocTachCli({ cachCai: [{ ten: 'x' }] })).toBe(true);
   });
 });

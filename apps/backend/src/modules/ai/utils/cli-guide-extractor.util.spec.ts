@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { HeDieuHanhCli, NhomCachCai, PhanCungYeuCau } from '@forgestore/types';
+import {
+  HeDieuHanhCli,
+  NhomCachCai,
+  PhanCungYeuCau,
+  boDauNhacShell,
+  trichTenGoiTuLenhTho,
+} from '@forgestore/types';
 import {
   bocTachHuongDanTuCodeBlocks,
   kiemTraLenhNguyenVan,
@@ -516,6 +522,52 @@ winget install --id bad; rm -rf / -e
       const res = trichXuatHuongDanCliBangQuyTac(maliciousReadme);
       // Lệnh bị loại hoặc không có trinhQuanLy/tenGoi hợp lệ
       expect(res?.cachCai.some((c) => c.tenGoi === 'bad; rm -rf /')).toBe(false);
+    });
+  });
+  describe('Dấu nhắc shell trong README (lỗi ripgrep)', () => {
+    it('boDauNhacShell bỏ $, >, %, PS> nhưng giữ nguyên lệnh sạch', () => {
+      expect(boDauNhacShell('$ winget install X.Y')).toBe('winget install X.Y');
+      expect(boDauNhacShell('> scoop install rg')).toBe('scoop install rg');
+      expect(boDauNhacShell('% npm i -g foo')).toBe('npm i -g foo');
+      expect(boDauNhacShell('PS> scoop install rg')).toBe('scoop install rg');
+      expect(boDauNhacShell('PS C:\\Users\\a> scoop install rg')).toBe('scoop install rg');
+      expect(boDauNhacShell('winget install X.Y')).toBe('winget install X.Y');
+    });
+
+    it('trichTenGoiTuLenhTho nhận lệnh có dấu nhắc nhưng vẫn chặn chèn lệnh', () => {
+      expect(trichTenGoiTuLenhTho('$ winget install BurntSushi.ripgrep.MSVC')).toEqual({
+        trinhQuanLy: 'winget',
+        tenGoi: 'BurntSushi.ripgrep.MSVC',
+      });
+      expect(trichTenGoiTuLenhTho('PS> scoop install ripgrep')?.tenGoi).toBe('ripgrep');
+      expect(trichTenGoiTuLenhTho('$ scoop install a; rm -rf /')).toBeNull();
+      expect(trichTenGoiTuLenhTho('$ scoop install $(whoami)')).toBeNull();
+    });
+
+    it('README kiểu ripgrep (mọi lệnh có "$ ") vẫn ra cách cài hợp lệ, lệnh lưu là lệnh sạch', () => {
+      const readme = [
+        '### Installation',
+        '',
+        'If you are a Windows Winget user:',
+        '',
+        '```',
+        '$ winget install BurntSushi.ripgrep.MSVC',
+        '```',
+        '',
+        'If you are a Windows Scoop user:',
+        '',
+        '```',
+        '$ scoop install ripgrep',
+        '```',
+      ].join('\n');
+      const res = trichXuatHuongDanCliBangQuyTac(readme, 'https://github.com/x/y#readme');
+      expect(res).not.toBeNull();
+      const winget = res!.cachCai.find((c) => c.trinhQuanLy === 'winget');
+      expect(winget?.tenGoi).toBe('BurntSushi.ripgrep.MSVC');
+      expect(winget?.buoc[0]?.lenh).toBe('winget install BurntSushi.ripgrep.MSVC');
+      expect(res!.cachCai.some((c) => c.trinhQuanLy === 'scoop' && c.tenGoi === 'ripgrep')).toBe(
+        true,
+      );
     });
   });
 });

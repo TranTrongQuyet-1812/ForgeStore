@@ -68,6 +68,21 @@ import { SearchQueryDto } from './dto/search.dto';
 import { InspectRepoDto } from './dto/inspect-repo.dto';
 
 /**
+ * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)
+ * bị coi là lỗi thời và được bóc tách lại một lần (VD: README có `$ winget install ...` từng bị bỏ sót).
+ */
+export const PHIEN_BAN_BOC_TACH_CLI = 2;
+
+export function daCoKetQuaBocTachCli(hd: unknown): boolean {
+  if (hd === null || hd === undefined) return false;
+  const obj = hd as { khongCoHuongDan?: boolean; phienBanBocTach?: number };
+  if (obj.khongCoHuongDan) {
+    return (obj.phienBanBocTach ?? 0) >= PHIEN_BAN_BOC_TACH_CLI;
+  }
+  return true;
+}
+
+/**
  * Lọc và chuẩn hóa hướng dẫn cài đặt dòng lệnh theo nền tảng được yêu cầu (Section 3.4).
  */
 export function locHuongDanCaiDatTheoNenTang(
@@ -566,8 +581,11 @@ export class AppsService {
     // 7. Xóa sạch Cache liên quan sau khi đồng bộ thành công (P2-23.5)
     await this.cacheService.xoaTheoPrefix(this.CACHE_KEY_LIST);
     await this.cacheService.xoaTheoPrefix('fs:categories:');
-    await this.cacheService.xoa(this.CACHE_KEY_DETAIL + ungDungUpdated.maUngDung);
-    await this.cacheService.xoa(this.CACHE_KEY_DETAIL + ungDungUpdated.tenRepoDayDu.toLowerCase());
+    // Xóa theo tiền tố để dọn cả các khóa có đuôi :platform:arch (nếu không Desktop thấy dữ liệu cũ tới 1 giờ)
+    await this.cacheService.xoaTheoPrefix(this.CACHE_KEY_DETAIL + ungDungUpdated.maUngDung);
+    await this.cacheService.xoaTheoPrefix(
+      this.CACHE_KEY_DETAIL + ungDungUpdated.tenRepoDayDu.toLowerCase(),
+    );
 
     this.logger.log(`Đồng bộ thành công [${owner}/${repo}] (UUID: ${ungDungUpdated.maUngDung})`);
 
@@ -971,7 +989,7 @@ export class AppsService {
     }
 
     // Lazy AI & CLI Backfill (P2-31.3 & BE-R6-01): Chạy nền non-blocking nếu chưa phân tích AI hoặc chưa có hướng dẫn CLI
-    if (!app.phanTichAI || app.phanTichAI.huongDanCaiDat === null) {
+    if (!app.phanTichAI || !daCoKetQuaBocTachCli(app.phanTichAI.huongDanCaiDat)) {
       this.phanTichUngDung(app.maUngDung).catch((err: unknown) => {
         this.logger.warn(
           `Bổ sung phân tích AI / CLI nền cho [${app.tenRepoDayDu}] thất bại: ${(err as Error).message}`,
@@ -1372,11 +1390,7 @@ export class AppsService {
           });
 
           // Nếu đã có phân tích AI và đã có hướng dẫn cài đặt CLI -> hoàn tất, không làm lại
-          if (
-            existing &&
-            existing.huongDanCaiDat !== null &&
-            existing.huongDanCaiDat !== undefined
-          ) {
+          if (existing && daCoKetQuaBocTachCli(existing.huongDanCaiDat)) {
             return;
           }
 
@@ -1398,10 +1412,7 @@ export class AppsService {
 
           // Trường hợp app đã có phân tích AI nhưng thiếu hướng dẫn CLI:
           // Bổ sung hướng dẫn CLI mà không cần chạy lại toàn bộ quy trình AI
-          if (
-            existing &&
-            (existing.huongDanCaiDat === null || existing.huongDanCaiDat === undefined)
-          ) {
+          if (existing && !daCoKetQuaBocTachCli(existing.huongDanCaiDat)) {
             let readme = '';
             let fetchReadmeLoi = false;
             try {
@@ -1428,6 +1439,7 @@ export class AppsService {
                 data: {
                   huongDanCaiDat: {
                     khongCoHuongDan: true,
+                    phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI,
                     cachCai: [],
                   } as unknown as Prisma.InputJsonValue,
                 },
@@ -1470,7 +1482,7 @@ export class AppsService {
             const coCachCaiHopLe = coCachCaiCliHopLe(huongDanCaiDat);
             const giaTriLuu = coCachCaiHopLe
               ? huongDanCaiDat
-              : { khongCoHuongDan: true, cachCai: [] };
+              : { khongCoHuongDan: true, phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI, cachCai: [] };
 
             await this.prisma.phanTichAI.update({
               where: { maUngDung },
@@ -1633,6 +1645,7 @@ export class AppsService {
             // Chỉ đánh dấu khi đã đọc được README thành công và AI/bóc tách không bị lỗi
             giaTriLuuCli = {
               khongCoHuongDan: true,
+              phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI,
               cachCai: [],
             } as unknown as Prisma.InputJsonValue;
           } else {

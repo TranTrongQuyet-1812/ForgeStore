@@ -295,6 +295,18 @@ export function ghepLenhCliAnToan(
 }
 
 /**
+ * Bỏ dấu nhắc shell đứng đầu dòng lệnh trong README: `$ cmd`, `> cmd`, `% cmd`, `PS> cmd`, `PS C:\> cmd`.
+ * Phải chạy TRƯỚC khi kiểm tra ký tự nguy hiểm (vì `$` nằm trong danh sách chặn).
+ */
+export function boDauNhacShell(lenh: string): string {
+  if (!lenh || typeof lenh !== 'string') return '';
+  return lenh
+    .trim()
+    .replace(/^(?:PS(?:\s+[^>\r\n]*)?>\s*|[$>%]\s+)/, '')
+    .trim();
+}
+
+/**
  * Bóc tách tên gói từ một dòng lệnh thô trích xuất từ README.
  * Ví dụ:
  *  - "winget install --id Microsoft.PowerToys -e" -> { trinhQuanLy: 'winget', tenGoi: 'Microsoft.PowerToys' }
@@ -303,9 +315,10 @@ export function ghepLenhCliAnToan(
  *  - "pip install open-webui" -> { trinhQuanLy: 'pip', tenGoi: 'open-webui' }
  */
 export function trichTenGoiTuLenhTho(
-  lenhTho: string,
+  lenhThoGoc: string,
 ): { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string; phienBan?: string } | null {
-  if (!lenhTho || typeof lenhTho !== 'string') return null;
+  if (!lenhThoGoc || typeof lenhThoGoc !== 'string') return null;
+  const lenhTho = boDauNhacShell(lenhThoGoc);
 
   // Chốt chặn 1: Nếu toàn bộ dòng lệnh thô chứa bất kỳ ký tự shell injection nào => TỪ CHỐI 100%
   if (KY_TU_DOC_HAI_REGEX.test(lenhTho)) return null;

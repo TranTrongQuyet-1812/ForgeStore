@@ -6,6 +6,7 @@ import {
   NhomCachCai,
   PhanCungYeuCau,
   trichTenGoiTuLenhTho,
+  boDauNhacShell,
   ghepLenhCliAnToan,
 } from '@forgestore/types';
 
@@ -550,7 +551,9 @@ export function bocTachHuongDanTuCodeBlocks(
       lines.push(currentLine);
     }
 
-    for (const line of lines) {
+    for (const dongGoc of lines) {
+      // Bỏ dấu nhắc shell (`$ `, `> `, `PS> `) để lệnh lưu và gói bóc tách là lệnh sạch
+      const line = boDauNhacShell(dongGoc) || dongGoc;
       const nhom = nhanDienNhomLenh(line);
       if (nhom) {
         cacLenh.push({
