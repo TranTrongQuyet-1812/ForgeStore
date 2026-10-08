@@ -582,6 +582,30 @@ pub fn giai_nen_portable_zip(
     })
 }
 
+/// Sao chép đệ quy thư mục nguồn đè lên thư mục đích (bảo toàn các file cũ không bị đè nếu cần)
+pub fn sao_chep_thu_muc_de_len(nguon: &Path, dich: &Path) -> Result<(), std::io::Error> {
+    if !dich.exists() {
+        std::fs::create_dir_all(dich)?;
+    }
+    for entry in std::fs::read_dir(nguon)? {
+        let entry = entry?;
+        let loai_tep = entry.file_type()?;
+        // Chống symlink attack khi copy
+        if loai_tep.is_symlink() {
+            continue;
+        }
+        let duong_dan_nguon = entry.path();
+        let duong_dan_dich = dich.join(entry.file_name());
+
+        if loai_tep.is_dir() {
+            sao_chep_thu_muc_de_len(&duong_dan_nguon, &duong_dan_dich)?;
+        } else {
+            std::fs::copy(&duong_dan_nguon, &duong_dan_dich)?;
+        }
+    }
+    Ok(())
+}
+
 /// Giải nén bản Portable .7z và phòng chống lỗ hổng Zip Slip (P3B-17.6, SEC-03, SEC-04)
 pub fn giai_nen_portable_7z(
     duong_dan_tep: &Path,
@@ -604,23 +628,39 @@ pub fn giai_nen_portable_7z(
     // Nếu không: fallback về mặc định %LOCALAPPDATA%\ForgeStore\apps\<safe_app_name>
     let dest_dir = if let Some(custom_dir) = thu_muc_tuy_chon {
         let safe_custom = kiem_tra_thu_muc_an_toan(custom_dir)?;
-        let target = safe_custom.join(&safe_app_name);
-        std::fs::create_dir_all(&target)
-            .map_err(|e| format!("Không thể tạo thư mục đích '{}': {}", target.display(), e))?;
-        target
+        safe_custom.join(&safe_app_name)
     } else {
         lay_thu_muc_cai_dat_app(ten_app)?
     };
 
-    let canonical_dest = dest_dir.canonicalize()
-        .map_err(|e| format!("Không thể chuẩn hóa đường dẫn đích: {}", e))?;
+    // Điểm Vàng 1: Trích xuất vào thư mục staging tạm thời trước.
+    // Nếu giải nén lỗi giữa chừng, CHỈ xóa staging_dir, bảo tồn nguyên vẹn dest_dir của app cũ.
+    let dest_parent = if let Some(p) = dest_dir.parent() {
+        if !p.exists() {
+            std::fs::create_dir_all(p)
+                .map_err(|e| format!("Không thể tạo thư mục cha: {}", e))?;
+        }
+        p.to_path_buf()
+    } else {
+        std::env::temp_dir()
+    };
+
+    let staging_dir = dest_parent.join(format!(".staging_7z_{}_{}", safe_app_name, std::process::id()));
+    if staging_dir.exists() {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+    }
+    std::fs::create_dir_all(&staging_dir)
+        .map_err(|e| format!("Không thể tạo thư mục tạm staging '{}': {}", staging_dir.display(), e))?;
+
+    let canonical_staging = staging_dir.canonicalize()
+        .map_err(|e| format!("Không thể chuẩn hóa đường dẫn staging: {}", e))?;
 
     let mut potential_exe: Option<PathBuf> = None;
     let mut total_uncompressed_bytes: u64 = 0;
     const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
     const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
-    let res = sevenz_rust::decompress_file_with_extract_fn(&safe_path, &dest_dir, |entry, reader, dest| {
+    let res = sevenz_rust::decompress_file_with_extract_fn(&safe_path, &staging_dir, |entry, reader, dest| {
         let entry_name = entry.name();
 
         // Chặn lỗ hổng Zip-Slip (P3B-17.6 & SEC-P3B17-01): kiểm tra chặt chẽ absolute path, prefix, root dir và ..
@@ -644,7 +684,7 @@ pub fn giai_nen_portable_7z(
         if entry.is_directory() {
             std::fs::create_dir_all(&outpath).map_err(|e| sevenz_rust::Error::io(e))?;
             if let Ok(canon_sub) = outpath.canonicalize() {
-                if !canon_sub.starts_with(&canonical_dest) {
+                if !canon_sub.starts_with(&canonical_staging) {
                     return Err(sevenz_rust::Error::other(
                         "CẢNH BÁO AN NINH: Thư mục giải nén vượt ra ngoài thư mục an toàn!",
                     ));
@@ -658,7 +698,7 @@ pub fn giai_nen_portable_7z(
                 std::fs::create_dir_all(parent).map_err(|e| sevenz_rust::Error::io(e))?;
             }
             let canon_parent = parent.canonicalize().map_err(|e| sevenz_rust::Error::io(e))?;
-            if !canon_parent.starts_with(&canonical_dest) {
+            if !canon_parent.starts_with(&canonical_staging) {
                 return Err(sevenz_rust::Error::other(
                     "CẢNH BÁO AN NINH: Thư mục cha giải nén vượt ra ngoài thư mục an toàn!",
                 ));
@@ -675,7 +715,7 @@ pub fn giai_nen_portable_7z(
                 }
             }
             if let Ok(canon_existing) = outpath.canonicalize() {
-                if !canon_existing.starts_with(&canonical_dest) {
+                if !canon_existing.starts_with(&canonical_staging) {
                     return Err(sevenz_rust::Error::other(format!(
                         "CẢNH BÁO AN NINH: Tệp đích hiện tại '{}' trỏ ra ngoài thư mục an toàn!",
                         outpath.display()
@@ -687,7 +727,7 @@ pub fn giai_nen_portable_7z(
         let mut outfile = std::fs::File::create(&outpath).map_err(|e| sevenz_rust::Error::io(e))?;
 
         let canon_out = outpath.canonicalize().map_err(|e| sevenz_rust::Error::io(e))?;
-        if !canon_out.starts_with(&canonical_dest) {
+        if !canon_out.starts_with(&canonical_staging) {
             let _ = std::fs::remove_file(&outpath);
             return Err(sevenz_rust::Error::other(
                 "CẢNH BÁO AN NINH: Tệp giải nén vượt ra ngoài thư mục an toàn!",
@@ -726,20 +766,44 @@ pub fn giai_nen_portable_7z(
     });
 
     if let Err(e) = res {
-        let _ = std::fs::remove_dir_all(&dest_dir);
+        // Điểm Vàng 1: Chỉ xóa thư mục staging, tuyệt đối không xóa dest_dir
+        let _ = std::fs::remove_dir_all(&staging_dir);
         return Err(format!("Lỗi khi giải nén tệp .7z: {}", e));
     }
+
+    // Đảm bảo thư mục đích tồn tại
+    if !dest_dir.exists() {
+        std::fs::create_dir_all(&dest_dir)
+            .map_err(|e| {
+                let _ = std::fs::remove_dir_all(&staging_dir);
+                format!("Không thể tạo thư mục đích '{}': {}", dest_dir.display(), e)
+            })?;
+    }
+
+    // Sao chép đè từ staging_dir vào dest_dir
+    if let Err(e) = sao_chep_thu_muc_de_len(&staging_dir, &dest_dir) {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        return Err(format!("Lỗi khi chuyển tệp từ staging sang thư mục đích: {}", e));
+    }
+
+    // Dọn dẹp staging_dir sau khi sao chép thành công
+    let _ = std::fs::remove_dir_all(&staging_dir);
 
     // Tự động xóa file .7z tải về sau khi giải nén thành công
     let clean_7z_path = bo_tien_to_dos_device_path(&safe_path);
     let _ = std::fs::remove_file(&clean_7z_path);
+
+    // Ánh xạ potential_exe sang dest_dir
+    let final_exe = potential_exe.and_then(|p| {
+        p.strip_prefix(&staging_dir).ok().map(|rel| dest_dir.join(rel))
+    });
 
     Ok(KetQuaCaiDat {
         thanh_cong: true,
         loai_cai_dat: "PORTABLE_ZIP".to_string(),
         thong_diep: format!("Đã giải nén bản portable (.7z) vào '{}' thành công.", dest_dir.display()),
         duong_dan_cai_dat: Some(dest_dir.to_string_lossy().to_string()),
-        duong_dan_thuc_thi: potential_exe.map(|p| p.to_string_lossy().to_string()),
+        duong_dan_thuc_thi: final_exe.map(|p| p.to_string_lossy().to_string()),
         thong_tin_registry: None,
     })
 }
@@ -1005,6 +1069,126 @@ mod tests {
         let res = giai_nen_portable_7z(Path::new("C:\\invalid\\path\\nonexistent.7z"), "TestApp", None);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("không tồn tại"));
+    }
+
+    #[test]
+    fn test_sao_chep_thu_muc_de_len_thanh_cong() {
+        let temp_base = std::env::temp_dir().join(format!("test_copy_{}", std::process::id()));
+        let nguon = temp_base.join("nguon");
+        let dich = temp_base.join("dich");
+
+        let _ = std::fs::remove_dir_all(&temp_base);
+        std::fs::create_dir_all(&nguon.join("sub")).unwrap();
+        std::fs::create_dir_all(&dich).unwrap();
+
+        // File cũ trong đích
+        std::fs::write(dich.join("old_keep.txt"), "old content").unwrap();
+        std::fs::write(dich.join("overwrite.txt"), "old to be replaced").unwrap();
+
+        // File mới trong nguồn
+        std::fs::write(nguon.join("overwrite.txt"), "new content").unwrap();
+        std::fs::write(nguon.join("sub").join("app.exe"), "dummy exe").unwrap();
+
+        sao_chep_thu_muc_de_len(&nguon, &dich).unwrap();
+
+        // Kiểm tra bảo toàn file cũ
+        assert_eq!(std::fs::read_to_string(dich.join("old_keep.txt")).unwrap(), "old content");
+        // Kiểm tra ghi đè file trùng tên
+        assert_eq!(std::fs::read_to_string(dich.join("overwrite.txt")).unwrap(), "new content");
+        // Kiểm tra sao chép thư mục con
+        assert!(dich.join("sub").join("app.exe").exists());
+
+        let _ = std::fs::remove_dir_all(&temp_base);
+    }
+
+    #[test]
+    fn test_giai_nen_portable_7z_that_bai_khong_xoa_ban_cu() {
+        // Điểm Vàng 1: Khi giải nén lỗi giữa chừng, bản cũ của app không bao giờ bị xóa mất
+        let temp_base = std::env::temp_dir().join(format!("test_7z_preserve_{}", std::process::id()));
+        let app_dir = temp_base.join("AppCu");
+        let _ = std::fs::remove_dir_all(&temp_base);
+        std::fs::create_dir_all(&app_dir).unwrap();
+
+        let old_file = app_dir.join("existing_important_file.txt");
+        std::fs::write(&old_file, "du lieu cu quan trong").unwrap();
+
+        // Tạo file .7z hỏng (corrupted)
+        let corrupt_7z = temp_base.join("corrupted.7z");
+        std::fs::write(&corrupt_7z, b"khong_phai_dinh_dang_7z_hop_le").unwrap();
+
+        let res = giai_nen_portable_7z(&corrupt_7z, "AppCu", Some(&temp_base));
+        assert!(res.is_err());
+
+        // File cũ và thư mục app cũ VẪN PHẢI NGUYÊN VẸN 100%
+        assert!(old_file.exists());
+        assert_eq!(std::fs::read_to_string(&old_file).unwrap(), "du lieu cu quan trong");
+
+        let _ = std::fs::remove_dir_all(&temp_base);
+    }
+
+    #[test]
+    fn test_giai_nen_portable_7z_phong_thu_zip_slip() {
+        // Kiểm tra logic lọc component đường dẫn độc hại
+        let test_cases = vec![
+            ("../malicious.exe", true),
+            ("..\\malicious.exe", true),
+            ("../../Windows/System32/cmd.exe", true),
+            ("C:\\Windows\\cmd.exe", true),
+            ("/etc/shadow", true),
+            ("safe_sub_dir/app.exe", false),
+            ("app.exe", false),
+        ];
+
+        for (path_str, should_block) in test_cases {
+            let p = Path::new(path_str);
+            let is_blocked = p.is_absolute()
+                || p.components().any(|c| matches!(
+                    c,
+                    std::path::Component::Prefix(_)
+                        | std::path::Component::RootDir
+                        | std::path::Component::ParentDir
+                ));
+            assert_eq!(is_blocked, should_block, "Thất bại với đường dẫn: {}", path_str);
+        }
+    }
+
+    #[test]
+    fn test_giai_nen_portable_7z_thuc_te_thanh_cong() {
+        let base_dir = std::env::var("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")));
+        let temp_base = base_dir.join("ForgeStore").join("downloads").join(format!("test_7z_real_{}", std::process::id()));
+        let src_dir = temp_base.join("src_files");
+        let dest_container = temp_base.join("dest_container");
+        let _ = std::fs::remove_dir_all(&temp_base);
+
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&dest_container).unwrap();
+
+        // Tạo file exe và txt giả lập bên trong thư mục nguồn
+        let exe_file = src_dir.join("MyRealApp.exe");
+        std::fs::write(&exe_file, b"fake MZ header and code").unwrap();
+        let txt_file = src_dir.join("readme.txt");
+        std::fs::write(&txt_file, "sample readme").unwrap();
+
+        // Nén thành file .7z thật
+        let archive_7z = temp_base.join("MyRealApp.7z");
+        sevenz_rust::compress_to_path(&src_dir, &archive_7z).unwrap();
+        assert!(archive_7z.exists());
+
+        // Tiến hành giải nén bằng hàm của hệ thống
+        let res = giai_nen_portable_7z(&archive_7z, "MyRealApp", Some(&dest_container));
+        assert!(res.is_ok(), "Giải nén thất bại: {:?}", res.err());
+
+        let ket_qua = res.unwrap();
+        assert!(ket_qua.thanh_cong);
+        assert_eq!(ket_qua.loai_cai_dat, "PORTABLE_ZIP");
+        assert!(ket_qua.duong_dan_thuc_thi.is_some());
+        let exe_path_str = ket_qua.duong_dan_thuc_thi.unwrap();
+        assert!(exe_path_str.ends_with("MyRealApp.exe"));
+        assert!(Path::new(&exe_path_str).exists());
+
+        let _ = std::fs::remove_dir_all(&temp_base);
     }
 }
 

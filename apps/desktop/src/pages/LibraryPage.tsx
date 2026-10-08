@@ -29,10 +29,11 @@ import type { ThongTinUngDungRegistry } from '../services/install/install-types'
 import { authService } from '../services/auth/auth-service';
 import { confirmDialog } from '../stores/useDialogStore';
 import { toast } from '../stores/useToastStore';
+import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
 
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
-  const { caiDatMap, goCaiDatLocal } = useInstallStore();
+  const { caiDatMap, goCaiDatLocal, batDauCaiDat, layBienThe } = useInstallStore();
   const {
     soLuongBanCapNhat,
     danhSachCapNhat,
@@ -498,6 +499,58 @@ export const LibraryPage: React.FC = () => {
     } else {
       toast.error(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
     }
+  };
+
+  // Xử lý cập nhật nhanh 1-Click bằng biến thể đã nhớ (P3B-17 Polish - Điểm Vàng 3)
+  const handleQuickUpdate = async (app: {
+    maUngDung: string;
+    tenApp: string;
+    phienBanHienTai: string;
+    phienBanMoi?: string;
+    duongDanThuMuc?: string;
+  }) => {
+    const updateItem = updatesMap.get(app.maUngDung);
+    const releaseAssets = updateItem?.banPhatHanhMoiNhat?.danhSachTepCaiDat || [];
+
+    if (releaseAssets.length > 0) {
+      // 1. Tìm biến thể đã nhớ của ứng dụng
+      const savedVariant =
+        layBienThe(app.maUngDung) ||
+        caiDatMap[app.maUngDung]?.mauBienThe ||
+        (caiDatMap[app.maUngDung]?.tenTepDaCai
+          ? taoMauTenTepWildcard(caiDatMap[app.maUngDung]!.tenTepDaCai!, app.phienBanHienTai)
+          : undefined);
+
+      // 2. Tìm tệp khớp với biến thể đã nhớ
+      const matchedAsset = savedVariant
+        ? timTepTheoMauWildcard(releaseAssets, savedVariant)
+        : undefined;
+
+      if (matchedAsset) {
+        const isZip =
+          matchedAsset.tenTep.toLowerCase().endsWith('.zip') ||
+          matchedAsset.tenTep.toLowerCase().endsWith('.7z');
+        const targetDir = caiDatMap[app.maUngDung]?.duongDanThuMuc || app.duongDanThuMuc;
+
+        toast.info(`Bắt đầu tải và cập nhật ${app.tenApp} lên bản ${app.phienBanMoi || ''}...`);
+
+        await batDauCaiDat({
+          maUngDung: app.maUngDung,
+          tenApp: app.tenApp,
+          url: matchedAsset.duongDanTaiVe,
+          tenTep: matchedAsset.tenTep,
+          loaiTep: matchedAsset.dinhDangTep?.toString() || (isZip ? 'ZIP_PORTABLE' : 'EXE'),
+          sha256DuKien: matchedAsset.maBamSha256 || undefined,
+          phienBan: updateItem?.banPhatHanhMoiNhat?.tenPhienBan || app.phienBanMoi,
+          maTep: matchedAsset.maTep,
+          thuMucDich: isZip ? targetDir : undefined,
+        });
+        return;
+      }
+    }
+
+    // Nếu không có biến thể đã nhớ hoặc không tìm thấy file phù hợp, mở trang chi tiết để người dùng chọn
+    openAppDetail(app.maUngDung);
   };
 
   // Xử lý xác nhận lại ứng dụng CLI ("Xác nhận đã cài" - P3B-16.5)
@@ -967,10 +1020,10 @@ export const LibraryPage: React.FC = () => {
                     {app.coBanMoi && (
                       <>
                         <button
-                          onClick={() => openAppDetail(app.maUngDung)}
+                          onClick={() => handleQuickUpdate(app)}
                           disabled={isUninstallingId !== null}
                           className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Cập nhật lên phiên bản mới"
+                          title="Cập nhật nhanh lên phiên bản mới"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Cập Nhật</span>

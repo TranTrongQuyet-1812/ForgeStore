@@ -69,6 +69,16 @@ describe('WildcardPatternUtil (P3B-17.1)', () => {
       expect(matched?.tenTep).toBe('app-v2.0.0-x64-portable.zip');
     });
 
+    it('tìm đúng tệp nén định dạng .7z portable (P3B-17 Polish - Lỗi Đỏ)', () => {
+      const assets7z = [
+        { maTep: '10', tenTep: 'app-v2.0.0-x64-installer.exe', loai: 'EXE' },
+        { maTep: '11', tenTep: 'app-v2.0.0-x64-portable.7z', loai: 'ZIP_PORTABLE' },
+      ];
+      const matched = timTepTheoMauWildcard(assets7z, 'app-*-x64-portable.7z');
+      expect(matched?.maTep).toBe('11');
+      expect(matched?.tenTep).toBe('app-v2.0.0-x64-portable.7z');
+    });
+
     it('trả về null nếu không có tệp nào khớp hoặc mẫu rỗng', () => {
       expect(timTepTheoMauWildcard(assets, 'app-*-ia32.exe')).toBeNull();
       expect(timTepTheoMauWildcard(assets, null)).toBeNull();

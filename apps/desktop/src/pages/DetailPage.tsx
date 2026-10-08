@@ -70,7 +70,7 @@ export function timTepCaiDatToiUu<
     if (fmtUpper === 'MSI' && a.tenTep.toLowerCase().endsWith('.msi')) return true;
     if (
       (fmtUpper === 'ZIP' || fmtUpper === 'ZIP_PORTABLE') &&
-      a.tenTep.toLowerCase().endsWith('.zip')
+      (a.tenTep.toLowerCase().endsWith('.zip') || a.tenTep.toLowerCase().endsWith('.7z'))
     )
       return true;
     return false;
@@ -493,10 +493,12 @@ export const DetailPage: React.FC = () => {
   const latestRelease = appDetail?.banPhatHanhMoiNhat || appDetail?.danhSachBanPhatHanh?.[0];
   const allAssets = latestRelease?.danhSachTepCaiDat || [];
 
-  // Lọc tệp cài đặt phù hợp với Windows (FE-EC-01: Chỉ nhận bản tương thích Windows, không fallback về allAssets)
+  // Lọc tệp cài đặt phù hợp với Windows (FE-EC-01 & P3B-17.6: Hỗ trợ .exe, .msi, .zip, .7z)
   const windowsAssets = allAssets.filter((f) => {
     const ext = f.tenTep.toLowerCase();
-    return ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip');
+    return (
+      ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
+    );
   });
   const displayAssets = windowsAssets;
   const coFileCaiDat = displayAssets.length > 0;
@@ -1484,8 +1486,8 @@ export const DetailPage: React.FC = () => {
           {/* Trường hợp không có cả tệp cài đặt lẫn hướng dẫn CLI */}
           {!coFileCaiDat && !coHuongDanCli && (
             <div className="tactile-card p-6 rounded-2xl border border-border text-center text-xs text-muted">
-              Ứng dụng này hiện chưa có tệp cài đặt phù hợp với Windows (.exe, .msi, .zip) và chưa
-              có hướng dẫn cài đặt dòng lệnh.
+              Ứng dụng này hiện chưa có tệp cài đặt phù hợp với Windows (.exe, .msi, .zip, .7z) và
+              chưa có hướng dẫn cài đặt dòng lệnh.
             </div>
           )}
 
@@ -1679,8 +1681,8 @@ export const DetailPage: React.FC = () => {
                   Chưa có bản cài cho Windows
                 </span>
                 <p className="text-[11px] text-muted leading-relaxed">
-                  Repository này hiện chưa phát hành gói cài đặt (.exe, .msi, .zip) tương thích với
-                  máy tính Windows.
+                  Repository này hiện chưa phát hành gói cài đặt (.exe, .msi, .zip, .7z) tương thích
+                  với máy tính Windows.
                 </p>
               </div>
               <button

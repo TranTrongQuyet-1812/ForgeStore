@@ -9,8 +9,95 @@ import {
   CheckUpdatesResponseDto,
   DinhDangTep,
   KienTrucChip,
+  taoMauTenTepWildcard,
+  khopMauTenTep,
 } from '@forgestore/types';
 import { TepCaiDat, VaiTro } from '@prisma/client';
+
+/**
+ * Tìm tệp trong bản phát hành mới tương đồng nhất với tệp đã cài (P3B-17 Polish - Điểm Vàng 2)
+ * Tránh so nhầm chéo file khác kiến trúc (ví dụ x64 vs arm64) khi cùng release có nhiều file cùng định dạng.
+ */
+export function timTepTuongDong(
+  tepDaCai: {
+    maTep?: string | null;
+    tenTep?: string | null;
+    dinhDangTep?: string | null;
+    kienTrucChip?: string | null;
+  },
+  danhSachTepMoi: TepCaiDat[],
+  phienBanCu?: string | null,
+): TepCaiDat | undefined {
+  if (!danhSachTepMoi || danhSachTepMoi.length === 0) {
+    return undefined;
+  }
+
+  // 1. Khớp maTep (nếu cùng release)
+  if (tepDaCai.maTep) {
+    const theoMaTep = danhSachTepMoi.find((f) => f.maTep === tepDaCai.maTep);
+    if (theoMaTep) return theoMaTep;
+  }
+
+  // 2. Khớp tên tệp chính xác (case-insensitive)
+  if (tepDaCai.tenTep) {
+    const theoTenChinhXac = danhSachTepMoi.find(
+      (f) => f.tenTep.toLowerCase() === tepDaCai.tenTep!.toLowerCase(),
+    );
+    if (theoTenChinhXac) return theoTenChinhXac;
+  }
+
+  // 3. Khớp theo mẫu Wildcard Pattern (P3B-17.1)
+  if (tepDaCai.tenTep) {
+    const mauWildcard = taoMauTenTepWildcard(tepDaCai.tenTep, phienBanCu || undefined);
+    const theoWildcard = danhSachTepMoi.find((f) => khopMauTenTep(f.tenTep, mauWildcard));
+    if (theoWildcard) return theoWildcard;
+  }
+
+  // 4. Khớp cùng kiến trúc chip và cùng định dạng tệp
+  if (tepDaCai.kienTrucChip && tepDaCai.dinhDangTep) {
+    const theoChipVaDinhDang = danhSachTepMoi.find(
+      (f) => f.kienTrucChip === tepDaCai.kienTrucChip && f.dinhDangTep === tepDaCai.dinhDangTep,
+    );
+    if (theoChipVaDinhDang) return theoChipVaDinhDang;
+  }
+
+  // 4b. Suy đoán chip từ tên tệp nếu DB không có kienTrucChip
+  if (tepDaCai.tenTep && tepDaCai.dinhDangTep) {
+    const tenLower = tepDaCai.tenTep.toLowerCase();
+    const isArm64 = tenLower.includes('arm64') || tenLower.includes('aarch64');
+    const isX64 =
+      tenLower.includes('x64') ||
+      tenLower.includes('x86_64') ||
+      tenLower.includes('amd64') ||
+      tenLower.includes('win64');
+
+    if (isArm64 || isX64) {
+      const theoSuyDoanChip = danhSachTepMoi.find((f) => {
+        if (f.dinhDangTep !== tepDaCai.dinhDangTep) return false;
+        const fTenLower = f.tenTep.toLowerCase();
+        if (isArm64) {
+          return fTenLower.includes('arm64') || fTenLower.includes('aarch64');
+        }
+        return (
+          fTenLower.includes('x64') ||
+          fTenLower.includes('x86_64') ||
+          fTenLower.includes('amd64') ||
+          fTenLower.includes('win64')
+        );
+      });
+      if (theoSuyDoanChip) return theoSuyDoanChip;
+    }
+  }
+
+  // 5. Khớp cùng định dạng tệp
+  if (tepDaCai.dinhDangTep) {
+    const theoDinhDang = danhSachTepMoi.find((f) => f.dinhDangTep === tepDaCai.dinhDangTep);
+    if (theoDinhDang) return theoDinhDang;
+  }
+
+  // 6. Fallback về tệp đầu tiên
+  return danhSachTepMoi[0];
+}
 
 @Injectable()
 export class UpdaterService {
@@ -165,10 +252,11 @@ export class UpdaterService {
           daXacDinhQuaTep = true;
           if (banMoiNhat.maPhatHanh === tepDaCai.maPhatHanh) {
             // Máy đang cài đúng release này.
-            // Kiểm tra xem file có bị đóng gói lại không (P3B-17.4):
-            const matchedNewFile = banMoiNhat.danhSachTepCaiDat.find(
-              (f: TepCaiDat) =>
-                f.maTep === tepDaCai.maTep || f.dinhDangTep === tepDaCai.dinhDangTep,
+            // Kiểm tra xem file có bị đóng gói lại không (P3B-17.4 & P3B-17 Polish Điểm Vàng 2):
+            const matchedNewFile = timTepTuongDong(
+              tepDaCai,
+              banMoiNhat.danhSachTepCaiDat,
+              tepDaCai.banPhatHanh.tenPhienBan,
             );
             const hashNew = matchedNewFile?.maBamSha256?.trim().toLowerCase();
             const hashOld = tepDaCai.maBamSha256?.trim().toLowerCase();
@@ -187,8 +275,10 @@ export class UpdaterService {
           } else {
             // Khác mã release -> kiểm tra toàn diện
             const matchedNewFile =
-              banMoiNhat.danhSachTepCaiDat.find(
-                (f: TepCaiDat) => f.dinhDangTep === tepDaCai.dinhDangTep,
+              timTepTuongDong(
+                tepDaCai,
+                banMoiNhat.danhSachTepCaiDat,
+                tepDaCai.banPhatHanh.tenPhienBan,
               ) || banMoiNhat.danhSachTepCaiDat[0];
 
             const ketQua = kiemTraCoBanCapNhat(

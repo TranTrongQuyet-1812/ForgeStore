@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { UpdaterService } from './updater.service';
+import { UpdaterService, timTepTuongDong } from './updater.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('UpdaterService (P2-52)', () => {
@@ -320,5 +320,149 @@ describe('UpdaterService (P2-52)', () => {
     const result = await service.kiemTraCapNhat({ maThietBi }, 'user-chinh-chu');
     expect(result.danhSachCapNhat).toHaveLength(1);
     expect(result.danhSachCapNhat[0]?.coBanCapNhat).toBe(true);
+  });
+
+  describe('timTepTuongDong (Điểm Vàng 2 - P3B-17 Polish)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const danhSachMoi: any[] = [
+      {
+        maTep: 'file-x64',
+        tenTep: 'MyApp-2.0.0-x64.exe',
+        dinhDangTep: 'EXE',
+        kienTrucChip: 'X86_64',
+        maBamSha256: 'hash-x64',
+        dungLuongBytes: BigInt(50000),
+      },
+      {
+        maTep: 'file-arm64',
+        tenTep: 'MyApp-2.0.0-arm64.exe',
+        dinhDangTep: 'EXE',
+        kienTrucChip: 'ARM64',
+        maBamSha256: 'hash-arm64',
+        dungLuongBytes: BigInt(45000),
+      },
+      {
+        maTep: 'file-portable',
+        tenTep: 'MyApp-2.0.0-portable.zip',
+        dinhDangTep: 'ZIP_PORTABLE',
+        kienTrucChip: 'X86_64',
+        maBamSha256: 'hash-zip',
+        dungLuongBytes: BigInt(40000),
+      },
+    ];
+
+    it('ưu tiên trùng maTep khi cùng một bản phát hành', () => {
+      const matched = timTepTuongDong({ maTep: 'file-arm64' }, danhSachMoi);
+      expect(matched?.maTep).toBe('file-arm64');
+    });
+
+    it('ưu tiên trùng tên tệp chính xác', () => {
+      const matched = timTepTuongDong({ tenTep: 'myapp-2.0.0-arm64.exe' }, danhSachMoi);
+      expect(matched?.maTep).toBe('file-arm64');
+    });
+
+    it('khớp theo mẫu wildcard giữ nguyên kiến trúc arm64 thay vì lấy x64 ở đầu', () => {
+      const matched = timTepTuongDong(
+        {
+          tenTep: 'MyApp-1.0.0-arm64.exe',
+          dinhDangTep: 'EXE',
+        },
+        danhSachMoi,
+        '1.0.0',
+      );
+      expect(matched?.maTep).toBe('file-arm64');
+      expect(matched?.tenTep).toBe('MyApp-2.0.0-arm64.exe');
+    });
+
+    it('khớp theo kienTrucChip và dinhDangTep khi tên không có phiên bản', () => {
+      const matched = timTepTuongDong(
+        {
+          tenTep: 'CustomRunner.exe',
+          dinhDangTep: 'EXE',
+          kienTrucChip: 'ARM64',
+        },
+        danhSachMoi,
+      );
+      expect(matched?.maTep).toBe('file-arm64');
+    });
+
+    it('trả về tệp đầu tiên nếu không khớp bất kỳ tiêu chí nào', () => {
+      const matched = timTepTuongDong(
+        {
+          dinhDangTep: 'UNKNOWN',
+        },
+        danhSachMoi,
+      );
+      expect(matched?.maTep).toBe('file-x64');
+    });
+  });
+
+  it('không báo sai file đóng gói lại khi release có cả file x64 và arm64 cùng định dạng EXE', async () => {
+    mockPrisma.thietBi.findUnique.mockResolvedValue({
+      maThietBi,
+      tenThietBi: 'Surface Pro ARM',
+      maNguoiDung: 'user-chinh-chu',
+    });
+    mockPrisma.thietBi.update.mockResolvedValue({});
+
+    const maUngDungArm = 'app-arm-x64-both';
+    mockPrisma.ungDung.findUnique.mockResolvedValue({
+      maUngDung: maUngDungArm,
+      danhSachPhatHanh: [
+        {
+          maPhatHanh: 'rel-multi',
+          tenPhienBan: '1.0.0',
+          ngayPhatHanh: new Date('2026-10-01'),
+          laBanThuNghiem: false,
+          danhSachTepCaiDat: [
+            {
+              maTep: 'tep-x64',
+              tenTep: 'tool-1.0.0-x64.exe',
+              dinhDangTep: 'EXE',
+              kienTrucChip: 'X86_64',
+              maBamSha256: 'sha256_x64_clean',
+              dungLuongBytes: BigInt(60000),
+            },
+            {
+              maTep: 'tep-arm64',
+              tenTep: 'tool-1.0.0-arm64.exe',
+              dinhDangTep: 'EXE',
+              kienTrucChip: 'ARM64',
+              maBamSha256: 'sha256_arm64_clean',
+              dungLuongBytes: BigInt(50000),
+            },
+          ],
+        },
+      ],
+    });
+
+    // Máy đã cài bản ARM64
+    mockPrisma.tepCaiDat.findUnique.mockResolvedValue({
+      maTep: 'tep-arm64',
+      maPhatHanh: 'rel-multi',
+      tenTep: 'tool-1.0.0-arm64.exe',
+      dinhDangTep: 'EXE',
+      kienTrucChip: 'ARM64',
+      maBamSha256: 'sha256_arm64_clean',
+      dungLuongBytes: BigInt(50000),
+      banPhatHanh: {
+        maPhatHanh: 'rel-multi',
+        tenPhienBan: '1.0.0',
+        ngayPhatHanh: new Date('2026-10-01'),
+      },
+    });
+
+    mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+      {
+        maUngDung: maUngDungArm,
+        phienBanHienTai: '1.0.0',
+        maTepDaCai: 'tep-arm64',
+        ungDung: {},
+      },
+    ]);
+
+    const result = await service.kiemTraCapNhat({ maThietBi }, 'user-chinh-chu');
+    // Vì so khớp đúng file ARM64 của release với file ARM64 đã cài, hash và size giống hệt nhau -> KHÔNG báo cập nhật giả (danh sách bản cập nhật rỗng)!
+    expect(result.danhSachCapNhat).toHaveLength(0);
   });
 });
