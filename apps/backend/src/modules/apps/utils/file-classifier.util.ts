@@ -124,8 +124,9 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
     dinhDang = DinhDangTep.MSI;
   } else if (extension === '.exe') {
     dinhDang = DinhDangTep.EXE;
-  } else if (extension === '.zip') {
-    // L-04: File .zip chứa "installer" hoặc "setup" (tách theo ranh giới từ) là bộ cài nén trong zip,
+  } else if (extension === '.zip' || extension === '.7z') {
+    const extUpper = extension === '.7z' ? '7Z' : 'ZIP';
+    // L-04: File .zip/.7z chứa "installer" hoặc "setup" (tách theo ranh giới từ) là bộ cài nén,
     // KHÔNG được xếp vào ZIP_PORTABLE để tránh người dùng tải portable nhưng lại nhận được installer.
     const isZippedInstaller = /(?:^|[-_.])(installer|setup)(?:[-_.]|$)/i.test(lowerName);
     if (isZippedInstaller) {
@@ -133,11 +134,11 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
         dinhDang: null,
         kienTruc: KienTrucChip.KHONG_XAC_DINH,
         boQua: true,
-        lyDoBoQua: 'Tệp ZIP chứa bộ cài đặt (installer/setup), không phải bản portable độc lập',
+        lyDoBoQua: `Tệp ${extUpper} chứa bộ cài đặt (installer/setup), không phải bản portable độc lập`,
       };
     }
 
-    // Tệp .zip chỉ được coi là bản cài Windows Portable nếu trong tên có chỉ thị Windows
+    // Tệp .zip/.7z chỉ được coi là bản cài Windows Portable nếu trong tên có chỉ thị Windows (P3B-17.6)
     const hasWindowsIndicator =
       /(?:^|[-_.])(win|windows|win32|win64|portable|winstore)(?:[-_.]|$)/i.test(lowerName) ||
       lowerName.includes('portable') ||
@@ -146,13 +147,14 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
       lowerName.includes('_win');
 
     if (hasWindowsIndicator) {
+      // P3B-17.6: Gộp trực tiếp .7z portable vào ZIP_PORTABLE (không thêm giá trị enum CSDL)
       dinhDang = DinhDangTep.ZIP_PORTABLE;
     } else {
       return {
         dinhDang: null,
         kienTruc: KienTrucChip.KHONG_XAC_DINH,
         boQua: true,
-        lyDoBoQua: 'Tệp ZIP không chứa chỉ báo Windows Portable hợp lệ',
+        lyDoBoQua: `Tệp ${extUpper} không chứa chỉ báo Windows Portable hợp lệ`,
       };
     }
   } else {

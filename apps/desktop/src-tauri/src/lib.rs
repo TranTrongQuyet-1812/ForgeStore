@@ -220,8 +220,16 @@ async fn cai_dat_ung_dung(
         match loai_upper.as_str() {
             "EXE" => installer::chay_bo_cai_exe(path, &ten_app),
             "MSI" => installer::chay_bo_cai_msi(path, &ten_app),
+            "7Z" | "PORTABLE_7Z" => {
+                installer::giai_nen_portable_7z(path, &ten_app, custom_dest)
+            }
             "ZIP" | "PORTABLE_ZIP" | "ZIP_PORTABLE" => {
-                installer::giai_nen_portable_zip(path, &ten_app, custom_dest)
+                let is_7z = path.extension().and_then(|s| s.to_str()).map_or(false, |ext| ext.eq_ignore_ascii_case("7z"));
+                if is_7z {
+                    installer::giai_nen_portable_7z(path, &ten_app, custom_dest)
+                } else {
+                    installer::giai_nen_portable_zip(path, &ten_app, custom_dest)
+                }
             }
             _ => {
                 // Tự động nhận diện đuôi mở rộng nếu không truyền đúng loại
@@ -229,6 +237,7 @@ async fn cai_dat_ung_dung(
                     match ext.to_lowercase().as_str() {
                         "exe" => installer::chay_bo_cai_exe(path, &ten_app),
                         "msi" => installer::chay_bo_cai_msi(path, &ten_app),
+                        "7z" => installer::giai_nen_portable_7z(path, &ten_app, custom_dest),
                         "zip" => installer::giai_nen_portable_zip(path, &ten_app, custom_dest),
                         _ => Err(format!("Định dạng tệp không được hỗ trợ để cài đặt: .{}", ext)),
                     }

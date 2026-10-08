@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Shield,
   Loader2,
+  BellOff,
 } from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
@@ -32,7 +33,14 @@ import { toast } from '../stores/useToastStore';
 export const LibraryPage: React.FC = () => {
   const { navigateTo, openAppDetail } = useNavStore();
   const { caiDatMap, goCaiDatLocal } = useInstallStore();
-  const { soLuongBanCapNhat, danhSachCapNhat, dangKiemTra, kiemTraCapNhat } = useUpdaterStore();
+  const {
+    soLuongBanCapNhat,
+    danhSachCapNhat,
+    dangKiemTra,
+    kiemTraCapNhat,
+    boQuaPhienBan,
+    kiemTraDaBoQua,
+  } = useUpdaterStore();
   const { user, isAuthenticated, maThietBi } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -163,6 +171,7 @@ export const LibraryPage: React.FC = () => {
       iconUrl?: string;
       coBanMoi: boolean;
       phienBanMoi?: string;
+      daBoQuaPhienBan?: boolean;
       khoaRegistry?: string | null;
       tenHienThiRegistry?: string | null;
       regInfo?: ThongTinUngDungRegistry | null;
@@ -193,6 +202,12 @@ export const LibraryPage: React.FC = () => {
       registryMap[bApp.maUngDung] === null &&
       !localApp;
 
+    const targetNewVersion = updateItem?.phienBanMoiNhat || bApp.phienBanMoiNhat || undefined;
+    const daBoQua = kiemTraDaBoQua(bApp.maUngDung, targetNewVersion);
+    const coBanMoiRaw =
+      bApp.phienBanHienTai !== 'latest' && Boolean(updateItem?.coBanCapNhat || bApp.coBanMoi);
+    const coBanMoi = coBanMoiRaw && !daBoQua;
+
     mergedAppsMap.set(bApp.maUngDung, {
       maUngDung: bApp.maUngDung,
       tenApp: bApp.ungDung?.tenKhoChua || bApp.ungDung?.tenRepoDayDu || bApp.maUngDung,
@@ -200,10 +215,10 @@ export const LibraryPage: React.FC = () => {
       duongDanThuMuc: bApp.duongDanThuMuc ?? undefined,
       duongDanThucThi: localApp?.duongDanThucThi ?? undefined,
       iconUrl: bApp.ungDung?.duongDanIcon ?? undefined,
-      // P3B-16 & Review: App CLI không có phiên bản (lưu 'latest') thì không hứa hẹn tính năng cập nhật
-      coBanMoi:
-        bApp.phienBanHienTai !== 'latest' && Boolean(updateItem?.coBanCapNhat || bApp.coBanMoi),
-      phienBanMoi: updateItem?.phienBanMoiNhat || bApp.phienBanMoiNhat || undefined,
+      // P3B-16 & P3B-17: Ẩn thông báo nếu bản này đã được người dùng chọn bỏ qua
+      coBanMoi,
+      phienBanMoi: targetNewVersion,
+      daBoQuaPhienBan: daBoQua,
       khoaRegistry: bApp.khoaRegistry ?? localApp?.registryKey,
       tenHienThiRegistry: bApp.tenHienThiRegistry ?? localApp?.registryDisplayName,
       regInfo,
@@ -896,26 +911,42 @@ export const LibraryPage: React.FC = () => {
                     )}
 
                     {app.coBanMoi && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (app.lenhCapNhatCli) {
-                            setCliUpdateModalApp({
-                              maUngDung: app.maUngDung,
-                              tenApp: app.tenApp,
-                              phienBanMoi: app.phienBanMoi,
-                              lenhCapNhatCli: app.lenhCapNhatCli,
-                            });
-                          } else {
-                            openAppDetail(app.maUngDung);
-                          }
-                        }}
-                        className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
-                        title="Xem lệnh cập nhật phiên bản mới"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Cập Nhật</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (app.lenhCapNhatCli) {
+                              setCliUpdateModalApp({
+                                maUngDung: app.maUngDung,
+                                tenApp: app.tenApp,
+                                phienBanMoi: app.phienBanMoi,
+                                lenhCapNhatCli: app.lenhCapNhatCli,
+                              });
+                            } else {
+                              openAppDetail(app.maUngDung);
+                            }
+                          }}
+                          className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                          title="Xem lệnh cập nhật phiên bản mới"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Cập Nhật</span>
+                        </button>
+                        {app.phienBanMoi && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              boQuaPhienBan(app.maUngDung, app.phienBanMoi!);
+                              toast.info(`Đã bỏ qua thông báo cập nhật bản ${app.phienBanMoi}`);
+                            }}
+                            className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1 shadow-xs transition-all outline-none"
+                            title="Bỏ qua phiên bản này (tự hiện lại khi có bản mới hơn)"
+                          >
+                            <BellOff className="w-3.5 h-3.5 text-secondary" />
+                            <span className="hidden sm:inline">Bỏ qua</span>
+                          </button>
+                        )}
+                      </>
                     )}
 
                     <button
@@ -932,17 +963,33 @@ export const LibraryPage: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    {/* Nút cập nhật nếu có bản mới */}
+                    {/* Nút cập nhật nếu có bản mới (P3B-17.2) */}
                     {app.coBanMoi && (
-                      <button
-                        onClick={() => openAppDetail(app.maUngDung)}
-                        disabled={isUninstallingId !== null}
-                        className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Cập nhật lên phiên bản mới"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Cập Nhật</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openAppDetail(app.maUngDung)}
+                          disabled={isUninstallingId !== null}
+                          className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Cập nhật lên phiên bản mới"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Cập Nhật</span>
+                        </button>
+                        {app.phienBanMoi && (
+                          <button
+                            onClick={() => {
+                              boQuaPhienBan(app.maUngDung, app.phienBanMoi!);
+                              toast.info(`Đã bỏ qua thông báo cập nhật bản ${app.phienBanMoi}`);
+                            }}
+                            disabled={isUninstallingId !== null}
+                            className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1 shadow-xs transition-all focus-visible:ring-2 focus-visible:ring-accent-forge outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Bỏ qua phiên bản này (tự hiện lại khi có bản mới hơn)"
+                          >
+                            <BellOff className="w-3.5 h-3.5 text-secondary" />
+                            <span className="hidden sm:inline">Bỏ qua</span>
+                          </button>
+                        )}
+                      </>
                     )}
 
                     {/* Nút Mở Ứng Dụng (L-01, R-01, R-08: Hiện khi có file thực thi, DisplayIcon hợp lệ hoặc InstallLocation khả dụng) */}

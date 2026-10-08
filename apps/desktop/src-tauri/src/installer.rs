@@ -582,6 +582,162 @@ pub fn giai_nen_portable_zip(
     })
 }
 
+/// Giải nén bản Portable .7z và phòng chống lỗ hổng Zip Slip (P3B-17.6, SEC-03, SEC-04)
+pub fn giai_nen_portable_7z(
+    duong_dan_tep: &Path,
+    ten_app: &str,
+    thu_muc_tuy_chon: Option<&Path>,
+) -> Result<KetQuaCaiDat, String> {
+    if !duong_dan_tep.exists() {
+        return Err(format!("Tệp nén .7z không tồn tại: {}", duong_dan_tep.display()));
+    }
+
+    let safe_path = kiem_tra_tep_an_toan(duong_dan_tep)?;
+
+    // Chuẩn hóa tên app an toàn cho thư mục
+    let safe_app_name: String = ten_app
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+
+    // Nếu người dùng chọn thư mục đích: kiểm tra an toàn thư mục đích
+    // Nếu không: fallback về mặc định %LOCALAPPDATA%\ForgeStore\apps\<safe_app_name>
+    let dest_dir = if let Some(custom_dir) = thu_muc_tuy_chon {
+        let safe_custom = kiem_tra_thu_muc_an_toan(custom_dir)?;
+        let target = safe_custom.join(&safe_app_name);
+        std::fs::create_dir_all(&target)
+            .map_err(|e| format!("Không thể tạo thư mục đích '{}': {}", target.display(), e))?;
+        target
+    } else {
+        lay_thu_muc_cai_dat_app(ten_app)?
+    };
+
+    let canonical_dest = dest_dir.canonicalize()
+        .map_err(|e| format!("Không thể chuẩn hóa đường dẫn đích: {}", e))?;
+
+    let mut potential_exe: Option<PathBuf> = None;
+    let mut total_uncompressed_bytes: u64 = 0;
+    const MAX_FILE_BYTES: u64 = 512 * 1024 * 1024;
+    const MAX_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+    let res = sevenz_rust::decompress_file_with_extract_fn(&safe_path, &dest_dir, |entry, reader, dest| {
+        let entry_name = entry.name();
+
+        // Chặn lỗ hổng Zip-Slip (P3B-17.6): kiểm tra chặt chẽ .. hoặc path normalization
+        let raw_path = Path::new(entry_name);
+        for comp in raw_path.components() {
+            if matches!(comp, std::path::Component::ParentDir) {
+                return Err(sevenz_rust::Error::other(format!(
+                    "CẢNH BÁO AN NINH: Phát hiện tệp 7z độc hại (Zip-Slip attempt): '{}'",
+                    entry_name
+                )));
+            }
+        }
+
+        let outpath = dest.join(entry_name);
+
+        if entry.is_directory() {
+            std::fs::create_dir_all(&outpath).map_err(|e| sevenz_rust::Error::io(e))?;
+            if let Ok(canon_sub) = outpath.canonicalize() {
+                if !canon_sub.starts_with(&canonical_dest) {
+                    return Err(sevenz_rust::Error::other(
+                        "CẢNH BÁO AN NINH: Thư mục giải nén vượt ra ngoài thư mục an toàn!",
+                    ));
+                }
+            }
+            return Ok(true);
+        }
+
+        if let Some(parent) = outpath.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(|e| sevenz_rust::Error::io(e))?;
+            }
+            let canon_parent = parent.canonicalize().map_err(|e| sevenz_rust::Error::io(e))?;
+            if !canon_parent.starts_with(&canonical_dest) {
+                return Err(sevenz_rust::Error::other(
+                    "CẢNH BÁO AN NINH: Thư mục cha giải nén vượt ra ngoài thư mục an toàn!",
+                ));
+            }
+        }
+
+        if outpath.exists() || outpath.symlink_metadata().is_ok() {
+            if let Ok(meta) = outpath.symlink_metadata() {
+                if meta.file_type().is_symlink() {
+                    return Err(sevenz_rust::Error::other(format!(
+                        "CẢNH BÁO AN NINH: Phát hiện tệp liên kết symlink nguy hiểm: '{}'",
+                        outpath.display()
+                    )));
+                }
+            }
+            if let Ok(canon_existing) = outpath.canonicalize() {
+                if !canon_existing.starts_with(&canonical_dest) {
+                    return Err(sevenz_rust::Error::other(format!(
+                        "CẢNH BÁO AN NINH: Tệp đích hiện tại '{}' trỏ ra ngoài thư mục an toàn!",
+                        outpath.display()
+                    )));
+                }
+            }
+        }
+
+        let mut outfile = std::fs::File::create(&outpath).map_err(|e| sevenz_rust::Error::io(e))?;
+
+        let canon_out = outpath.canonicalize().map_err(|e| sevenz_rust::Error::io(e))?;
+        if !canon_out.starts_with(&canonical_dest) {
+            let _ = std::fs::remove_file(&outpath);
+            return Err(sevenz_rust::Error::other(
+                "CẢNH BÁO AN NINH: Tệp giải nén vượt ra ngoài thư mục an toàn!",
+            ));
+        }
+
+        use std::io::Read;
+        let mut limited_reader = reader.take(MAX_FILE_BYTES + 1);
+        let bytes_written = std::io::copy(&mut limited_reader, &mut outfile).map_err(|e| sevenz_rust::Error::io(e))?;
+
+        if bytes_written > MAX_FILE_BYTES {
+            let _ = std::fs::remove_file(&outpath);
+            return Err(sevenz_rust::Error::other(format!(
+                "CẢNH BÁO AN NINH: Tệp nén '{}' vượt quá giới hạn an toàn 512MB (nghi vấn Zip Bomb)!",
+                outpath.display()
+            )));
+        }
+
+        total_uncompressed_bytes = total_uncompressed_bytes.saturating_add(bytes_written);
+        if total_uncompressed_bytes > MAX_TOTAL_BYTES {
+            let _ = std::fs::remove_file(&outpath);
+            return Err(sevenz_rust::Error::other(
+                "CẢNH BÁO AN NINH: Tổng dung lượng gói nén vượt quá giới hạn an toàn 4GB (nghi vấn Zip Bomb)!",
+            ));
+        }
+
+        if let Some(ext) = outpath.extension() {
+            if ext.eq_ignore_ascii_case("exe") {
+                if potential_exe.is_none() || outpath.file_stem().map_or(false, |s| s.to_string_lossy().to_lowercase().contains(&ten_app.to_lowercase())) {
+                    potential_exe = Some(outpath.clone());
+                }
+            }
+        }
+
+        Ok(true)
+    });
+
+    if let Err(e) = res {
+        return Err(format!("Lỗi khi giải nén tệp .7z: {}", e));
+    }
+
+    // Tự động xóa file .7z tải về sau khi giải nén thành công
+    let clean_7z_path = bo_tien_to_dos_device_path(&safe_path);
+    let _ = std::fs::remove_file(&clean_7z_path);
+
+    Ok(KetQuaCaiDat {
+        thanh_cong: true,
+        loai_cai_dat: "PORTABLE_ZIP".to_string(),
+        thong_diep: format!("Đã giải nén bản portable (.7z) vào '{}' thành công.", dest_dir.display()),
+        duong_dan_cai_dat: Some(dest_dir.to_string_lossy().to_string()),
+        duong_dan_thuc_thi: potential_exe.map(|p| p.to_string_lossy().to_string()),
+        thong_tin_registry: None,
+    })
+}
+
 /// Mở ứng dụng đã cài đặt qua đường dẫn thực thi (hỗ trợ cả app portable trong thư mục người dùng chọn)
 pub fn mo_ung_dung_thuc_thi(duong_dan: &Path, thu_muc_cho_phep: Option<&Path>) -> Result<(), String> {
     if !duong_dan.exists() {
@@ -836,6 +992,13 @@ mod tests {
         assert!(res.is_ok());
         let clean_path = res.unwrap();
         assert!(!clean_path.to_string_lossy().starts_with(r"\\?\"));
+    }
+
+    #[test]
+    fn test_giai_nen_portable_7z_tep_khong_ton_tai() {
+        let res = giai_nen_portable_7z(Path::new("C:\\invalid\\path\\nonexistent.7z"), "TestApp", None);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("không tồn tại"));
     }
 }
 

@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { soSanhPhienBan, coBanMoiHon, chuanHoaPhienBan } from './version-comparator.util';
+import {
+  soSanhPhienBan,
+  coBanMoiHon,
+  chuanHoaPhienBan,
+  laTagKhongCoSo,
+  kiemTraCoBanCapNhat,
+} from './version-comparator.util';
 
-describe('VersionComparatorUtil (P2-52)', () => {
+describe('VersionComparatorUtil (P2-52 & P3B-17)', () => {
   describe('chuanHoaPhienBan', () => {
     it('loại bỏ tiền tố v, V và cắt khoảng trắng', () => {
       expect(chuanHoaPhienBan('v1.2.3')).toBe('1.2.3');
@@ -15,8 +21,26 @@ describe('VersionComparatorUtil (P2-52)', () => {
     });
   });
 
-  describe('soSanhPhienBan & coBanMoiHon (Tối thiểu 20 cặp phiên bản theo P2-52.5)', () => {
-    // Định nghĩa bảng 25 cặp phiên bản kiểm thử
+  describe('laTagKhongCoSo (P3B-17.3)', () => {
+    it('nhận diện chính xác các tag không có số phiên bản', () => {
+      expect(laTagKhongCoSo('nightly')).toBe(true);
+      expect(laTagKhongCoSo('latest')).toBe(true);
+      expect(laTagKhongCoSo('continuous')).toBe(true);
+      expect(laTagKhongCoSo('dev')).toBe(true);
+      expect(laTagKhongCoSo('master')).toBe(true);
+      expect(laTagKhongCoSo('canary')).toBe(true);
+      expect(laTagKhongCoSo('rolling')).toBe(true);
+    });
+
+    it('từ chối các tag có chứa số phiên bản', () => {
+      expect(laTagKhongCoSo('v1.0.0')).toBe(false);
+      expect(laTagKhongCoSo('2.3.4')).toBe(false);
+      expect(laTagKhongCoSo('v2024.10.05')).toBe(false);
+      expect(laTagKhongCoSo('nightly-20241008')).toBe(false);
+    });
+  });
+
+  describe('soSanhPhienBan & coBanMoiHon (Bao gồm các ca thử P3B-17.5)', () => {
     const testCases: Array<{
       current: string;
       target: string;
@@ -54,8 +78,17 @@ describe('VersionComparatorUtil (P2-52)', () => {
       },
       { current: 'V3.0.0', target: 'v3.0.1', expectedCmp: 1, description: 'v3.0.1 mới hơn V3.0.0' },
 
-      // 3. Thiếu số đoạn (2 số so với 3 số)
+      // 3. Thiếu số đoạn (2 số so với 3 số) & P3B-17.5 số phiên bản thêm .0
       { current: 'v1.2', target: '1.2.0', expectedCmp: 0, description: 'v1.2 tương đương 1.2.0' },
+      { current: '1.0', target: '1.0.0', expectedCmp: 0, description: '1.0 tương đương 1.0.0' },
+      {
+        current: '1.0.0',
+        target: '1.0.0.0',
+        expectedCmp: 0,
+        description: '1.0.0 tương đương 1.0.0.0',
+      },
+      { current: '1.2.0.0', target: '1.2', expectedCmp: 0, description: '1.2.0.0 tương đương 1.2' },
+      { current: '1.2.0', target: '1.2.0.1', expectedCmp: 1, description: '1.2.0.1 mới hơn 1.2.0' },
       { current: '1.2', target: '1.2.1', expectedCmp: 1, description: '1.2.1 mới hơn 1.2' },
       { current: '1.3', target: '1.2.9', expectedCmp: -1, description: '1.2.9 cũ hơn 1.3' },
 
@@ -85,7 +118,7 @@ describe('VersionComparatorUtil (P2-52)', () => {
         description: 'CalVer phân cách bằng dấu gạch dưới',
       },
 
-      // 5. Prerelease so với Bản chính thức (SemVer rule: Official > Prerelease)
+      // 5. Prerelease so với Bản chính thức & P3B-17.5 chữ đóng gói (debug, release, universal)
       {
         current: '1.0.0-beta',
         target: '1.0.0',
@@ -127,6 +160,24 @@ describe('VersionComparatorUtil (P2-52)', () => {
         target: '1.0.0-rc.2',
         expectedCmp: 1,
         description: 'rc.2 mới hơn rc.1',
+      },
+      {
+        current: '1.0.0-debug',
+        target: '1.0.0-release',
+        expectedCmp: 1,
+        description: 'bản release mới hơn bản debug',
+      },
+      {
+        current: '1.0.0-release',
+        target: '1.0.0',
+        expectedCmp: 0,
+        description: 'bản release và bản không hậu tố tương đương nhau',
+      },
+      {
+        current: '1.0.0-universal',
+        target: '1.0.0',
+        expectedCmp: 0,
+        description: 'bản universal và bản thường tương đương nhau',
       },
 
       // 6. Build Metadata
@@ -183,6 +234,87 @@ describe('VersionComparatorUtil (P2-52)', () => {
           expect(coBanMoiHon(current, target)).toBe(false);
         }
       });
+    });
+  });
+
+  describe('kiemTraCoBanCapNhat (P3B-17.3 & P3B-17.4)', () => {
+    it('báo có bản cập nhật khi tag nightly có ngày phát hành mới hơn', () => {
+      const hienTai = {
+        tenPhienBan: 'nightly',
+        ngayPhatHanh: '2026-10-01T00:00:00Z',
+      };
+      const moi = {
+        tenPhienBan: 'nightly',
+        ngayPhatHanh: '2026-10-02T00:00:00Z',
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(true);
+      expect(res.lyDo).toBe('NGAY_PHAT_HANH_MOI');
+    });
+
+    it('không báo cập nhật khi tag nightly cùng ngày phát hành và cùng hash', () => {
+      const hienTai = {
+        tenPhienBan: 'nightly',
+        ngayPhatHanh: '2026-10-01T00:00:00Z',
+        maBamSha256: 'abc123hash',
+      };
+      const moi = {
+        tenPhienBan: 'nightly',
+        ngayPhatHanh: '2026-10-01T00:00:00Z',
+        maBamSha256: 'abc123hash',
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(false);
+    });
+
+    it('báo có bản cập nhật khi tag continuous có hash SHA-256 khác nhau', () => {
+      const hienTai = {
+        tenPhienBan: 'continuous',
+        maBamSha256: 'sha256_old',
+      };
+      const moi = {
+        tenPhienBan: 'continuous',
+        maBamSha256: 'sha256_new',
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(true);
+      expect(res.lyDo).toBe('FILE_DONG_GOI_LAI');
+    });
+
+    it('báo có bản cập nhật khi cùng số phiên bản nhưng file bị đóng gói lại (P3B-17.4)', () => {
+      const hienTai = {
+        tenPhienBan: 'v1.2.3',
+        maBamSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        dungLuongBytes: 15000000,
+      };
+      const moi = {
+        tenPhienBan: 'v1.2.3',
+        maBamSha256: 'a1b2c3d4e5f60000000000000000000000000000000000000000000000000000',
+        dungLuongBytes: 15000000,
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(true);
+      expect(res.lyDo).toBe('FILE_DONG_GOI_LAI');
+    });
+
+    it('báo có bản cập nhật khi cùng số phiên bản nhưng dung lượng byte khác nhau', () => {
+      const hienTai = {
+        tenPhienBan: '2.0.0',
+        dungLuongBytes: 1048576,
+      };
+      const moi = {
+        tenPhienBan: '2.0.0',
+        dungLuongBytes: 2097152,
+      };
+      const res = kiemTraCoBanCapNhat(hienTai, moi);
+      expect(res.coBanCapNhat).toBe(true);
+      expect(res.lyDo).toBe('FILE_DONG_GOI_LAI');
+    });
+
+    it('báo có bản cập nhật khi phiên bản SemVer mới hơn thông thường', () => {
+      const res = kiemTraCoBanCapNhat('1.0.0', '1.1.0');
+      expect(res.coBanCapNhat).toBe(true);
+      expect(res.lyDo).toBe('PHIEN_BAN_MOI');
     });
   });
 });

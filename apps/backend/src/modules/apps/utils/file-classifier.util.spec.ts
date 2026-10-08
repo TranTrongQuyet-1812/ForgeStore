@@ -393,5 +393,29 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
       expect(setupZip.boQua).toBe(true);
       expect(setupZip.dinhDang).toBeNull();
     });
+
+    it('P3B-17.6: Nhận dạng chính xác tệp .7z portable và gộp vào ZIP_PORTABLE', () => {
+      // 1. .7z có chỉ thị windows -> nhận dạng là ZIP_PORTABLE
+      const portable7z = phanLoaiTep('app-v1.2.0-windows-x64.7z');
+      expect(portable7z.boQua).toBe(false);
+      expect(portable7z.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+      expect(portable7z.kienTruc).toBe(KienTrucChip.X86_64);
+
+      // 2. .7z có chỉ thị portable -> nhận dạng là ZIP_PORTABLE
+      const toolPortable7z = phanLoaiTep('mytool-portable.7z');
+      expect(toolPortable7z.boQua).toBe(false);
+      expect(toolPortable7z.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+
+      // 3. .7z chứa installer/setup -> BỎ QUA
+      const setup7z = phanLoaiTep('app-setup-win-x64.7z');
+      expect(setup7z.boQua).toBe(true);
+      expect(setup7z.dinhDang).toBeNull();
+      expect(setup7z.lyDoBoQua).toContain('installer/setup');
+
+      // 4. .7z không có chỉ thị Windows (ví dụ package.7z) -> BỎ QUA
+      const generic7z = phanLoaiTep('generic-package.7z');
+      expect(generic7z.boQua).toBe(true);
+      expect(generic7z.dinhDang).toBeNull();
+    });
   });
 });

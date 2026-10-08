@@ -44,6 +44,7 @@ import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
   trichTenGoiTuLenhTho,
+  timTepTheoMauWildcard,
   type TrangKetQua,
   type UngDungTomTatDto,
 } from '@forgestore/types';
@@ -525,14 +526,28 @@ export const DetailPage: React.FC = () => {
     [displayAssets, selectedFormat],
   );
 
-  // Lựa chọn hiện tại: ưu tiên tệp người dùng click chọn thủ công, nếu không thì lấy tệp tối ưu
+  // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11 & P3B-17)
+  const appKey = appDetail?.maUngDung || appId;
+  const installInfo = caiDatMap[appKey];
+
+  // P3B-17.1: Tự động nhận diện biến thể đã cài đặt lần trước qua mẫu wildcard pattern
+  const mauBienTheDaLuu = useInstallStore((s) => s.layBienThe(appKey)) || installInfo?.mauBienThe;
+  const assetBienTheCu = useMemo(() => {
+    if (!mauBienTheDaLuu || displayAssets.length === 0) return null;
+    return timTepTheoMauWildcard(displayAssets, mauBienTheDaLuu);
+  }, [displayAssets, mauBienTheDaLuu]);
+
+  // Lựa chọn hiện tại: ưu tiên tệp người dùng click chọn thủ công, tiếp đến là biến thể đã cài lần trước, nếu không thì lấy tệp tối ưu
   const selectedAsset = useMemo(() => {
     if (selectedAssetId) {
       const found = displayAssets.find((a) => a.maTep === selectedAssetId);
       if (found) return found;
     }
+    if (assetBienTheCu) {
+      return assetBienTheCu;
+    }
     return optimalAsset || displayAssets[0];
-  }, [selectedAssetId, displayAssets, optimalAsset]);
+  }, [selectedAssetId, displayAssets, assetBienTheCu, optimalAsset]);
 
   // Cảnh báo nếu tệp đang chọn không tương thích với máy x64
   const isChipIncompatible = useMemo(() => {
@@ -659,8 +674,6 @@ export const DetailPage: React.FC = () => {
     selectedFormat.toUpperCase() === 'ZIP' || selectedFormat.toUpperCase() === 'ZIP_PORTABLE';
 
   // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11)
-  const appKey = appDetail?.maUngDung || appId;
-  const installInfo = caiDatMap[appKey];
   const localStatus = installInfo?.trangThai || 'CHUA_CAI';
 
   const effectiveStatus = useMemo(

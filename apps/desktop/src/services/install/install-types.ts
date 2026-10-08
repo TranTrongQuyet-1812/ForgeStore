@@ -96,6 +96,8 @@ export interface ThongTinCaiDatApp {
   registryDisplayName?: string;
   registryPublisher?: string;
   registryDisplayVersion?: string;
+  mauBienThe?: string;
+  tenTepDaCai?: string;
 }
 
 /**

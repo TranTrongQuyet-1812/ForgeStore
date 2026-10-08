@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckUpdatesDto } from './dto/check-updates.dto';
-import { coBanMoiHon } from './utils/version-comparator.util';
+import { kiemTraCoBanCapNhat } from './utils/version-comparator.util';
 import { layBanPhatHanhMoiNhat } from '../apps/utils/release-selector.util';
 import {
   BanPhatHanhDto,
@@ -163,19 +163,68 @@ export class UpdaterService {
 
         if (tepDaCai && tepDaCai.banPhatHanh) {
           daXacDinhQuaTep = true;
-          // So sánh mã release hoặc ngày phát hành
-          if (banMoiNhat.maPhatHanh !== tepDaCai.maPhatHanh) {
-            coBanMoi = banMoiNhat.ngayPhatHanh > tepDaCai.banPhatHanh.ngayPhatHanh;
+          if (banMoiNhat.maPhatHanh === tepDaCai.maPhatHanh) {
+            // Máy đang cài đúng release này.
+            // Kiểm tra xem file có bị đóng gói lại không (P3B-17.4):
+            const matchedNewFile = banMoiNhat.danhSachTepCaiDat.find(
+              (f: TepCaiDat) =>
+                f.maTep === tepDaCai.maTep || f.dinhDangTep === tepDaCai.dinhDangTep,
+            );
+            if (
+              matchedNewFile &&
+              ((matchedNewFile.maBamSha256 &&
+                tepDaCai.maBamSha256 &&
+                matchedNewFile.maBamSha256.toLowerCase() !== tepDaCai.maBamSha256.toLowerCase()) ||
+                (matchedNewFile.dungLuongBytes !== undefined &&
+                  tepDaCai.dungLuongBytes !== undefined &&
+                  BigInt(matchedNewFile.dungLuongBytes.toString()) !==
+                    BigInt(tepDaCai.dungLuongBytes.toString())))
+            ) {
+              coBanMoi = true;
+            } else {
+              coBanMoi = false;
+            }
           } else {
-            // Máy đang cài đúng release mới nhất trong Store
-            coBanMoi = false;
+            // Khác mã release -> kiểm tra toàn diện
+            const matchedNewFile =
+              banMoiNhat.danhSachTepCaiDat.find(
+                (f: TepCaiDat) => f.dinhDangTep === tepDaCai.dinhDangTep,
+              ) || banMoiNhat.danhSachTepCaiDat[0];
+
+            const ketQua = kiemTraCoBanCapNhat(
+              {
+                tenPhienBan: tepDaCai.banPhatHanh.tenPhienBan || item.phienBanHienTai,
+                ngayPhatHanh: tepDaCai.banPhatHanh.ngayPhatHanh,
+                maBamSha256: tepDaCai.maBamSha256,
+                dungLuongBytes: tepDaCai.dungLuongBytes,
+              },
+              {
+                tenPhienBan: banMoiNhat.tenPhienBan,
+                ngayPhatHanh: banMoiNhat.ngayPhatHanh,
+                maBamSha256: matchedNewFile?.maBamSha256,
+                dungLuongBytes: matchedNewFile?.dungLuongBytes,
+              },
+            );
+            coBanMoi = ketQua.coBanCapNhat;
           }
         }
       }
 
-      // B. Nếu chưa xác định được qua maTepDaCai (do client tự gửi danh sách hoặc file không tìm thấy) -> so sánh chuỗi
+      // B. Nếu chưa xác định được qua maTepDaCai (do client tự gửi danh sách hoặc file không tìm thấy) -> kiểm tra toàn diện
       if (!daXacDinhQuaTep) {
-        coBanMoi = coBanMoiHon(item.phienBanHienTai, phienBanMoi);
+        const defaultNewFile = banMoiNhat.danhSachTepCaiDat[0];
+        const ketQua = kiemTraCoBanCapNhat(
+          {
+            tenPhienBan: item.phienBanHienTai,
+          },
+          {
+            tenPhienBan: phienBanMoi,
+            ngayPhatHanh: banMoiNhat.ngayPhatHanh,
+            maBamSha256: defaultNewFile?.maBamSha256,
+            dungLuongBytes: defaultNewFile?.dungLuongBytes,
+          },
+        );
+        coBanMoi = ketQua.coBanCapNhat;
       }
 
       if (coBanMoi) {

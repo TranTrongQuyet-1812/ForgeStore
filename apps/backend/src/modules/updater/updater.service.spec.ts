@@ -261,4 +261,64 @@ describe('UpdaterService (P2-52)', () => {
     // Không được báo có bản cập nhật!
     expect(result.danhSachCapNhat).toHaveLength(0);
   });
+
+  it('phát hiện bản cập nhật khi file cùng release bị đóng gói lại với hash khác (P3B-17.4)', async () => {
+    mockPrisma.thietBi.findUnique.mockResolvedValue({
+      maThietBi,
+      loaiThietBi: 'MAY_TINH_WINDOWS',
+      maNguoiDung: 'user-chinh-chu',
+    });
+    mockPrisma.thietBi.update.mockResolvedValue({});
+
+    const maUngDung = 'app-repackaged';
+    mockPrisma.ungDung.findUnique.mockResolvedValue({
+      maUngDung,
+      danhSachPhatHanh: [
+        {
+          maPhatHanh: 'rel-1',
+          tenPhienBan: '1.0.0',
+          ngayPhatHanh: new Date('2026-10-01'),
+          laBanThuNghiem: false,
+          danhSachTepCaiDat: [
+            {
+              maTep: 'tep-1',
+              tenTep: 'app-setup.exe',
+              dinhDangTep: 'EXE',
+              maBamSha256: 'sha256_new_rebuilt',
+              dungLuongBytes: BigInt(5000),
+              ngayTao: new Date('2026-10-01'),
+              soLuotTai: 10,
+            },
+          ],
+        },
+      ],
+    });
+
+    // File đã cài trên máy có hash cũ
+    mockPrisma.tepCaiDat.findUnique.mockResolvedValue({
+      maTep: 'tep-1',
+      maPhatHanh: 'rel-1',
+      dinhDangTep: 'EXE',
+      maBamSha256: 'sha256_old_initial',
+      dungLuongBytes: BigInt(5000),
+      banPhatHanh: {
+        maPhatHanh: 'rel-1',
+        tenPhienBan: '1.0.0',
+        ngayPhatHanh: new Date('2026-10-01'),
+      },
+    });
+
+    mockPrisma.ungDungDaCai.findMany.mockResolvedValue([
+      {
+        maUngDung,
+        phienBanHienTai: '1.0.0',
+        maTepDaCai: 'tep-1',
+        ungDung: {},
+      },
+    ]);
+
+    const result = await service.kiemTraCapNhat({ maThietBi }, 'user-chinh-chu');
+    expect(result.danhSachCapNhat).toHaveLength(1);
+    expect(result.danhSachCapNhat[0]?.coBanCapNhat).toBe(true);
+  });
 });

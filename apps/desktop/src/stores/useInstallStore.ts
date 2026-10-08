@@ -5,6 +5,7 @@ import { libraryService } from '../services/library/library-service';
 import { queryClient } from '../services/api/query-client';
 import { apiClient } from '../services/api/api-client';
 import { useAuthStore } from './useAuthStore';
+import { taoMauTenTepWildcard } from '@forgestore/types';
 import type {
   ThamSoCaiDat,
   ThongTinCaiDatApp,
@@ -49,6 +50,7 @@ safeMemoryStorage.removeItem('forgestore_installed_apps');
 
 interface InstallState {
   caiDatMap: Record<string, ThongTinCaiDatApp>;
+  bienTheMap: Record<string, { mauBienThe: string; tenTep: string }>;
 
   // Actions
   batDauCaiDat: (params: ThamSoCaiDat) => Promise<boolean>;
@@ -58,12 +60,29 @@ interface InstallState {
   xoaTrangThaiTam: () => void;
   capNhatTrangThai: (maUngDung: string, partial: Partial<ThongTinCaiDatApp>) => void;
   layThongTinApp: (maUngDung: string) => ThongTinCaiDatApp | undefined;
+  luuBienThe: (maUngDung: string, tenTep: string, phienBan?: string) => void;
+  layBienThe: (maUngDung: string) => string | undefined;
 }
 
 export const useInstallStore = create<InstallState>()(
   persist(
     (set, get) => ({
       caiDatMap: {},
+      bienTheMap: {},
+
+      luuBienThe: (maUngDung, tenTep, phienBan) => {
+        const mauBienThe = taoMauTenTepWildcard(tenTep, phienBan);
+        set((state) => ({
+          bienTheMap: {
+            ...state.bienTheMap,
+            [maUngDung]: { mauBienThe, tenTep },
+          },
+        }));
+      },
+
+      layBienThe: (maUngDung) => {
+        return get().bienTheMap[maUngDung]?.mauBienThe;
+      },
 
       capNhatTrangThai: (maUngDung, partial) => {
         set((state) => {
@@ -123,12 +142,16 @@ export const useInstallStore = create<InstallState>()(
 
           if (res.thanh_cong) {
             const isPortableZip = params.loaiTep?.toUpperCase().includes('ZIP');
+            const mauBienThe = taoMauTenTepWildcard(params.tenTep, params.phienBan);
+            get().luuBienThe(maUngDung, params.tenTep, params.phienBan);
 
             get().capNhatTrangThai(maUngDung, {
               trangThai: 'DA_CAI_DAT',
               loaiTep: params.loaiTep,
               phanTram: 100,
               tocDoBps: 0,
+              mauBienThe,
+              tenTepDaCai: params.tenTep,
               duongDanThucThi: res.duong_dan_thuc_thi ?? undefined,
               duongDanThuMuc: isPortableZip ? (res.duong_dan_cai_dat ?? undefined) : undefined,
               registryKey: res.thong_tin_registry?.registry_key ?? undefined,
@@ -247,6 +270,7 @@ export const useInstallStore = create<InstallState>()(
       name: 'forgestore_install_tasks',
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
+        bienTheMap: state.bienTheMap,
         // L-08: Chỉ lưu các tiến trình dở dang để merge reset sang DA_HUY khi khởi động lại app.
         // Bản Portable ZIP không lưu kẹt DA_CAI_DAT trong storage.
         caiDatMap: Object.fromEntries(
@@ -262,14 +286,11 @@ export const useInstallStore = create<InstallState>()(
         // FE-R7-01 / EC-03: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
         // Sửa trực tiếp trên persistedState trước khi gộp vào store, triệt tiêu lỗi TDZ useInstallStore.setState
         const typed = persistedState as Partial<InstallState> | undefined;
-        if (!typed || !typed.caiDatMap) {
-          return {
-            ...currentState,
-            ...(typed || {}),
-          };
+        if (!typed) {
+          return currentState;
         }
 
-        const next = { ...typed.caiDatMap };
+        const next = { ...(typed.caiDatMap || {}) };
         for (const [id, item] of Object.entries(next)) {
           if (['DANG_TAI', 'XAC_MINH', 'DANG_CAI_DAT'].includes(item.trangThai)) {
             next[id] = {
@@ -286,6 +307,10 @@ export const useInstallStore = create<InstallState>()(
           ...currentState,
           ...typed,
           caiDatMap: next,
+          bienTheMap: {
+            ...(currentState.bienTheMap || {}),
+            ...(typed.bienTheMap || {}),
+          },
         };
       },
     },

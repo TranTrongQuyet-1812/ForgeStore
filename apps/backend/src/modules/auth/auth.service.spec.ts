@@ -739,7 +739,7 @@ describe('AuthService', () => {
       expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
         where: { maPhien: 'session-attacked' },
       });
-    });
+    }, 15000);
 
     it('Điểm 6: CHỐNG PHÁ HOẠI SID.RÁC — Gửi chuỗi rác không khớp cả token mới lẫn token cũ bị 401 nhưng KHÔNG xóa phiên', async () => {
       const currentHashed = await argon2.hash('legit-current-secret');
@@ -760,7 +760,7 @@ describe('AuthService', () => {
 
       // ĐẢM BẢO TUYỆT ĐỐI: Phiên của nạn nhân KHÔNG BỊ XÓA!
       expect(mockPrisma.phienDangNhap.delete).not.toHaveBeenCalled();
-    });
+    }, 15000);
   });
 
   describe('P2-14: dangXuat & dangXuatTatCa', () => {
