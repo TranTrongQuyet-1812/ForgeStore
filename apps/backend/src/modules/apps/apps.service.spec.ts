@@ -996,18 +996,20 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         Array.from({ length: 10 }).map(() => service.phanTichUngDung('app-uuid-rustdesk')),
       );
 
-      // Nghiệm thu P2-31: LLM tóm tắt chỉ được gọi đúng 1 lần
-      expect(mockLlmRotationService.tomTatReadme).toHaveBeenCalledTimes(1);
+      // Nghiệm thu P3B-10.1 & D-17: Không còn gọi LLM tóm tắt README khi nạp app
+      expect(mockLlmRotationService.tomTatReadme).not.toHaveBeenCalled();
+      // Single-flight lock vẫn đảm bảo chỉ chạy phân tích đúng 1 lần
       expect(mockTrustScoreService.tinhTrustScore).toHaveBeenCalledTimes(1);
     });
 
-    it('Khi LLM lỗi vẫn lưu Trust Score với mô hình DU_PHONG (P2-31.4)', async () => {
+    it('Không gọi LLM tóm tắt README khi nạp app mới; lưu khẩu hiệu từ mô tả và tomTatTinhNangVi là null (P3B-10.1 & D-17)', async () => {
       mockPrisma.phanTichAI.findUnique.mockResolvedValue(null);
       mockPrisma.ungDung.findUnique.mockResolvedValue({
         maUngDung: 'app-uuid-rustdesk',
         tenRepoDayDu: 'rustdesk/rustdesk',
         chuSoHuu: 'rustdesk',
         tenKhoChua: 'rustdesk',
+        moTaVi: 'Phần mềm điều khiển máy tính từ xa mã nguồn mở',
         moTaGocTiengAnh: 'Remote desktop software',
         danhSachChuDe: ['remote-desktop'],
         soSaoGithub: 75000,
@@ -1017,17 +1019,19 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         danhSachPhatHanh: [],
       });
 
-      mockLlmRotationService.tomTatReadme.mockRejectedValue(new Error('Rate limit 429'));
       mockPrisma.phanTichAI.upsert.mockResolvedValue({
-        maPhanTich: 'fallback-analysis-uuid',
+        maPhanTich: 'new-analysis-uuid',
       });
 
       await service.phanTichUngDung('app-uuid-rustdesk');
 
+      expect(mockLlmRotationService.tomTatReadme).not.toHaveBeenCalled();
       expect(mockPrisma.phanTichAI.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            moHinhTomTat: 'DU_PHONG',
+            khauHieuTiengViet: 'Phần mềm điều khiển máy tính từ xa mã nguồn mở',
+            tomTatTinhNangVi: null,
+            moHinhTomTat: null,
             diemUyTin: 95,
           }),
         }),

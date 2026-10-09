@@ -34,7 +34,7 @@ import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
 import { FavoritesService } from '../favorites/favorites.service';
 import { JevClientService } from '../ai/services/jev-client.service';
-import { LlmRotationService, KetQuaTomTatKemModel } from '../ai/services/llm-rotation.service';
+import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { SemanticSearchService } from '../ai/services/semantic-search.service';
@@ -1528,32 +1528,13 @@ export class AppsService {
             );
           }
 
-          // 2. Tóm tắt README qua LLM Rotation (Gemini ⇄ NVIDIA NIM) (P2-30, P2-39)
-          let ketQuaTomTat: KetQuaTomTatKemModel;
-          try {
-            ketQuaTomTat = await this.llmRotationService.tomTatReadme(
-              readme,
-              repo,
-              app.moTaGocTiengAnh || undefined,
-            );
-          } catch (err: unknown) {
-            this.logger.error(
-              `Lỗi tóm tắt README [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-            );
-            ketQuaTomTat = {
-              ketQua: {
-                khauHieu: app.moTaGocTiengAnh?.slice(0, 80) || app.tenKhoChua,
-                tinhNang: [
-                  {
-                    tieuDe: app.tenKhoChua,
-                    moTa: app.moTaGocTiengAnh || 'Ứng dụng nguồn mở chất lượng cao',
-                    trichDan: app.moTaGocTiengAnh || app.tenKhoChua,
-                  },
-                ],
-              },
-              moHinhTomTat: 'DU_PHONG',
-            };
-          }
+          // 2. Khẩu hiệu tiếng Việt (D-17 & P3B-02.6: lấy từ mô tả tiếng Việt đã dịch, fallback mô tả gốc hoặc tên app)
+          const khauHieuTiengViet =
+            app.moTaVi ||
+            (app.moTaGocTiengAnh && app.moTaGocTiengAnh.length > 80
+              ? `${app.moTaGocTiengAnh.slice(0, 77)}...`
+              : app.moTaGocTiengAnh) ||
+            app.tenKhoChua;
 
           // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35)
           let danhSachQuyen: string[] = [];
@@ -1583,7 +1564,7 @@ export class AppsService {
             }
           }
 
-          // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32)
+          // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32 & D-01)
           let daArchived = false;
           let ngayPushCuoi = app.dongBoLanCuoi;
           let soContributor = 1;
@@ -1610,8 +1591,6 @@ export class AppsService {
             );
           }
 
-          const tinhNangTomTat = ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`);
-
           const trustScore = await this.trustScoreService.tinhTrustScore({
             tenApp: app.tenKhoChua,
             moTaApp: app.moTaGocTiengAnh || '',
@@ -1624,10 +1603,10 @@ export class AppsService {
             soContributor,
             danhSachQuyenAndroid: danhSachQuyen,
             coAccessibilityService,
-            tinhNangTomTat,
+            tinhNangTomTat: undefined,
           });
 
-          // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3)
+          // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3, P3B-16.3, D-23)
           let huongDanCaiDat: HuongDanCaiDatDto | null = null;
           let aiCliBiLoi = false;
           if (!fetchReadmeLoi && readme) {
@@ -1647,25 +1626,21 @@ export class AppsService {
             }
           }
 
-          // 5. Lưu kết quả vào phan_tich_ai
-          const chuoiTinhNangVi = ketQuaTomTat.ketQua.tinhNang
-            .map((t) => `- **${t.tieuDe}**: ${t.moTa}`)
-            .join('\n');
-
+          // 5. Lưu kết quả vào phan_tich_ai (P3B-10: bỏ tomTatTinhNangVi và moHinhTomTat theo D-17)
           let giaTriLuuCli: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput =
             Prisma.DbNull;
           const coCachCaiHopLe = coCachCaiCliHopLe(huongDanCaiDat);
           if (coCachCaiHopLe) {
             giaTriLuuCli = huongDanCaiDat as unknown as Prisma.InputJsonValue;
           } else if (!fetchReadmeLoi && readme && !aiCliBiLoi) {
-            // Chỉ đánh dấu khi đã đọc được README thành công và AI/bóc tách không bị lỗi
+            // Chỉ đánh dấu khi đã đọc được README thành công và bóc tách không bị lỗi
             giaTriLuuCli = {
               khongCoHuongDan: true,
               phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI,
               cachCai: [],
             } as unknown as Prisma.InputJsonValue;
           } else {
-            // Gặp lỗi tải README hoặc lỗi AI -> để null cho lần sau thử lại
+            // Gặp lỗi tải README hoặc lỗi bóc tách -> để null cho lần sau thử lại
             giaTriLuuCli = Prisma.DbNull;
           }
 
@@ -1673,27 +1648,27 @@ export class AppsService {
             where: { maUngDung },
             create: {
               maUngDung,
-              khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
-              tomTatTinhNangVi: chuoiTinhNangVi,
+              khauHieuTiengViet,
+              tomTatTinhNangVi: null,
               diemUyTin: trustScore.diemUyTin,
               mucDoAnToan: trustScore.mucDoAnToan,
               daThamDinhJev: trustScore.daThamDinhJev,
               trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
               yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
               quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
-              moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+              moHinhTomTat: null,
               huongDanCaiDat: giaTriLuuCli,
             },
             update: {
-              khauHieuTiengViet: ketQuaTomTat.ketQua.khauHieu,
-              tomTatTinhNangVi: chuoiTinhNangVi,
+              khauHieuTiengViet,
+              tomTatTinhNangVi: null,
               diemUyTin: trustScore.diemUyTin,
               mucDoAnToan: trustScore.mucDoAnToan,
               daThamDinhJev: trustScore.daThamDinhJev,
               trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
               yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
               quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
-              moHinhTomTat: ketQuaTomTat.moHinhTomTat,
+              moHinhTomTat: null,
               huongDanCaiDat: giaTriLuuCli,
             },
           });
@@ -1702,10 +1677,10 @@ export class AppsService {
           try {
             const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
               tenKhoChua: app.tenKhoChua,
-              slogan: ketQuaTomTat.ketQua.khauHieu,
-              tinhNang: ketQuaTomTat.ketQua.tinhNang.map((t) => `${t.tieuDe}: ${t.moTa}`),
+              slogan: khauHieuTiengViet,
+              tinhNang: app.danhSachChuDe || [],
               topics: app.danhSachChuDe,
-              moTa: app.moTaGocTiengAnh,
+              moTa: app.moTaVi || app.moTaGocTiengAnh,
             });
             const vector = await this.semanticSearchService.sinhEmbedding(textEmbed);
             await this.semanticSearchService.luuVectorNguNghia(phanTich.maPhanTich, vector);
