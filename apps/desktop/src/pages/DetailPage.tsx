@@ -141,6 +141,20 @@ export function timTepCaiDatToiUu<
 }
 
 /**
+ * P3B-17.1: Biến thể đã nhớ chỉ được áp dụng khi cùng loại tệp với tab đang mở.
+ * Nếu không, tab hiện EXE nhưng tệp được chọn lại là .7z đã nhớ từ lần trước và
+ * bấm sang tab khác cũng không đổi được tệp đang chọn.
+ */
+export function bienTheKhopTab<T extends { dinhDangTep?: unknown }>(
+  bienTheDaNho: T | null | undefined,
+  selectedFormat: string,
+): T | null {
+  if (!bienTheDaNho) return null;
+  const dinhDang = (bienTheDaNho.dinhDangTep?.toString() || 'EXE').toUpperCase();
+  return dinhDang === selectedFormat.toUpperCase() ? bienTheDaNho : null;
+}
+
+/**
  * Tính trạng thái hiệu lực của nút Cài đặt theo định dạng (A2, A3, FE-01, FE-V3-03)
  * - Tab ZIP: Luôn tải độc lập, không bị khóa bởi bản EXE/MSI đã cài trên máy.
  * - Tab EXE/MSI: Nguồn chân lý từ server theo thiết bị (isInstalledOnDevice) hoặc vừa cài xong.
@@ -555,11 +569,20 @@ export const DetailPage: React.FC = () => {
       const found = displayAssets.find((a) => a.maTep === selectedAssetId);
       if (found) return found;
     }
-    if (assetBienTheCu) {
-      return assetBienTheCu;
+    const bienTheTrongTab = bienTheKhopTab(assetBienTheCu, selectedFormat);
+    if (bienTheTrongTab) {
+      return bienTheTrongTab;
     }
     return optimalAsset || displayAssets[0];
-  }, [selectedAssetId, displayAssets, assetBienTheCu, optimalAsset]);
+  }, [selectedAssetId, displayAssets, assetBienTheCu, optimalAsset, selectedFormat]);
+
+  // Mở trang lần đầu: đưa tab về đúng loại tệp của biến thể đã nhớ (chỉ một lần cho mỗi app)
+  const daDongBoTabTheoBienThe = useRef<string | null>(null);
+  useEffect(() => {
+    if (!assetBienTheCu || daDongBoTabTheoBienThe.current === appKey) return;
+    daDongBoTabTheoBienThe.current = appKey;
+    setSelectedFormat(assetBienTheCu.dinhDangTep?.toString() || 'EXE');
+  }, [assetBienTheCu, appKey]);
 
   // Cảnh báo nếu tệp đang chọn không tương thích với máy x64
   const isChipIncompatible = useMemo(() => {

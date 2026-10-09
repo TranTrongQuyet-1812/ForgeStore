@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tinhTrangThaiHieuLuc } from './DetailPage';
+import { tinhTrangThaiHieuLuc, bienTheKhopTab } from './DetailPage';
 
 describe('tinhTrangThaiHieuLuc - Trạng thái nút cài đặt theo từng định dạng (A2 & A3)', () => {
   describe('Tab EXE / MSI (Hệ thống)', () => {
@@ -183,5 +183,28 @@ describe('tinhTrangThaiHieuLuc - Trạng thái nút cài đặt theo từng đ�
       });
       expect(statusDaCai).toBe('DA_CAI_DAT');
     });
+  });
+});
+
+describe('bienTheKhopTab - Biến thể đã nhớ chỉ áp dụng đúng tab (P3B-17.1)', () => {
+  const bien7z = { maTep: 'a', dinhDangTep: 'ZIP_PORTABLE' };
+
+  it('trả về biến thể khi cùng loại với tab đang mở', () => {
+    expect(bienTheKhopTab(bien7z, 'ZIP_PORTABLE')).toBe(bien7z);
+  });
+
+  it('bỏ biến thể .7z đã nhớ khi tab đang mở là EXE, để bấm tab EXE chọn được tệp EXE', () => {
+    expect(bienTheKhopTab(bien7z, 'EXE')).toBeNull();
+  });
+
+  it('không phân biệt hoa thường và coi thiếu định dạng là EXE', () => {
+    expect(bienTheKhopTab(bien7z, 'zip_portable')).toBe(bien7z);
+    const khongDinhDang: { maTep: string; dinhDangTep?: string } = { maTep: 'b' };
+    expect(bienTheKhopTab(khongDinhDang, 'EXE')).toBe(khongDinhDang);
+  });
+
+  it('không có biến thể đã nhớ thì trả về null', () => {
+    expect(bienTheKhopTab(null, 'EXE')).toBeNull();
+    expect(bienTheKhopTab(undefined, 'EXE')).toBeNull();
   });
 });

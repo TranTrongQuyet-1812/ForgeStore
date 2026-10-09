@@ -17,6 +17,7 @@ import {
   Shield,
   Loader2,
   BellOff,
+  RotateCcw,
 } from 'lucide-react';
 import { useNavStore } from '../stores/useNavStore';
 import { useInstallStore } from '../stores/useInstallStore';
@@ -40,6 +41,7 @@ export const LibraryPage: React.FC = () => {
     dangKiemTra,
     kiemTraCapNhat,
     boQuaPhienBan,
+    khoiPhucPhienBan,
     kiemTraDaBoQua,
   } = useUpdaterStore();
   const { user, isAuthenticated, maThietBi } = useAuthStore();
@@ -963,6 +965,22 @@ export const LibraryPage: React.FC = () => {
                       </button>
                     )}
 
+                    {/* P3B-17.2: Khôi phục thông báo cập nhật cho bản đã bỏ qua */}
+                    {app.daBoQuaPhienBan && !app.coBanMoi && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          khoiPhucPhienBan(app.maUngDung);
+                          toast.info(`Đã khôi phục thông báo cập nhật bản ${app.phienBanMoi}`);
+                        }}
+                        className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1 shadow-xs transition-all outline-none"
+                        title={`Đã bỏ qua bản ${app.phienBanMoi}. Bấm để hiện lại nút Cập Nhật`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-secondary" />
+                        <span className="hidden sm:inline">Khôi phục bản {app.phienBanMoi}</span>
+                      </button>
+                    )}
+
                     {app.coBanMoi && (
                       <>
                         <button
@@ -1016,6 +1034,22 @@ export const LibraryPage: React.FC = () => {
                   </>
                 ) : (
                   <>
+                    {/* P3B-17.2: Khôi phục thông báo cập nhật cho bản đã bỏ qua */}
+                    {app.daBoQuaPhienBan && !app.coBanMoi && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          khoiPhucPhienBan(app.maUngDung);
+                          toast.info(`Đã khôi phục thông báo cập nhật bản ${app.phienBanMoi}`);
+                        }}
+                        className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-surface-elevated text-secondary hover:text-primary font-medium text-xs flex items-center gap-1 shadow-xs transition-all outline-none"
+                        title={`Đã bỏ qua bản ${app.phienBanMoi}. Bấm để hiện lại nút Cập Nhật`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-secondary" />
+                        <span className="hidden sm:inline">Khôi phục bản {app.phienBanMoi}</span>
+                      </button>
+                    )}
+
                     {/* Nút cập nhật nếu có bản mới (P3B-17.2) */}
                     {app.coBanMoi && (
                       <>
