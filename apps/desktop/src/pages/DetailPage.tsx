@@ -505,6 +505,16 @@ export const DetailPage: React.FC = () => {
 
   // Hướng dẫn cài đặt qua dòng lệnh CLI (DELIV-33.3)
   const huongDanCli = appDetail?.huongDanCaiDat || appDetail?.phanTichAi?.huongDanCaiDat || null;
+  // Khẩu hiệu riêng: bỏ qua nếu trùng nguyên văn với dòng mô tả đang hiển thị dưới tên app
+  const moTaDangHienThi = (appDetail?.moTaVi || appDetail?.moTaGocTiengAnh || '').trim();
+  const khauHieuUngVien = (
+    appDetail?.phanTichAi?.khauHieuTiengViet ||
+    appDetail?.khauHieuTiengViet ||
+    ''
+  ).trim();
+  const khauHieuRieng =
+    khauHieuUngVien && khauHieuUngVien !== moTaDangHienThi ? khauHieuUngVien : null;
+
   const coHuongDanCli = Boolean(
     huongDanCli && huongDanCli.cachCai && huongDanCli.cachCai.length > 0,
   );
@@ -937,17 +947,11 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Slogan định vị ứng dụng (nếu có - ưu tiên moTaVi đã dịch) */}
-          {(appDetail.moTaVi ||
-            appDetail.phanTichAi?.khauHieuTiengViet ||
-            appDetail.khauHieuTiengViet) && (
+          {/* Khẩu hiệu: chỉ hiện khi khác dòng mô tả ở trên (tránh lặp một câu hai lần, P3B-10) */}
+          {khauHieuRieng && (
             <div className="tactile-card px-5 py-3.5 rounded-2xl border-l-4 border-l-accent-forge bg-surface-elevated/30">
               <blockquote className="text-sm font-semibold text-primary italic">
-                "
-                {appDetail.moTaVi ||
-                  appDetail.phanTichAi?.khauHieuTiengViet ||
-                  appDetail.khauHieuTiengViet}
-                "
+                "{khauHieuRieng}"
               </blockquote>
             </div>
           )}
