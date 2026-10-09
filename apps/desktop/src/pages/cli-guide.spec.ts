@@ -159,4 +159,42 @@ describe('CLI Guide Logic & Display Rules (DELIV-33.3)', () => {
       expect(mergedItem.coBanMoi).toBe(false);
     });
   });
+
+  describe('P3B-18 & D-27: Nút Mở Terminal & Nhận Diện Rủi Ro / Kiểm Tra Gói Thuộc Repo', () => {
+    it('nhận diện lệnh rủi ro cao curl|sh, wget|sh, irm|iex, iwr|iex, iex (irm...) hoặc pipe shell', () => {
+      const lenhNguyHiem1 = 'curl -fsSL https://example.com/install.sh | bash';
+      const lenhNguyHiem2 = 'irm https://example.com/install.ps1 | iex';
+      const lenhNguyHiem3 = 'wget -qO- https://example.com/script.sh | sudo bash';
+      const lenhNguyHiem4 = 'iwr -useb https://example.com/win.ps1 | iex';
+      const lenhNguyHiem5 = 'iex (irm https://example.com/setup.ps1)';
+      const lenhAnToan = 'winget install --id Microsoft.PowerToys -e';
+
+      const checkRuiRo = (cmd: string) => {
+        const hasPipe = /\|\s*(?:sudo\s+)?(?:bash|sh|zsh|pwsh|iex|Invoke-Expression)\b/i.test(cmd);
+        const hasDownloadTool =
+          /\b(?:curl|wget|irm|iwr|Invoke-RestMethod|Invoke-WebRequest)\b/i.test(cmd);
+        const hasParenthesisCradle =
+          /\b(?:iex|Invoke-Expression)\s*\(\s*(?:irm|iwr|Invoke-RestMethod|Invoke-WebRequest|New-Object)\b/i.test(
+            cmd,
+          );
+        const hasPrivilegeEscalation = /\b(?:sudo|runas|gsudo)\b/i.test(cmd);
+        return (hasPipe && hasDownloadTool) || hasParenthesisCradle || hasPrivilegeEscalation;
+      };
+
+      expect(checkRuiRo(lenhNguyHiem1)).toBe(true);
+      expect(checkRuiRo(lenhNguyHiem2)).toBe(true);
+      expect(checkRuiRo(lenhNguyHiem3)).toBe(true);
+      expect(checkRuiRo(lenhNguyHiem4)).toBe(true);
+      expect(checkRuiRo(lenhNguyHiem5)).toBe(true);
+      expect(checkRuiRo(lenhAnToan)).toBe(false);
+    });
+
+    it('khử khuẩn ký tự xuống dòng của lệnh trước khi truyền sang Terminal hoặc Clipboard', () => {
+      const multilineCmd = '  winget install \r\n --id App.Id \n -e   ';
+      const sanitized = multilineCmd.trim().replace(/[\r\n]+/g, ' ');
+      expect(sanitized).toBe('winget install   --id App.Id   -e');
+      expect(sanitized).not.toContain('\n');
+      expect(sanitized).not.toContain('\r');
+    });
+  });
 });

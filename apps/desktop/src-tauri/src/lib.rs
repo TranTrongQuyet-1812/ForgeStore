@@ -1,5 +1,6 @@
 pub mod downloader;
 pub mod installer;
+pub mod terminal;
 pub mod uninstaller;
 
 use downloader::{KetQuaTai, TienDoTai, TrinhQuanLyTai};
@@ -321,6 +322,26 @@ fn mo_ung_dung_tu_registry(khoa_registry: String, ten_app: Option<String>) -> Re
     uninstaller::mo_ung_dung_tu_registry(&khoa_registry, ten_app.as_deref())
 }
 
+/// Khởi chạy Terminal an toàn cho ứng dụng CLI theo Quyết định D-27 (P3B-18)
+#[tauri::command]
+fn mo_terminal_chay_lenh(
+    lenh: String,
+    trinh_terminal: Option<String>,
+    thu_muc_lam_viec: Option<String>,
+) -> Result<(), String> {
+    terminal::khoi_chay_terminal_an_toan(
+        &lenh,
+        trinh_terminal.as_deref(),
+        thu_muc_lam_viec.as_deref(),
+    )
+}
+
+/// Kiểm tra xem Windows Terminal (wt.exe) có khả dụng trên hệ thống không (D-27)
+#[tauri::command]
+fn kiem_tra_windows_terminal_kha_dung() -> Result<bool, String> {
+    Ok(terminal::kiem_tra_wt_co_san())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let trinh_quan_ly_tai = Arc::new(TrinhQuanLyTai::new());
@@ -360,7 +381,9 @@ pub fn run() {
             don_dep_thu_muc_downloads,
             kiem_tra_ung_dung_da_cai_registry,
             go_cai_dat_ung_dung_qua_registry,
-            mo_ung_dung_tu_registry
+            mo_ung_dung_tu_registry,
+            mo_terminal_chay_lenh,
+            kiem_tra_windows_terminal_kha_dung
         ])
         .run(tauri::generate_context!())
         .expect("error while running forgestore desktop application");

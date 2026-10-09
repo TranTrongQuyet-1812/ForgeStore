@@ -9,6 +9,9 @@ import {
   laKyTuDocHai,
   taoTenContainerTuImage,
   coCachCaiCliHopLe,
+  kiemTraGoiThuocRepo,
+  trichXuatOwnerVaRepo,
+  xacThucGoiThuocRepoUrl,
 } from '@forgestore/types';
 
 describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Injection Defense', () => {
@@ -332,6 +335,140 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(coCachCaiCliHopLe(null)).toBe(false);
       expect(coCachCaiCliHopLe(undefined)).toBe(false);
       expect(coCachCaiCliHopLe({ cachCai: [] })).toBe(false);
+    });
+  });
+
+  describe('P3B-18 & D-27: Repo Ownership Verification (Kiểm tra gói thuộc repo)', () => {
+    describe('trichXuatOwnerVaRepo', () => {
+      it('trích xuất chính xác owner và repo từ các định dạng URL và slug khác nhau', () => {
+        expect(trichXuatOwnerVaRepo('microsoft/PowerToys')).toEqual({
+          owner: 'microsoft',
+          repo: 'powertoys',
+        });
+        expect(trichXuatOwnerVaRepo('https://github.com/open-webui/open-webui.git')).toEqual({
+          owner: 'open-webui',
+          repo: 'open-webui',
+        });
+        expect(trichXuatOwnerVaRepo('https://github.com/fastfetch-cli/fastfetch/')).toEqual({
+          owner: 'fastfetch-cli',
+          repo: 'fastfetch',
+        });
+        expect(trichXuatOwnerVaRepo(null)).toBeNull();
+        expect(trichXuatOwnerVaRepo('')).toBeNull();
+      });
+    });
+
+    describe('kiemTraGoiThuocRepo', () => {
+      it('Winget: nhận diện chính xác gói thuộc repo Microsoft.PowerToys', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.WINGET,
+          'Microsoft.PowerToys',
+          'microsoft/PowerToys',
+        );
+        expect(kq.khop).toBe(true);
+        expect(kq.mucDoTinCay).toBe('CAO');
+        expect(kq.canhBao).toBeUndefined();
+      });
+
+      it('Docker: nhận diện chính xác image ghcr.io/open-webui/open-webui:main', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.DOCKER,
+          'ghcr.io/open-webui/open-webui:main',
+          'https://github.com/open-webui/open-webui',
+        );
+        expect(kq.khop).toBe(true);
+        expect(kq.mucDoTinCay).toBe('CAO');
+      });
+
+      it('NPM: nhận diện gói scoped @angular/cli thuộc angular/angular-cli', () => {
+        const kq = kiemTraGoiThuocRepo(MaTrinhQuanLyGoi.NPM, '@angular/cli', 'angular/angular-cli');
+        expect(kq.khop).toBe(true);
+        expect(kq.mucDoTinCay).toBe('CAO');
+      });
+
+      it('PIP: nhận diện gói yt-dlp thuộc yt-dlp/yt-dlp', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.PIP,
+          'yt-dlp',
+          'https://github.com/yt-dlp/yt-dlp',
+        );
+        expect(kq.khop).toBe(true);
+        expect(kq.mucDoTinCay).toBe('CAO');
+      });
+
+      it('CẢNH BÁO MẠNH khi tên gói hoàn toàn không khớp với repo (chống mạo danh)', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.NPM,
+          'malicious-crypto-miner',
+          'calculator-app/calculator',
+        );
+        expect(kq.khop).toBe(false);
+        expect(kq.mucDoTinCay).toBe('CANH_BAO');
+        expect(kq.canhBao).toContain('malicious-crypto-miner');
+        expect(kq.canhBao).toContain('calculator-app/calculator');
+      });
+
+      it('NPM: CẢNH BÁO MẠNH khi scope mạo danh (@evil-hacker/react trên repo facebook/react)', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.NPM,
+          '@evil-hacker/react',
+          'facebook/react',
+        );
+        expect(kq.khop).toBe(false);
+        expect(kq.mucDoTinCay).toBe('CANH_BAO');
+        expect(kq.canhBao).toContain('evil-hacker');
+      });
+
+      it('Docker: CẢNH BÁO MẠNH khi namespace image khác owner repo (evil-org/open-webui trên open-webui)', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.DOCKER,
+          'evil-org/open-webui:main',
+          'https://github.com/open-webui/open-webui',
+        );
+        expect(kq.khop).toBe(false);
+        expect(kq.mucDoTinCay).toBe('CANH_BAO');
+      });
+
+      it('PIP: cảnh báo khi repo là flameshot nhưng tên gói là open-webui', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.PIP,
+          'open-webui',
+          'flameshot-org/flameshot',
+        );
+        expect(kq.khop).toBe(false);
+        expect(kq.mucDoTinCay).toBe('CANH_BAO');
+      });
+
+      it('Combosquatting: CẢNH BÁO MẠNH khi tên gói chứa repo nhưng có hậu tố độc hại (ytdlp-malware trên yt-dlp)', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.PIP,
+          'ytdlp-malware',
+          'https://github.com/yt-dlp/yt-dlp',
+        );
+        expect(kq.khop).toBe(false);
+        expect(kq.mucDoTinCay).toBe('CANH_BAO');
+        expect(kq.canhBao).toContain('Combosquatting');
+      });
+    });
+
+    describe('xacThucGoiThuocRepoUrl', () => {
+      it('trả về true khi URL registry trùng repo gốc', () => {
+        expect(
+          xacThucGoiThuocRepoUrl(
+            'https://github.com/yt-dlp/yt-dlp',
+            'https://github.com/yt-dlp/yt-dlp.git',
+          ),
+        ).toBe(true);
+      });
+
+      it('trả về false khi URL registry khác repo gốc', () => {
+        expect(
+          xacThucGoiThuocRepoUrl(
+            'https://github.com/evil-actor/evil-pkg',
+            'https://github.com/legit/legit-pkg',
+          ),
+        ).toBe(false);
+      });
     });
   });
 });

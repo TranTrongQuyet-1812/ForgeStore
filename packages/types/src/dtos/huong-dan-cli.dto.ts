@@ -25,6 +25,8 @@ export interface CachCaiDto {
   tenGoi?: string; // Tên gói trích xuất được (đã qua kiểm tra an toàn)
   lenhCapNhat?: string; // Lệnh cập nhật sinh ra từ manifest
   lenhGo?: string; // Lệnh gỡ sinh ra từ manifest
+  goiThuocRepo?: boolean; // True nếu tên gói thuộc hoặc tương đồng với repo, False nếu nghi vấn (D-27)
+  canhBaoGoiKhongKhop?: string; // Diễn giải cảnh báo nếu tên gói không khớp repo (D-27)
 }
 
 /**

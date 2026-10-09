@@ -544,3 +544,248 @@ export function coCachCaiCliHopLe<
   }
   return huongDan.cachCai.some((c) => Boolean(c.trinhQuanLy && c.tenGoi));
 }
+
+export interface KetQuaKiemTraGoiThuocRepo {
+  khop: boolean;
+  mucDoTinCay: 'CAO' | 'TRUNG_BINH' | 'CANH_BAO';
+  canhBao?: string;
+  tenGoiChuanHoa: string;
+  repoChuanHoa: string;
+}
+
+/**
+ * Tách và chuẩn hóa tên owner và repo từ đường dẫn hoặc slug (VD: "owner/repo", "https://github.com/owner/repo.git").
+ */
+export function trichXuatOwnerVaRepo(
+  repoDuongDan?: string | null,
+): { owner: string; repo: string } | null {
+  if (!repoDuongDan || typeof repoDuongDan !== 'string') return null;
+  const clean = repoDuongDan
+    .trim()
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
+  const match = clean.match(
+    /(?:github\.com\/|gitlab\.com\/|^)([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)$/,
+  );
+  if (match && match[1] && match[2]) {
+    return { owner: match[1].toLowerCase(), repo: match[2].toLowerCase() };
+  }
+  return null;
+}
+
+/**
+ * Kiểm tra xem tên gói CLI có thuộc về hoặc tương đồng với repository GitHub hay không (P3B-18 & Quyết định D-27).
+ * Cảnh báo mạnh nếu tên gói khác biệt hoàn toàn với repo (chống mạo danh hoặc chèn gói độc hại).
+ */
+export function kiemTraGoiThuocRepo(
+  trinhQuanLy: MaTrinhQuanLyGoi,
+  tenGoi: string,
+  repoDuongDan?: string | null,
+): KetQuaKiemTraGoiThuocRepo {
+  const cleanGoi = (tenGoi || '').trim();
+  const info = trichXuatOwnerVaRepo(repoDuongDan);
+
+  const tenGoiNorm = cleanGoi.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const repoSlug = info ? `${info.owner}/${info.repo}` : (repoDuongDan || '').toLowerCase();
+  const repoNameNorm = info ? info.repo.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+  const ownerNorm = info ? info.owner.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+
+  if (!info || !cleanGoi) {
+    return {
+      khop: true,
+      mucDoTinCay: 'TRUNG_BINH',
+      tenGoiChuanHoa: tenGoiNorm,
+      repoChuanHoa: repoSlug,
+    };
+  }
+
+  // 1. Docker: Image có dạng registry/owner/repo:tag hoặc owner/repo:tag
+  if (trinhQuanLy === MaTrinhQuanLyGoi.DOCKER) {
+    const cleanImage = cleanGoi.split(':')[0]?.split('@')[0] || cleanGoi;
+    const parts = cleanImage.split('/').filter(Boolean);
+    const imgRepo =
+      parts
+        .pop()
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || '';
+    const imgOwner =
+      parts
+        .pop()
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || '';
+
+    if (imgRepo === repoNameNorm) {
+      if (!imgOwner || imgOwner === ownerNorm) {
+        return {
+          khop: true,
+          mucDoTinCay: 'CAO',
+          tenGoiChuanHoa: tenGoiNorm,
+          repoChuanHoa: repoSlug,
+        };
+      }
+      if (ownerNorm.includes(imgOwner) || imgOwner.includes(ownerNorm)) {
+        return {
+          khop: true,
+          mucDoTinCay: 'TRUNG_BINH',
+          tenGoiChuanHoa: tenGoiNorm,
+          repoChuanHoa: repoSlug,
+        };
+      }
+      // Khác hoàn toàn owner -> Cảnh báo
+      return {
+        khop: false,
+        mucDoTinCay: 'CANH_BAO',
+        canhBao: `Tổ chức Docker Image [${imgOwner}] không khớp với tác giả repository [${info.owner}]. Hãy kiểm tra kỹ trước khi tải.`,
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+  }
+
+  // 2. Winget: Package ID thường là Publisher.AppName (VD: Microsoft.PowerToys)
+  if (trinhQuanLy === MaTrinhQuanLyGoi.WINGET) {
+    const parts = cleanGoi.split('.').map((p) => p.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const pub = parts[0] || '';
+    const app = parts[parts.length - 1] || '';
+
+    if (pub === ownerNorm && (app === repoNameNorm || parts.includes(repoNameNorm))) {
+      return {
+        khop: true,
+        mucDoTinCay: 'CAO',
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+    if (pub === ownerNorm && (app.includes(repoNameNorm) || repoNameNorm.includes(app))) {
+      return {
+        khop: true,
+        mucDoTinCay: 'CAO',
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+    // Trường hợp Publisher khác Owner nhưng App trùng Repo (VD gói do cộng đồng đóng gói)
+    if (app === repoNameNorm || parts.includes(repoNameNorm)) {
+      return {
+        khop: true,
+        mucDoTinCay: 'TRUNG_BINH',
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+  }
+
+  // 3. NPM Scoped: @scope/pkg
+  if (trinhQuanLy === MaTrinhQuanLyGoi.NPM && cleanGoi.startsWith('@')) {
+    const match = cleanGoi.match(/^@([^/]+)\/(.+)$/);
+    if (match) {
+      const scope = match[1]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+      const pkg = match[2]?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+      // BẮT BUỘC scope phải khớp chính xác owner để chống mạo danh (vd @evil-hacker/react, @facebook-fake/react)
+      if (scope === ownerNorm) {
+        if (pkg === repoNameNorm || pkg.includes(repoNameNorm) || repoNameNorm.includes(pkg)) {
+          return {
+            khop: true,
+            mucDoTinCay: 'CAO',
+            tenGoiChuanHoa: tenGoiNorm,
+            repoChuanHoa: repoSlug,
+          };
+        }
+      } else {
+        // Scope không khớp với owner kho lưu trữ -> Cảnh báo mạo danh
+        return {
+          khop: false,
+          mucDoTinCay: 'CANH_BAO',
+          canhBao: `Phạm vi gói NPM [@${match[1]}] không khớp với tác giả repository [${info.owner}]. Nguy cơ mạo danh thư viện.`,
+          tenGoiChuanHoa: tenGoiNorm,
+          repoChuanHoa: repoSlug,
+        };
+      }
+    }
+  }
+
+  // 4. Scoop: bucket/pkg hoặc pkg
+  if (trinhQuanLy === MaTrinhQuanLyGoi.SCOOP && cleanGoi.includes('/')) {
+    const pkg =
+      cleanGoi
+        .split('/')
+        .pop()
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]/g, '') || '';
+    if (pkg === repoNameNorm) {
+      return {
+        khop: true,
+        mucDoTinCay: 'CAO',
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+    if (repoNameNorm.includes(pkg) || pkg.includes(repoNameNorm)) {
+      return {
+        khop: false,
+        mucDoTinCay: 'CANH_BAO',
+        canhBao: `Gói Scoop [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}]. Cảnh giác nguy cơ mạo danh.`,
+        tenGoiChuanHoa: tenGoiNorm,
+        repoChuanHoa: repoSlug,
+      };
+    }
+  }
+
+  // 5. So sánh tên chuẩn hóa thông thường (pip, npm không scope, scoop không bucket)
+  if (tenGoiNorm === repoNameNorm) {
+    return {
+      khop: true,
+      mucDoTinCay: 'CAO',
+      tenGoiChuanHoa: tenGoiNorm,
+      repoChuanHoa: repoSlug,
+    };
+  }
+
+  // Chống combosquatting: Tên bao hàm nhau (vd ytdlp-malware trên yt-dlp) phải kích hoạt cảnh báo khop: false
+  if (
+    (tenGoiNorm.length >= 3 && repoNameNorm.includes(tenGoiNorm)) ||
+    (repoNameNorm.length >= 3 && tenGoiNorm.includes(repoNameNorm))
+  ) {
+    return {
+      khop: false,
+      mucDoTinCay: 'CANH_BAO',
+      canhBao: `Tên gói [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}]. Cảnh giác nguy cơ Combosquatting.`,
+      tenGoiChuanHoa: tenGoiNorm,
+      repoChuanHoa: repoSlug,
+    };
+  }
+
+  // Nếu không khớp
+  return {
+    khop: false,
+    mucDoTinCay: 'CANH_BAO',
+    canhBao: `Tên gói [${cleanGoi}] khác biệt so với tên kho lưu trữ [${repoSlug}]. Hãy kiểm tra kỹ độ tin cậy trước khi cài đặt.`,
+    tenGoiChuanHoa: tenGoiNorm,
+    repoChuanHoa: repoSlug,
+  };
+}
+
+/**
+ * Đối chiếu URL dự án được công bố trên Registry (PyPI, npm, winget) với repository gốc (D-27).
+ */
+export function xacThucGoiThuocRepoUrl(urlDuAn?: string | null, repoGoc?: string | null): boolean {
+  if (!urlDuAn || !repoGoc) return false;
+  const infoDuAn = trichXuatOwnerVaRepo(urlDuAn);
+  const infoGoc = trichXuatOwnerVaRepo(repoGoc);
+
+  if (infoDuAn && infoGoc) {
+    return infoDuAn.owner === infoGoc.owner && infoDuAn.repo === infoGoc.repo;
+  }
+
+  const cleanDuAn = urlDuAn
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
+  const cleanGoc = repoGoc
+    .trim()
+    .toLowerCase()
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '');
+  return cleanDuAn.includes(cleanGoc) || cleanGoc.includes(cleanDuAn);
+}

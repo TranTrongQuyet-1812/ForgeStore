@@ -8,6 +8,8 @@ import {
   FolderOpen,
   RotateCcw,
   Trash2,
+  Terminal,
+  Check,
 } from 'lucide-react';
 import { useThemeStore } from '../stores/useThemeStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -17,11 +19,21 @@ import { deviceService, type DeviceInfo } from '../services/device/device-servic
 
 export const SettingsPage: React.FC = () => {
   const { theme, setTheme } = useThemeStore();
-  const { thuMucPortable, datLaiMacDinh, chonThuMucQuaDialog } = useSettingsStore();
+  const {
+    thuMucPortable,
+    datLaiMacDinh,
+    chonThuMucQuaDialog,
+    trinhTerminal,
+    setTrinhTerminal,
+    thuMucLamViecTerminal,
+    datLaiMacDinhTerminal,
+    chonThuMucTerminalQuaDialog,
+  } = useSettingsStore();
   const { maThietBi } = useAuthStore();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [downloadSize, setDownloadSize] = useState<number | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
+  const [isWtAvailable, setIsWtAvailable] = useState<boolean>(true);
 
   const fetchDownloadSize = async () => {
     const isTauri =
@@ -75,6 +87,18 @@ export const SettingsPage: React.FC = () => {
       setDeviceInfo(info);
     });
     fetchDownloadSize();
+
+    const isTauri =
+      typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (isTauri) {
+      import('@tauri-apps/api/core')
+        .then(({ invoke }) => {
+          invoke<boolean>('kiem_tra_windows_terminal_kha_dung')
+            .then((res) => setIsWtAvailable(Boolean(res)))
+            .catch(() => setIsWtAvailable(false));
+        })
+        .catch(() => setIsWtAvailable(false));
+    }
   }, []);
 
   return (
@@ -177,6 +201,131 @@ export const SettingsPage: React.FC = () => {
             {thuMucPortable && (
               <button
                 onClick={() => datLaiMacDinh()}
+                className="btn-tactile px-2.5 py-1.5 rounded-lg bg-surface border border-border text-muted hover:text-primary text-xs font-mono flex items-center gap-1"
+                title="Khôi phục thư mục mặc định"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Mặc định</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Cấu hình Trình Dòng Lệnh & Terminal CLI (P3B-18 & D-27) */}
+      <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
+        <div>
+          <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-accent-forge" />
+            <span>Trình dòng lệnh (Terminal cho ứng dụng CLI)</span>
+          </h3>
+          <p className="text-xs text-secondary mt-1">
+            Lựa chọn ứng dụng Terminal và thư mục làm việc mặc định khi nhấn "Mở Terminal" tại trang
+            chi tiết ứng dụng.
+          </p>
+        </div>
+
+        {/* 3 Tùy chọn Terminal */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div
+            onClick={() => setTrinhTerminal('windows-terminal')}
+            className={`p-3.5 rounded-xl border flex flex-col gap-2 cursor-pointer transition-all ${
+              trinhTerminal === 'windows-terminal'
+                ? 'bg-surface-elevated border-accent-forge ring-1 ring-accent-forge'
+                : 'bg-surface border-border hover:bg-surface-elevated'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-primary">
+                  <Terminal className="w-4 h-4 text-accent-forge" />
+                </div>
+                <span className="text-xs font-semibold text-primary">Windows Terminal</span>
+              </div>
+              {trinhTerminal === 'windows-terminal' && (
+                <Check className="w-4 h-4 text-accent-forge" />
+              )}
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              Mở <code>wt.exe</code> đa nhiệm hiện đại (khuyên dùng cho Windows 10/11).
+              {!isWtAvailable && (
+                <span className="text-amber-400 block mt-1 font-mono text-[10px]">
+                  (Chưa phát hiện wt.exe - sẽ tự fallback sang PowerShell)
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div
+            onClick={() => setTrinhTerminal('powershell')}
+            className={`p-3.5 rounded-xl border flex flex-col gap-2 cursor-pointer transition-all ${
+              trinhTerminal === 'powershell'
+                ? 'bg-surface-elevated border-accent-forge ring-1 ring-accent-forge'
+                : 'bg-surface border-border hover:bg-surface-elevated'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-sky-400 font-mono text-xs font-bold">
+                  PS
+                </div>
+                <span className="text-xs font-semibold text-primary">PowerShell</span>
+              </div>
+              {trinhTerminal === 'powershell' && <Check className="w-4 h-4 text-accent-forge" />}
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              Mở cửa sổ <code>powershell.exe</code> độc lập chuẩn mực hệ thống.
+            </p>
+          </div>
+
+          <div
+            onClick={() => setTrinhTerminal('cmd')}
+            className={`p-3.5 rounded-xl border flex flex-col gap-2 cursor-pointer transition-all ${
+              trinhTerminal === 'cmd'
+                ? 'bg-surface-elevated border-accent-forge ring-1 ring-accent-forge'
+                : 'bg-surface border-border hover:bg-surface-elevated'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-amber-400 font-mono text-xs font-bold">
+                  C:&gt;
+                </div>
+                <span className="text-xs font-semibold text-primary">Command Prompt</span>
+              </div>
+              {trinhTerminal === 'cmd' && <Check className="w-4 h-4 text-accent-forge" />}
+            </div>
+            <p className="text-[11px] text-muted leading-relaxed">
+              Mở cửa sổ <code>cmd.exe</code> cổ điển nhẹ nhàng và tương thích cao.
+            </p>
+          </div>
+        </div>
+
+        {/* Thư mục làm việc của Terminal */}
+        <div className="p-3.5 rounded-xl bg-surface-elevated/70 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span className="text-[11px] font-mono text-muted uppercase">
+              Thư mục làm việc mặc định:
+            </span>
+            <div
+              className="font-mono text-xs text-primary font-medium truncate mt-0.5"
+              title={thuMucLamViecTerminal || '%USERPROFILE% (Thư mục người dùng cá nhân)'}
+            >
+              {thuMucLamViecTerminal || '%USERPROFILE% (Thư mục người dùng cá nhân)'}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => chonThuMucTerminalQuaDialog()}
+              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span>Chọn thư mục...</span>
+            </button>
+            {thuMucLamViecTerminal && (
+              <button
+                onClick={() => datLaiMacDinhTerminal()}
                 className="btn-tactile px-2.5 py-1.5 rounded-lg bg-surface border border-border text-muted hover:text-primary text-xs font-mono flex items-center gap-1"
                 title="Khôi phục thư mục mặc định"
               >
