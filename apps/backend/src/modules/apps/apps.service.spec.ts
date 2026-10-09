@@ -69,7 +69,6 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
     hoiNoulBatch: ReturnType<typeof vi.fn>;
   };
   let mockLlmRotationService: {
-    tomTatReadme: ReturnType<typeof vi.fn>;
     tomTatChangelog: ReturnType<typeof vi.fn>;
   };
   let mockTrustScoreService: {
@@ -181,13 +180,6 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
     };
 
     mockLlmRotationService = {
-      tomTatReadme: vi.fn().mockResolvedValue({
-        ketQua: {
-          khauHieu: 'Ứng dụng điều khiển máy từ xa mã nguồn mở',
-          tinhNang: ['Bảo mật đầu cuối', 'Độ trễ thấp', 'Đa nền tảng'],
-        },
-        moHinhTomTat: 'gemini-2.0-flash',
-      }),
       tomTatChangelog: vi.fn().mockResolvedValue({
         ketQua: {
           tomTatNangCapVi: ['Sửa lỗi âm thanh', 'Tăng tốc kết nối'],
@@ -725,6 +717,58 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       await expect(service.layChiTietApp('nonexistent/app')).rejects.toThrow(NotFoundException);
     });
+
+    it('Ưu tiên moTaVi hiện tại làm khauHieuTiengViet thay vì giá trị tiếng Anh cũ đã lưu trong phanTichAI (Điểm Vàng P3B-10)', async () => {
+      mockCacheService.lay.mockResolvedValue(null);
+
+      const mockApp = {
+        maUngDung: 'uuid-translated',
+        tenRepoDayDu: 'test/translated',
+        chuSoHuu: 'test',
+        tenKhoChua: 'translated',
+        duongDanGithub: 'https://github.com/test/translated',
+        duongDanIcon: null,
+        soSaoGithub: 1000,
+        soLuotFork: 100,
+        loaiGiayPhep: 'MIT',
+        ngonNguChinh: 'TypeScript',
+        danhSachChuDe: ['tools'],
+        danhMucChinh: 'Tiện ích',
+        nenTangHoTro: NenTangHoTro.WINDOWS,
+        duocNoiBat: false,
+        daXacMinh: false,
+        tenGoiAndroid: null,
+        trangThai: 'HOAT_DONG',
+        dongBoLanCuoi: new Date(),
+        ngayTao: new Date(),
+        moTaGocTiengAnh: 'A very cool tool originally in English',
+        moTaVi: 'Công cụ tuyệt vời đã được dịch tiếng Việt chuẩn xác',
+        phanTichAI: {
+          maPhanTich: 'analysis-1',
+          maUngDung: 'uuid-translated',
+          khauHieuTiengViet: 'A very cool tool originally in English...',
+          tomTatTinhNangVi: null,
+          diemUyTin: 90,
+          mucDoAnToan: 'AN_TOAN',
+          daThamDinhJev: false,
+          trangThaiThamDinhJev: 'CHUA_THAM_DINH',
+          yeuToRuiRo: [],
+          quyenHanDaKiemTra: [],
+          moHinhTomTat: null,
+          huongDanCaiDat: null,
+          thoiGianPhanTich: new Date(),
+        },
+        danhSachPhatHanh: [],
+      };
+
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+
+      const res = await service.layChiTietApp('uuid-translated');
+      expect(res.khauHieuTiengViet).toBe('Công cụ tuyệt vời đã được dịch tiếng Việt chuẩn xác');
+      expect(res.phanTichAi?.khauHieuTiengViet).toBe(
+        'Công cụ tuyệt vời đã được dịch tiếng Việt chuẩn xác',
+      );
+    });
   });
 
   describe('giaiQuyetFileCaiDat (P2-33)', () => {
@@ -996,8 +1040,8 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         Array.from({ length: 10 }).map(() => service.phanTichUngDung('app-uuid-rustdesk')),
       );
 
-      // Nghiệm thu P3B-10.1 & D-17: Không còn gọi LLM tóm tắt README khi nạp app
-      expect(mockLlmRotationService.tomTatReadme).not.toHaveBeenCalled();
+      // Nghiệm thu P3B-10.1 & D-17: Không còn gọi LLM tóm tắt README khi nạp app (method đã bị gỡ bỏ 100%)
+      expect((mockLlmRotationService as Record<string, unknown>).tomTatReadme).toBeUndefined();
       // Single-flight lock vẫn đảm bảo chỉ chạy phân tích đúng 1 lần
       expect(mockTrustScoreService.tinhTrustScore).toHaveBeenCalledTimes(1);
     });
@@ -1025,7 +1069,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       await service.phanTichUngDung('app-uuid-rustdesk');
 
-      expect(mockLlmRotationService.tomTatReadme).not.toHaveBeenCalled();
+      expect((mockLlmRotationService as Record<string, unknown>).tomTatReadme).toBeUndefined();
       expect(mockPrisma.phanTichAI.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({

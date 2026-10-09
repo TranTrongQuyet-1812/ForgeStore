@@ -937,11 +937,17 @@ export const DetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Slogan định vị ứng dụng (nếu có) */}
-          {appDetail.phanTichAi?.khauHieuTiengViet && (
+          {/* Slogan định vị ứng dụng (nếu có - ưu tiên moTaVi đã dịch) */}
+          {(appDetail.moTaVi ||
+            appDetail.phanTichAi?.khauHieuTiengViet ||
+            appDetail.khauHieuTiengViet) && (
             <div className="tactile-card px-5 py-3.5 rounded-2xl border-l-4 border-l-accent-forge bg-surface-elevated/30">
               <blockquote className="text-sm font-semibold text-primary italic">
-                "{appDetail.phanTichAi.khauHieuTiengViet}"
+                "
+                {appDetail.moTaVi ||
+                  appDetail.phanTichAi?.khauHieuTiengViet ||
+                  appDetail.khauHieuTiengViet}
+                "
               </blockquote>
             </div>
           )}

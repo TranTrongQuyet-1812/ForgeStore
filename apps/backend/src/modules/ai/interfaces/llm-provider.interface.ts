@@ -1,5 +1,5 @@
 import type { HuongDanCaiDatDto } from '@forgestore/types';
-import { KetQuaChangelog, KetQuaTomTat } from '../dto/ai-summary.dto';
+import { KetQuaChangelog } from '../dto/ai-summary.dto';
 
 export type TenNhaCungCap = 'GEMINI' | 'NVIDIA_NIM';
 
@@ -10,11 +10,6 @@ export type TenNhaCungCap = 'GEMINI' | 'NVIDIA_NIM';
 export interface INhaCungCapTomTat {
   readonly ten: TenNhaCungCap;
   readonly tenModel: string;
-
-  /**
-   * Tóm tắt README thành khẩu hiệu và danh sách tính năng kèm trích dẫn nguyên văn.
-   */
-  tomTatReadme(readme: string, repoName: string): Promise<KetQuaTomTat>;
 
   /**
    * Tóm tắt Changelog bản phát hành thành các điểm mới tiếng Việt.

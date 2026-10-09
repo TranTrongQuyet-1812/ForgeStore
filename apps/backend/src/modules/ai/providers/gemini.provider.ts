@@ -1,18 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import {
-  KetQuaChangelog,
-  KetQuaChangelogSchema,
-  KetQuaTomTat,
-  KetQuaTomTatSchema,
-} from '../dto/ai-summary.dto';
+import { KetQuaChangelog, KetQuaChangelogSchema } from '../dto/ai-summary.dto';
 import { HuongDanCaiDatAiSchema } from '../dto/cli-guide.dto';
 import { INhaCungCapTomTat, TenNhaCungCap } from '../interfaces/llm-provider.interface';
-import { taoPromptTomTatReadme } from '../prompts/readme-summary.prompt';
 import { taoPromptTomTatChangelog } from '../prompts/changelog-summary.prompt';
 import { taoPromptHuongDanCaiDat } from '../prompts/cli-guide.prompt';
-import { kiemTraTrichDanHopLe, lamSachReadme } from '../utils/readme-cleaner.util';
 import { locVaChuanHoaHuongDanCaiDat } from '../utils/cli-guide-extractor.util';
 import type { HuongDanCaiDatDto } from '@forgestore/types';
 
@@ -39,53 +32,6 @@ export class GeminiProvider implements INhaCungCapTomTat {
         'GEMINI_API_KEY chưa được cấu hình. GeminiProvider sẽ báo lỗi khi được gọi.',
       );
     }
-  }
-
-  /**
-   * Tóm tắt README thành JSON có cấu trúc (P2-30).
-   */
-  async tomTatReadme(readme: string, repoName: string): Promise<KetQuaTomTat> {
-    if (!this.client) {
-      throw new Error('GEMINI_API_KEY không khả dụng.');
-    }
-
-    const cleanedReadme = lamSachReadme(readme);
-    const prompt = taoPromptTomTatReadme(repoName, cleanedReadme);
-
-    // Thử gọi Gemini tối đa 2 lần nếu gặp lỗi parse JSON
-    let lastError: Error | null = null;
-    for (let lanThu = 1; lanThu <= 2; lanThu++) {
-      try {
-        const rawJson = await this.goiGemini(prompt);
-        const parsed = JSON.parse(rawJson);
-        const validated = KetQuaTomTatSchema.parse(parsed);
-
-        // Code-check không dùng AI: kiểm tra trích dẫn nguyên văn (P2-30.8)
-        const tinhNangHopLe = kiemTraTrichDanHopLe(validated.tinhNang, readme);
-
-        if (tinhNangHopLe.length === 0) {
-          throw new Error(
-            `Không có tính năng nào có trích dẫn khớp với README cho repo [${repoName}]`,
-          );
-        }
-
-        return {
-          khauHieu: validated.khauHieu,
-          tinhNang: tinhNangHopLe,
-        };
-      } catch (err: unknown) {
-        lastError = err as Error;
-        this.logger.warn(
-          `Lần thử ${lanThu} tóm tắt README [${repoName}] thất bại: ${lastError.message}`,
-        );
-        if (this.laLoiRateLimit(lastError)) {
-          // Bắn lỗi 429 để Bộ Xoay Tua bắt được và chuyển sang NVIDIA NIM
-          throw lastError;
-        }
-      }
-    }
-
-    throw lastError || new Error(`Tóm tắt README thất bại cho repo [${repoName}]`);
   }
 
   /**

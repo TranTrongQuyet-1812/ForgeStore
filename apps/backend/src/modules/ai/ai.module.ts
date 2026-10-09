@@ -8,7 +8,6 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { NvidiaNimProvider } from './providers/nvidia-nim.provider';
 import { LlmRotationService } from './services/llm-rotation.service';
 import { LlmRateLimiterService } from './services/llm-rate-limiter.service';
-import { AiFallbackRetryJob } from './jobs/ai-fallback-retry.job';
 
 import { ApkInspectorService } from './services/apk-inspector.service';
 import { JevClientService } from './services/jev-client.service';
@@ -33,7 +32,6 @@ import { ReadmeTranslationService } from './translation/services/readme-translat
     NvidiaNimProvider,
     LlmRateLimiterService,
     LlmRotationService,
-    AiFallbackRetryJob,
     ApkInspectorService,
     JevClientService,
     RulePermissionJudgeService,
