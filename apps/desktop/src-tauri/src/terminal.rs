@@ -90,6 +90,54 @@ impl LoaiTerminal {
     }
 }
 
+/// Mã hóa chuỗi script PowerShell sang Base64 UTF-16LE cho cờ `-EncodedCommand` (D-27).
+/// Triệt tiêu hoàn toàn rủi ro bị cắt bởi dấu chấm phẩy (;) hoặc ký tự đặc biệt của wt.exe parser.
+pub fn ma_hoa_powershell_base64(script: &str) -> String {
+    let utf16_bytes: Vec<u8> = script.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+    base64_encode(&utf16_bytes)
+}
+
+/// Thuật toán mã hóa Base64 chuẩn RFC 4648 không cần crate ngoài.
+fn base64_encode(bytes: &[u8]) -> String {
+    const CHARSET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::with_capacity((bytes.len() + 2) / 3 * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0];
+        let b1 = chunk.get(1).copied().unwrap_or(0);
+        let b2 = chunk.get(2).copied().unwrap_or(0);
+
+        let n = ((b0 as u32) << 16) | ((b1 as u32) << 8) | (b2 as u32);
+
+        result.push(CHARSET[((n >> 18) & 0x3F) as usize] as char);
+        result.push(CHARSET[((n >> 12) & 0x3F) as usize] as char);
+
+        if chunk.len() > 1 {
+            result.push(CHARSET[((n >> 6) & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+
+        if chunk.len() > 2 {
+            result.push(CHARSET[(n & 0x3F) as usize] as char);
+        } else {
+            result.push('=');
+        }
+    }
+    result
+}
+
+/// Tạo nội dung script chào an toàn cho PowerShell
+pub fn tao_script_chao_powershell() -> String {
+    concat!(
+        "Write-Host ''; ",
+        "Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; ",
+        "Write-Host 'Lệnh cài đặt: ' -NoNewline; ",
+        "Write-Host $env:FORGESTORE_CLI_CMD -ForegroundColor Yellow; ",
+        "Write-Host 'Nhấn Ctrl+V (nếu đã chép vào Clipboard) hoặc gõ: $env:FORGESTORE_CLI_CMD rồi Enter để chạy.' -ForegroundColor Green; ",
+        "Write-Host '';"
+    ).to_string()
+}
+
 /// Khởi chạy Terminal với câu lệnh truyền an toàn qua biến môi trường (P3B-18 & Quyết định D-27).
 /// Tuyệt đối KHÔNG tự chạy lệnh thay người dùng: Lệnh chỉ in ra màn hình và chờ người dùng tự bấm.
 /// Tuyệt đối KHÔNG ghép lệnh vào tham số dòng lệnh khởi động shell: Lệnh chỉ truyền qua FORGESTORE_CLI_CMD.
@@ -109,23 +157,19 @@ pub fn khoi_chay_terminal_an_toan(
     #[cfg(target_os = "windows")]
     {
         let working_dir_str = working_dir.to_string_lossy().to_string();
+        let encoded_ps_cmd = ma_hoa_powershell_base64(&tao_script_chao_powershell());
 
         match loai_terminal {
             LoaiTerminal::WindowsTerminal if kiem_tra_wt_co_san() => {
-                // Khởi chạy wt.exe mở PowerShell trong thư mục làm việc
+                // Khởi chạy wt.exe mở PowerShell trong thư mục làm việc.
+                // Dùng -EncodedCommand với chuỗi Base64 UTF-16LE: hoàn toàn không có dấu ;
+                // giúp triệt tiêu 100% việc wt.exe cắt lệnh do hiểu nhầm ; là sub-command delimiter.
+                // Loại bỏ -ExecutionPolicy Bypass để không làm hạ chính sách bảo mật của phiên shell.
                 let mut cmd = std::process::Command::new("wt.exe");
                 cmd.arg("-d").arg(&working_dir_str);
                 cmd.arg("powershell.exe");
                 cmd.arg("-NoExit");
-                cmd.arg("-ExecutionPolicy").arg("Bypass");
-                cmd.arg("-Command");
-                cmd.arg(
-                    "Write-Host ''; \
-                     Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; \
-                     Write-Host 'Lệnh cài đặt: ' -NoNewline; Write-Host $env:FORGESTORE_CLI_CMD -ForegroundColor Yellow; \
-                     Write-Host 'Lệnh đã được sao chép vào Clipboard. Nhấn Ctrl+V rồi Enter để chạy:' -ForegroundColor Green; \
-                     Write-Host ''"
-                );
+                cmd.arg("-EncodedCommand").arg(&encoded_ps_cmd);
                 cmd.env("FORGESTORE_CLI_CMD", clean_lenh);
                 cmd.spawn().map_err(|e| format!("Không thể khởi chạy Windows Terminal: {}", e))?;
             }
@@ -144,7 +188,7 @@ pub fn khoi_chay_terminal_an_toan(
                      echo. & \
                      set FORGESTORE_CLI_CMD & \
                      echo. & \
-                     echo Lenh da duoc sao chep vao Clipboard. Nhan Ctrl+V roi Enter de chay. & \
+                     echo Nhan Ctrl+V (neu da chep vao Clipboard) roi Enter de chay. & \
                      echo."
                 );
                 cmd.env("FORGESTORE_CLI_CMD", clean_lenh);
@@ -152,18 +196,11 @@ pub fn khoi_chay_terminal_an_toan(
             }
             _ => {
                 // Mặc định hoặc Fallback về PowerShell (powershell.exe)
+                // Dùng -EncodedCommand và bỏ -ExecutionPolicy Bypass
                 let mut cmd = std::process::Command::new("powershell.exe");
                 cmd.current_dir(&working_dir);
                 cmd.arg("-NoExit");
-                cmd.arg("-ExecutionPolicy").arg("Bypass");
-                cmd.arg("-Command");
-                cmd.arg(
-                    "Write-Host ''; \
-                     Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; \
-                     Write-Host 'Lệnh cài đặt: ' -NoNewline; Write-Host $env:FORGESTORE_CLI_CMD -ForegroundColor Yellow; \
-                     Write-Host 'Lệnh đã được sao chép vào Clipboard. Nhấn Ctrl+V rồi Enter để chạy:' -ForegroundColor Green; \
-                     Write-Host ''"
-                );
+                cmd.arg("-EncodedCommand").arg(&encoded_ps_cmd);
                 cmd.env("FORGESTORE_CLI_CMD", clean_lenh);
                 cmd.spawn().map_err(|e| format!("Không thể khởi chạy PowerShell: {}", e))?;
             }
@@ -255,5 +292,35 @@ mod tests {
         let result_mixed = xac_thuc_thu_muc_lam_viec(Some(mixed_path));
         assert!(result_mixed.exists());
         assert!(!result_mixed.to_string_lossy().contains("attacker.evil.com"), "Phải chặn mixed slashes UNC");
+    }
+
+    #[test]
+    fn test_ma_hoa_powershell_base64_khong_chua_cham_phay_hoac_khoang_trang() {
+        let script = "Write-Host 'a'; Write-Host 'b'; Write-Host $env:TEST";
+        let encoded = ma_hoa_powershell_base64(script);
+
+        // Chuỗi Base64 tuyệt đối không được chứa dấu ; hoặc khoảng trắng hoặc xuống dòng
+        assert!(!encoded.contains(';'), "Base64 không được chứa dấu chấm phẩy (;)");
+        assert!(!encoded.contains(' '), "Base64 không được chứa khoảng trắng");
+        assert!(!encoded.contains('\n'), "Base64 không được chứa xuống dòng");
+        assert!(!encoded.contains('"'), "Base64 không được chứa nháy kép");
+        assert!(!encoded.contains('\''), "Base64 không được chứa nháy đơn");
+
+        // Kiểm tra tất cả ký tự thuộc bảng mã Base64
+        let base64_valid = encoded.chars().all(|c| {
+            c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '='
+        });
+        assert!(base64_valid, "Tất cả ký tự phải thuộc bảng mã Base64");
+    }
+
+    #[test]
+    fn test_tao_script_chao_powershell_hop_le() {
+        let script = tao_script_chao_powershell();
+        assert!(script.contains("$env:FORGESTORE_CLI_CMD"), "Script phải chứa biến môi trường");
+        assert!(script.contains("ForgeStore"), "Script phải chứa tiêu đề ForgeStore");
+
+        let encoded = ma_hoa_powershell_base64(&script);
+        assert!(!encoded.is_empty(), "Chuỗi mã hóa không được rỗng");
+        assert!(!encoded.contains(';'), "Chuỗi mã hóa không được chứa dấu chấm phẩy");
     }
 }

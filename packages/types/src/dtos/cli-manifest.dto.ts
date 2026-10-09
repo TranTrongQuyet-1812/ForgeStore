@@ -574,8 +574,9 @@ export function trichXuatOwnerVaRepo(
 }
 
 /**
- * Kiểm tra xem tên gói CLI có thuộc về hoặc tương đồng với repository GitHub hay không (P3B-18 & Quyết định D-27).
- * Cảnh báo mạnh nếu tên gói khác biệt hoàn toàn với repo (chống mạo danh hoặc chèn gói độc hại).
+ * Đối chiếu tên gói CLI với repository GitHub theo quy tắc định danh (Heuristic Name Check, P3B-18 & Quyết định D-27).
+ * Lưu ý: Đây là kiểm tra tương đồng cú pháp/tên gọi (Name Heuristic), chưa gọi live network API lên Registry (PyPI, npm, winget).
+ * Cảnh báo nếu tên gói khác biệt hoặc nghi vấn mạo danh để người dùng thẩm tra trước khi cài đặt.
  */
 export function kiemTraGoiThuocRepo(
   trinhQuanLy: MaTrinhQuanLyGoi,
@@ -724,7 +725,7 @@ export function kiemTraGoiThuocRepo(
       return {
         khop: false,
         mucDoTinCay: 'CANH_BAO',
-        canhBao: `Gói Scoop [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}]. Cảnh giác nguy cơ mạo danh.`,
+        canhBao: `Gói Scoop [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Cảnh giác nguy cơ mạo danh.`,
         tenGoiChuanHoa: tenGoiNorm,
         repoChuanHoa: repoSlug,
       };
@@ -749,7 +750,7 @@ export function kiemTraGoiThuocRepo(
     return {
       khop: false,
       mucDoTinCay: 'CANH_BAO',
-      canhBao: `Tên gói [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}]. Cảnh giác nguy cơ Combosquatting.`,
+      canhBao: `Tên gói [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Cảnh giác nguy cơ Combosquatting.`,
       tenGoiChuanHoa: tenGoiNorm,
       repoChuanHoa: repoSlug,
     };
@@ -759,7 +760,7 @@ export function kiemTraGoiThuocRepo(
   return {
     khop: false,
     mucDoTinCay: 'CANH_BAO',
-    canhBao: `Tên gói [${cleanGoi}] khác biệt so với tên kho lưu trữ [${repoSlug}]. Hãy kiểm tra kỹ độ tin cậy trước khi cài đặt.`,
+    canhBao: `Tên gói [${cleanGoi}] khác biệt so với tên kho lưu trữ [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Hãy kiểm tra kỹ độ tin cậy trước khi cài đặt.`,
     tenGoiChuanHoa: tenGoiNorm,
     repoChuanHoa: repoSlug,
   };
@@ -767,6 +768,7 @@ export function kiemTraGoiThuocRepo(
 
 /**
  * Đối chiếu URL dự án được công bố trên Registry (PyPI, npm, winget) với repository gốc (D-27).
+ * Hàm này dùng để so khớp URL metadata khi backend tích hợp API truy vấn Registry trực tiếp.
  */
 export function xacThucGoiThuocRepoUrl(urlDuAn?: string | null, repoGoc?: string | null): boolean {
   if (!urlDuAn || !repoGoc) return false;

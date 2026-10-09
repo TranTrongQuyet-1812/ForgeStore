@@ -515,10 +515,13 @@ export const DetailPage: React.FC = () => {
     const sanitizedLenh = lenh.trim().replace(/[\r\n]+/g, ' ');
 
     // 1. Sao chép câu lệnh vào Clipboard
+    let daChepClipboard = false;
     try {
       await navigator.clipboard.writeText(sanitizedLenh);
+      daChepClipboard = true;
     } catch (clipErr) {
       console.warn('[DetailPage] Không thể sao chép vào clipboard trước khi mở terminal:', clipErr);
+      daChepClipboard = false;
     }
 
     // 2. Lấy cấu hình terminal từ useSettingsStore
@@ -535,21 +538,37 @@ export const DetailPage: React.FC = () => {
           trinhTerminal: trinhTerminal || undefined,
           thuMucLamViec: thuMucLamViecTerminal || undefined,
         });
-        toast.success(
-          'Đã mở Terminal! Lệnh đã nằm trong Clipboard, nhấn Ctrl+V rồi Enter để chạy.',
-        );
+        if (daChepClipboard) {
+          toast.success(
+            'Đã mở Terminal! Lệnh đã nằm trong Clipboard, nhấn Ctrl+V rồi Enter để chạy.',
+          );
+        } else {
+          toast.info(
+            'Đã mở Terminal nhưng không thể tự động sao chép vào Clipboard. Vui lòng sao chép lệnh thủ công!',
+          );
+        }
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
         toast.error(`Không thể mở Terminal tự động: ${errMsg}`);
-        toast.info(
-          'Lệnh đã nằm trong Clipboard. Vui lòng mở Terminal thủ công rồi nhấn Ctrl+V rồi Enter để chạy.',
-        );
+        if (daChepClipboard) {
+          toast.info(
+            'Lệnh đã nằm trong Clipboard. Vui lòng mở Terminal thủ công rồi nhấn Ctrl+V rồi Enter để chạy.',
+          );
+        } else {
+          toast.info('Vui lòng sao chép lệnh và mở Terminal thủ công để chạy.');
+        }
       }
     } else {
       // Giả lập trên Web dev
-      toast.info(
-        `[Web Dev] Lệnh đã nằm trong Clipboard. Mở Terminal rồi nhấn Ctrl+V rồi Enter để chạy: ${sanitizedLenh}`,
-      );
+      if (daChepClipboard) {
+        toast.info(
+          `[Web Dev] Lệnh đã nằm trong Clipboard. Mở Terminal rồi nhấn Ctrl+V rồi Enter để chạy: ${sanitizedLenh}`,
+        );
+      } else {
+        toast.info(
+          `[Web Dev] Không thể sao chép lệnh vào Clipboard. Mở Terminal và gõ: ${sanitizedLenh}`,
+        );
+      }
     }
   };
 
@@ -1435,12 +1454,12 @@ export const DetailPage: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Cảnh báo nếu tên gói có thể không thuộc repository (P3B-18 & D-27) */}
+                      {/* Cảnh báo nếu tên gói có thể không thuộc repository (P3B-18 & D-27: Heuristic Name Check) */}
                       {ownershipCheck && !ownershipCheck.khop && (
                         <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-mono flex items-start gap-2 leading-relaxed mt-1">
                           <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <span className="font-bold">Lưu ý tên gói:</span>{' '}
+                            <span className="font-bold">Lưu ý đối chiếu tên gói:</span>{' '}
                             {ownershipCheck.canhBao}
                           </div>
                         </div>
