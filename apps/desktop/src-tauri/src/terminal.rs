@@ -133,7 +133,7 @@ pub fn tao_script_chao_powershell() -> String {
         "Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; ",
         "Write-Host 'Lệnh cài đặt: ' -NoNewline; ",
         "Write-Host $env:FORGESTORE_CLI_CMD -ForegroundColor Yellow; ",
-        "Write-Host 'Nhấn Ctrl+V (nếu đã chép vào Clipboard) hoặc gõ: $env:FORGESTORE_CLI_CMD rồi Enter để chạy.' -ForegroundColor Green; ",
+        "Write-Host 'Nhấn Ctrl+V (nếu đã chép vào Clipboard) rồi Enter để chạy.' -ForegroundColor Green; ",
         "Write-Host '';"
     ).to_string()
 }
