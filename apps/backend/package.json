@@ -14,7 +14,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
-    "test": "prisma generate && vitest run"
+    "test": "prisma generate && vitest run",
+    "data-repo": "ts-node --transpile-only src/scripts/data-repo/data-repo.cli.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
