@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { laUrlTaiVeAnToan } from './DetailPage';
+import { laUrlTaiVeAnToan, phanTichTepAndroidApk } from './DetailPage';
 
 export interface TepMock {
   maTep: string;
@@ -7,26 +7,6 @@ export interface TepMock {
   duongDanTaiVe?: string;
   dungLuongBytes?: number;
   kienTrucChip?: string;
-}
-
-export function phanTichTepAndroidApk(allAssets: TepMock[]) {
-  const windowsAssets = allAssets.filter((f) => {
-    const ext = f.tenTep.toLowerCase();
-    return (
-      ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
-    );
-  });
-  const coFileCaiDat = windowsAssets.length > 0;
-
-  const apkAssets = allAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk'));
-  const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
-
-  return {
-    windowsAssets,
-    coFileCaiDat,
-    apkAssets,
-    chiCoFileApkAndroid,
-  };
 }
 
 describe('P3B-19.3: Nhận diện và Xử lý Ứng dụng Chỉ Có Tệp .APK Android', () => {
@@ -95,16 +75,10 @@ describe('P3B-19.3: Nhận diện và Xử lý Ứng dụng Chỉ Có Tệp .APK
       { maTep: '3', tenTep: 'AnkiDroid-2.18.4-armeabi-v7a.apk', dungLuongBytes: 17_000_000 },
     ];
 
-    const windowsAssetsFiltered = windowsAssets.filter((f) => {
-      const ext = f.tenTep.toLowerCase();
-      return (
-        ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
-      );
-    });
-    const coFileCaiDat = windowsAssetsFiltered.length > 0;
-    const allCandidateAssets = windowsAssets.length > 0 ? windowsAssets : androidAssets;
-    const apkAssets = allCandidateAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk'));
-    const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
+    const { coFileCaiDat, apkAssets, chiCoFileApkAndroid } = phanTichTepAndroidApk(
+      windowsAssets,
+      androidAssets,
+    );
 
     expect(coFileCaiDat).toBe(false);
     expect(apkAssets).toHaveLength(3);

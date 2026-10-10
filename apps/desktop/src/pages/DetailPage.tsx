@@ -252,6 +252,34 @@ export function laUrlTaiVeAnToan(url: string | null | undefined): boolean {
   }
 }
 
+/** Là tệp cài chạy được trên Windows (.exe, .msi, .zip, .7z). */
+export function laTepCaiWindows(tenTep: string): boolean {
+  const ext = tenTep.toLowerCase();
+  return (
+    ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
+  );
+}
+
+/**
+ * Phân tích tệp của bản phát hành (P3B-19.3 / 19.6): app chỉ có APK khi không có tệp Windows.
+ * Nếu bản Windows trả 0 tệp thì lấy danh sách từ bản Android (tepAndroid).
+ */
+export function phanTichTepAndroidApk<T extends { tenTep: string }>(
+  tepWindows: T[],
+  tepAndroid: T[] = [],
+) {
+  const windowsAssets = tepWindows.filter((f) => laTepCaiWindows(f.tenTep));
+  const coFileCaiDat = windowsAssets.length > 0;
+  const ungVien = tepWindows.length > 0 ? tepWindows : tepAndroid;
+  const apkAssets = ungVien.filter((f) => f.tenTep.toLowerCase().endsWith('.apk'));
+  return {
+    windowsAssets,
+    coFileCaiDat,
+    apkAssets,
+    chiCoFileApkAndroid: !coFileCaiDat && apkAssets.length > 0,
+  };
+}
+
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo, setAuthModalOpen } = useNavStore();
@@ -350,12 +378,7 @@ export const DetailPage: React.FC = () => {
       appDetail?.banPhatHanhMoiNhat?.danhSachTepCaiDat ||
       appDetail?.danhSachBanPhatHanh?.[0]?.danhSachTepCaiDat ||
       []
-    ).some((f) => {
-      const ext = f.tenTep.toLowerCase();
-      return (
-        ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
-      );
-    }),
+    ).some((f) => laTepCaiWindows(f.tenTep)),
   );
   const huongDanCliBanDau =
     appDetail?.huongDanCaiDat || appDetail?.phanTichAi?.huongDanCaiDat || null;
@@ -668,30 +691,14 @@ export const DetailPage: React.FC = () => {
     androidDetail?.danhSachBanPhatHanh?.[0];
   const allAssets = latestRelease?.danhSachTepCaiDat || [];
 
-  // Lọc tệp cài đặt phù hợp với Windows (FE-EC-01 & P3B-17.6: Hỗ trợ .exe, .msi, .zip, .7z)
-  const windowsAssets = allAssets.filter((f) => {
-    const ext = f.tenTep.toLowerCase();
-    return (
-      ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
-    );
-  });
-  const displayAssets = windowsAssets;
-  const coFileCaiDat = displayAssets.length > 0;
-
-  // Lấy danh sách tệp ứng viên (kết hợp cả từ androidDetail nếu bản Windows không có file cài)
-  const allCandidateAssets =
-    allAssets.length > 0
-      ? allAssets
-      : androidDetail?.banPhatHanhMoiNhat?.danhSachTepCaiDat ||
-        androidDetail?.danhSachBanPhatHanh?.[0]?.danhSachTepCaiDat ||
-        [];
-
-  // Lọc tệp Android APK (P3B-19.3 & P3B-19.6: Hồi sinh hiển thị thân thiện cho app FOSS chỉ có .apk)
-  const apkAssets = useMemo(
-    () => allCandidateAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk')),
-    [allCandidateAssets],
+  // Lọc tệp cài Windows và APK Android (FE-EC-01, P3B-17.6, P3B-19.3, P3B-19.6)
+  const { windowsAssets, coFileCaiDat, apkAssets, chiCoFileApkAndroid } = phanTichTepAndroidApk(
+    allAssets,
+    androidDetail?.banPhatHanhMoiNhat?.danhSachTepCaiDat ||
+      androidDetail?.danhSachBanPhatHanh?.[0]?.danhSachTepCaiDat ||
+      [],
   );
-  const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
+  const displayAssets = windowsAssets;
 
   const handleDownloadApk = async (apkAsset: (typeof allAssets)[0]) => {
     if (!apkAsset.duongDanTaiVe) return;
