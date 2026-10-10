@@ -344,6 +344,33 @@ export const DetailPage: React.FC = () => {
     staleTime: 1000 * 60 * 2,
   });
 
+  // P3B-19.6: Khi không có tệp cài Windows và không có CLI, nạp thêm chi tiết nền tảng Android để lấy tệp APK
+  const coFileWindowsBanDau = Boolean(
+    (
+      appDetail?.banPhatHanhMoiNhat?.danhSachTepCaiDat ||
+      appDetail?.danhSachBanPhatHanh?.[0]?.danhSachTepCaiDat ||
+      []
+    ).some((f) => {
+      const ext = f.tenTep.toLowerCase();
+      return (
+        ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
+      );
+    }),
+  );
+  const huongDanCliBanDau =
+    appDetail?.huongDanCaiDat || appDetail?.phanTichAi?.huongDanCaiDat || null;
+  const coCliBanDau = Boolean(
+    huongDanCliBanDau && huongDanCliBanDau.cachCai && huongDanCliBanDau.cachCai.length > 0,
+  );
+  const canFetchAndroidApk = Boolean(appDetail && !coFileWindowsBanDau && !coCliBanDau);
+
+  const { data: androidDetail } = useQuery({
+    queryKey: ['app-detail-android', appId],
+    queryFn: () => storeService.layChiTietApp(appId, 'android'),
+    enabled: canFetchAndroidApk,
+    staleTime: 3 * 60 * 1000,
+  });
+
   // P3B-05.7 / P3B-05.9 / Lỗi 4: Nạp tài liệu README song ngữ từ backend kèm timeout polling 2 phút (40 lần)
   const [readmeLang, setReadmeLang] = useState<'vi' | 'en'>('vi');
   const pollCountRef = useRef(0);
@@ -633,8 +660,12 @@ export const DetailPage: React.FC = () => {
     thucHienMoTerminal(sanitizedLenh);
   };
 
-  // Phân tích các tệp cài đặt của bản phát hành mới nhất
-  const latestRelease = appDetail?.banPhatHanhMoiNhat || appDetail?.danhSachBanPhatHanh?.[0];
+  // Phân tích các tệp cài đặt của bản phát hành mới nhất (ưu tiên Windows, fallback Android khi cần)
+  const latestRelease =
+    appDetail?.banPhatHanhMoiNhat ||
+    appDetail?.danhSachBanPhatHanh?.[0] ||
+    androidDetail?.banPhatHanhMoiNhat ||
+    androidDetail?.danhSachBanPhatHanh?.[0];
   const allAssets = latestRelease?.danhSachTepCaiDat || [];
 
   // Lọc tệp cài đặt phù hợp với Windows (FE-EC-01 & P3B-17.6: Hỗ trợ .exe, .msi, .zip, .7z)
@@ -647,10 +678,18 @@ export const DetailPage: React.FC = () => {
   const displayAssets = windowsAssets;
   const coFileCaiDat = displayAssets.length > 0;
 
-  // Lọc tệp Android APK (P3B-19.3: Xử lý hiển thị thân thiện cho app FOSS chỉ có .apk)
+  // Lấy danh sách tệp ứng viên (kết hợp cả từ androidDetail nếu bản Windows không có file cài)
+  const allCandidateAssets =
+    allAssets.length > 0
+      ? allAssets
+      : androidDetail?.banPhatHanhMoiNhat?.danhSachTepCaiDat ||
+        androidDetail?.danhSachBanPhatHanh?.[0]?.danhSachTepCaiDat ||
+        [];
+
+  // Lọc tệp Android APK (P3B-19.3 & P3B-19.6: Hồi sinh hiển thị thân thiện cho app FOSS chỉ có .apk)
   const apkAssets = useMemo(
-    () => allAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk')),
-    [allAssets],
+    () => allCandidateAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk')),
+    [allCandidateAssets],
   );
   const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
 
@@ -1333,9 +1372,9 @@ export const DetailPage: React.FC = () => {
                   </p>
                 </div>
 
-                {appDetail.duongDanGithub && (
+                {(appDetail.duongDanGithub || androidDetail?.duongDanGithub) && (
                   <a
-                    href={`${appDetail.duongDanGithub}/releases`}
+                    href={`${appDetail.duongDanGithub || androidDetail?.duongDanGithub}/releases`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-tactile text-xs font-mono text-accent-ai hover:underline flex items-center gap-1"
@@ -1733,9 +1772,9 @@ export const DetailPage: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                {appDetail.duongDanGithub && (
+                {(appDetail.duongDanGithub || androidDetail?.duongDanGithub) && (
                   <a
-                    href={`${appDetail.duongDanGithub}/releases`}
+                    href={`${appDetail.duongDanGithub || androidDetail?.duongDanGithub}/releases`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-tactile text-xs font-mono text-muted hover:text-primary flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-elevated transition-colors"
@@ -2016,9 +2055,9 @@ export const DetailPage: React.FC = () => {
                   <span>Tải File APK (Android)</span>
                 </button>
 
-                {appDetail.duongDanGithub && (
+                {(appDetail.duongDanGithub || androidDetail?.duongDanGithub) && (
                   <a
-                    href={`${appDetail.duongDanGithub}/releases`}
+                    href={`${appDetail.duongDanGithub || androidDetail?.duongDanGithub}/releases`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-tactile w-full h-9 rounded-xl border border-border bg-surface hover:bg-surface-elevated text-secondary hover:text-primary font-mono text-xs flex items-center justify-center gap-1.5 transition-all"

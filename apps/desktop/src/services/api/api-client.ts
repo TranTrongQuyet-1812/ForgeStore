@@ -194,10 +194,12 @@ export class ApiClient {
     }
 
     if (!response.ok) {
-      void desktopLogger.ghiLogError(
-        `Lỗi phản hồi API [${endpoint}]: HTTP ${response.status} ${response.statusText}`,
-        'ApiClient',
-      );
+      const thongDiepLoi = `Lỗi phản hồi API [${endpoint}]: HTTP ${response.status} ${response.statusText}`;
+      if (response.status >= 400 && response.status < 500) {
+        void desktopLogger.ghiLogWarn(thongDiepLoi, 'ApiClient');
+      } else {
+        void desktopLogger.ghiLogError(thongDiepLoi, 'ApiClient');
+      }
       const errData = await response.json().catch(() => ({}));
       const retryAfter = Number(response.headers?.get?.('retry-after'));
       throw new ApiError(

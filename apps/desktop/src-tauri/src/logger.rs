@@ -123,8 +123,15 @@ pub fn lam_sach_thong_diep_log(thong_diep: &str) -> String {
 
             if end_rel > 0 {
                 cleaned.replace_range(abs_start..abs_start + end_rel, "[REDACTED]");
+                cur_search = abs_start + 10; // 10 == "[REDACTED]".len()
+            } else {
+                cur_search = abs_start;
             }
-            cur_search = abs_start + 10; // 10 == "[REDACTED]".len()
+
+            cur_search = cur_search.min(cleaned.len());
+            while cur_search < cleaned.len() && !cleaned.is_char_boundary(cur_search) {
+                cur_search += 1;
+            }
         } else {
             break;
         }
@@ -205,6 +212,10 @@ pub fn lam_sach_thong_diep_log(thong_diep: &str) -> String {
                         cur_search = abs_val_start + 10;
                     } else {
                         cur_search = key_end;
+                    }
+                    cur_search = cur_search.min(cleaned.len());
+                    while cur_search < cleaned.len() && !cleaned.is_char_boundary(cur_search) {
+                        cur_search += 1;
                     }
                 } else {
                     cur_search = key_end;
@@ -336,12 +347,27 @@ mod tests {
     fn test_ghi_log_va_xoay_log() {
         let temp_dir = std::env::temp_dir().join("forgestore_test_logs");
         let _ = std::fs::create_dir_all(&temp_dir);
-        let test_file = temp_dir.join("test.log");
+        let test_file = temp_dir.join("test_rotate.log");
 
-        // Ghi thử 1 dòng
-        let line = "Test log line\n";
-        let _ = std::fs::write(&test_file, line);
+        // 1. Tạo tệp và giả lập dung lượng đạt 5MB (MAX_LOG_SIZE_BYTES)
+        let file = std::fs::File::create(&test_file).expect("Tạo file test");
+        file.set_len(MAX_LOG_SIZE_BYTES)
+            .expect("Đặt dung lượng file 5MB");
+        drop(file);
+
         assert!(test_file.exists());
+        assert_eq!(
+            std::fs::metadata(&test_file).unwrap().len(),
+            MAX_LOG_SIZE_BYTES
+        );
+
+        // 2. Kích hoạt hàm xoay log thực tế
+        kiem_tra_va_xoay_log(&test_file);
+
+        // 3. Xác nhận tệp .log.old đã được tạo và tệp gốc đã được di chuyển
+        let old_file = test_file.with_extension("log.old");
+        assert!(old_file.exists(), "Tệp sao lưu .log.old phải được tạo");
+        assert!(!test_file.exists(), "Tệp log cũ phải được di chuyển sang .old");
 
         // Dọn dẹp
         let _ = std::fs::remove_dir_all(temp_dir);
@@ -356,6 +382,15 @@ mod tests {
         assert!(cleaned.contains("Bearer [REDACTED]"), "Phải thay bằng [REDACTED]");
         assert!(cleaned.contains("Người dùng Đăng nhập"), "Phải bảo toàn tiếng Việt UTF-8");
         assert!(cleaned.contains("tại máy chủ Hà Nội"), "Phải bảo toàn phần đuôi tiếng Việt");
+    }
+
+    #[test]
+    fn test_lam_sach_thong_diep_bearer_nhieu_khoang_trang_tieng_viet() {
+        // Kiểm tra kịch bản biên: Bearer có nhiều khoảng trắng rồi đến chữ tiếng Việt
+        let input = "Bearer   Hà Nội và Bearer   Đà Nẵng";
+        let cleaned = lam_sach_thong_diep_log(input);
+        assert!(cleaned.contains("Hà Nội"), "Phải bảo toàn Unicode tiếng Việt");
+        assert!(cleaned.contains("Đà Nẵng"), "Phải bảo toàn Unicode tiếng Việt");
     }
 
     #[test]

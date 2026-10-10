@@ -84,6 +84,33 @@ describe('P3B-19.3: Nhận diện và Xử lý Ứng dụng Chỉ Có Tệp .APK
     expect(ketQua.chiCoFileApkAndroid).toBe(true);
     expect(ketQua.apkAssets).toHaveLength(1);
   });
+
+  it('P3B-19.6: nạp được tệp APK từ androidRelease khi Windows trả về 0 tệp cài đặt (kịch bản Anki-Android, NewPipe, Termux)', () => {
+    // Backend trả 0 tệp khi query platform=windows cho Anki-Android
+    const windowsAssets: TepMock[] = [];
+    // Backend trả 13 tệp APK khi query platform=android
+    const androidAssets: TepMock[] = [
+      { maTep: '1', tenTep: 'AnkiDroid-2.18.4-universal.apk', dungLuongBytes: 24_000_000 },
+      { maTep: '2', tenTep: 'AnkiDroid-2.18.4-arm64-v8a.apk', dungLuongBytes: 18_000_000 },
+      { maTep: '3', tenTep: 'AnkiDroid-2.18.4-armeabi-v7a.apk', dungLuongBytes: 17_000_000 },
+    ];
+
+    const windowsAssetsFiltered = windowsAssets.filter((f) => {
+      const ext = f.tenTep.toLowerCase();
+      return (
+        ext.endsWith('.exe') || ext.endsWith('.msi') || ext.endsWith('.zip') || ext.endsWith('.7z')
+      );
+    });
+    const coFileCaiDat = windowsAssetsFiltered.length > 0;
+    const allCandidateAssets = windowsAssets.length > 0 ? windowsAssets : androidAssets;
+    const apkAssets = allCandidateAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk'));
+    const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
+
+    expect(coFileCaiDat).toBe(false);
+    expect(apkAssets).toHaveLength(3);
+    expect(chiCoFileApkAndroid).toBe(true);
+    expect(apkAssets[0].tenTep).toBe('AnkiDroid-2.18.4-universal.apk');
+  });
 });
 
 describe('SEC-02: Kiểm chứng an toàn URL tải tệp APK (laUrlTaiVeAnToan)', () => {
