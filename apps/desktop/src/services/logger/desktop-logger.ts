@@ -24,12 +24,12 @@ export class DesktopLogger {
     if (!thongDiep) return '';
     let result = thongDiep;
 
-    // 1. Che giấu Bearer Token
-    result = result.replace(/Bearer\s+[A-Za-z0-9-_=.]+/gi, 'Bearer [REDACTED]');
+    // 1. Che giấu Bearer Token (chuẩn Base64 RFC 4648 bao gồm +, /, =)
+    result = result.replace(/Bearer\s+[A-Za-z0-9+/=._-]+/gi, 'Bearer [REDACTED]');
 
     // 2. Che giấu các trường nhạy cảm trong chuỗi JSON/Query
     result = result.replace(
-      /"(password|refresh_token|accessToken|token|secret)":\s*"[^"]*"/gi,
+      /"(password|refresh_token|refreshToken|access_token|accessToken|token|secret|apiKey|api_key)":\s*"[^"\\]*(?:\\.[^"\\]*)*"/gi,
       '"$1":"[REDACTED]"',
     );
 

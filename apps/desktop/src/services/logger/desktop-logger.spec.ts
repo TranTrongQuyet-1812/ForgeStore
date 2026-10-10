@@ -36,6 +36,32 @@ describe('DesktopLogger - Ghi log an toàn ra file cho Desktop Client (P3B-19)',
         'Payload debug: {"password":"[REDACTED]","username":"user1"}',
       );
     });
+
+    it('che giấu Bearer Token chuẩn Base64 RFC 4648 chứa ký tự + và /', async () => {
+      const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      await desktopLogger.ghiLogInfo(
+        'Auth: Bearer a1b2+c3d/e4f==.token_end and continue',
+        'ApiClient',
+      );
+
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[INFO] [ApiClient]',
+        'Auth: Bearer [REDACTED] and continue',
+      );
+    });
+
+    it('che giấu access_token, refreshToken, apiKey trong chuỗi JSON với khoảng trắng', async () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await desktopLogger.ghiLogWarn(
+        'Token response: {"access_token": "secret_acc", "refreshToken": "secret_ref", "apiKey": "secret_key"}',
+        'AuthService',
+      );
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[WARN] [AuthService]',
+        'Token response: {"access_token":"[REDACTED]", "refreshToken":"[REDACTED]", "apiKey":"[REDACTED]"}',
+      );
+    });
   });
 
   describe('Chế độ Web Preview (non-Tauri)', () => {

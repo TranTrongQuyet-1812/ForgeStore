@@ -95,39 +95,121 @@ pub fn dinh_dang_utc_timestamp() -> String {
 pub fn lam_sach_thong_diep_log(thong_diep: &str) -> String {
     let mut cleaned = thong_diep.to_string();
 
-    // 1. Che giấu Bearer tokens
-    let lower = cleaned.to_lowercase();
+    // 1. Che giấu Bearer tokens (hỗ trợ nhiều token, an toàn với Unicode UTF-8)
     let mut cur_search = 0;
-    while let Some(pos) = lower[cur_search..].find("bearer ") {
-        let abs_start = cur_search + pos + 7;
-        let token_slice = &cleaned[abs_start..];
-        let end_rel = token_slice
-            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == ',' || c == '}')
-            .unwrap_or(token_slice.len());
-
-        if end_rel > 0 {
-            cleaned.replace_range(abs_start..abs_start + end_rel, "[REDACTED]");
+    while cur_search < cleaned.len() {
+        let mut found_token_start = None;
+        let remaining = &cleaned[cur_search..];
+        for (byte_offset, _) in remaining.char_indices() {
+            let candidate = &remaining[byte_offset..];
+            if candidate.len() >= 7
+                && candidate.is_char_boundary(7)
+                && candidate[..7].eq_ignore_ascii_case("bearer ")
+            {
+                found_token_start = Some(cur_search + byte_offset + 7);
+                break;
+            }
         }
-        cur_search = abs_start + 10;
-        if cur_search >= cleaned.len() {
+
+        if let Some(abs_start) = found_token_start {
+            let token_slice = &cleaned[abs_start..];
+            let mut end_rel = token_slice.len();
+            for (rel_offset, c) in token_slice.char_indices() {
+                if c.is_whitespace() || c == '"' || c == '\'' || c == ',' || c == '}' {
+                    end_rel = rel_offset;
+                    break;
+                }
+            }
+
+            if end_rel > 0 {
+                cleaned.replace_range(abs_start..abs_start + end_rel, "[REDACTED]");
+            }
+            cur_search = abs_start + 10; // 10 == "[REDACTED]".len()
+        } else {
             break;
         }
     }
 
-    // 2. Che giấu refresh_token hoặc password nếu xuất hiện trong json
-    for pattern in &["\"password\":\"", "\"refresh_token\":\"", "\"token\":\""] {
-        let pattern_lower = pattern.to_lowercase();
-        let mut p_search = 0;
-        while let Some(pos) = cleaned.to_lowercase()[p_search..].find(&pattern_lower) {
-            let abs_start = p_search + pos + pattern.len();
-            let slice = &cleaned[abs_start..];
-            if let Some(quote_pos) = slice.find('"') {
-                cleaned.replace_range(abs_start..abs_start + quote_pos, "[REDACTED]");
-                p_search = abs_start + 10;
-            } else {
-                break;
+    // 2. Che giấu các trường nhạy cảm trong JSON (hỗ trợ linh hoạt khoảng trắng giữa key, : và ")
+    let sensitive_keys = [
+        "password",
+        "refresh_token",
+        "refreshtoken",
+        "access_token",
+        "accesstoken",
+        "token",
+        "secret",
+        "apikey",
+        "api_key",
+    ];
+
+    for key in &sensitive_keys {
+        let mut cur_search = 0;
+        let target_key = format!("\"{}\"", key);
+        while cur_search < cleaned.len() {
+            let mut found_key_end = None;
+            let remaining = &cleaned[cur_search..];
+            for (byte_offset, _) in remaining.char_indices() {
+                let candidate = &remaining[byte_offset..];
+                if candidate.len() >= target_key.len()
+                    && candidate.is_char_boundary(target_key.len())
+                    && candidate[..target_key.len()].eq_ignore_ascii_case(&target_key)
+                {
+                    found_key_end = Some(cur_search + byte_offset + target_key.len());
+                    break;
+                }
             }
-            if p_search >= cleaned.len() {
+
+            if let Some(key_end) = found_key_end {
+                let after_key = &cleaned[key_end..];
+                let chars = after_key.char_indices();
+                let mut found_colon = false;
+                let mut val_start_rel = None;
+
+                for (idx, c) in chars {
+                    if !found_colon {
+                        if c.is_whitespace() {
+                            continue;
+                        } else if c == ':' {
+                            found_colon = true;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        if c.is_whitespace() {
+                            continue;
+                        } else if c == '"' {
+                            val_start_rel = Some(idx + 1);
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                if let Some(rel_val_start) = val_start_rel {
+                    let abs_val_start = key_end + rel_val_start;
+                    let val_slice = &cleaned[abs_val_start..];
+                    let mut prev_char = '\0';
+                    let mut val_end_rel = None;
+                    for (idx, c) in val_slice.char_indices() {
+                        if c == '"' && prev_char != '\\' {
+                            val_end_rel = Some(idx);
+                            break;
+                        }
+                        prev_char = c;
+                    }
+
+                    if let Some(rel_val_end) = val_end_rel {
+                        cleaned.replace_range(abs_val_start..abs_val_start + rel_val_end, "[REDACTED]");
+                        cur_search = abs_val_start + 10;
+                    } else {
+                        cur_search = key_end;
+                    }
+                } else {
+                    cur_search = key_end;
+                }
+            } else {
                 break;
             }
         }
@@ -264,4 +346,30 @@ mod tests {
         // Dọn dẹp
         let _ = std::fs::remove_dir_all(temp_dir);
     }
+
+    #[test]
+    fn test_lam_sach_thong_diep_da_bearer_va_unicode() {
+        let input = "Người dùng Đăng nhập với Bearer token_one_123 và gọi tiếp Bearer token_two_456 tại máy chủ Hà Nội";
+        let cleaned = lam_sach_thong_diep_log(input);
+        assert!(!cleaned.contains("token_one_123"), "Phải che token 1");
+        assert!(!cleaned.contains("token_two_456"), "Phải che token 2");
+        assert!(cleaned.contains("Bearer [REDACTED]"), "Phải thay bằng [REDACTED]");
+        assert!(cleaned.contains("Người dùng Đăng nhập"), "Phải bảo toàn tiếng Việt UTF-8");
+        assert!(cleaned.contains("tại máy chủ Hà Nội"), "Phải bảo toàn phần đuôi tiếng Việt");
+    }
+
+    #[test]
+    fn test_lam_sach_thong_diep_json_co_khoang_trang_va_cac_loai_token() {
+        let input = r#"{"username": "admin", "password" : "secret123", "access_token": "acc_xyz", "refresh_token" : "ref_abc", "apiKey": "key_789"}"#;
+        let cleaned = lam_sach_thong_diep_log(input);
+        assert!(!cleaned.contains("secret123"), "Phải che password");
+        assert!(!cleaned.contains("acc_xyz"), "Phải che access_token");
+        assert!(!cleaned.contains("ref_abc"), "Phải che refresh_token");
+        assert!(!cleaned.contains("key_789"), "Phải che apiKey");
+        assert!(cleaned.contains(r#""password" : "[REDACTED]""#));
+        assert!(cleaned.contains(r#""access_token": "[REDACTED]""#));
+        assert!(cleaned.contains(r#""refresh_token" : "[REDACTED]""#));
+        assert!(cleaned.contains(r#""apiKey": "[REDACTED]""#));
+    }
 }
+

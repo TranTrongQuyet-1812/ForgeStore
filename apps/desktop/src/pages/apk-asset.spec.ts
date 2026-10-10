@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { laUrlTaiVeAnToan } from './DetailPage';
 
 export interface TepMock {
   maTep: string;
@@ -82,5 +83,47 @@ describe('P3B-19.3: Nhận diện và Xử lý Ứng dụng Chỉ Có Tệp .APK
     const ketQua = phanTichTepAndroidApk(assetsCase);
     expect(ketQua.chiCoFileApkAndroid).toBe(true);
     expect(ketQua.apkAssets).toHaveLength(1);
+  });
+});
+
+describe('SEC-02: Kiểm chứng an toàn URL tải tệp APK (laUrlTaiVeAnToan)', () => {
+  it('cho phép URL tải hợp lệ từ GitHub Releases và objects.githubusercontent.com', () => {
+    expect(
+      laUrlTaiVeAnToan(
+        'https://github.com/tachiyomiorg/tachiyomi/releases/download/v0.15.3/tachiyomi-v0.15.3.apk',
+      ),
+    ).toBe(true);
+    expect(
+      laUrlTaiVeAnToan(
+        'https://objects.githubusercontent.com/github-production-release-asset-2e65be/12345/app.apk',
+      ),
+    ).toBe(true);
+    expect(laUrlTaiVeAnToan('https://raw.githubusercontent.com/org/repo/master/app.apk')).toBe(
+      true,
+    );
+  });
+
+  it('từ chối giao thức không an toàn hoặc độc hại (http, javascript, file, data)', () => {
+    expect(
+      laUrlTaiVeAnToan(
+        'http://github.com/tachiyomiorg/tachiyomi/releases/download/v0.15.3/tachiyomi.apk',
+      ),
+    ).toBe(false);
+    expect(laUrlTaiVeAnToan('javascript:alert(1)')).toBe(false);
+    expect(laUrlTaiVeAnToan('file:///C:/Windows/system32/cmd.exe')).toBe(false);
+    expect(laUrlTaiVeAnToan('data:text/html;base64,PHNjcmlwdD5...')).toBe(false);
+    expect(laUrlTaiVeAnToan('')).toBe(false);
+    expect(laUrlTaiVeAnToan(null as unknown as string)).toBe(false);
+    expect(laUrlTaiVeAnToan(undefined as unknown as string)).toBe(false);
+  });
+
+  it('từ chối domain mạo danh hoặc không thuộc GitHub', () => {
+    expect(laUrlTaiVeAnToan('https://evil-github.com/tachiyomi.apk')).toBe(false);
+    expect(laUrlTaiVeAnToan('https://fakegithubusercontent.com/app.apk')).toBe(false);
+    expect(laUrlTaiVeAnToan('https://attacker.org/download.apk')).toBe(false);
+  });
+
+  it('từ chối URL có chứa thông tin xác thực nhúng (credential injection)', () => {
+    expect(laUrlTaiVeAnToan('https://user:password@github.com/repo/releases/app.apk')).toBe(false);
   });
 });

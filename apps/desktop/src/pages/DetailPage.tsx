@@ -227,6 +227,31 @@ export function tinhTrangThaiHieuLuc(params: {
   }
 }
 
+/**
+ * Kiểm tra xem URL tải tệp có an toàn và thuộc nguồn phát hành tin cậy (GitHub) hay không (SEC-02).
+ * Chặn đứng các scheme độc hại (javascript:, file:, data:, http:) và open redirect / credential injection.
+ */
+export function laUrlTaiVeAnToan(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    // Chặn credential nhúng trong URL: https://user:pass@evil.com/
+    if (parsed.username || parsed.password) return false;
+
+    const hostname = parsed.hostname.toLowerCase();
+    // Trusted GitHub domains cho release downloads
+    return (
+      hostname === 'github.com' ||
+      hostname.endsWith('.github.com') ||
+      hostname === 'githubusercontent.com' ||
+      hostname.endsWith('.githubusercontent.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export const DetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedAppId, navigateTo, setAuthModalOpen } = useNavStore();
@@ -631,6 +656,12 @@ export const DetailPage: React.FC = () => {
 
   const handleDownloadApk = async (apkAsset: (typeof allAssets)[0]) => {
     if (!apkAsset.duongDanTaiVe) return;
+
+    if (!laUrlTaiVeAnToan(apkAsset.duongDanTaiVe)) {
+      toast.error('Đường dẫn tải tệp APK không an toàn hoặc không thuộc nguồn GitHub tin cậy!');
+      return;
+    }
+
     try {
       toast.info(`Bắt đầu tải tệp ${apkAsset.tenTep}...`);
       const isTauri =
@@ -1306,7 +1337,7 @@ export const DetailPage: React.FC = () => {
                   <a
                     href={`${appDetail.duongDanGithub}/releases`}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="btn-tactile text-xs font-mono text-accent-ai hover:underline flex items-center gap-1"
                   >
                     <span>GitHub Releases</span>
@@ -1666,7 +1697,7 @@ export const DetailPage: React.FC = () => {
                         <a
                           href={huongDanCli.duongDanReadmeGoc}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="btn-tactile text-accent-ai hover:underline text-xs font-mono shrink-0 flex items-center gap-1 ml-auto"
                         >
                           <span>Xem README gốc</span>
