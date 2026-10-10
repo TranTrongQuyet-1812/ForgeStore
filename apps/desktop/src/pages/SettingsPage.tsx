@@ -105,7 +105,8 @@ export const SettingsPage: React.FC = () => {
     }
 
     desktopLogger.layDuongDanLog().then((path) => {
-      setLogFilePath(path);
+      // Chỉ hiện thư mục chứa nhật ký (khớp với nút "Mở thư mục"), bỏ tên tệp ở cuối
+      setLogFilePath(path.replace(/[\\/][^\\/]+$/, ''));
     });
   }, []);
 
@@ -122,7 +123,7 @@ export const SettingsPage: React.FC = () => {
     if (!logFilePath) return;
     try {
       await navigator.clipboard.writeText(logFilePath);
-      toast.success('Đã sao chép đường dẫn tệp nhật ký vào bộ nhớ tạm.');
+      toast.success('Đã sao chép đường dẫn thư mục nhật ký vào bộ nhớ tạm.');
     } catch {
       toast.info(`Đường dẫn nhật ký: ${logFilePath}`);
     }
@@ -423,14 +424,12 @@ export const SettingsPage: React.FC = () => {
 
         <div className="p-3.5 rounded-xl bg-surface-elevated/70 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <span className="text-[11px] font-mono text-muted uppercase">
-              Tệp nhật ký hiện tại:
-            </span>
+            <span className="text-[11px] font-mono text-muted uppercase">Thư mục nhật ký:</span>
             <div
               className="font-mono text-xs text-primary font-medium truncate mt-0.5 select-all"
               title={logFilePath}
             >
-              {logFilePath || '%LOCALAPPDATA%\\forgestore-desktop\\logs\\forgestore_client.log'}
+              {logFilePath || '%LOCALAPPDATA%\\forgestore-desktop\\logs'}
             </div>
           </div>
 
@@ -438,7 +437,7 @@ export const SettingsPage: React.FC = () => {
             <button
               onClick={handleCopyLogPath}
               className="btn-tactile px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-elevated text-xs font-semibold text-secondary hover:text-primary flex items-center gap-1.5 shadow-sm transition-all"
-              title="Sao chép đường dẫn file log"
+              title="Sao chép đường dẫn thư mục nhật ký"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Sao chép đường dẫn</span>
