@@ -27,6 +27,7 @@ import {
   BookOpen,
   Languages,
   Library,
+  Smartphone,
 } from 'lucide-react';
 import { TrustPill } from '../components/common/TrustPill';
 import { MarkdownView } from '../components/common/MarkdownView';
@@ -620,6 +621,30 @@ export const DetailPage: React.FC = () => {
   });
   const displayAssets = windowsAssets;
   const coFileCaiDat = displayAssets.length > 0;
+
+  // Lọc tệp Android APK (P3B-19.3: Xử lý hiển thị thân thiện cho app FOSS chỉ có .apk)
+  const apkAssets = useMemo(
+    () => allAssets.filter((f) => f.tenTep.toLowerCase().endsWith('.apk')),
+    [allAssets],
+  );
+  const chiCoFileApkAndroid = !coFileCaiDat && apkAssets.length > 0;
+
+  const handleDownloadApk = async (apkAsset: (typeof allAssets)[0]) => {
+    if (!apkAsset.duongDanTaiVe) return;
+    try {
+      toast.info(`Bắt đầu tải tệp ${apkAsset.tenTep}...`);
+      const isTauri =
+        typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+      if (isTauri) {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(apkAsset.duongDanTaiVe);
+      } else {
+        window.open(apkAsset.duongDanTaiVe, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      window.open(apkAsset.duongDanTaiVe, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   // Hướng dẫn cài đặt qua dòng lệnh CLI (DELIV-33.3)
   const huongDanCli = appDetail?.huongDanCaiDat || appDetail?.phanTichAi?.huongDanCaiDat || null;
@@ -1655,8 +1680,86 @@ export const DetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* Trường hợp ứng dụng chỉ có tệp APK Android (P3B-19.3) */}
+          {chiCoFileApkAndroid && (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 border border-indigo-500/30 bg-indigo-500/5 shadow-xl">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
+                      <span>ỨNG DỤNG DÀNH CHO ANDROID (.APK)</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300">
+                        {apkAssets.length} tệp APK
+                      </span>
+                    </h3>
+                    <p className="text-xs text-secondary mt-0.5 leading-relaxed">
+                      Ứng dụng này hiện chỉ phát hành gói cài đặt cho Android (.apk). ForgeStore
+                      Windows hiển thị thông tin và hỗ trợ tải về máy để bạn chuyển sang điện thoại
+                      hoặc trình giả lập Android.
+                    </p>
+                  </div>
+                </div>
+                {appDetail.duongDanGithub && (
+                  <a
+                    href={`${appDetail.duongDanGithub}/releases`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-tactile text-xs font-mono text-muted hover:text-primary flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-elevated transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>GitHub Releases</span>
+                  </a>
+                )}
+              </div>
+
+              {/* Danh sách tệp APK khả dụng */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-mono text-muted uppercase">
+                  Danh sách tệp cài đặt APK:
+                </span>
+                <div className="grid grid-cols-1 gap-2">
+                  {apkAssets.map((asset) => (
+                    <div
+                      key={asset.maTep}
+                      className="p-3.5 rounded-xl bg-surface/50 border border-border flex items-center justify-between gap-3 hover:bg-surface/80 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Smartphone className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-mono text-xs font-semibold text-primary truncate">
+                            {asset.tenTep}
+                          </div>
+                          <div className="text-[11px] font-mono text-muted flex items-center gap-2 mt-0.5">
+                            <span>{formatBytes(asset.dungLuongBytes)}</span>
+                            {asset.kienTrucChip && (
+                              <>
+                                <span>•</span>
+                                <span>{asset.kienTrucChip}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDownloadApk(asset)}
+                        className="btn-tactile px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Tải về</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Trường hợp không có cả tệp cài đặt lẫn hướng dẫn CLI */}
-          {!coFileCaiDat && !coHuongDanCli && (
+          {!coFileCaiDat && !coHuongDanCli && !chiCoFileApkAndroid && (
             <div className="tactile-card p-6 rounded-2xl border border-border text-center text-xs text-muted">
               Ứng dụng này hiện chưa có tệp cài đặt phù hợp với Windows (.exe, .msi, .zip, .7z) và
               chưa có hướng dẫn cài đặt dòng lệnh.
@@ -1827,44 +1930,115 @@ export const DetailPage: React.FC = () => {
               </div>
             </div>
           ) : !coFileCaiDat && !coHuongDanCli ? (
-            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4 border border-border shadow-xl">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-muted uppercase">Trạng thái phát hành</span>
-                <button
-                  onClick={handleToggleFavorite}
-                  disabled={isTogglingFavorite}
-                  className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
-                    isFavorited
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
-                      : 'bg-surface-elevated border-border text-muted hover:text-primary'
-                  } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
-                  title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
-                >
-                  {isTogglingFavorite ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
-                  ) : (
-                    <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+            chiCoFileApkAndroid ? (
+              /* Card Hành Động cho App Android APK (P3B-19.3) */
+              <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4 border border-indigo-500/30 bg-indigo-500/5 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-indigo-400 font-mono font-bold text-xs">
+                    <Smartphone className="w-4 h-4" />
+                    <span>ỨNG DỤNG ANDROID (.APK)</span>
+                  </div>
+                  <button
+                    onClick={handleToggleFavorite}
+                    disabled={isTogglingFavorite}
+                    className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                      isFavorited
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                        : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                    } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                    title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
+                  >
+                    {isTogglingFavorite ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                    ) : (
+                      <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                    )}
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-xl bg-surface/50 border border-border/50 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                    <Smartphone className="w-4 h-4 text-indigo-400" />
+                    <span>Chỉ phát hành cho Android</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    Ứng dụng này không có bản chạy trực tiếp trên Windows. Bạn có thể tải file APK
+                    về để cài đặt trên điện thoại hoặc trình giả lập Android.
+                  </p>
+                  {apkAssets[0] && (
+                    <div className="text-[11px] font-mono text-secondary truncate mt-1 bg-surface-elevated/70 p-2.5 rounded-lg border border-border">
+                      <span className="text-muted">Tệp chính: </span>
+                      <span className="text-primary font-medium">{apkAssets[0].tenTep}</span>{' '}
+                      <span className="text-muted">
+                        ({formatBytes(apkAssets[0].dungLuongBytes)})
+                      </span>
+                    </div>
                   )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => apkAssets[0] && handleDownloadApk(apkAssets[0])}
+                  className="btn-tactile w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-display font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải File APK (Android)</span>
+                </button>
+
+                {appDetail.duongDanGithub && (
+                  <a
+                    href={`${appDetail.duongDanGithub}/releases`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-tactile w-full h-9 rounded-xl border border-border bg-surface hover:bg-surface-elevated text-secondary hover:text-primary font-mono text-xs flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Xem Bản Phát Hành Trên GitHub</span>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4 border border-border shadow-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-muted uppercase">
+                    Trạng thái phát hành
+                  </span>
+                  <button
+                    onClick={handleToggleFavorite}
+                    disabled={isTogglingFavorite}
+                    className={`btn-tactile w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                      isFavorited
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-500'
+                        : 'bg-surface-elevated border-border text-muted hover:text-primary'
+                    } ${isTogglingFavorite ? 'opacity-70 cursor-wait' : ''}`}
+                    title={isFavorited ? 'Đã yêu thích (Bấm để bỏ thích)' : 'Thêm vào yêu thích'}
+                  >
+                    {isTogglingFavorite ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                    ) : (
+                      <Heart className={`w-4 h-4 ${isFavorited ? 'fill-rose-500' : ''}`} />
+                    )}
+                  </button>
+                </div>
+                <div className="p-4 rounded-xl bg-surface-elevated/50 border border-border/50 text-center flex flex-col items-center gap-2">
+                  <AlertCircle className="w-6 h-6 text-muted" />
+                  <span className="text-xs font-semibold text-primary">
+                    Chưa có bản cài cho Windows
+                  </span>
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    Repository này hiện chưa phát hành gói cài đặt (.exe, .msi, .zip, .7z) tương
+                    thích với máy tính Windows.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="w-full h-12 rounded-xl bg-surface-elevated border border-border text-muted font-display font-bold text-xs flex items-center justify-center cursor-not-allowed opacity-60"
+                >
+                  Chưa hỗ trợ cài đặt
                 </button>
               </div>
-              <div className="p-4 rounded-xl bg-surface-elevated/50 border border-border/50 text-center flex flex-col items-center gap-2">
-                <AlertCircle className="w-6 h-6 text-muted" />
-                <span className="text-xs font-semibold text-primary">
-                  Chưa có bản cài cho Windows
-                </span>
-                <p className="text-[11px] text-muted leading-relaxed">
-                  Repository này hiện chưa phát hành gói cài đặt (.exe, .msi, .zip, .7z) tương thích
-                  với máy tính Windows.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled
-                className="w-full h-12 rounded-xl bg-surface-elevated border border-border text-muted font-display font-bold text-xs flex items-center justify-center cursor-not-allowed opacity-60"
-              >
-                Chưa hỗ trợ cài đặt
-              </button>
-            </div>
+            )
           ) : (
             <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 shadow-xl">
               <div className="flex items-center justify-between">

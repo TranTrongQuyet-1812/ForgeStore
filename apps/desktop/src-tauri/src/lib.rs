@@ -1,5 +1,6 @@
 pub mod downloader;
 pub mod installer;
+pub mod logger;
 pub mod terminal;
 pub mod uninstaller;
 
@@ -383,7 +384,10 @@ pub fn run() {
             go_cai_dat_ung_dung_qua_registry,
             mo_ung_dung_tu_registry,
             mo_terminal_chay_lenh,
-            kiem_tra_windows_terminal_kha_dung
+            kiem_tra_windows_terminal_kha_dung,
+            logger::ghi_log_desktop,
+            logger::mo_thu_muc_log_cmd,
+            logger::lay_duong_dan_tep_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running forgestore desktop application");

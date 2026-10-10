@@ -11,6 +11,7 @@
  */
 
 import { tokenStorage } from '../auth/token-storage';
+import { desktopLogger } from '../logger/desktop-logger';
 import type { AuthRefreshResponseDto } from '@forgestore/types';
 
 export class ApiError extends Error {
@@ -144,13 +145,26 @@ export class ApiClient {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } catch (networkErr) {
+      void desktopLogger.ghiLogError(
+        `Lỗi kết nối mạng khi gọi API [${endpoint}]: ${networkErr}`,
+        'ApiClient',
+      );
+      throw networkErr;
+    }
 
     // Xử lý khi nhận 401 Unauthorized
     if (response.status === 401) {
+      void desktopLogger.ghiLogWarn(
+        `API [${endpoint}] trả về 401 Unauthorized, bắt đầu quy trình làm mới token`,
+        'ApiClient',
+      );
       // Nếu chính endpoint /auth/refresh bị 401 hoặc request này đã là retry một lần rồi thì không retry nữa
       if (endpoint.includes('/auth/refresh') || isRetry) {
         await tokenStorage.clearAllTokens();
@@ -180,6 +194,10 @@ export class ApiClient {
     }
 
     if (!response.ok) {
+      void desktopLogger.ghiLogError(
+        `Lỗi phản hồi API [${endpoint}]: HTTP ${response.status} ${response.statusText}`,
+        'ApiClient',
+      );
       const errData = await response.json().catch(() => ({}));
       const retryAfter = Number(response.headers?.get?.('retry-after'));
       throw new ApiError(

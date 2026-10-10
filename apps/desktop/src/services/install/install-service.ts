@@ -6,6 +6,7 @@ import type {
   TienDoTaiPayload,
   ThongTinUngDungRegistry,
 } from './install-types';
+import { desktopLogger } from '../logger/desktop-logger';
 
 /**
  * Service điều phối động cơ tải nhị phân và cài đặt Windows (P3-08..P3-11)
@@ -25,6 +26,10 @@ export class InstallService {
     onProgress: (tienDo: TienDoTaiFrontend) => void,
   ): Promise<KetQuaCaiDatRust> {
     const idTai = params.maUngDung;
+    await desktopLogger.ghiLogInfo(
+      `Bắt đầu quy trình tải và cài đặt [${params.tenApp}] (${params.tenTep})`,
+      'InstallService',
+    );
 
     if (this.isTauriEnv()) {
       return this.thucThiTauriNative(params, idTai, onProgress);
@@ -37,6 +42,10 @@ export class InstallService {
    * Hủy tiến trình tải tệp hiện tại
    */
   async huyTai(idTai: string): Promise<boolean> {
+    await desktopLogger.ghiLogInfo(
+      `Yêu cầu hủy tiến trình tải tệp cho tác vụ [${idTai}]`,
+      'InstallService',
+    );
     if (this.isTauriEnv()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
@@ -123,13 +132,31 @@ export class InstallService {
     };
 
     // 2. Gọi lệnh tải và tính SHA-256 nguyên tử (P3-08 & P3-09)
-    const ketQuaTai = await invoke<KetQuaTaiRust>('tai_tep_cai_dat', {
-      idTai,
-      url: params.url,
-      tenTep: params.tenTep,
-      sha256DuKien: params.sha256DuKien || null,
-      onProgress: channel,
-    });
+    await desktopLogger.ghiLogInfo(
+      `Bắt đầu tải file [${params.tenTep}] từ ${params.url} (SHA-256 dự kiến: ${params.sha256DuKien || 'Không có'})`,
+      'InstallService',
+    );
+
+    let ketQuaTai: KetQuaTaiRust;
+    try {
+      ketQuaTai = await invoke<KetQuaTaiRust>('tai_tep_cai_dat', {
+        idTai,
+        url: params.url,
+        tenTep: params.tenTep,
+        sha256DuKien: params.sha256DuKien || null,
+        onProgress: channel,
+      });
+      await desktopLogger.ghiLogInfo(
+        `Tải thành công [${params.tenTep}] (${ketQuaTai.kich_thuoc_bytes} bytes). SHA-256 thực tế: ${ketQuaTai.sha256_tinh_duoc}`,
+        'InstallService',
+      );
+    } catch (taiErr) {
+      await desktopLogger.ghiLogError(
+        `Lỗi khi tải file [${params.tenTep}]: ${taiErr}`,
+        'InstallService',
+      );
+      throw taiErr;
+    }
 
     // 3. Thông báo chuyển sang trạng thái cài đặt (P3-10)
     onProgress({
@@ -143,12 +170,38 @@ export class InstallService {
     });
 
     // 4. Gọi lệnh cài đặt (chạy .exe, .msi hoặc giải nén .zip)
-    const ketQuaCaiDat = await invoke<KetQuaCaiDatRust>('cai_dat_ung_dung', {
-      duongDanTep: ketQuaTai.duong_dan_tep,
-      loaiTep: params.loaiTep,
-      tenApp: params.tenApp,
-      thuMucDich: params.thuMucDich || null,
-    });
+    await desktopLogger.ghiLogInfo(
+      `Khởi chạy cài đặt [${params.tenApp}] bằng tệp ${params.tenTep} (định dạng: ${params.loaiTep})`,
+      'InstallService',
+    );
+
+    let ketQuaCaiDat: KetQuaCaiDatRust;
+    try {
+      ketQuaCaiDat = await invoke<KetQuaCaiDatRust>('cai_dat_ung_dung', {
+        duongDanTep: ketQuaTai.duong_dan_tep,
+        loaiTep: params.loaiTep,
+        tenApp: params.tenApp,
+        thuMucDich: params.thuMucDich || null,
+      });
+
+      if (ketQuaCaiDat.thanh_cong) {
+        await desktopLogger.ghiLogInfo(
+          `Cài đặt thành công [${params.tenApp}]. File thực thi: ${ketQuaCaiDat.duong_dan_thuc_thi || 'N/A'}`,
+          'InstallService',
+        );
+      } else {
+        await desktopLogger.ghiLogWarn(
+          `Cài đặt thất bại hoặc bị hủy [${params.tenApp}]: ${ketQuaCaiDat.thong_diep}`,
+          'InstallService',
+        );
+      }
+    } catch (caiErr) {
+      await desktopLogger.ghiLogError(
+        `Lỗi khi thực thi cài đặt [${params.tenApp}]: ${caiErr}`,
+        'InstallService',
+      );
+      throw caiErr;
+    }
 
     // 5. Báo hoàn tất
     onProgress({
@@ -266,13 +319,26 @@ export class InstallService {
     uninstallString?: string,
     registryKey?: string,
   ): Promise<boolean> {
+    await desktopLogger.ghiLogInfo(
+      `Kích hoạt gỡ cài đặt [${tenApp}] qua Registry (Khóa: ${registryKey || 'N/A'})`,
+      'InstallService',
+    );
     if (this.isTauriEnv()) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke<boolean>('go_cai_dat_ung_dung_qua_registry', {
+      const res = await invoke<boolean>('go_cai_dat_ung_dung_qua_registry', {
         tenApp,
         uninstallString: uninstallString || null,
         registryKey: registryKey || null,
       });
+      if (res) {
+        await desktopLogger.ghiLogInfo(`Gỡ cài đặt thành công cho [${tenApp}]`, 'InstallService');
+      } else {
+        await desktopLogger.ghiLogWarn(
+          `Tiến trình gỡ cài đặt [${tenApp}] kết thúc không thành công hoặc bị người dùng hủy`,
+          'InstallService',
+        );
+      }
+      return res;
     }
     // Web dev preview fallback
     return true;

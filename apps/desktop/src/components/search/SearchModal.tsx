@@ -120,16 +120,10 @@ export const SearchModal: React.FC = () => {
           setSearchModalOpen(false);
         }, 800);
       } else {
-        // Thông báo lỗi dễ hiểu theo TrangThaiNapRepo
-        let errorMsg = 'Không thể nạp ứng dụng từ liên kết này.';
-        if (res.trangThai === 'LINK_KHONG_HOP_LE') {
-          errorMsg = 'Liên kết GitHub không hợp lệ hoặc kho lưu trữ không công khai.';
-        } else if (res.trangThai === 'KHONG_CO_RELEASE') {
-          errorMsg = 'Kho lưu trữ này chưa có bất kỳ bản phát hành (Release) nào trên GitHub.';
-        } else if (res.trangThai === 'KHONG_CO_FILE_CAI_DAT') {
-          errorMsg =
-            'Không tìm thấy tệp cài đặt tương thích Windows (.exe, .msi, .zip) trong bản phát hành mới nhất.';
-        }
+        const errorMsg =
+          res.trangThai === 'LINK_KHONG_HOP_LE'
+            ? 'Liên kết GitHub không hợp lệ hoặc kho lưu trữ không công khai.'
+            : 'Không thể nạp ứng dụng từ liên kết này.';
         setInspectError(res.thongBao || errorMsg);
       }
     } catch (err: unknown) {

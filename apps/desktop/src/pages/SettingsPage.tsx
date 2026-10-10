@@ -10,12 +10,15 @@ import {
   Trash2,
   Terminal,
   Check,
+  FileText,
+  Copy,
 } from 'lucide-react';
 import { useThemeStore } from '../stores/useThemeStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import { toast } from '../stores/useToastStore';
 import { deviceService, type DeviceInfo } from '../services/device/device-service';
+import { desktopLogger } from '../services/logger/desktop-logger';
 
 export const SettingsPage: React.FC = () => {
   const { theme, setTheme } = useThemeStore();
@@ -34,6 +37,7 @@ export const SettingsPage: React.FC = () => {
   const [downloadSize, setDownloadSize] = useState<number | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
   const [isWtAvailable, setIsWtAvailable] = useState<boolean>(true);
+  const [logFilePath, setLogFilePath] = useState<string>('');
 
   const fetchDownloadSize = async () => {
     const isTauri =
@@ -99,7 +103,30 @@ export const SettingsPage: React.FC = () => {
         })
         .catch(() => setIsWtAvailable(false));
     }
+
+    desktopLogger.layDuongDanLog().then((path) => {
+      setLogFilePath(path);
+    });
   }, []);
+
+  const handleOpenLogDirectory = async () => {
+    try {
+      await desktopLogger.moThuMucLog();
+      toast.success('Đã mở thư mục chứa nhật ký hoạt động.');
+    } catch (err) {
+      toast.error('Không thể mở thư mục nhật ký: ' + err);
+    }
+  };
+
+  const handleCopyLogPath = async () => {
+    if (!logFilePath) return;
+    try {
+      await navigator.clipboard.writeText(logFilePath);
+      toast.success('Đã sao chép đường dẫn tệp nhật ký vào bộ nhớ tạm.');
+    } catch {
+      toast.info(`Đường dẫn nhật ký: ${logFilePath}`);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto w-full select-none">
@@ -374,6 +401,54 @@ export const SettingsPage: React.FC = () => {
             >
               <Trash2 className={`w-3.5 h-3.5 ${isCleaning ? 'animate-spin' : ''}`} />
               <span>{isCleaning ? 'Đang dọn dẹp...' : 'Dọn dẹp file tải về'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Nhật ký hoạt động hệ thống (P3B-19 & D-27) */}
+      <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
+              <FileText className="w-4 h-4 text-accent-forge" />
+              <span>Nhật ký hoạt động (System Logs)</span>
+            </h3>
+            <p className="text-xs text-secondary mt-1">
+              Ghi lại chi tiết tiến trình tải file, kiểm tra SHA-256, cài đặt, gỡ ứng dụng và lỗi
+              kết nối. Thông tin xác thực và dữ liệu nhạy cảm được che giấu tự động.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-surface-elevated/70 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <span className="text-[11px] font-mono text-muted uppercase">
+              Tệp nhật ký hiện tại:
+            </span>
+            <div
+              className="font-mono text-xs text-primary font-medium truncate mt-0.5 select-all"
+              title={logFilePath}
+            >
+              {logFilePath || '%LOCALAPPDATA%\\forgestore-desktop\\logs\\forgestore_client.log'}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleCopyLogPath}
+              className="btn-tactile px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-elevated text-xs font-semibold text-secondary hover:text-primary flex items-center gap-1.5 shadow-sm transition-all"
+              title="Sao chép đường dẫn file log"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Sao chép đường dẫn</span>
+            </button>
+            <button
+              onClick={handleOpenLogDirectory}
+              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge/10 hover:bg-accent-forge/20 border border-accent-forge/30 text-accent-forge text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span>Mở thư mục nhật ký</span>
             </button>
           </div>
         </div>
