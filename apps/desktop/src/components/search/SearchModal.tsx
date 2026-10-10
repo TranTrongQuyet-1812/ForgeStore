@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useNavStore } from '../../stores/useNavStore';
 import { storeService } from '../../services/store/store-service';
+import { layThongBaoLoi } from '../../services/api/error-message';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
@@ -131,8 +132,7 @@ export const SearchModal: React.FC = () => {
         setInspectError(res.thongBao || errorMsg);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Lỗi kết nối khi kiểm tra repository.';
-      setInspectError(message);
+      setInspectError(layThongBaoLoi(err, 'Lỗi kết nối khi kiểm tra repository.'));
     } finally {
       setIsInspecting(false);
     }
