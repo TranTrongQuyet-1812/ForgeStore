@@ -9,6 +9,8 @@ export interface BanGhiDaCao {
   lo: string;
   caoLuc: string; // ISO
   sao: number;
+  /** Mã số repo GitHub (không đổi khi repo đổi tên hoặc chuyển chủ), dùng để bắt trùng. */
+  idGithub?: number | null;
   moTaEn: string | null;
   /** README thô đúng như GithubService.layReadme trả về (mã băm tính trên bản này). */
   readmeEn: string | null;

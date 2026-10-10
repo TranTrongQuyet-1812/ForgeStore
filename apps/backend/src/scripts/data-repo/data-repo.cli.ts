@@ -2,6 +2,7 @@
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
+ *   pnpm data-repo kiem-trung                       # báo cáo repo trùng (id GitHub, tên, README giống hệt), không tự xóa
  *   pnpm data-repo chia --lo dot-01 [--moi-lo 30]   # cắt đợt đã cào thành lô nhỏ cho Anti (dot-01-l001, ...)
  *   (cũ) pnpm data-repo kham-pha --lo pilot-01 [--so 20]  # Search + 11 bộ lọc → 00_danh_sach/pilot-01.txt (+ .boqua.jsonl)
  *   pnpm data-repo cao  --lo pilot-01        # 00_danh_sach/pilot-01.txt → 01_da_cao (cào GitHub, chưa đụng DB)
@@ -24,6 +25,7 @@ import {
   THU_MUC,
 } from './data-repo.paths';
 import { canhBaoDong } from './data-repo.canh-bao';
+import { timTrungLap } from './data-repo.trung-lap';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
@@ -97,6 +99,7 @@ async function lenhCao(): Promise<void> {
       continue;
     }
     const info = (await r1.res.json()) as {
+      id?: number;
       stargazers_count: number;
       description: string | null;
       archived: boolean;
@@ -121,6 +124,7 @@ async function lenhCao(): Promise<void> {
       lo,
       caoLuc: new Date().toISOString(),
       sao: info.stargazers_count,
+      idGithub: info.id ?? null,
       moTaEn: info.description,
       readmeEn,
       readmeSha: readmeEn ? tinhMaBam(readmeEn) : null,
@@ -548,7 +552,17 @@ async function lenhKhamPha(): Promise<void> {
 
   // Chạy tiếp được: đọc kết quả của lần chạy trước trong cùng đợt
   const daXet = new Set<string>();
+  const daXetId = new Set<number>();
   const datTruoc = docDanhSachRepo(fileDs);
+  // Mã số repo đã gặp trong mọi danh sách và bản cào (bắt repo đổi tên hoặc chuyển chủ)
+  for (const t of fs.readdirSync(thuMucDs).filter((x) => x.endsWith('.txt'))) {
+    for (const m of fs.readFileSync(path.join(thuMucDs, t), 'utf8').matchAll(/\bid=(\d+)/g)) {
+      daXetId.add(Number(m[1]));
+    }
+  }
+  for (const b of docJsonl<{ idGithub?: number }>(fileBoQua)) {
+    if (b.idGithub) daXetId.add(b.idGithub);
+  }
   for (const r of datTruoc) daXet.add(r.toLowerCase());
   for (const b of docJsonl<{ repo: string }>(fileBoQua)) daXet.add(b.repo.toLowerCase());
   if (!fs.existsSync(fileDs)) fs.writeFileSync(fileDs, `# Đợt ${lo}\n`, 'utf8');
@@ -592,11 +606,16 @@ async function lenhKhamPha(): Promise<void> {
         }
         if (Number(res.headers.get('x-ratelimit-remaining') ?? '30') <= 1) await ngu(30000);
         const kq = (await res.json()) as { items: RepoUV[] };
-        for (const it of kq.items) {
+        for (const it of kq.items as Array<RepoUV & { id?: number }>) {
           if (soDat >= soCan || soXet >= toiDaXet) break;
           const khoa = it.full_name.toLowerCase();
           if (daXet.has(khoa)) continue;
           daXet.add(khoa);
+          if (it.id && daXetId.has(it.id)) {
+            loai(it.full_name, 'TRUNG_ID_GITHUB', { idGithub: it.id });
+            continue;
+          }
+          if (it.id) daXetId.add(it.id);
           if (daCo.has(khoa)) {
             loai(it.full_name, 'DA_CO_TRONG_KHO_HOAC_DOT_KHAC');
             continue;
@@ -634,7 +653,7 @@ async function lenhKhamPha(): Promise<void> {
           }
           fs.appendFileSync(
             fileDs,
-            `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'} dai=${dai}\n`,
+            `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'} dai=${dai} id=${it.id ?? ''}\n`,
             'utf8',
           );
           soDat++;
@@ -676,6 +695,40 @@ function lenhChia(): void {
     `Đã chia ${cao.length} repo thành ${soLo} lô (mỗi lô tối đa ${moiLo}): ${dot}-l001 … ${dot}-l${String(soLo).padStart(3, '0')}. Tổng ${tongDoan} đoạn cần dịch.`,
   );
   console.info(`Đưa từng file ${THU_MUC.choDich}/<lô>.jsonl cho Anti.`);
+}
+
+// ---------------------------------------------------------------- KIỂM TRÙNG
+/** Báo cáo repo trùng trong mọi bản cào (không tự xóa): cùng id GitHub, cùng tên, README giống hệt. */
+function lenhKiemTrung(): void {
+  const thuMuc = path.join(DATA_REPO_DIR, THU_MUC.daCao);
+  if (!fs.existsSync(thuMuc)) throw new Error('Chưa có 01_da_cao.');
+  const files = fs
+    .readdirSync(thuMuc)
+    // Bỏ lô con do "chia" sinh ra (dot-01-l001) vì chúng là bản cắt của đợt
+    .filter((f) => f.endsWith('.jsonl') && !/-l\d{3}\.jsonl$/.test(f));
+  const rows = files.flatMap((f) =>
+    docJsonl<BanGhiDaCao>(path.join(thuMuc, f)).map((r) => ({
+      repo: r.repo,
+      lo: f.replace('.jsonl', ''),
+      idGithub: r.idGithub ?? null,
+      readmeSha: r.readmeSha,
+      readmeDai: r.readmeEn?.length ?? 0,
+    })),
+  );
+  const nhom = timTrungLap(rows);
+  const file = path.join(DATA_REPO_DIR, THU_MUC.danhSach, '_trung_lap.jsonl');
+  ghiJsonl(file, nhom);
+  const dem: Record<string, number> = {};
+  for (const n of nhom) dem[n.loai] = (dem[n.loai] ?? 0) + 1;
+  console.info(
+    `Đã xét ${rows.length} repo trong ${files.length} bản cào. Nhóm trùng: ${nhom.length} ${JSON.stringify(dem)} → ${file}`,
+  );
+  for (const n of nhom.slice(0, 10)) console.info(` - ${n.loai}: ${n.repo.join('  |  ')}`);
+  const thieuId = rows.filter((r) => !r.idGithub).length;
+  if (thieuId)
+    console.info(
+      `Lưu ý: ${thieuId} repo chưa có id GitHub (bản cào cũ), chỉ kiểm được theo tên và README.`,
+    );
 }
 
 async function lenhPhanTich(): Promise<void> {
@@ -724,6 +777,8 @@ async function lenhPhanTich(): Promise<void> {
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'kiem-trung':
+      return lenhKiemTrung();
     case 'chia':
       return lenhChia();
     case 'kham-pha':
