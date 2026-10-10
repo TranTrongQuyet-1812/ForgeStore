@@ -7,7 +7,8 @@
  *   pnpm data-repo nhap --lo pilot-01        # 03_da_dich (Anti trả) → 04_da_kiem + 04_loi
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi]  [--repo owner/repo]   # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich]  [--repo owner/repo]   # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -209,11 +210,12 @@ function lenhXem(): void {
 // ---------------------------------------------------------------- CÁC LỆNH CẦN NEST/DB
 async function voiNest<T>(
   fn: (app: import('@nestjs/common').INestApplicationContext) => Promise<T>,
+  logChiTiet = false,
 ) {
   const { NestFactory } = await import('@nestjs/core');
   const { AppModule } = await import('../../app.module');
   const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['warn', 'error'],
+    logger: logChiTiet ? ['log', 'warn', 'error'] : ['warn', 'error'],
   });
   try {
     return await fn(app);
@@ -383,8 +385,22 @@ async function lenhDay(): Promise<void> {
         await cache.xoaTheoPrefix(`fs:apps:detail:${ud.tenRepoDayDu.toLowerCase()}`);
         await cache.xoaTheoPrefix('fs:apps:list:');
         await cache.xoaTheoPrefix('fs:categories:');
-        ghiLog('ok', { moTa, readme });
-        console.info(`✓ ${r.repo}: mô tả ${moTa}, README ${readme}`);
+        // Phân tích AI (điểm uy tín, mức an toàn, hướng dẫn CLI, vector tìm kiếm). Không dựa vào "phân tích lười" của BE.
+        let phanTich = 'bo_qua';
+        if (!coCo('bo-qua-phan-tich')) {
+          try {
+            await apps.phanTichUngDung(ud.maUngDung);
+            const pt = await prisma.phanTichAI.findUnique({
+              where: { maUngDung: ud.maUngDung },
+              select: { maPhanTich: true },
+            });
+            phanTich = pt ? 'da_ghi' : 'khong_co_ket_qua';
+          } catch (err) {
+            phanTich = 'loi: ' + String(err).slice(0, 120);
+          }
+        }
+        ghiLog('ok', { moTa, readme, phanTich });
+        console.info(`✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}`);
       } catch (err) {
         ghiLog('loi', { thongBao: String(err).slice(0, 300) });
         console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
@@ -573,6 +589,49 @@ async function lenhKhamPha(): Promise<void> {
   console.info(`Loại ${boQua.length}: ${JSON.stringify(dem)}`);
 }
 
+async function lenhPhanTich(): Promise<void> {
+  const repo = layThamSo('repo');
+  if (!repo) throw new Error('Thiếu --repo owner/repo');
+  await voiNest(async (app) => {
+    const { PrismaService } = await import('../../modules/prisma/prisma.service');
+    const { AppsService } = await import('../../modules/apps/apps.service');
+    const prisma = app.get(PrismaService);
+    const apps = app.get(AppsService);
+    const ud = await prisma.ungDung.findFirst({
+      where: { tenRepoDayDu: { equals: repo, mode: 'insensitive' } },
+      select: { maUngDung: true, tenRepoDayDu: true },
+    });
+    if (!ud) throw new Error('Repo chưa có trong DB (chạy day trước).');
+    const truoc = await prisma.phanTichAI.findUnique({
+      where: { maUngDung: ud.maUngDung },
+      select: { diemUyTin: true },
+    });
+    console.info('Trước khi chạy: phan_tich_ai', truoc ? 'đã có' : 'CHƯA có');
+    try {
+      await apps.phanTichUngDung(ud.maUngDung);
+      console.info('phanTichUngDung kết thúc, không ném lỗi.');
+    } catch (err) {
+      console.error('phanTichUngDung NÉM LỖI:', err);
+    }
+    const sau = await prisma.phanTichAI.findUnique({
+      where: { maUngDung: ud.maUngDung },
+      select: { diemUyTin: true, mucDoAnToan: true, huongDanCaiDat: true },
+    });
+    const vec = (await prisma.$queryRawUnsafe(
+      `SELECT (vector_ngu_nghia IS NOT NULL) AS co FROM phan_tich_ai WHERE ma_ung_dung = '${ud.maUngDung}'::uuid`,
+    )) as Array<{ co: boolean }>;
+    console.info(
+      JSON.stringify({
+        sau_khi_chay: sau ? 'đã có phan_tich_ai' : 'VẪN CHƯA có',
+        diemUyTin: sau?.diemUyTin ?? null,
+        mucDoAnToan: sau?.mucDoAnToan ?? null,
+        coHuongDanCli: Boolean(sau?.huongDanCaiDat),
+        coVector: vec[0]?.co ?? false,
+      }),
+    );
+  }, true);
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
@@ -586,6 +645,8 @@ async function main(): Promise<void> {
       return lenhNhap();
     case 'xem':
       return lenhXem();
+    case 'phan-tich':
+      return lenhPhanTich();
     case 'doi-chieu':
       return lenhDoiChieu();
     case 'day':
