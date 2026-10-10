@@ -53,6 +53,7 @@ export const envSchema = z.object({
     .transform((v) => v === true || v === 'true' || v === '1'),
   NVIDIA_API_KEY: z.string().optional(),
   NVIDIA_NIM_MODEL: z.string().optional(),
+  NVIDIA_TRANSLATE_MODEL: z.string().optional(),
 
   // Shared Translation Engine (4 Tầng Nhà Cung Cấp)
   CLOUDFLARE_TRANSLATE_URL: z.string().optional(),

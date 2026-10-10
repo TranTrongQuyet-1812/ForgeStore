@@ -20,9 +20,10 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
 
   constructor(private readonly configService: ConfigService) {
     const key = this.configService.get<string>('NVIDIA_API_KEY');
-    // P3B-05.6 / Mục 3: Khớp tên biến NVIDIA_NIM_MODEL trong .env.example
+    // P3B-05.6: biến riêng cho DỊCH (NVIDIA_NIM_MODEL là của LLM dự phòng phân tích/tìm kiếm, mặc định khác)
     this.modelName =
-      this.configService.get<string>('NVIDIA_NIM_MODEL') || 'google/diffusiongemma-26b-a4b-it';
+      this.configService.get<string>('NVIDIA_TRANSLATE_MODEL') ||
+      'google/diffusiongemma-26b-a4b-it';
 
     if (key && key.trim() && !key.startsWith('your_')) {
       this.apiKey = key.trim();

@@ -10,7 +10,7 @@ describe('NvidiaTranslationProvider', () => {
     mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'NVIDIA_API_KEY') return 'test-key-nvidia';
-        if (key === 'NVIDIA_NIM_MODEL') return 'google/diffusiongemma-26b-a4b-it';
+        if (key === 'NVIDIA_TRANSLATE_MODEL') return 'google/diffusiongemma-26b-a4b-it';
         return undefined;
       }),
     } as unknown as ConfigService;
