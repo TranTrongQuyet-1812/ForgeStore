@@ -13,6 +13,7 @@ import {
 import { useNavStore } from '../../stores/useNavStore';
 import { storeService } from '../../services/store/store-service';
 import { layThongBaoLoi } from '../../services/api/error-message';
+import { layMaMoTrangTuLink } from './search-utils';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
@@ -161,7 +162,7 @@ export const SearchModal: React.FC = () => {
       e.preventDefault();
       if (isGithubUrl || searchResult?.loaiTruyVan === 'URL') {
         if (searchResult?.duongDanUrl?.daCoTrongStore) {
-          openAppDetail(searchResult.duongDanUrl.repo);
+          openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl));
           setSearchModalOpen(false);
         } else {
           handleInspectRepo(query.trim());
@@ -315,7 +316,7 @@ export const SearchModal: React.FC = () => {
               {searchResult?.duongDanUrl?.daCoTrongStore ? (
                 <button
                   onClick={() => {
-                    openAppDetail(searchResult.duongDanUrl!.repo);
+                    openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl!));
                     setSearchModalOpen(false);
                   }}
                   className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30"
