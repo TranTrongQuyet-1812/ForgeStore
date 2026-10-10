@@ -21,6 +21,7 @@ import {
   noiThemJsonl,
   THU_MUC,
 } from './data-repo.paths';
+import { canhBaoDong } from './data-repo.canh-bao';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
@@ -170,6 +171,13 @@ function lenhNhap(): void {
   }
   ghiJsonl(fileKiem, [...daKiem.values()]);
   ghiJsonl(duongDan('loi', lo), loi);
+  const canhBao = [...daKiem.values()].flatMap(canhBaoDong);
+  ghiJsonl(duongDan('canhBao', lo), canhBao);
+  const demCb: Record<string, number> = {};
+  for (const cb of canhBao) demCb[cb.loai] = (demCb[cb.loai] ?? 0) + 1;
+  console.info(
+    `Cảnh báo chất lượng (không chặn): ${canhBao.length} → ${duongDan('canhBao', lo)} ${JSON.stringify(demCb)}`,
+  );
   console.info(`Đạt: ${daKiem.size} repo → ${fileKiem}`);
   console.info(`Lỗi: ${loi.length} repo → ${duongDan('loi', lo)} ${JSON.stringify(demLoi)}`);
   if (loi.length) {

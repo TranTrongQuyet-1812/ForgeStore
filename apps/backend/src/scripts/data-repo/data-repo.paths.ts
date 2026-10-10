@@ -12,6 +12,7 @@ export const THU_MUC = {
   daDich: '03_da_dich',
   daKiem: '04_da_kiem',
   loi: '04_loi',
+  canhBao: '04_canh_bao',
   xem: '05_xem',
   daDay: '06_da_day',
 } as const;
