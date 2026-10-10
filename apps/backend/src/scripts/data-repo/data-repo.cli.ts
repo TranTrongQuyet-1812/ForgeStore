@@ -2,6 +2,7 @@
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
+ *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
  *   pnpm data-repo kiem-trung                       # báo cáo repo trùng (id GitHub, tên, README giống hệt), không tự xóa
  *   pnpm data-repo chia --lo dot-01 [--moi-lo 30]   # cắt đợt đã cào thành lô nhỏ cho Anti (dot-01-l001, ...)
  *   (cũ) pnpm data-repo kham-pha --lo pilot-01 [--so 20]  # Search + 11 bộ lọc → 00_danh_sach/pilot-01.txt (+ .boqua.jsonl)
@@ -498,6 +499,22 @@ const CHU_DE_KHAM_PHA = [
   'topic:system-tools',
 ];
 
+/** Lấy README thô của repo qua GitHub API (giải mã base64, giống GithubService.layReadme). */
+async function layReadmeGithub(
+  repo: string,
+  headers: Record<string, string>,
+): Promise<string | null> {
+  const res = await fetch(`https://api.github.com/repos/${repo}/readme`, {
+    headers,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) return null;
+  const d = (await res.json()) as { content?: string; encoding?: string };
+  return d.content && d.encoding === 'base64'
+    ? Buffer.from(d.content, 'base64').toString('utf-8')
+    : null;
+}
+
 /** Đọc các repo đã có trong một file danh sách (bỏ ghi chú sau dấu #). */
 function docDanhSachRepo(file: string): string[] {
   if (!fs.existsSync(file)) return [];
@@ -521,7 +538,7 @@ async function lenhKhamPha(): Promise<void> {
   }
   const token = process.env.GITHUB_TOKEN || '';
   if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
-  const { locCucBo, danhGiaRelease, NGUONG_LOC_MAC_DINH } =
+  const { locCucBo, danhGiaRelease, NGUONG_LOC_MAC_DINH, coLenhCaiTuReadme } =
     await import('../../modules/apps/utils/ingestion-filters.util');
   type RepoUV = import('../../modules/apps/utils/ingestion-filters.util').RepoUngVien;
 
@@ -644,7 +661,14 @@ async function lenhKhamPha(): Promise<void> {
             continue;
           }
           const dg = danhGiaRelease((await rr.json()) as never[], now);
-          if (!dg.dat) {
+          let chiCoLenhCai = false;
+          if (
+            !dg.dat &&
+            (dg.lyDo === 'KHONG_CO_BAN_PHAT_HANH' || dg.lyDo === 'KHONG_CO_FILE_CAI') &&
+            coLenhCaiTuReadme(await layReadmeGithub(it.full_name, headers), it.full_name)
+          ) {
+            chiCoLenhCai = true; // bộ lọc 10: không có tệp cài nhưng có lệnh cài trong README
+          } else if (!dg.dat) {
             loai(it.full_name, dg.lyDo ?? 'KHONG_RO', {
               sao: it.stargazers_count,
               chiTiet: dg.chiTiet,
@@ -653,7 +677,7 @@ async function lenhKhamPha(): Promise<void> {
           }
           fs.appendFileSync(
             fileDs,
-            `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'} dai=${dai} id=${it.id ?? ''}\n`,
+            `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''}${chiCoLenhCai ? ' chi-co-lenh-cai' : ''} chu-de=${chuDe || 'tat-ca'} dai=${dai} id=${it.id ?? ''}\n`,
             'utf8',
           );
           soDat++;
@@ -672,6 +696,78 @@ async function lenhKhamPha(): Promise<void> {
   );
   console.info(`Loại trong lần chạy này: ${JSON.stringify(dem)}`);
   if (soDat < soCan) console.info('Chưa đủ mục tiêu: chạy lại đúng lệnh này để tiếp tục.');
+}
+
+// ---------------------------------------------------------------- XÉT LẠI REPO THIẾU TỆP CÀI (bộ lọc 10)
+/** Xét lại các repo đã bị loại vì thiếu tệp cài của một đợt: README có lệnh cài hợp lệ thì nhận vào đợt mới (--ra). */
+async function lenhQuetLaiCli(): Promise<void> {
+  const nguon = batBuocLo();
+  const ra = layThamSo('ra') ?? `${nguon}b`;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  const duTruCore = Number(layThamSo('du-tru') ?? '1000');
+  const { coLenhCaiTuReadme } = await import('../../modules/apps/utils/ingestion-filters.util');
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const ungVien = docJsonl<{ repo: string; sao?: number; lyDo: string }>(
+    path.join(thuMucDs, `${nguon}.boqua.jsonl`),
+  ).filter((b) => b.lyDo === 'KHONG_CO_BAN_PHAT_HANH' || b.lyDo === 'KHONG_CO_FILE_CAI');
+  const fileRa = path.join(thuMucDs, `${ra}.txt`);
+  const daXet = new Set(docDanhSachRepo(fileRa).map((r) => r.toLowerCase()));
+  const fileLoai = path.join(thuMucDs, `${ra}.boqua.jsonl`);
+  for (const b of docJsonl<{ repo: string }>(fileLoai)) daXet.add(b.repo.toLowerCase());
+  if (!fs.existsSync(fileRa))
+    fs.writeFileSync(
+      fileRa,
+      `# Đợt ${ra}: repo thiếu tệp cài nhưng có lệnh cài trong README (từ ${nguon})\n`,
+      'utf8',
+    );
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${token}`,
+  };
+  let nhan = 0;
+  let loai = 0;
+  for (const b of ungVien.sort((x, y) => (y.sao ?? 0) - (x.sao ?? 0))) {
+    if (daXet.has(b.repo.toLowerCase())) continue;
+    daXet.add(b.repo.toLowerCase());
+    const res = await fetch(`https://api.github.com/repos/${b.repo}/readme`, {
+      headers,
+      signal: AbortSignal.timeout(30000),
+    });
+    if (Number(res.headers.get('x-ratelimit-remaining') ?? '5000') < duTruCore) {
+      console.warn(`Dừng: hạn mức GitHub xuống dưới ${duTruCore}. Chạy lại để tiếp tục.`);
+      break;
+    }
+    let readme: string | null = null;
+    if (res.ok) {
+      const d = (await res.json()) as { content?: string; encoding?: string };
+      readme =
+        d.content && d.encoding === 'base64'
+          ? Buffer.from(d.content, 'base64').toString('utf-8')
+          : null;
+    }
+    if (coLenhCaiTuReadme(readme, b.repo)) {
+      fs.appendFileSync(
+        fileRa,
+        `${b.repo}  # chi-co-lenh-cai ${b.sao ?? ''}★ tu=${nguon}\n`,
+        'utf8',
+      );
+      nhan++;
+    } else {
+      noiThemJsonl(fileLoai, { repo: b.repo, sao: b.sao, lyDo: 'KHONG_CO_TEP_CAI_VA_LENH_CAI' });
+      loai++;
+    }
+  }
+  console.info(
+    `Xét ${nhan + loai} repo thiếu tệp cài của ${nguon}: nhận ${nhan} (có lệnh cài), loại ${loai} → ${fileRa}`,
+  );
 }
 
 // ---------------------------------------------------------------- CHIA ĐỢT THÀNH LÔ NHỎ
@@ -777,6 +873,8 @@ async function lenhPhanTich(): Promise<void> {
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'quet-lai-cli':
+      return lenhQuetLaiCli();
     case 'kiem-trung':
       return lenhKiemTrung();
     case 'chia':

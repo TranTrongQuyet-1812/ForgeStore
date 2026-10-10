@@ -1,4 +1,6 @@
 import { DinhDangTep } from '@prisma/client';
+import { coCachCaiCliHopLe } from '@forgestore/types';
+import { trichXuatHuongDanCliBangQuyTac } from '../../ai/utils/cli-guide-extractor.util';
 import { phanLoaiTep } from './file-classifier.util';
 
 /**
@@ -152,4 +154,15 @@ export function danhGiaRelease(
     chiCoApk: tep.every((k) => k.dinhDang === DinhDangTep.APK),
     tenBanPhatHanh: chinhThuc.tag_name,
   };
+}
+
+/**
+ * Bộ lọc 10 (P3B-06.3): repo không có tệp cài nhưng README có lệnh cài hợp lệ (winget, scoop, npm, pip, docker…)
+ * vẫn được nhận. Dùng đúng bộ trích bằng quy tắc của BE (không AI).
+ */
+export function coLenhCaiTuReadme(readme: string | null | undefined, fullName: string): boolean {
+  if (!readme) return false;
+  return coCachCaiCliHopLe(
+    trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullName}#readme`),
+  );
 }

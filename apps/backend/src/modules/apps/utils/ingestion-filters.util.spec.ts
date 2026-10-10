@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  coLenhCaiTuReadme,
   danhGiaRelease,
   locCucBo,
   trongDanhSachChan,
@@ -102,5 +103,19 @@ describe('danhGiaRelease (bộ lọc 8 và 9)', () => {
       NOW,
     );
     expect(kq.tenBanPhatHanh).toBe('v2');
+  });
+});
+
+describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
+  it('README có lệnh winget trong mục cài đặt thì nhận', () => {
+    const readme = '# Foo\n\n## Installation\n\n```\nwinget install Foo.Bar\n```\n';
+    expect(coLenhCaiTuReadme(readme, 'o/foo')).toBe(true);
+  });
+  it('README không có lệnh cài thì loại', () => {
+    expect(coLenhCaiTuReadme('# Foo\n\nA library for things.', 'o/foo')).toBe(false);
+  });
+  it('README rỗng hoặc null thì loại', () => {
+    expect(coLenhCaiTuReadme('', 'o/foo')).toBe(false);
+    expect(coLenhCaiTuReadme(null, 'o/foo')).toBe(false);
   });
 });
