@@ -18,6 +18,7 @@ export class ApiError extends Error {
     public status: number,
     public statusText: string,
     public data: unknown,
+    public retryAfterGiay?: number,
   ) {
     super(`API Error ${status}: ${statusText}`);
     this.name = 'ApiError';
@@ -180,7 +181,13 @@ export class ApiClient {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new ApiError(response.status, response.statusText, errData);
+      const retryAfter = Number(response.headers?.get?.('retry-after'));
+      throw new ApiError(
+        response.status,
+        response.statusText,
+        errData,
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+      );
     }
 
     // Nếu không có content (204 No Content)

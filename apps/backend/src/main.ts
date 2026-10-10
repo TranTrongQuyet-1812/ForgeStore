@@ -69,6 +69,8 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Hardware-Id'],
+    // Cho Desktop đọc được thời gian chờ khi bị giới hạn tốc độ (429)
+    exposedHeaders: ['Retry-After'],
   });
 
   // P2-04.5: Swagger Documentation tại /api/docs

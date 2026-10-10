@@ -16,6 +16,28 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     global.fetch = originalFetch;
   });
 
+  it('lỗi 429: ApiError mang theo thời gian chờ đọc từ header Retry-After', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: '',
+      headers: new Headers({ 'retry-after': '3284' }),
+      json: async () => ({ thongBao: 'ThrottlerException: Too Many Requests' }),
+    });
+    await expect(client.get('/x')).rejects.toMatchObject({ status: 429, retryAfterGiay: 3284 });
+  });
+
+  it('lỗi 429 không có Retry-After: retryAfterGiay để trống', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: '',
+      headers: new Headers(),
+      json: async () => ({}),
+    });
+    await expect(client.get('/x')).rejects.toMatchObject({ status: 429, retryAfterGiay: undefined });
+  });
+
   it('tự động đính kèm Authorization header khi có Access Token trong RAM', async () => {
     tokenStorage.setAccessToken('initial-access-token');
 

@@ -15,9 +15,18 @@ describe('layThongBaoLoi', () => {
     );
   });
 
-  it('429 hiện câu nhắc đợi vài giây', () => {
+  it('429 kèm Retry-After thì hiện số phút phải chờ', () => {
+    const err = new ApiError(429, '', { thongBao: 'ThrottlerException: Too Many Requests' }, 3284);
+    expect(layThongBaoLoi(err, macDinh)).toBe(
+      'Bạn đã thao tác quá nhiều lần. Vui lòng thử lại sau khoảng 55 phút.',
+    );
+  });
+
+  it('429 không đọc được Retry-After thì dùng câu chung, không hứa "vài giây"', () => {
     const err = new ApiError(429, '', { thongBao: 'ThrottlerException: Too Many Requests' });
-    expect(layThongBaoLoi(err, macDinh)).toContain('đợi vài giây');
+    const msg = layThongBaoLoi(err, macDinh);
+    expect(msg).toContain('quá nhiều lần');
+    expect(msg).not.toContain('vài giây');
   });
 
   it('không có thongBao thì dùng câu mặc định', () => {

@@ -10,7 +10,13 @@ export function layThongBaoLoi(err: unknown, macDinh: string): string {
     const data = err.data as { thongBao?: unknown } | null | undefined;
     const thongBao = typeof data?.thongBao === 'string' ? data.thongBao.trim() : '';
     if (err.status === 429) {
-      return 'Bạn thao tác hơi nhanh, vui lòng đợi vài giây rồi thử lại.';
+      if (err.retryAfterGiay) {
+        const phut = Math.max(1, Math.ceil(err.retryAfterGiay / 60));
+        return phut >= 2
+          ? `Bạn đã thao tác quá nhiều lần. Vui lòng thử lại sau khoảng ${phut} phút.`
+          : 'Bạn đã thao tác quá nhiều lần. Vui lòng thử lại sau ít phút.';
+      }
+      return 'Bạn đã thao tác quá nhiều lần trong một giờ. Vui lòng thử lại sau.';
     }
     return thongBao || macDinh;
   }

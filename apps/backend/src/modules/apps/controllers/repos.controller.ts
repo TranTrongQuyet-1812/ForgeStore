@@ -17,7 +17,7 @@ export class ReposController {
   constructor(private readonly appsService: AppsService) {}
 
   @CongKhai()
-  @Throttle({ default: { limit: 10, ttl: 3600000 } })
+  @Throttle({ default: { limit: 30, ttl: 3600000 } })
   @Post('inspect')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
