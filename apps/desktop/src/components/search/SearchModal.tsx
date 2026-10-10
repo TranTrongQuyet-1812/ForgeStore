@@ -356,11 +356,7 @@ export const SearchModal: React.FC = () => {
                 <div className="p-2.5 rounded-xl bg-accent-ai/10 border border-accent-ai/20 flex items-center justify-between text-xs text-accent-ai">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 shrink-0" />
-                    <span>
-                      {searchResult.truyVanDich
-                        ? `Tìm kiếm: "${searchResult.truyVanDich}"`
-                        : 'Tìm kiếm thông minh'}
-                    </span>
+                    <span>Gợi ý thông minh theo điều bạn mô tả</span>
                   </div>
                 </div>
               )}
