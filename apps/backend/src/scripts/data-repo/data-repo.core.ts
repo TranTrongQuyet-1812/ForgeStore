@@ -22,6 +22,8 @@ const dichVuReadme = new ReadmeTranslationService(
 );
 
 export const MO_TA_TOI_DA = 400;
+/** Bản dịch ngắn hơn 60% bản gốc (theo ký tự hoặc số dòng) là dấu hiệu bị cắt. Bản dịch tiếng Việt thường dài tương đương hoặc hơn. */
+export const TI_LE_DO_DAI_TOI_THIEU = 0.6;
 const KY_HIEU_CHE = /⟦C\d+⟧/;
 
 export function tinhMaBam(text: string): string {
@@ -124,6 +126,19 @@ export function kiemTraDongDaDich(
       ketQua.loi = 'con_ky_hieu_che' satisfies LyDoLoiDong;
       soDoanLoi++;
       return ketQua;
+    }
+    // Bản dịch bị cắt hoặc rút gọn (validator cũ không bắt được): so độ dài và số dòng với bản gốc
+    if (goc[i] && goc[i].length > 300) {
+      const dongGoc = goc[i].split('\n').filter((l) => l.trim()).length;
+      const dongDich = viDay.split('\n').filter((l) => l.trim()).length;
+      if (
+        viDay.length / goc[i].length < TI_LE_DO_DAI_TOI_THIEU ||
+        dongDich / dongGoc < TI_LE_DO_DAI_TOI_THIEU
+      ) {
+        ketQua.loi = 'mat_noi_dung' satisfies LyDoLoiDong;
+        soDoanLoi++;
+        return ketQua;
+      }
     }
     ketQua.vi = t.vi;
     doanDat.push({ maBam: c.maBam, goc: (goc[i] ?? '').trim(), dich: viDay });

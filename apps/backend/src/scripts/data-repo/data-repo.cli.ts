@@ -158,8 +158,10 @@ function lenhNhap(): void {
   const demLoi: Record<string, number> = {};
   for (const d of dich) {
     const kq = kiemTraDongDaDich(cao.get(d.repo), d, nhanLo(lo));
+    // Chạy lại nhap: dòng đã đạt trước đó nhưng nay lỗi thì phải gỡ khỏi danh sách đạt
     if (kq.dat) daKiem.set(d.repo, kq.dat);
-    else if (kq.loi) {
+    else daKiem.delete(d.repo);
+    if (kq.loi) {
       loi.push(kq.loi);
       for (const x of kq.loi.doan) if (x.loi) demLoi[x.loi] = (demLoi[x.loi] ?? 0) + 1;
       if (kq.loi.loiMoTa) demLoi[kq.loi.loiMoTa] = (demLoi[kq.loi.loiMoTa] ?? 0) + 1;

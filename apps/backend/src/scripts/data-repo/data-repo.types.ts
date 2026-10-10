@@ -73,4 +73,5 @@ export type LyDoLoiDong =
   | 'placeholders_changed'
   | 'headings_changed'
   | 'table_changed'
-  | 'empty_output';
+  | 'empty_output'
+  | 'mat_noi_dung';
