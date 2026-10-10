@@ -126,15 +126,20 @@ fn base64_encode(bytes: &[u8]) -> String {
     result
 }
 
-/// Tạo nội dung script chào an toàn cho PowerShell
+/// Tạo nội dung script chào an toàn cho PowerShell.
+/// Sau lời chào, điền sẵn lệnh vào dòng nhắc bằng PSReadLine (chỉ gõ chữ, KHÔNG nhấn Enter):
+/// người dùng tự xem lại rồi bấm Enter (D-27). Chèn trong sự kiện OnIdle vì PSReadLine
+/// chỉ nhận chữ khi đã chờ nhập; lỗi thì bỏ qua, người dùng vẫn dán bằng Ctrl+V.
 pub fn tao_script_chao_powershell() -> String {
     concat!(
         "Write-Host ''; ",
         "Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; ",
         "Write-Host 'Lệnh cài đặt: ' -NoNewline; ",
         "Write-Host $env:FORGESTORE_CLI_CMD -ForegroundColor Yellow; ",
-        "Write-Host 'Nhấn Ctrl+V (nếu đã chép vào Clipboard) rồi Enter để chạy.' -ForegroundColor Green; ",
-        "Write-Host '';"
+        "Write-Host 'Lệnh đã được điền sẵn ở dòng nhắc bên dưới. Kiểm tra rồi nhấn Enter để chạy (nếu chưa thấy, nhấn Ctrl+V).' -ForegroundColor Green; ",
+        "Write-Host ''; ",
+        "try { $null = Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action { ",
+        "try { [Microsoft.PowerShell.PSConsoleReadLine]::Insert($env:FORGESTORE_CLI_CMD) } catch {} } } catch {}"
     ).to_string()
 }
 
@@ -322,5 +327,16 @@ mod tests {
         let encoded = ma_hoa_powershell_base64(&script);
         assert!(!encoded.is_empty(), "Chuỗi mã hóa không được rỗng");
         assert!(!encoded.contains(';'), "Chuỗi mã hóa không được chứa dấu chấm phẩy");
+    }
+
+    #[test]
+    fn test_script_chao_dien_san_lenh_nhung_khong_tu_chay() {
+        let script = tao_script_chao_powershell();
+        assert!(script.contains("PSConsoleReadLine"), "Phải điền sẵn lệnh vào dòng nhắc bằng PSReadLine");
+        assert!(script.contains("]::Insert("), "Chỉ được chèn chữ vào dòng nhắc");
+        // D-27: tuyệt đối không tự chạy lệnh thay người dùng
+        for cam in ["AcceptLine", "Invoke-Expression", "iex ", "Start-Process", "& $env:", ".Invoke()"] {
+            assert!(!script.contains(cam), "Script không được chứa '{}' (không tự chạy lệnh)", cam);
+        }
     }
 }
