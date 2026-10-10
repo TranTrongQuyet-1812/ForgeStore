@@ -7,7 +7,7 @@
  *   pnpm data-repo nhap --lo pilot-01        # 03_da_dich (Anti trả) → 04_da_kiem + 04_loi
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi]   # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi]  [--repo owner/repo]   # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -281,7 +281,10 @@ async function lenhDay(): Promise<void> {
       .filter((l) => l.ketQua === 'ok')
       .map((l) => l.repo),
   );
-  const cho = dsKiem.filter((r) => !daDay.has(r.repo)).slice(0, toiDa);
+  const chiRepo = layThamSo('repo')?.toLowerCase();
+  const cho = dsKiem
+    .filter((r) => !daDay.has(r.repo) && (!chiRepo || r.repo.toLowerCase() === chiRepo))
+    .slice(0, toiDa);
   console.info(
     `${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
   );
