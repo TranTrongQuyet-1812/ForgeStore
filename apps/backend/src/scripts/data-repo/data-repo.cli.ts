@@ -1,7 +1,9 @@
 /**
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
- *   pnpm data-repo kham-pha --lo pilot-01 [--so 20]  # Search + 11 bộ lọc → 00_danh_sach/pilot-01.txt (+ .boqua.jsonl)
+ *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
+ *   pnpm data-repo chia --lo dot-01 [--moi-lo 30]   # cắt đợt đã cào thành lô nhỏ cho Anti (dot-01-l001, ...)
+ *   (cũ) pnpm data-repo kham-pha --lo pilot-01 [--so 20]  # Search + 11 bộ lọc → 00_danh_sach/pilot-01.txt (+ .boqua.jsonl)
  *   pnpm data-repo cao  --lo pilot-01        # 00_danh_sach/pilot-01.txt → 01_da_cao (cào GitHub, chưa đụng DB)
  *   pnpm data-repo xuat --lo pilot-01        # 01_da_cao → 02_cho_dich (che mã, chia đoạn như BE)
  *   pnpm data-repo nhap --lo pilot-01        # 03_da_dich (Anti trả) → 04_da_kiem + 04_loi
@@ -83,8 +85,10 @@ async function lenhCao(): Promise<void> {
   for (const repo of dsRepo) {
     if (daCo.has(repo.toLowerCase())) continue;
     const r1 = await goi(`https://api.github.com/repos/${repo}`);
-    if (r1.conLai < 300) {
-      console.warn(`Dừng: hạn mức GitHub còn ${r1.conLai} (<300). Chạy lại sau để cào tiếp.`);
+    if (r1.conLai < Number(layThamSo('du-tru') ?? '1000')) {
+      console.warn(
+        `Dừng: hạn mức GitHub còn ${r1.conLai} (dưới dự trữ). Chạy lại sau để cào tiếp.`,
+      );
       break;
     }
     if (!r1.res.ok) {
@@ -439,7 +443,10 @@ async function lenhHoanTac(): Promise<void> {
 }
 
 // ---------------------------------------------------------------- KHÁM PHÁ
-/** Truy vấn Search theo thứ tự ưu tiên 2 (nhiều sao nhất), chia theo chủ đề để không chỉ ra repo phi ứng dụng. */
+/** Dải sao, quét từ cao xuống thấp (ưu tiên repo nhiều sao, P3B-06.1). Mỗi truy vấn Search tối đa 1.000 kết quả nên chia dải. */
+const DAI_SAO = ['>=20000', '5000..19999', '2000..4999', '1000..1999'];
+
+/** Chủ đề (topic) dùng để tìm repo ứng dụng; '' là không lọc chủ đề. */
 const CHU_DE_KHAM_PHA = [
   '',
   'topic:windows',
@@ -447,12 +454,61 @@ const CHU_DE_KHAM_PHA = [
   'topic:electron',
   'topic:tauri',
   'topic:productivity',
+  'topic:cross-platform',
+  'topic:gui',
+  'topic:utility',
+  'topic:qt',
+  'topic:wpf',
+  'topic:dotnet',
+  'topic:flutter',
+  'topic:gtk',
+  'topic:cli',
+  'topic:terminal',
+  'topic:editor',
+  'topic:media-player',
+  'topic:video',
+  'topic:audio',
+  'topic:music',
+  'topic:file-manager',
+  'topic:downloader',
+  'topic:backup',
+  'topic:password-manager',
+  'topic:security',
+  'topic:vpn',
+  'topic:proxy',
+  'topic:network',
+  'topic:screen-recorder',
+  'topic:screenshot',
+  'topic:ocr',
+  'topic:note-taking',
+  'topic:markdown',
+  'topic:launcher',
+  'topic:clipboard',
+  'topic:emulator',
+  'topic:game',
+  'topic:torrent',
+  'topic:ide',
+  'topic:database',
+  'topic:git',
+  'topic:developer-tools',
+  'topic:system-tools',
 ];
+
+/** Đọc các repo đã có trong một file danh sách (bỏ ghi chú sau dấu #). */
+function docDanhSachRepo(file: string): string[] {
+  if (!fs.existsSync(file)) return [];
+  return fs
+    .readFileSync(file, 'utf8')
+    .split(/\r?\n/)
+    .map((l) => l.replace(/#.*/, '').trim())
+    .filter((l) => /^[\w.-]+\/[\w.-]+$/.test(l));
+}
 
 async function lenhKhamPha(): Promise<void> {
   const lo = batBuocLo();
   const soCan = Number(layThamSo('so') ?? '20');
-  const toiDaXet = Number(layThamSo('toi-da-xet') ?? '150');
+  const toiDaXet = Number(layThamSo('toi-da-xet') ?? String(soCan * 8));
+  const duTruCore = Number(layThamSo('du-tru') ?? '1000');
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('dotenv').config({ path: path.join(process.cwd(), '.env') });
@@ -465,7 +521,12 @@ async function lenhKhamPha(): Promise<void> {
     await import('../../modules/apps/utils/ingestion-filters.util');
   type RepoUV = import('../../modules/apps/utils/ingestion-filters.util').RepoUngVien;
 
-  // Bộ lọc 6: không trùng kho, hàng chờ và các lô Data_Repo khác (chỉ ĐỌC DB)
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const fileDs = path.join(thuMucDs, `${lo}.txt`);
+  const fileBoQua = path.join(thuMucDs, `${lo}.boqua.jsonl`);
+  fs.mkdirSync(thuMucDs, { recursive: true });
+
+  // Bộ lọc 6: không trùng kho (chỉ ĐỌC DB), hàng chờ và các đợt Data_Repo khác
   const daCo = new Set<string>();
   {
     const { PrismaClient } = await import('@prisma/client');
@@ -478,18 +539,19 @@ async function lenhKhamPha(): Promise<void> {
     } finally {
       await prisma.$disconnect();
     }
-    const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
-    if (fs.existsSync(thuMucDs)) {
-      for (const t of fs
-        .readdirSync(thuMucDs)
-        .filter((x) => x.endsWith('.txt') && x !== `${lo}.txt`)) {
-        for (const l of fs.readFileSync(path.join(thuMucDs, t), 'utf8').split(/\r?\n/)) {
-          const m = l.replace(/#.*/, '').trim();
-          if (m) daCo.add(m.toLowerCase());
-        }
-      }
+    for (const t of fs
+      .readdirSync(thuMucDs)
+      .filter((x) => x.endsWith('.txt') && x !== `${lo}.txt`)) {
+      for (const r of docDanhSachRepo(path.join(thuMucDs, t))) daCo.add(r.toLowerCase());
     }
   }
+
+  // Chạy tiếp được: đọc kết quả của lần chạy trước trong cùng đợt
+  const daXet = new Set<string>();
+  const datTruoc = docDanhSachRepo(fileDs);
+  for (const r of datTruoc) daXet.add(r.toLowerCase());
+  for (const b of docJsonl<{ repo: string }>(fileBoQua)) daXet.add(b.repo.toLowerCase());
+  if (!fs.existsSync(fileDs)) fs.writeFileSync(fileDs, `# Đợt ${lo}\n`, 'utf8');
 
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -502,99 +564,118 @@ async function lenhKhamPha(): Promise<void> {
     .toISOString()
     .slice(0, 10);
 
-  const dat: string[] = [];
-  const boQua: Array<Record<string, unknown>> = [];
-  const daXet = new Set<string>();
+  let soDat = datTruoc.length;
   let soXet = 0;
   let soSearch = 0;
+  const dem: Record<string, number> = {};
+  const loai = (repo: string, lyDo: string, extra: Record<string, unknown> = {}) => {
+    dem[lyDo] = (dem[lyDo] ?? 0) + 1;
+    noiThemJsonl(fileBoQua, { repo, lyDo, ...extra });
+  };
+  console.info(
+    `Đợt ${lo}: mục tiêu ${soCan} repo, đã có ${soDat} từ lần trước, dự trữ GitHub ${duTruCore} lượt, tối đa xét ${toiDaXet} release.`,
+  );
 
-  vongNgoai: for (let trang = 1; trang <= 3; trang++) {
+  vongNgoai: for (const dai of DAI_SAO) {
     for (const chuDe of CHU_DE_KHAM_PHA) {
-      if (dat.length >= soCan || soXet >= toiDaXet) break vongNgoai;
-      const q =
-        `stars:>=${NGUONG_LOC_MAC_DINH.minStars} archived:false fork:false pushed:>=${ngayPush} ${chuDe}`.trim();
-      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=50&page=${trang}`;
-      await ngu(2500); // Search tối đa khoảng 24 lần mỗi phút
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-      soSearch++;
-      if (!res.ok) {
-        console.warn(
-          `Search lỗi ${res.status} (${chuDe || 'tất cả'}, trang ${trang}), bỏ qua truy vấn này.`,
-        );
-        continue;
-      }
-      const conLaiSearch = Number(res.headers.get('x-ratelimit-remaining') ?? '30');
-      if (conLaiSearch <= 1) await ngu(30000); // hết lượt Search trong phút này, đợi sang phút mới
-      const kq = (await res.json()) as { items: RepoUV[] };
-      for (const it of kq.items) {
-        const khoa = it.full_name.toLowerCase();
-        if (daXet.has(khoa)) continue;
-        daXet.add(khoa);
-        if (daCo.has(khoa)) {
-          boQua.push({ repo: it.full_name, lyDo: 'DA_CO_TRONG_KHO_HOAC_LO_KHAC' });
-          continue;
+      for (let trang = 1; trang <= 10; trang++) {
+        if (soDat >= soCan || soXet >= toiDaXet) break vongNgoai;
+        const q = `stars:${dai} archived:false fork:false pushed:>=${ngayPush} ${chuDe}`.trim();
+        const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=100&page=${trang}`;
+        await ngu(2500); // Search tối đa khoảng 24 lần mỗi phút
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+        soSearch++;
+        if (!res.ok) {
+          console.warn(`Search lỗi ${res.status} (${dai} ${chuDe || 'tất cả'} trang ${trang}).`);
+          if (res.status === 403 || res.status === 429) await ngu(60000);
+          break; // sang chủ đề tiếp theo
         }
-        const cb = locCucBo(it, now);
-        if (!cb.dat) {
-          boQua.push({
-            repo: it.full_name,
-            sao: it.stargazers_count,
-            lyDo: cb.lyDo,
-            chiTiet: cb.chiTiet,
-          });
-          continue;
+        if (Number(res.headers.get('x-ratelimit-remaining') ?? '30') <= 1) await ngu(30000);
+        const kq = (await res.json()) as { items: RepoUV[] };
+        for (const it of kq.items) {
+          if (soDat >= soCan || soXet >= toiDaXet) break;
+          const khoa = it.full_name.toLowerCase();
+          if (daXet.has(khoa)) continue;
+          daXet.add(khoa);
+          if (daCo.has(khoa)) {
+            loai(it.full_name, 'DA_CO_TRONG_KHO_HOAC_DOT_KHAC');
+            continue;
+          }
+          const cb = locCucBo(it, now);
+          if (!cb.dat) {
+            loai(it.full_name, cb.lyDo ?? 'KHONG_RO', {
+              sao: it.stargazers_count,
+              chiTiet: cb.chiTiet,
+            });
+            continue;
+          }
+          soXet++;
+          const rr = await fetch(
+            `https://api.github.com/repos/${it.full_name}/releases?per_page=15`,
+            { headers, signal: AbortSignal.timeout(30000) },
+          );
+          if (Number(rr.headers.get('x-ratelimit-remaining') ?? '5000') < duTruCore) {
+            console.warn(
+              `Dừng: hạn mức GitHub (core) xuống dưới ${duTruCore}. Chạy lại sau để tiếp tục.`,
+            );
+            break vongNgoai;
+          }
+          if (!rr.ok) {
+            loai(it.full_name, 'LOI_KHI_SANG_LOC', { chiTiet: `HTTP ${rr.status}` });
+            continue;
+          }
+          const dg = danhGiaRelease((await rr.json()) as never[], now);
+          if (!dg.dat) {
+            loai(it.full_name, dg.lyDo ?? 'KHONG_RO', {
+              sao: it.stargazers_count,
+              chiTiet: dg.chiTiet,
+            });
+            continue;
+          }
+          fs.appendFileSync(
+            fileDs,
+            `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'} dai=${dai}\n`,
+            'utf8',
+          );
+          soDat++;
+          if (soDat % 25 === 0)
+            console.info(
+              `... đạt ${soDat}/${soCan} (đã xét release ${soXet}, ${soSearch} lượt Search)`,
+            );
         }
-        if (dat.length >= soCan || soXet >= toiDaXet) break;
-        soXet++;
-        const rr = await fetch(
-          `https://api.github.com/repos/${it.full_name}/releases?per_page=15`,
-          { headers, signal: AbortSignal.timeout(20000) },
-        );
-        if (!rr.ok) {
-          boQua.push({
-            repo: it.full_name,
-            lyDo: 'LOI_KHI_SANG_LOC',
-            chiTiet: `HTTP ${rr.status}`,
-          });
-          continue;
-        }
-        const conLaiCore = Number(rr.headers.get('x-ratelimit-remaining') ?? '5000');
-        if (conLaiCore < 300) {
-          console.warn('Dừng: hạn mức GitHub (core) còn ' + conLaiCore);
-          break vongNgoai;
-        }
-        const dg = danhGiaRelease((await rr.json()) as never[], now);
-        if (!dg.dat) {
-          boQua.push({
-            repo: it.full_name,
-            sao: it.stargazers_count,
-            lyDo: dg.lyDo,
-            chiTiet: dg.chiTiet,
-          });
-          continue;
-        }
-        dat.push(
-          `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'}`,
-        );
-        console.info(`✓ ${it.full_name} (${it.stargazers_count}★)`);
+        if (kq.items.length < 100) break; // hết kết quả của truy vấn này
       }
     }
   }
 
-  const fileDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach, `${lo}.txt`);
-  fs.mkdirSync(path.dirname(fileDs), { recursive: true });
-  fs.writeFileSync(
-    fileDs,
-    `# Lô ${lo}: khám phá ${now.toISOString()}\n` + dat.join('\n') + '\n',
-    'utf8',
-  );
-  ghiJsonl(path.join(DATA_REPO_DIR, THU_MUC.danhSach, `${lo}.boqua.jsonl`), boQua);
-  const dem: Record<string, number> = {};
-  for (const b of boQua) dem[String(b.lyDo)] = (dem[String(b.lyDo)] ?? 0) + 1;
   console.info(
-    `Đạt ${dat.length}/${soCan} (đã xét release ${soXet}, ${soSearch} lượt Search) → ${fileDs}`,
+    `Đạt ${soDat}/${soCan} (xét release ${soXet} trong lần chạy này, ${soSearch} lượt Search) → ${fileDs}`,
   );
-  console.info(`Loại ${boQua.length}: ${JSON.stringify(dem)}`);
+  console.info(`Loại trong lần chạy này: ${JSON.stringify(dem)}`);
+  if (soDat < soCan) console.info('Chưa đủ mục tiêu: chạy lại đúng lệnh này để tiếp tục.');
+}
+
+// ---------------------------------------------------------------- CHIA ĐỢT THÀNH LÔ NHỎ
+/** Cắt đợt đã cào (01_da_cao/<đợt>.jsonl) thành lô nhỏ cho Anti dịch, đồng thời xuất sẵn 02_cho_dich của từng lô. */
+function lenhChia(): void {
+  const dot = batBuocLo();
+  const moiLo = Number(layThamSo('moi-lo') ?? '30');
+  const cao = docJsonl<BanGhiDaCao>(duongDan('daCao', dot));
+  if (!cao.length) throw new Error('Chưa có 01_da_cao cho đợt này. Chạy "cao" trước.');
+  const soLo = Math.ceil(cao.length / moiLo);
+  let tongDoan = 0;
+  for (let i = 0; i < soLo; i++) {
+    const tenLo = `${dot}-l${String(i + 1).padStart(3, '0')}`;
+    const phan = cao.slice(i * moiLo, (i + 1) * moiLo).map((r) => ({ ...r, lo: tenLo }));
+    ghiJsonl(duongDan('daCao', tenLo), phan);
+    const dong = phan.map(taoDongChoDich);
+    ghiJsonl(duongDan('choDich', tenLo), dong);
+    tongDoan += dong.reduce((s, d) => s + d.doan.filter((x) => x.canDich).length, 0);
+  }
+  console.info(
+    `Đã chia ${cao.length} repo thành ${soLo} lô (mỗi lô tối đa ${moiLo}): ${dot}-l001 … ${dot}-l${String(soLo).padStart(3, '0')}. Tổng ${tongDoan} đoạn cần dịch.`,
+  );
+  console.info(`Đưa từng file ${THU_MUC.choDich}/<lô>.jsonl cho Anti.`);
 }
 
 async function lenhPhanTich(): Promise<void> {
@@ -643,6 +724,8 @@ async function lenhPhanTich(): Promise<void> {
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'chia':
+      return lenhChia();
     case 'kham-pha':
       return lenhKhamPha();
     case 'cao':
