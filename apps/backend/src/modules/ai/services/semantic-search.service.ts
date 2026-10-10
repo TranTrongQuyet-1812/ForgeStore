@@ -39,6 +39,28 @@ interface RawSearchResult {
   khoangCach: number;
 }
 
+/**
+ * Ngưỡng độ giống (P3B-09.4), đo ngày 10/10/2026 trên 21 câu hỏi mẫu với 24 app trong Store.
+ * Khoảng cách cosine: kết quả đúng nằm ở 0.28 đến 0.42, câu không liên quan (thời tiết, vé máy bay)
+ * có kết quả tốt nhất từ 0.43 trở lên. Điểm tốt nhất thay đổi theo cách viết câu hỏi nên ngoài
+ * ngưỡng tuyệt đối còn giữ các kết quả sát điểm tốt nhất, bỏ phần đuôi.
+ */
+export const NGUONG_KHOANG_CACH_TOI_DA = 0.42;
+export const BIEN_DO_SO_VOI_KET_QUA_TOT_NHAT = 0.05;
+
+/** Lọc danh sách đã sắp tăng dần theo khoảng cách: ít kết quả thì trả ít, có thể trả rỗng. */
+export function locTheoNguongDoGiong<T extends { khoangCach: number }>(
+  ketQua: T[],
+  nguongToiDa = NGUONG_KHOANG_CACH_TOI_DA,
+  bienDo = BIEN_DO_SO_VOI_KET_QUA_TOT_NHAT,
+): T[] {
+  if (ketQua.length === 0) return [];
+  const tot = Math.min(...ketQua.map((r) => r.khoangCach));
+  if (tot > nguongToiDa) return [];
+  const gioiHan = Math.min(nguongToiDa, tot + bienDo);
+  return ketQua.filter((r) => r.khoangCach <= gioiHan);
+}
+
 @Injectable()
 export class SemanticSearchService {
   private readonly logger = new Logger(SemanticSearchService.name);
@@ -219,7 +241,7 @@ export class SemanticSearchService {
       LIMIT ${gioiHan}
     `;
 
-    return ketQua.map((row) => ({
+    return locTheoNguongDoGiong(ketQua).map((row) => ({
       maUngDung: row.maUngDung,
       tenRepoDayDu: row.tenRepoDayDu,
       chuSoHuu: row.chuSoHuu,

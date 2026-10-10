@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfigService } from '@nestjs/config';
-import { SemanticSearchService } from './semantic-search.service';
+import { SemanticSearchService, locTheoNguongDoGiong } from './semantic-search.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
@@ -175,6 +175,27 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
       expect(results[0].doTuongDong).toBeCloseTo(0.85); // 1 - 0.15
+    });
+  });
+
+  describe('locTheoNguongDoGiong (P3B-09.4)', () => {
+    const r = (khoangCach: number) => ({ khoangCach });
+
+    it('chụp màn hình: giữ 3 app sát nhau, bỏ phần đuôi', () => {
+      const kq = locTheoNguongDoGiong([0.324, 0.336, 0.358, 0.432, 0.435].map(r));
+      expect(kq.map((x) => x.khoangCach)).toEqual([0.324, 0.336, 0.358]);
+    });
+
+    it('câu không liên quan (tốt nhất > 0.42) trả rỗng', () => {
+      expect(locTheoNguongDoGiong([0.428, 0.444, 0.446].map(r))).toEqual([]);
+    });
+
+    it('một kết quả rất giống thì chỉ trả một', () => {
+      expect(locTheoNguongDoGiong([0.3, 0.446, 0.45].map(r))).toHaveLength(1);
+    });
+
+    it('danh sách rỗng trả rỗng', () => {
+      expect(locTheoNguongDoGiong([])).toEqual([]);
     });
   });
 });
