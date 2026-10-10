@@ -35,7 +35,10 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
       headers: new Headers(),
       json: async () => ({}),
     });
-    await expect(client.get('/x')).rejects.toMatchObject({ status: 429, retryAfterGiay: undefined });
+    await expect(client.get('/x')).rejects.toMatchObject({
+      status: 429,
+      retryAfterGiay: undefined,
+    });
   });
 
   it('tự động đính kèm Authorization header khi có Access Token trong RAM', async () => {
