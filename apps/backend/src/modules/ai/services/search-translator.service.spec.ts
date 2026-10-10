@@ -30,7 +30,7 @@ describe('SearchTranslatorService (P2-42)', () => {
     });
 
     expect(query).toBe(
-      'video player topic:video-player topic:adblock language:rust stars:>=10 archived:false',
+      'video player topic:video-player topic:adblock language:rust stars:>=100 archived:false',
     );
   });
 
@@ -46,7 +46,7 @@ describe('SearchTranslatorService (P2-42)', () => {
     // Các ký tự không an toàn như ; và / bị làm sạch
     expect(query).toContain('notesDROPTABLE');
     expect(query).toContain('topic:notesinjection');
-    expect(query).toContain('stars:>=10');
+    expect(query).toContain('stars:>=100');
     expect(query).toContain('archived:false');
     expect(query).not.toContain('DROP TABLE');
   });

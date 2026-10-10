@@ -236,10 +236,10 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       }),
       ghepQueryAnToan: vi
         .fn()
-        .mockReturnValue('video player topic:video-player stars:>=10 archived:false'),
+        .mockReturnValue('video player topic:video-player stars:>=100 archived:false'),
       dichVaGhepQuery: vi
         .fn()
-        .mockResolvedValue('video player topic:video-player stars:>=10 archived:false'),
+        .mockResolvedValue('video player topic:video-player stars:>=100 archived:false'),
     };
 
     service = new AppsService(
@@ -1178,6 +1178,27 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(mockGithubService.timKiemRepo).toHaveBeenCalledWith('vlc', 20, 1);
       expect(res.duLieu).toHaveLength(1);
       expect(res.duLieu[0].tenKhoChua).toBe('vlc');
+    });
+
+    it('4b. Cụm ngắn tiếng Việt ("chụp màn hình") không có app trùng tên -> chuyển sang luồng ý định, không tìm chữ đó trên GitHub', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      const res = await service.timKiemThongMinh({ q: 'chụp màn hình' });
+      expect(res.loaiTruyVan).toBe('Y_DINH');
+      expect(mockSearchTranslatorService.dichVaGhepQuery).toHaveBeenCalledWith(
+        'ứng dụng chụp màn hình',
+      );
+      expect(mockGithubService.timKiemRepo).not.toHaveBeenCalledWith('chụp màn hình', 20, 1);
+    });
+
+    it('4c. Tên app tiếng Anh nhiều từ không có trong Store -> vẫn tìm theo tên trên GitHub', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      const res = await service.timKiemThongMinh({ q: 'visual studio' });
+      expect(res.loaiTruyVan).toBe('TEN_APP');
+      expect(mockGithubService.timKiemRepo).toHaveBeenCalledWith('visual studio', 20, 1);
     });
 
     it('5. Luồng Y_DINH: kết hợp pgvector ngữ nghĩa và Gemini dịch truy vấn', async () => {

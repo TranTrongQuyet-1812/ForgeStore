@@ -920,7 +920,7 @@ export const DetailPage: React.FC = () => {
     const upper = fmt.toUpperCase();
     if (upper === 'EXE') return 'Bản cài đặt (.exe)';
     if (upper === 'MSI') return 'Bản cài đặt (.msi)';
-    if (upper === 'ZIP' || upper === 'ZIP_PORTABLE') return 'Bản chạy ngay (.zip)';
+    if (upper === 'ZIP' || upper === 'ZIP_PORTABLE') return 'Bản chạy ngay (.zip, .7z)';
     return `.${fmt.toLowerCase()}`;
   };
 

@@ -51,7 +51,7 @@ import {
   trichXuatDinhDangVaKienTruc,
   BanPhatHanhToiThieu,
 } from './utils/release-selector.util';
-import { phanLuongInput } from './utils/smart-input-dispatcher.util';
+import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './utils/smart-input-dispatcher.util';
 import {
   trichMucCaiDat,
   sapXepCachCai,
@@ -1958,6 +1958,12 @@ export class AppsService {
 
         await this.cacheService.dat(cacheKey, res, 300);
         return res;
+      }
+
+      // Cụm 2 đến 3 từ tiếng Việt mà Store không có app tên giống (ví dụ "chụp màn hình") là mô tả nhu cầu,
+      // không phải tên app: chuyển sang luồng ý định thay vì tìm chữ đó trên GitHub (ra repo vãng lai).
+      if (laCumTuMoTaNhuCauTiengViet(phanLuong.tuKhoa)) {
+        return this.timKiemThongMinh({ ...query, q: `ứng dụng ${rawQ}` });
       }
 
       // Nếu không có trong DB Store -> gọi GitHub Search API (P2-40.3)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { phanLuongInput } from './smart-input-dispatcher.util';
+import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './smart-input-dispatcher.util';
 
 describe('SmartInputDispatcher (P2-40)', () => {
   describe('Luồng URL GitHub (P2-40.2)', () => {
@@ -168,5 +168,24 @@ describe('SmartInputDispatcher (P2-40)', () => {
       expect(res.owner).toBe('rustdesk');
       expect(res.repo).toBe('rustdesk');
     });
+  });
+});
+
+describe('laCumTuMoTaNhuCauTiengViet', () => {
+  it('cụm 2 đến 3 từ tiếng Việt có dấu là mô tả nhu cầu', () => {
+    expect(laCumTuMoTaNhuCauTiengViet('chụp màn hình')).toBe(true);
+    expect(laCumTuMoTaNhuCauTiengViet('ghi chú')).toBe(true);
+    expect(laCumTuMoTaNhuCauTiengViet('tải torrent')).toBe(true);
+  });
+
+  it('tên app tiếng Anh nhiều từ vẫn là tên app', () => {
+    expect(laCumTuMoTaNhuCauTiengViet('visual studio')).toBe(false);
+    expect(laCumTuMoTaNhuCauTiengViet('notepad plus plus')).toBe(false);
+  });
+
+  it('một từ hoặc rỗng không phải mô tả nhu cầu', () => {
+    expect(laCumTuMoTaNhuCauTiengViet('vlc')).toBe(false);
+    expect(laCumTuMoTaNhuCauTiengViet('ghi')).toBe(false);
+    expect(laCumTuMoTaNhuCauTiengViet('')).toBe(false);
   });
 });

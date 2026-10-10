@@ -100,7 +100,7 @@ export class SearchTranslatorService {
 
   /**
    * Ghép chuỗi truy vấn GitHub an toàn từ kết quả dịch (P2-42.2).
-   * CHỈ sử dụng whitelist qualifier: topic:, language:, stars:>=10, archived:false.
+   * CHỈ sử dụng whitelist qualifier: topic:, language:, stars:>=100, archived:false.
    * Ngăn chặn hoàn toàn prompt injection.
    */
   ghepQueryAnToan(dich: KetQuaDichTimKiem): string {
@@ -136,8 +136,8 @@ export class SearchTranslatorService {
       }
     }
 
-    // 4. Tiêu chí bắt buộc bảo vệ chất lượng repo (stars >= 10, chưa bị lưu trữ)
-    parts.push('stars:>=10');
+    // 4. Tiêu chí bắt buộc bảo vệ chất lượng repo (stars >= 100 để bỏ repo vãng lai ít người dùng, chưa bị lưu trữ)
+    parts.push('stars:>=100');
     parts.push('archived:false');
 
     return parts.join(' ');

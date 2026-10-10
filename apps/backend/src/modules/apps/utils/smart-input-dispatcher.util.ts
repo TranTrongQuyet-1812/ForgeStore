@@ -102,3 +102,16 @@ export function phanLuongInput(q: string): KetQuaPhanLuongTruyVan {
     tuKhoa: cleanInput,
   };
 }
+
+// Chữ cái tiếng Việt có dấu (khác với tên app tiếng Anh viết không dấu)
+const CHU_CO_DAU_TIENG_VIET =
+  /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+/**
+ * Cụm 2 đến 3 từ có chữ tiếng Việt có dấu (ví dụ "chụp màn hình", "ghi chú") thường là mô tả nhu cầu,
+ * không phải tên app. Tên app tiếng Anh nhiều từ ("visual studio") vẫn tìm theo tên.
+ */
+export function laCumTuMoTaNhuCauTiengViet(tuKhoa: string): boolean {
+  const tu = (tuKhoa || '').trim().split(/\s+/).filter(Boolean);
+  return tu.length >= 2 && CHU_CO_DAU_TIENG_VIET.test(tuKhoa);
+}
