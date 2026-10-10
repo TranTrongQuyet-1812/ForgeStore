@@ -1,6 +1,7 @@
 /**
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
+ *   pnpm data-repo kham-pha --lo pilot-01 [--so 20]  # Search + 11 bộ lọc → 00_danh_sach/pilot-01.txt (+ .boqua.jsonl)
  *   pnpm data-repo cao  --lo pilot-01        # 00_danh_sach/pilot-01.txt → 01_da_cao (cào GitHub, chưa đụng DB)
  *   pnpm data-repo xuat --lo pilot-01        # 01_da_cao → 02_cho_dich (che mã, chia đoạn như BE)
  *   pnpm data-repo nhap --lo pilot-01        # 03_da_dich (Anti trả) → 04_da_kiem + 04_loi
@@ -408,9 +409,170 @@ async function lenhHoanTac(): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------- KHÁM PHÁ
+/** Truy vấn Search theo thứ tự ưu tiên 2 (nhiều sao nhất), chia theo chủ đề để không chỉ ra repo phi ứng dụng. */
+const CHU_DE_KHAM_PHA = [
+  '',
+  'topic:windows',
+  'topic:desktop-app',
+  'topic:electron',
+  'topic:tauri',
+  'topic:productivity',
+];
+
+async function lenhKhamPha(): Promise<void> {
+  const lo = batBuocLo();
+  const soCan = Number(layThamSo('so') ?? '20');
+  const toiDaXet = Number(layThamSo('toi-da-xet') ?? '150');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  const { locCucBo, danhGiaRelease, NGUONG_LOC_MAC_DINH } =
+    await import('../../modules/apps/utils/ingestion-filters.util');
+  type RepoUV = import('../../modules/apps/utils/ingestion-filters.util').RepoUngVien;
+
+  // Bộ lọc 6: không trùng kho, hàng chờ và các lô Data_Repo khác (chỉ ĐỌC DB)
+  const daCo = new Set<string>();
+  {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    try {
+      for (const r of await prisma.ungDung.findMany({ select: { tenRepoDayDu: true } }))
+        daCo.add(r.tenRepoDayDu.toLowerCase());
+      for (const r of await prisma.ungVienRepo.findMany({ select: { tenRepoDayDu: true } }))
+        daCo.add(r.tenRepoDayDu.toLowerCase());
+    } finally {
+      await prisma.$disconnect();
+    }
+    const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+    if (fs.existsSync(thuMucDs)) {
+      for (const t of fs
+        .readdirSync(thuMucDs)
+        .filter((x) => x.endsWith('.txt') && x !== `${lo}.txt`)) {
+        for (const l of fs.readFileSync(path.join(thuMucDs, t), 'utf8').split(/\r?\n/)) {
+          const m = l.replace(/#.*/, '').trim();
+          if (m) daCo.add(m.toLowerCase());
+        }
+      }
+    }
+  }
+
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${token}`,
+  };
+  const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const now = new Date();
+  const ngayPush = new Date(now.getTime() - NGUONG_LOC_MAC_DINH.maxPushThang * 30.4375 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  const dat: string[] = [];
+  const boQua: Array<Record<string, unknown>> = [];
+  const daXet = new Set<string>();
+  let soXet = 0;
+  let soSearch = 0;
+
+  vongNgoai: for (let trang = 1; trang <= 3; trang++) {
+    for (const chuDe of CHU_DE_KHAM_PHA) {
+      if (dat.length >= soCan || soXet >= toiDaXet) break vongNgoai;
+      const q =
+        `stars:>=${NGUONG_LOC_MAC_DINH.minStars} archived:false fork:false pushed:>=${ngayPush} ${chuDe}`.trim();
+      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=50&page=${trang}`;
+      await ngu(2500); // Search tối đa khoảng 24 lần mỗi phút
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      soSearch++;
+      if (!res.ok) {
+        console.warn(
+          `Search lỗi ${res.status} (${chuDe || 'tất cả'}, trang ${trang}), bỏ qua truy vấn này.`,
+        );
+        continue;
+      }
+      const conLaiSearch = Number(res.headers.get('x-ratelimit-remaining') ?? '30');
+      if (conLaiSearch <= 1) await ngu(30000); // hết lượt Search trong phút này, đợi sang phút mới
+      const kq = (await res.json()) as { items: RepoUV[] };
+      for (const it of kq.items) {
+        const khoa = it.full_name.toLowerCase();
+        if (daXet.has(khoa)) continue;
+        daXet.add(khoa);
+        if (daCo.has(khoa)) {
+          boQua.push({ repo: it.full_name, lyDo: 'DA_CO_TRONG_KHO_HOAC_LO_KHAC' });
+          continue;
+        }
+        const cb = locCucBo(it, now);
+        if (!cb.dat) {
+          boQua.push({
+            repo: it.full_name,
+            sao: it.stargazers_count,
+            lyDo: cb.lyDo,
+            chiTiet: cb.chiTiet,
+          });
+          continue;
+        }
+        if (dat.length >= soCan || soXet >= toiDaXet) break;
+        soXet++;
+        const rr = await fetch(
+          `https://api.github.com/repos/${it.full_name}/releases?per_page=15`,
+          { headers, signal: AbortSignal.timeout(20000) },
+        );
+        if (!rr.ok) {
+          boQua.push({
+            repo: it.full_name,
+            lyDo: 'LOI_KHI_SANG_LOC',
+            chiTiet: `HTTP ${rr.status}`,
+          });
+          continue;
+        }
+        const conLaiCore = Number(rr.headers.get('x-ratelimit-remaining') ?? '5000');
+        if (conLaiCore < 300) {
+          console.warn('Dừng: hạn mức GitHub (core) còn ' + conLaiCore);
+          break vongNgoai;
+        }
+        const dg = danhGiaRelease((await rr.json()) as never[], now);
+        if (!dg.dat) {
+          boQua.push({
+            repo: it.full_name,
+            sao: it.stargazers_count,
+            lyDo: dg.lyDo,
+            chiTiet: dg.chiTiet,
+          });
+          continue;
+        }
+        dat.push(
+          `${it.full_name}  # P2 ${it.stargazers_count}★ ${it.license?.spdx_id ?? ''} ${dg.tenBanPhatHanh ?? ''}${dg.lauChuaCapNhat ? ' lau-chua-cap-nhat' : ''}${dg.chiCoApk ? ' chi-co-apk' : ''} chu-de=${chuDe || 'tat-ca'}`,
+        );
+        console.info(`✓ ${it.full_name} (${it.stargazers_count}★)`);
+      }
+    }
+  }
+
+  const fileDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach, `${lo}.txt`);
+  fs.mkdirSync(path.dirname(fileDs), { recursive: true });
+  fs.writeFileSync(
+    fileDs,
+    `# Lô ${lo}: khám phá ${now.toISOString()}\n` + dat.join('\n') + '\n',
+    'utf8',
+  );
+  ghiJsonl(path.join(DATA_REPO_DIR, THU_MUC.danhSach, `${lo}.boqua.jsonl`), boQua);
+  const dem: Record<string, number> = {};
+  for (const b of boQua) dem[String(b.lyDo)] = (dem[String(b.lyDo)] ?? 0) + 1;
+  console.info(
+    `Đạt ${dat.length}/${soCan} (đã xét release ${soXet}, ${soSearch} lượt Search) → ${fileDs}`,
+  );
+  console.info(`Loại ${boQua.length}: ${JSON.stringify(dem)}`);
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'kham-pha':
+      return lenhKhamPha();
     case 'cao':
       return lenhCao();
     case 'xuat':
@@ -433,7 +595,7 @@ async function main(): Promise<void> {
 }
 
 main()
-  .then(() => process.exit(0))
+  .then(() => setTimeout(() => process.exit(0), 200))
   .catch((e) => {
     console.error(String(e instanceof Error ? e.message : e));
     process.exit(1);
