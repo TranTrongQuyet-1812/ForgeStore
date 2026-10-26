@@ -1,12 +1,12 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { DevicesService } from './thiet-bi.service';
-import { UpdateDeviceDto } from './dto/update-device.dto';
+import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 import {
   CapNhatKhoaRegistryDto,
   GhiNhanCaiDatCliDto,
   GhiNhanCaiDatDto,
-} from './dto/installed-app.dto';
+} from './dto/ung-dung-da-cai.dto';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface';
 

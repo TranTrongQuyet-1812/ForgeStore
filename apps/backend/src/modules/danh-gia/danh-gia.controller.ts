@@ -14,9 +14,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { ReviewsService } from './danh-gia.service';
-import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
-import { QueryReviewsDto } from './dto/query-reviews.dto';
+import { CreateReviewDto } from './dto/tao-danh-gia.dto';
+import { UpdateReviewDto } from './dto/cap-nhat-danh-gia.dto';
+import { QueryReviewsDto } from './dto/truy-van-danh-gia.dto';
 import { JwtAuthGuard } from '../xac-thuc/guards/jwt-auth.guard';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';

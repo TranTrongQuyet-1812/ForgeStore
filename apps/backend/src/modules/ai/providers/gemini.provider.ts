@@ -6,7 +6,7 @@ import { HuongDanCaiDatAiSchema } from '../dto/cli-guide.dto';
 import { INhaCungCapTomTat, TenNhaCungCap } from '../interfaces/llm-provider.interface';
 import { taoPromptTomTatChangelog } from '../prompts/changelog-summary.prompt';
 import { taoPromptHuongDanCaiDat } from '../prompts/cli-guide.prompt';
-import { locVaChuanHoaHuongDanCaiDat } from '../utils/cli-guide-extractor.util';
+import { locVaChuanHoaHuongDanCaiDat } from '../tien-ich/cli-guide-extractor.util';
 import type { HuongDanCaiDatDto } from '@forgestore/types';
 
 @Injectable()

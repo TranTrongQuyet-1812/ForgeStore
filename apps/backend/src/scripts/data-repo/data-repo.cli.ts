@@ -539,8 +539,8 @@ async function lenhKhamPha(): Promise<void> {
   const token = process.env.GITHUB_TOKEN || '';
   if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
   const { locCucBo, danhGiaRelease, NGUONG_LOC_MAC_DINH, coLenhCaiTuReadme } =
-    await import('../../modules/ung-dung/utils/ingestion-filters.util');
-  type RepoUV = import('../../modules/ung-dung/utils/ingestion-filters.util').RepoUngVien;
+    await import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util');
+  type RepoUV = import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util').RepoUngVien;
 
   const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
   const fileDs = path.join(thuMucDs, `${lo}.txt`);
@@ -712,7 +712,8 @@ async function lenhQuetLaiCli(): Promise<void> {
   const token = process.env.GITHUB_TOKEN || '';
   if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
   const duTruCore = Number(layThamSo('du-tru') ?? '1000');
-  const { coLenhCaiTuReadme } = await import('../../modules/ung-dung/utils/ingestion-filters.util');
+  const { coLenhCaiTuReadme } =
+    await import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util');
   const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
   const ungVien = docJsonl<{ repo: string; sao?: number; lyDo: string }>(
     path.join(thuMucDs, `${nguon}.boqua.jsonl`),

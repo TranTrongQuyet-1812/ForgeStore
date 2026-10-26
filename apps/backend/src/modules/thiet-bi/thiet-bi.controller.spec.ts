@@ -6,8 +6,8 @@ import {
   GhiNhanCaiDatCliDto,
   GhiNhanCaiDatDto,
   CapNhatKhoaRegistryDto,
-} from './dto/installed-app.dto';
-import { UpdateDeviceDto } from './dto/update-device.dto';
+} from './dto/ung-dung-da-cai.dto';
+import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 
 describe('DevicesController', () => {
   let controller: DevicesController;

@@ -5,7 +5,7 @@ import { NvidiaTranslationProvider } from '../providers/nvidia-translation.provi
 import { CloudflareTranslationProvider } from '../providers/cloudflare-translation.provider';
 import { GroqTranslationProvider } from '../providers/groq-translation.provider';
 import { CacheService } from '../../../redis/cache.service';
-import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 
 describe('TranslationRotationService', () => {
   let service: TranslationRotationService;

@@ -1,6 +1,6 @@
 import { ReadmeTranslationService } from '../../modules/ai/translation/services/readme-translation.service';
-import { MarkdownMasker } from '../../modules/ai/translation/utils/markdown-masker.util';
-import { StructureValidator } from '../../modules/ai/translation/utils/structure-validator.util';
+import { MarkdownMasker } from '../../modules/ai/translation/tien-ich/markdown-masker.util';
+import { StructureValidator } from '../../modules/ai/translation/tien-ich/structure-validator.util';
 import type {
   BanGhiDaCao,
   DoanChoDich,

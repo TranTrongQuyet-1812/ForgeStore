@@ -6,8 +6,8 @@ import {
   KetQuaDichDoan,
   NhaCungCapDich,
 } from '../interfaces/translation-provider.interface';
-import { MarkdownMasker } from '../utils/markdown-masker.util';
-import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
+import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { GeminiTranslationProvider } from '../providers/gemini-translation.provider';
 import { NvidiaTranslationProvider } from '../providers/nvidia-translation.provider';
 import { CloudflareTranslationProvider } from '../providers/cloudflare-translation.provider';

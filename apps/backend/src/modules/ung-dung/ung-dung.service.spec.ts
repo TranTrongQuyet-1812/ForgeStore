@@ -10,7 +10,7 @@ import {
   PlatformFilter,
   QueryAppsDto,
   TimeWindowFilter,
-} from './dto/query-apps.dto';
+} from './dto/truy-van-ung-dung.dto';
 import { JevClientService } from '../ai/services/jev-client.service';
 import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';

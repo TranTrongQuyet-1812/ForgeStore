@@ -8,9 +8,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
-import { CreateReviewDto } from './dto/create-review.dto';
-import { UpdateReviewDto } from './dto/update-review.dto';
-import { QueryReviewsDto, ReviewSortOption } from './dto/query-reviews.dto';
+import { CreateReviewDto } from './dto/tao-danh-gia.dto';
+import { UpdateReviewDto } from './dto/cap-nhat-danh-gia.dto';
+import { QueryReviewsDto, ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 import { DanhGiaDto, TrangKetQua } from '@forgestore/types';
 import { Prisma } from '@prisma/client';
 

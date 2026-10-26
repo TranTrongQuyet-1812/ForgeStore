@@ -6,7 +6,7 @@ import {
   LyDoLoiDich,
   NhaCungCapDich,
 } from '../interfaces/translation-provider.interface';
-import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 
 interface CloudflareWorkerResponse {
   success?: boolean;

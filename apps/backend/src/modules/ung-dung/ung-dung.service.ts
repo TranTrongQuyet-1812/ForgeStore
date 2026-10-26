@@ -43,29 +43,29 @@ import {
   phanLoaiTep,
   hauXuLyKienTrucBanPhatHanh,
   tinhDiemUuTienTep,
-} from './utils/file-classifier.util';
-import { anhXaDanhMuc, doanTenGoiAndroid, DANH_MUC_CHUAN } from './utils/category-mapper.util';
+} from './tien-ich/phan-loai-tep.util';
+import { anhXaDanhMuc, doanTenGoiAndroid, DANH_MUC_CHUAN } from './tien-ich/anh-xa-danh-muc.util';
 import {
   locVaSapXepBanPhatHanh,
   layBanPhatHanhMoiNhat,
   trichXuatDinhDangVaKienTruc,
   BanPhatHanhToiThieu,
-} from './utils/release-selector.util';
-import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './utils/smart-input-dispatcher.util';
+} from './tien-ich/chon-ban-phat-hanh.util';
+import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './tien-ich/dieu-phoi-dau-vao.util';
 import {
   trichMucCaiDat,
   sapXepCachCai,
   trichXuatHuongDanCliBangQuyTac,
-} from '../ai/utils/cli-guide-extractor.util';
+} from '../ai/tien-ich/cli-guide-extractor.util';
 import {
   AppSortOption,
   PlatformFilter,
   QueryAppsDto,
   TimeWindowFilter,
-} from './dto/query-apps.dto';
-import { ResolveAssetDto } from './dto/resolve-asset.dto';
-import { SearchQueryDto } from './dto/search.dto';
-import { InspectRepoDto } from './dto/inspect-repo.dto';
+} from './dto/truy-van-ung-dung.dto';
+import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
+import { SearchQueryDto } from './dto/tim-kiem.dto';
+import { InspectRepoDto } from './dto/kiem-tra-repo.dto';
 
 /**
  * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)

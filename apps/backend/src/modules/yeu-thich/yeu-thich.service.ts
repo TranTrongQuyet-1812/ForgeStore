@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
-import { trichXuatDinhDangVaKienTruc } from '../ung-dung/utils/release-selector.util';
+import { trichXuatDinhDangVaKienTruc } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
 
 @Injectable()
 export class FavoritesService {

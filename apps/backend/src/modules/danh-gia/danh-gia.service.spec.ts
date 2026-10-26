@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { ReviewsService } from './danh-gia.service';
-import { ReviewSortOption } from './dto/query-reviews.dto';
+import { ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 
 describe('ReviewsService (P2-53)', () => {
   let service: ReviewsService;

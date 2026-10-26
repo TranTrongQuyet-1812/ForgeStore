@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '../kho-trang-thai/useAuthStore';
-import { useInstallStore, type CaiDatTienTrinh } from '../kho-trang-thai/useInstallStore';
-import { libraryService } from '../dich-vu/library/library-service';
+import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
+import { useInstallStore, type CaiDatTienTrinh } from '../kho-trang-thai/useCaiDatUngDungStore';
+import { libraryService } from '../dich-vu/thu-vien/thu-vien.service';
 import type { UngDungDaCaiDto } from '@forgestore/types';
 
 export interface TrangThaiCaiDatApp {

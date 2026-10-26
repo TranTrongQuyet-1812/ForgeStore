@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as zlib from 'zlib';
-import { parseAxml } from '../utils/axml-parser.util';
+import { parseAxml } from '../tien-ich/axml-parser.util';
 
 export interface KetQuaDocApk {
   thanhCong: boolean;

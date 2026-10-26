@@ -13,15 +13,15 @@ import { LoaiThietBi } from '@prisma/client';
 import {
   layBanPhatHanhMoiNhat,
   BanPhatHanhToiThieu,
-} from '../ung-dung/utils/release-selector.util';
-import { coBanMoiHon } from '../cap-nhat/utils/version-comparator.util';
+} from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
+import { coBanMoiHon } from '../cap-nhat/tien-ich/so-sanh-phien-ban.util';
 import {
   kiemTraTenGoiHopLe,
   kiemTraPhienBanHopLe,
   ghepLenhCliAnToan,
   MaTrinhQuanLyGoi,
 } from '@forgestore/types';
-import { GhiNhanCaiDatCliDto } from './dto/installed-app.dto';
+import { GhiNhanCaiDatCliDto } from './dto/ung-dung-da-cai.dto';
 
 export interface DangKyThietBiParams {
   dinhDanhPhanCung: string;

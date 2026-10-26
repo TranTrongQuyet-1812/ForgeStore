@@ -5,15 +5,15 @@ import { GithubModule } from '../github/github.module';
 import { AiModule } from '../ai/ai.module';
 import { FavoritesModule } from '../yeu-thich/yeu-thich.module';
 import { AppsController } from './ung-dung.controller';
-import { AiAdminController } from './controllers/ai-admin.controller';
-import { SearchController } from './controllers/search.controller';
-import { ReposController } from './controllers/repos.controller';
-import { CategoriesController } from './controllers/categories.controller';
+import { AiAdminController } from './controllers/ai-quan-tri.controller';
+import { SearchController } from './controllers/tim-kiem.controller';
+import { ReposController } from './controllers/kho-chua.controller';
+import { CategoriesController } from './controllers/danh-muc.controller';
 import { AppsService } from './ung-dung.service';
-import { ReleaseScannerJob } from './jobs/release-scanner.job';
-import { TrendingDecayJob } from './jobs/trending-decay.job';
-import { RepoIngestionPipelineService } from './services/repo-ingestion-pipeline.service';
-import { RepoIngestionJob } from './jobs/repo-ingestion.job';
+import { ReleaseScannerJob } from './jobs/quet-ban-phat-hanh.job';
+import { TrendingDecayJob } from './jobs/suy-giam-thinh-hanh.job';
+import { RepoIngestionPipelineService } from './services/day-chuyen-nap-repo.service';
+import { RepoIngestionJob } from './jobs/nap-repo.job';
 
 @Module({
   imports: [PrismaModule, RedisModule, GithubModule, AiModule, FavoritesModule],

@@ -7,10 +7,10 @@ import {
   NhaCungCapDich,
 } from '../interfaces/translation-provider.interface';
 import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.prompt';
-import { StructureValidator } from '../utils/structure-validator.util';
-import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
+import { StructureValidator } from '../tien-ich/structure-validator.util';
+import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { LlmRateLimiterService } from '../../services/llm-rate-limiter.service';
-import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../utils/batch-translation.util';
+import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../tien-ich/batch-translation.util';
 
 @Injectable()
 export class GeminiTranslationProvider implements ITranslationProvider {

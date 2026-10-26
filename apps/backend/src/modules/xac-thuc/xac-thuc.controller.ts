@@ -4,10 +4,10 @@ import { Response } from 'express';
 import { AuthService } from './xac-thuc.service';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
-import { AuthExchangeDto } from './dto/auth-exchange.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { GithubAuthQueryDto } from './dto/github-auth-query.dto';
-import { GoogleAuthQueryDto } from './dto/google-auth-query.dto';
+import { AuthExchangeDto } from './dto/trao-doi-xac-thuc.dto';
+import { RefreshTokenDto } from './dto/lam-moi-token.dto';
+import { GithubAuthQueryDto } from './dto/truy-van-xac-thuc-github.dto';
+import { GoogleAuthQueryDto } from './dto/truy-van-xac-thuc-google.dto';
 import { UserSessionContext } from './interfaces/jwt-payload.interface';
 import { dungTrangQuayLaiApp, TrangThaiQuayLai } from './trang-quay-lai-app';
 

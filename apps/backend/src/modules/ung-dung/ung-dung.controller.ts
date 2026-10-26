@@ -12,8 +12,8 @@ import {
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { AppsService } from './ung-dung.service';
 import { ReadmeTranslationService } from '../ai/translation/services/readme-translation.service';
-import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/query-apps.dto';
-import { ResolveAssetDto } from './dto/resolve-asset.dto';
+import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/truy-van-ung-dung.dto';
+import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
 
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 

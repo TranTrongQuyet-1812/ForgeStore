@@ -9,8 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { CACHE_PREFIX, DEFAULT_TTL } from '../redis/redis.constants';
 import { DevicesService } from '../thiet-bi/thiet-bi.service';
-import { AuthExchangeDto } from './dto/auth-exchange.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { AuthExchangeDto } from './dto/trao-doi-xac-thuc.dto';
+import { RefreshTokenDto } from './dto/lam-moi-token.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @Injectable()

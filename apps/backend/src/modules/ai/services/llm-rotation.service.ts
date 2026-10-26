@@ -5,7 +5,7 @@ import { KetQuaChangelog } from '../dto/ai-summary.dto';
 import { INhaCungCapTomTat, TenNhaCungCap } from '../interfaces/llm-provider.interface';
 import { GeminiProvider } from '../providers/gemini.provider';
 import { NvidiaNimProvider } from '../providers/nvidia-nim.provider';
-import { bocTachHuongDanTuCodeBlocks } from '../utils/cli-guide-extractor.util';
+import { bocTachHuongDanTuCodeBlocks } from '../tien-ich/cli-guide-extractor.util';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
 export interface KetQuaChangelogKemModel {

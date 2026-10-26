@@ -4,8 +4,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubService } from '../../../github/github.service';
 import { CacheService } from '../../../redis/cache.service';
 import { TranslationRotationService } from './translation-rotation.service';
-import { sanitizeLogMessage } from '../utils/log-sanitizer.util';
-import { MarkdownMasker } from '../utils/markdown-masker.util';
+import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
+import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types';
 
 @Injectable()

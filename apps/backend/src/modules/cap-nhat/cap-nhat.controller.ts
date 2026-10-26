@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface';
 import { UpdaterService } from './cap-nhat.service';
-import { CheckUpdatesDto } from './dto/check-updates.dto';
+import { CheckUpdatesDto } from './dto/kiem-tra-cap-nhat.dto';
 
 @ApiTags('Updater - Cập Nhật Ứng Dụng')
 @ApiBearerAuth()

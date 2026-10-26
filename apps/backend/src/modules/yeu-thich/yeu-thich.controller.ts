@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { FavoritesService } from './yeu-thich.service';
-import { QueryFavoritesDto } from './dto/query-favorites.dto';
+import { QueryFavoritesDto } from './dto/truy-van-yeu-thich.dto';
 import { JwtAuthGuard } from '../xac-thuc/guards/jwt-auth.guard';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 

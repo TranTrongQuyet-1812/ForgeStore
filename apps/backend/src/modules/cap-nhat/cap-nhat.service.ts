@@ -1,8 +1,8 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CheckUpdatesDto } from './dto/check-updates.dto';
-import { kiemTraCoBanCapNhat, parseBigIntAnToan } from './utils/version-comparator.util';
-import { layBanPhatHanhMoiNhat } from '../ung-dung/utils/release-selector.util';
+import { CheckUpdatesDto } from './dto/kiem-tra-cap-nhat.dto';
+import { kiemTraCoBanCapNhat, parseBigIntAnToan } from './tien-ich/so-sanh-phien-ban.util';
+import { layBanPhatHanhMoiNhat } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
 import {
   BanPhatHanhDto,
   CheckUpdatesItemDto,
