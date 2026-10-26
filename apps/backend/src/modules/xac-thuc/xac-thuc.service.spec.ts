@@ -4,10 +4,10 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as argon2 from 'argon2';
-import { AuthService } from './xac-thuc.service';
+import { XacThucService } from './xac-thuc.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
-import { DevicesService } from '../thiet-bi/thiet-bi.service';
+import { ThietBiService } from '../thiet-bi/thiet-bi.service';
 import { LoaiThietBi, VaiTro } from '@prisma/client';
 import { DEFAULT_TTL } from '../redis/redis.constants';
 
@@ -57,8 +57,8 @@ interface MockConfig {
   get: MockFn;
 }
 
-describe('AuthService', () => {
-  let service: AuthService;
+describe('XacThucService', () => {
+  let service: XacThucService;
   let mockPrisma: MockPrisma;
   let mockCache: MockCache;
   let mockDevices: MockDevices;
@@ -123,10 +123,10 @@ describe('AuthService', () => {
       }),
     };
 
-    service = new AuthService(
+    service = new XacThucService(
       mockPrisma as unknown as PrismaService,
       mockCache as unknown as CacheService,
-      mockDevices as unknown as DevicesService,
+      mockDevices as unknown as ThietBiService,
       mockJwt as unknown as JwtService,
       mockConfig as unknown as ConfigService,
     );

@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { AppsService } from '../src/modules/ung-dung/ung-dung.service';
+import { UngDungService } from '../src/modules/ung-dung/ung-dung.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**
@@ -53,7 +53,7 @@ async function main() {
     logger: ['error', 'warn', 'log'],
   });
 
-  const appsService = app.get(AppsService);
+  const appsService = app.get(UngDungService);
   const prisma = app.get(PrismaService);
 
   // 1. Dọn dẹp các phân tích AI giả cũ không có moHinhTomTat

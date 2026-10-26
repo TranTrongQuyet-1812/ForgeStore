@@ -6,7 +6,7 @@ export interface ToggleFavoriteResult {
   tongSoYeuThich: number;
 }
 
-export const favoritesService = {
+export const yeuThichService = {
   /**
    * Lấy danh sách ứng dụng trong kho yêu thích của người dùng hiện tại (P3-12.1)
    */

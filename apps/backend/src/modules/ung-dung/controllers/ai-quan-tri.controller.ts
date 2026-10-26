@@ -3,9 +3,9 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { VaiTro } from '@prisma/client';
-import { AppsService } from '../ung-dung.service';
+import { UngDungService } from '../ung-dung.service';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
-import { RepoIngestionPipelineService } from '../services/day-chuyen-nap-repo.service';
+import { DayChuyenNapRepoService } from '../services/day-chuyen-nap-repo.service';
 import { VaiTroYeuCau } from '../../../common/decorators/vai-tro.decorator';
 
 export class PrewarmAiDto {
@@ -41,11 +41,11 @@ export class IngestionRunDto {
 @ApiTags('Admin AI')
 @ApiBearerAuth()
 @Controller('admin/ai')
-export class AiAdminController {
+export class AiQuanTriController {
   constructor(
-    private readonly appsService: AppsService,
+    private readonly appsService: UngDungService,
     private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
-    private readonly repoIngestionPipelineService: RepoIngestionPipelineService,
+    private readonly repoIngestionPipelineService: DayChuyenNapRepoService,
   ) {}
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
@@ -58,8 +58,8 @@ export class AiAdminController {
   })
   @ApiResponse({ status: 200, description: 'Kết quả số app đã chạy và thành công' })
   @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
-  async prewarm(@Body() body?: PrewarmAiDto) {
-    return this.appsService.chayPrewarmAI(body?.danhSachAppIds);
+  async lamNongAi(@Body() body?: PrewarmAiDto) {
+    return this.appsService.chayLamNongAI(body?.danhSachAppIds);
   }
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { RepoIngestionPipelineService } from '../services/day-chuyen-nap-repo.service';
+import { DayChuyenNapRepoService } from '../services/day-chuyen-nap-repo.service';
 
 @Injectable()
-export class RepoIngestionJob {
-  private readonly logger = new Logger(RepoIngestionJob.name);
+export class NapRepoJob {
+  private readonly logger = new Logger(NapRepoJob.name);
 
-  constructor(private readonly pipelineService: RepoIngestionPipelineService) {}
+  constructor(private readonly pipelineService: DayChuyenNapRepoService) {}
 
   /**
    * Tác vụ định kỳ mỗi giờ: chạy dây chuyền nạp lô nhỏ và dịch nền (P3B-06 & P3B-05.4)
@@ -21,8 +21,8 @@ export class RepoIngestionJob {
    * Thực thi chu kỳ nạp định kỳ
    */
   async chayChuKyDinhKy(force = false): Promise<{
-    ketQuaNap: Awaited<ReturnType<RepoIngestionPipelineService['sangLocVaNapLauNho']>>;
-    ketQuaDich: Awaited<ReturnType<RepoIngestionPipelineService['dichNenTheoNganSachNgay']>>;
+    ketQuaNap: Awaited<ReturnType<DayChuyenNapRepoService['sangLocVaNapLauNho']>>;
+    ketQuaDich: Awaited<ReturnType<DayChuyenNapRepoService['dichNenTheoNganSachNgay']>>;
   }> {
     // Chốt chặn 1 từ Claude: Công tắc tắt toàn diện.
     // Nếu INGESTION_ENABLED=false và không force, không chạy bất kỳ tác vụ nào (kể cả AI dịch nền)

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Compass, LayoutGrid, Library, Heart, Settings } from 'lucide-react';
-import { useNavStore, NavTab } from '../../kho-trang-thai/useDieuHuongStore';
-import { useUpdaterStore } from '../../kho-trang-thai/useCapNhatStore';
+import { useDieuHuongStore, NavTab } from '../../kho-trang-thai/useDieuHuongStore';
+import { useCapNhatStore } from '../../kho-trang-thai/useCapNhatStore';
 
 interface NavGroup {
   groupName: string;
@@ -33,13 +33,13 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export const Sidebar: React.FC = () => {
-  const { currentTab, navigateTo } = useNavStore();
-  const { soLuongBanCapNhat } = useUpdaterStore();
+export const ThanhBen: React.FC = () => {
+  const { currentTab, navigateTo } = useDieuHuongStore();
+  const { soLuongBanCapNhat } = useCapNhatStore();
 
   return (
     <aside className="w-[260px] min-w-[260px] h-full bg-surface border-r border-border flex flex-col justify-between select-none transition-colors duration-200 shadow-sm z-30">
-      {/* 1. Đỉnh Sidebar: Khối Thương Hiệu Hero Brand to bản & bề thế */}
+      {/* 1. Đỉnh ThanhBen: Khối Thương Hiệu Hero Brand to bản & bề thế */}
       <div
         data-tauri-drag-region
         className="h-16 px-4 flex items-center border-b border-border shrink-0 cursor-default"
@@ -117,7 +117,7 @@ export const Sidebar: React.FC = () => {
         ))}
       </div>
 
-      {/* 3. Chân Sidebar: Widget trạng thái hệ thống mini */}
+      {/* 3. Chân ThanhBen: Widget trạng thái hệ thống mini */}
       <div className="p-3 border-t border-border shrink-0">
         <div className="p-2.5 rounded-xl bg-surface-elevated border border-border flex items-center justify-between text-[11px] font-mono text-muted">
           <div className="flex items-center gap-2">

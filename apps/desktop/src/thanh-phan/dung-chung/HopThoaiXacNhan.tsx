@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, Trash2, AlertTriangle, Info, X, Loader2 } from 'lucide-react';
-import { useDialogStore } from '../../kho-trang-thai/useHopThoaiStore';
+import { useHopThoaiStore } from '../../kho-trang-thai/useHopThoaiStore';
 
-export const ConfirmDialog: React.FC = () => {
-  const { isOpen, options, close } = useDialogStore();
+export const HopThoaiXacNhan: React.FC = () => {
+  const { isOpen, options, close } = useHopThoaiStore();
   const cardRef = useRef<HTMLDivElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
@@ -98,7 +98,7 @@ export const ConfirmDialog: React.FC = () => {
       }
       close();
     } catch (err) {
-      console.error('[ConfirmDialog] Lỗi khi thực thi xác nhận:', err);
+      console.error('[HopThoaiXacNhan] Lỗi khi thực thi xác nhận:', err);
     } finally {
       setIsSubmitting(false);
     }

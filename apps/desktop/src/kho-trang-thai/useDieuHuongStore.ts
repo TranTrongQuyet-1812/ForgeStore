@@ -19,7 +19,7 @@ interface NavState {
   setAuthModalOpen: (open: boolean) => void;
 }
 
-export const useNavStore = create<NavState>((set) => ({
+export const useDieuHuongStore = create<NavState>((set) => ({
   currentTab: 'explore',
   selectedAppId: null,
   selectedCategory: null,

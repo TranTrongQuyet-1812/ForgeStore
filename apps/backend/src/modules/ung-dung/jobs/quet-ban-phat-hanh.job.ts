@@ -2,17 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
-import { AppsService } from '../ung-dung.service';
+import { UngDungService } from '../ung-dung.service';
 
 @Injectable()
-export class ReleaseScannerJob {
-  private readonly logger = new Logger(ReleaseScannerJob.name);
+export class QuetBanPhatHanhJob {
+  private readonly logger = new Logger(QuetBanPhatHanhJob.name);
   private isRunning = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
-    private readonly appsService: AppsService,
+    private readonly appsService: UngDungService,
   ) {}
 
   /**

@@ -5,11 +5,11 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { ReviewsService } from './danh-gia.service';
+import { DanhGiaService } from './danh-gia.service';
 import { ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 
-describe('ReviewsService (P2-53)', () => {
-  let service: ReviewsService;
+describe('DanhGiaService (P2-53)', () => {
+  let service: DanhGiaService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prisma: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,7 +71,7 @@ describe('ReviewsService (P2-53)', () => {
       xoa: vi.fn(),
     };
 
-    service = new ReviewsService(prisma, cacheService);
+    service = new DanhGiaService(prisma, cacheService);
   });
 
   describe('layDanhSachDanhGia', () => {

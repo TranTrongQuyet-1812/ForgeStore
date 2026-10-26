@@ -13,15 +13,15 @@ import {
   FileText,
   Copy,
 } from 'lucide-react';
-import { useThemeStore } from '../kho-trang-thai/useGiaoDienStore';
-import { useSettingsStore } from '../kho-trang-thai/useCaiDatStore';
-import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
+import { useGiaoDienStore } from '../kho-trang-thai/useGiaoDienStore';
+import { useCaiDatStore } from '../kho-trang-thai/useCaiDatStore';
+import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
-import { deviceService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
+import { thietBiService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
 import { desktopLogger } from '../dich-vu/logger/desktop-logger';
 
-export const SettingsPage: React.FC = () => {
-  const { theme, setTheme } = useThemeStore();
+export const TrangCaiDat: React.FC = () => {
+  const { theme, setTheme } = useGiaoDienStore();
   const {
     thuMucPortable,
     datLaiMacDinh,
@@ -31,8 +31,8 @@ export const SettingsPage: React.FC = () => {
     thuMucLamViecTerminal,
     datLaiMacDinhTerminal,
     chonThuMucTerminalQuaDialog,
-  } = useSettingsStore();
-  const { maThietBi } = useAuthStore();
+  } = useCaiDatStore();
+  const { maThietBi } = useXacThucStore();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [downloadSize, setDownloadSize] = useState<number | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -87,7 +87,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    deviceService.getDeviceInfo().then((info) => {
+    thietBiService.getDeviceInfo().then((info) => {
       setDeviceInfo(info);
     });
     fetchDownloadSize();

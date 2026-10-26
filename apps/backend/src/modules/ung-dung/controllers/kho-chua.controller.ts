@@ -4,7 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { InspectRepoResponseDto } from '@forgestore/types';
 import { CongKhai } from '../../../common/decorators/cong-khai.decorator';
-import { AppsService } from '../ung-dung.service';
+import { UngDungService } from '../ung-dung.service';
 import { InspectRepoDto } from '../dto/kiem-tra-repo.dto';
 
 interface RequestWithUser extends Request {
@@ -13,8 +13,8 @@ interface RequestWithUser extends Request {
 
 @ApiTags('Repos - Nạp & Kiểm Định Kho Nguồn (Module 6)')
 @Controller('repos')
-export class ReposController {
-  constructor(private readonly appsService: AppsService) {}
+export class KhoChuaController {
+  constructor(private readonly appsService: UngDungService) {}
 
   @CongKhai()
   @Throttle({ default: { limit: 30, ttl: 3600000 } })

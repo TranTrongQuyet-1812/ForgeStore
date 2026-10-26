@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AppsController } from './ung-dung.controller';
-import { AppsService } from './ung-dung.service';
+import { UngDungController } from './ung-dung.controller';
+import { UngDungService } from './ung-dung.service';
 import { ReadmeTranslationService } from '../ai/translation/services/readme-translation.service';
 import { TrangThaiDichReadme } from '@forgestore/types';
 
-describe('AppsController', () => {
-  let controller: AppsController;
-  let mockAppsService: AppsService;
+describe('UngDungController', () => {
+  let controller: UngDungController;
+  let mockAppsService: UngDungService;
   let mockReadmeService: ReadmeTranslationService;
 
   beforeEach(() => {
@@ -14,13 +14,13 @@ describe('AppsController', () => {
       layDanhSachDanhMuc: vi.fn(),
       layDanhSachApps: vi.fn(),
       layChiTietApp: vi.fn(),
-    } as unknown as AppsService;
+    } as unknown as UngDungService;
 
     mockReadmeService = {
       layHoacKichHoatDichReadme: vi.fn(),
     } as unknown as ReadmeTranslationService;
 
-    controller = new AppsController(mockAppsService, mockReadmeService);
+    controller = new UngDungController(mockAppsService, mockReadmeService);
   });
 
   describe('GET :owner/:repo/readme', () => {

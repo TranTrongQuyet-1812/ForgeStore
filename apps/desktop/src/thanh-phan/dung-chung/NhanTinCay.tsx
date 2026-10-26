@@ -9,7 +9,7 @@ interface TrustPillProps {
   onClick?: () => void;
 }
 
-export const TrustPill: React.FC<TrustPillProps> = ({
+export const NhanTinCay: React.FC<TrustPillProps> = ({
   score,
   size = 'md',
   showLabel = false,

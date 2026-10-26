@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { DevicesService } from './thiet-bi.service';
+import { ThietBiService } from './thiet-bi.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoaiThietBi } from '@prisma/client';
 
-describe('DevicesService', () => {
-  let service: DevicesService;
+describe('ThietBiService', () => {
+  let service: ThietBiService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockPrisma: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,7 +42,7 @@ describe('DevicesService', () => {
       },
     };
 
-    service = new DevicesService(mockPrisma as unknown as PrismaService, mockCacheService);
+    service = new ThietBiService(mockPrisma as unknown as PrismaService, mockCacheService);
   });
 
   describe('dangKyThietBi', () => {

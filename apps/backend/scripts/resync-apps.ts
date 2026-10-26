@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { AppsService } from '../src/modules/ung-dung/ung-dung.service';
+import { UngDungService } from '../src/modules/ung-dung/ung-dung.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 import { CacheService } from '../src/modules/redis/cache.service';
 import { GithubService } from '../src/modules/github/github.service';
@@ -47,7 +47,7 @@ async function main() {
     logger: ['error', 'warn', 'log'],
   });
 
-  const appsService = app.get(AppsService);
+  const appsService = app.get(UngDungService);
   const prisma = app.get(PrismaService);
   const cacheService = app.get(CacheService);
   const githubService = app.get(GithubService);

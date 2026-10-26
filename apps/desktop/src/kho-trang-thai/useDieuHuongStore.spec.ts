@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useNavStore } from './useDieuHuongStore';
+import { useDieuHuongStore } from './useDieuHuongStore';
 
-describe('useNavStore & AuthModal state (P3B-15-PREMIUM-UI)', () => {
+describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => {
   beforeEach(() => {
-    useNavStore.setState({
+    useDieuHuongStore.setState({
       currentTab: 'explore',
       selectedAppId: null,
       selectedCategory: null,
@@ -14,29 +14,29 @@ describe('useNavStore & AuthModal state (P3B-15-PREMIUM-UI)', () => {
   });
 
   it('khởi tạo mặc định với isAuthModalOpen = false', () => {
-    const state = useNavStore.getState();
+    const state = useDieuHuongStore.getState();
     expect(state.isAuthModalOpen).toBe(false);
     expect(state.currentTab).toBe('explore');
   });
 
   it('setAuthModalOpen(true) mở modal xác thực trung tâm và setAuthModalOpen(false) đóng lại', () => {
-    useNavStore.getState().setAuthModalOpen(true);
-    expect(useNavStore.getState().isAuthModalOpen).toBe(true);
+    useDieuHuongStore.getState().setAuthModalOpen(true);
+    expect(useDieuHuongStore.getState().isAuthModalOpen).toBe(true);
 
-    useNavStore.getState().setAuthModalOpen(false);
-    expect(useNavStore.getState().isAuthModalOpen).toBe(false);
+    useDieuHuongStore.getState().setAuthModalOpen(false);
+    expect(useDieuHuongStore.getState().isAuthModalOpen).toBe(false);
   });
 
   it('điều hướng tab và cập nhật state chính xác', () => {
-    useNavStore.getState().navigateTo('favorites');
-    expect(useNavStore.getState().currentTab).toBe('favorites');
+    useDieuHuongStore.getState().navigateTo('favorites');
+    expect(useDieuHuongStore.getState().currentTab).toBe('favorites');
 
-    useNavStore.getState().openAppDetail('app-test-123');
-    expect(useNavStore.getState().currentTab).toBe('detail');
-    expect(useNavStore.getState().selectedAppId).toBe('app-test-123');
+    useDieuHuongStore.getState().openAppDetail('app-test-123');
+    expect(useDieuHuongStore.getState().currentTab).toBe('detail');
+    expect(useDieuHuongStore.getState().selectedAppId).toBe('app-test-123');
 
-    useNavStore.getState().openCategory('developer-tools');
-    expect(useNavStore.getState().currentTab).toBe('explore');
-    expect(useNavStore.getState().selectedCategory).toBe('developer-tools');
+    useDieuHuongStore.getState().openCategory('developer-tools');
+    expect(useDieuHuongStore.getState().currentTab).toBe('explore');
+    expect(useDieuHuongStore.getState().selectedCategory).toBe('developer-tools');
   });
 });

@@ -1,20 +1,20 @@
 import React, { useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { AppLayout } from './thanh-phan/bo-cuc/BoCucUngDung';
-import { authService } from './dich-vu/xac-thuc/xac-thuc.service';
+import { BoCucUngDung } from './thanh-phan/bo-cuc/BoCucUngDung';
+import { xacThucService } from './dich-vu/xac-thuc/xac-thuc.service';
 import { queryClient } from './dich-vu/api/query-client';
 
 export const App: React.FC = () => {
   useEffect(() => {
-    authService.init();
+    xacThucService.init();
     return () => {
-      authService.destroy();
+      xacThucService.destroy();
     };
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppLayout />
+      <BoCucUngDung />
     </QueryClientProvider>
   );
 };

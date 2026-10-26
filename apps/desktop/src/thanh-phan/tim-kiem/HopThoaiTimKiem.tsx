@@ -10,15 +10,15 @@ import {
   CheckCircle2,
   Star,
 } from 'lucide-react';
-import { useNavStore } from '../../kho-trang-thai/useDieuHuongStore';
-import { storeService } from '../../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { khoUngDungService } from '../../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { layThongBaoLoi } from '../../dich-vu/api/thong-bao-loi';
 import { layMaMoTrangTuLink } from './tien-ich-tim-kiem';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
-export const SearchModal: React.FC = () => {
-  const { isSearchModalOpen, setSearchModalOpen, openAppDetail } = useNavStore();
+export const HopThoaiTimKiem: React.FC = () => {
+  const { isSearchModalOpen, setSearchModalOpen, openAppDetail } = useDieuHuongStore();
   const { kiemTraAppDaCai } = useDeviceInstalledApps();
 
   const [query, setQuery] = useState<string>('');
@@ -85,7 +85,7 @@ export const SearchModal: React.FC = () => {
 
     const timer = setTimeout(async () => {
       try {
-        const res = await storeService.timKiem(trimmed, 'WINDOWS');
+        const res = await khoUngDungService.timKiem(trimmed, 'WINDOWS');
         setSearchResult(res);
         setSelectedIndex(res.duLieu && res.duLieu.length > 0 ? 0 : -1);
       } catch (err) {
@@ -108,7 +108,7 @@ export const SearchModal: React.FC = () => {
     setInspectSuccess(null);
 
     try {
-      const res = await storeService.kiemDinhRepo(urlToInspect);
+      const res = await khoUngDungService.kiemDinhRepo(urlToInspect);
       if (res.trangThai === 'THANH_CONG' && res.ungDung) {
         setInspectSuccess(res);
         // Tự động chuyển trang sau 800ms (EC-06: Quản lý timer chống rò rỉ)

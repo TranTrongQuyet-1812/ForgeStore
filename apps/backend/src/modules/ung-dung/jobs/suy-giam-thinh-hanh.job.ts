@@ -4,8 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
 
 @Injectable()
-export class TrendingDecayJob {
-  private readonly logger = new Logger(TrendingDecayJob.name);
+export class SuyGiamThinhHanhJob {
+  private readonly logger = new Logger(SuyGiamThinhHanhJob.name);
   private isRunning = false;
 
   constructor(

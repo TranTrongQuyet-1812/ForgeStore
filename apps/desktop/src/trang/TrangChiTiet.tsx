@@ -29,17 +29,17 @@ import {
   Library,
   Smartphone,
 } from 'lucide-react';
-import { TrustPill } from '../thanh-phan/dung-chung/NhanTinCay';
-import { MarkdownView } from '../thanh-phan/dung-chung/XemMarkdown';
-import { useNavStore } from '../kho-trang-thai/useDieuHuongStore';
-import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
-import { useInstallStore } from '../kho-trang-thai/useCaiDatUngDungStore';
-import { useSettingsStore } from '../kho-trang-thai/useCaiDatStore';
+import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
+import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
+import { useCaiDatUngDungStore } from '../kho-trang-thai/useCaiDatUngDungStore';
+import { useCaiDatStore } from '../kho-trang-thai/useCaiDatStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
-import { installService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
-import { storeService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
-import { favoritesService } from '../dich-vu/yeu-thich/yeu-thich.service';
-import { libraryService } from '../dich-vu/thu-vien/thu-vien.service';
+import { caiDatUngDungService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
+import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
+import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { ApiError } from '../dich-vu/api/api-client';
 import {
   CachCaiDto,
@@ -61,7 +61,7 @@ import {
  */
 export function timTepCaiDatToiUu<
   T extends { tenTep: string; dinhDangTep?: string | null; kienTrucChip?: string | null },
->(assets: T[], format: string, preferredArch: 'x64' | 'arm64' = 'x64'): T | undefined {
+>(assets: T[], format: string, kienTrucUuTien: 'x64' | 'arm64' = 'x64'): T | undefined {
   if (!assets || assets.length === 0) return undefined;
 
   const fmtUpper = format.toUpperCase();
@@ -115,7 +115,7 @@ export function timTepCaiDatToiUu<
       return 0; // Đưa về 0 điểm tuyệt đối
     }
 
-    if (preferredArch === 'x64') {
+    if (kienTrucUuTien === 'x64') {
       if (isExplicitX64 && !isArm) {
         // Tên chứa rõ ràng x64/amd64 được ưu tiên hàng đầu
         return ten.includes('x64') || ten.includes('amd64') ? 110 : 100;
@@ -280,10 +280,10 @@ export function phanTichTepAndroidApk<T extends { tenTep: string }>(
   };
 }
 
-export const DetailPage: React.FC = () => {
+export const TrangChiTiet: React.FC = () => {
   const queryClient = useQueryClient();
-  const { selectedAppId, navigateTo, setAuthModalOpen } = useNavStore();
-  const { isAuthenticated, user, maThietBi } = useAuthStore();
+  const { selectedAppId, navigateTo, setAuthModalOpen } = useDieuHuongStore();
+  const { isAuthenticated, user, maThietBi } = useXacThucStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
   // Cờ `laYeuThich` trong chi tiết app phụ thuộc người đang đăng nhập, nên khóa cache phải gắn với
   // người dùng. Nếu không, bản tải lúc chưa có token (laYeuThich rỗng) bị giữ lại sau khi đăng nhập.
@@ -326,11 +326,11 @@ export const DetailPage: React.FC = () => {
   }, [appId]);
 
   // Cấu hình thư mục lưu bản portable từ trang Cài đặt (L-08: Chỗ duy nhất chọn thư mục portable)
-  const { thuMucPortable } = useSettingsStore();
+  const { thuMucPortable } = useCaiDatStore();
   const targetPortableDir = thuMucPortable || undefined;
 
   // Động cơ cài đặt Native Tauri & Quản lý tiến trình (P3-08..P3-11)
-  const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useInstallStore();
+  const { caiDatMap, batDauCaiDat, huyCaiDat, moApp } = useCaiDatUngDungStore();
 
   // TanStack Query nạp dữ liệu sống từ Backend
   const {
@@ -340,7 +340,7 @@ export const DetailPage: React.FC = () => {
     refetch,
   } = useQuery({
     queryKey: appDetailKey,
-    queryFn: () => storeService.layChiTietApp(appId),
+    queryFn: () => khoUngDungService.layChiTietApp(appId),
     staleTime: 3 * 60 * 1000,
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -358,7 +358,7 @@ export const DetailPage: React.FC = () => {
   const { data: userFavoritesData } = useQuery({
     queryKey: ['user-favorites'],
     // Backend giới hạn limit tối đa 50 (QueryFavoritesDto); gửi 100 sẽ bị trả 400.
-    queryFn: () => favoritesService.layDanhSachYeuThich(1, 50),
+    queryFn: () => yeuThichService.layDanhSachYeuThich(1, 50),
     enabled: isAuthenticated,
     staleTime: 60 * 1000,
   });
@@ -367,7 +367,7 @@ export const DetailPage: React.FC = () => {
   const { data: installedAppsOnDevice = [] } = useQuery({
     queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
     queryFn: () =>
-      maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
+      maThietBi ? thuVienService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
     enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
   });
@@ -389,7 +389,7 @@ export const DetailPage: React.FC = () => {
 
   const { data: androidDetail } = useQuery({
     queryKey: ['app-detail-android', appId],
-    queryFn: () => storeService.layChiTietApp(appId, 'android'),
+    queryFn: () => khoUngDungService.layChiTietApp(appId, 'android'),
     enabled: canFetchAndroidApk,
     staleTime: 3 * 60 * 1000,
   });
@@ -412,7 +412,7 @@ export const DetailPage: React.FC = () => {
     refetch: refetchReadme,
   } = useQuery({
     queryKey: ['app-readme', appId],
-    queryFn: () => storeService.layReadmeApp(appId),
+    queryFn: () => khoUngDungService.layReadmeApp(appId),
     enabled: Boolean(appId),
     staleTime: 2 * 60 * 1000,
     refetchInterval: (query) => {
@@ -468,7 +468,7 @@ export const DetailPage: React.FC = () => {
     setIsFavorited(nextState);
 
     try {
-      const res = await favoritesService.chuyenDoiYeuThich(targetId);
+      const res = await yeuThichService.chuyenDoiYeuThich(targetId);
       setIsFavorited(res.daYeuThich);
       // Cập nhật ngay trong cache của app-detail
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -531,7 +531,7 @@ export const DetailPage: React.FC = () => {
         },
       );
     } catch (err) {
-      console.warn('[DetailPage] Lỗi khi chuyển đổi yêu thích:', err);
+      console.warn('[TrangChiTiet] Lỗi khi chuyển đổi yêu thích:', err);
       setIsFavorited(prevState);
       // Báo lỗi ra giao diện thay vì âm thầm quay về trạng thái cũ
       setLoiYeuThich(
@@ -582,7 +582,7 @@ export const DetailPage: React.FC = () => {
         if (copyCommandTimerRef.current) clearTimeout(copyCommandTimerRef.current);
         copyCommandTimerRef.current = setTimeout(() => setCopiedCommandId(null), 2000);
       })
-      .catch((err) => console.warn('[DetailPage] Không thể sao chép lệnh:', err));
+      .catch((err) => console.warn('[TrangChiTiet] Không thể sao chép lệnh:', err));
   };
 
   // Mở Terminal an toàn theo Quyết định D-27 (P3B-18)
@@ -596,12 +596,15 @@ export const DetailPage: React.FC = () => {
       await navigator.clipboard.writeText(sanitizedLenh);
       daChepClipboard = true;
     } catch (clipErr) {
-      console.warn('[DetailPage] Không thể sao chép vào clipboard trước khi mở terminal:', clipErr);
+      console.warn(
+        '[TrangChiTiet] Không thể sao chép vào clipboard trước khi mở terminal:',
+        clipErr,
+      );
       daChepClipboard = false;
     }
 
-    // 2. Lấy cấu hình terminal từ useSettingsStore
-    const { trinhTerminal, thuMucLamViecTerminal } = useSettingsStore.getState();
+    // 2. Lấy cấu hình terminal từ useCaiDatStore
+    const { trinhTerminal, thuMucLamViecTerminal } = useCaiDatStore.getState();
 
     const isTauri =
       typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -758,12 +761,13 @@ export const DetailPage: React.FC = () => {
     [displayAssets, selectedFormat],
   );
 
-  // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11 & P3B-17)
+  // Trạng thái cài đặt thực tế từ useCaiDatUngDungStore (P3-08..P3-11 & P3B-17)
   const appKey = appDetail?.maUngDung || appId;
   const installInfo = caiDatMap[appKey];
 
   // P3B-17.1: Tự động nhận diện biến thể đã cài đặt lần trước qua mẫu wildcard pattern
-  const mauBienTheDaLuu = useInstallStore((s) => s.layBienThe(appKey)) || installInfo?.mauBienThe;
+  const mauBienTheDaLuu =
+    useCaiDatUngDungStore((s) => s.layBienThe(appKey)) || installInfo?.mauBienThe;
   const assetBienTheCu = useMemo(() => {
     if (!mauBienTheDaLuu || displayAssets.length === 0) return null;
     return timTepTheoMauWildcard(displayAssets, mauBienTheDaLuu);
@@ -865,7 +869,7 @@ export const DetailPage: React.FC = () => {
         appDetail.danhSachBanPhatHanh?.[0]?.tenPhienBan ||
         undefined;
 
-      const res = await libraryService.ghiNhanCaiDatCli(maThietBi, {
+      const res = await thuVienService.ghiNhanCaiDatCli(maThietBi, {
         maUngDung: appDetail.maUngDung,
         trinhQuanLy,
         tenGoi,
@@ -894,7 +898,7 @@ export const DetailPage: React.FC = () => {
     if (!maThietBi || !appDetail?.maUngDung) return;
     try {
       setIsConfirmingCli(true);
-      const res = await libraryService.xacNhanCaiDatCli(maThietBi, appDetail.maUngDung);
+      const res = await thuVienService.xacNhanCaiDatCli(maThietBi, appDetail.maUngDung);
       if (res?.thanhCong) {
         toast.success('Đã xác nhận cài đặt thành công! Bản ghi sẽ không bị hết hạn.');
         queryClient.invalidateQueries({
@@ -914,7 +918,7 @@ export const DetailPage: React.FC = () => {
   const isZipTab =
     selectedFormat.toUpperCase() === 'ZIP' || selectedFormat.toUpperCase() === 'ZIP_PORTABLE';
 
-  // Trạng thái cài đặt thực tế từ useInstallStore (P3-08..P3-11)
+  // Trạng thái cài đặt thực tế từ useCaiDatUngDungStore (P3-08..P3-11)
   const localStatus = installInfo?.trangThai || 'CHUA_CAI';
 
   const effectiveStatus = useMemo(
@@ -970,7 +974,7 @@ export const DetailPage: React.FC = () => {
 
     if (ok && isZipTab) {
       const extractedPath =
-        useInstallStore.getState().caiDatMap[appKey]?.duongDanThuMuc ||
+        useCaiDatUngDungStore.getState().caiDatMap[appKey]?.duongDanThuMuc ||
         targetPortableDir ||
         'thư mục giải nén';
       setZipExtractToast({ duongDan: extractedPath });
@@ -1261,7 +1265,7 @@ export const DetailPage: React.FC = () => {
                             pollCountRef.current = 0;
                             setIsPollTimedOut(false);
                             // Gọi endpoint POST retry chuyên biệt với rate-limit riêng (Fix Claude DELIV-77.7)
-                            await storeService.dichLaiReadmeApp(appId);
+                            await khoUngDungService.dichLaiReadmeUngDung(appId);
                             refetchReadme();
                           } finally {
                             setIsRetryingReadme(false);
@@ -1274,7 +1278,7 @@ export const DetailPage: React.FC = () => {
                       </button>
                     </div>
                   )}
-                  <MarkdownView
+                  <XemMarkdown
                     content={readmeData.banDich}
                     owner={appDetail?.chuSoHuu}
                     repo={appDetail?.tenKhoChua}
@@ -1296,7 +1300,7 @@ export const DetailPage: React.FC = () => {
                           pollCountRef.current = 0;
                           setIsPollTimedOut(false);
                           // Gọi endpoint POST retry chuyên biệt với rate-limit riêng (Fix Claude DELIV-77.7)
-                          await storeService.dichLaiReadmeApp(appId);
+                          await khoUngDungService.dichLaiReadmeUngDung(appId);
                           refetchReadme();
                         } finally {
                           setIsRetryingReadme(false);
@@ -1310,7 +1314,7 @@ export const DetailPage: React.FC = () => {
                   </div>
                   {readmeData?.banGoc && (
                     <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                      <MarkdownView
+                      <XemMarkdown
                         content={readmeData.banGoc}
                         owner={appDetail?.chuSoHuu}
                         repo={appDetail?.tenKhoChua}
@@ -1330,7 +1334,7 @@ export const DetailPage: React.FC = () => {
                   </div>
                   {readmeData?.banGoc && (
                     <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                      <MarkdownView
+                      <XemMarkdown
                         content={readmeData.banGoc}
                         owner={appDetail?.chuSoHuu}
                         repo={appDetail?.tenKhoChua}
@@ -1341,7 +1345,7 @@ export const DetailPage: React.FC = () => {
               )
             ) : readmeData?.banGoc ? (
               <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                <MarkdownView
+                <XemMarkdown
                   content={readmeData.banGoc}
                   owner={appDetail?.chuSoHuu}
                   repo={appDetail?.tenKhoChua}
@@ -2291,7 +2295,7 @@ export const DetailPage: React.FC = () => {
                     onClick={async () => {
                       try {
                         setMoThuMucLoi(null);
-                        await installService.moThuMuc(zipExtractToast.duongDan);
+                        await caiDatUngDungService.moThuMuc(zipExtractToast.duongDan);
                       } catch (err) {
                         const msg = (err as Error)?.message || 'Không thể mở thư mục';
                         setMoThuMucLoi(msg);
@@ -2394,7 +2398,7 @@ export const DetailPage: React.FC = () => {
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
                 <span>ĐIỂM UY TÍN KHO MÃ</span>
               </span>
-              <TrustPill score={trustScore} size="sm" />
+              <NhanTinCay score={trustScore} size="sm" />
             </div>
 
             <div className="flex items-baseline gap-2">

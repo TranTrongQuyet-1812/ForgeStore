@@ -126,7 +126,7 @@ export async function openExternalUrl(url: string): Promise<void> {
   try {
     await openUrl(url);
   } catch (err) {
-    console.warn('[MarkdownView] Fallback mở link qua window.open:', err);
+    console.warn('[XemMarkdown] Fallback mở link qua window.open:', err);
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 }
@@ -138,7 +138,7 @@ export async function openExternalUrl(url: string): Promise<void> {
  * 3. Tự động nối URL tương đối của GitHub cho ảnh và link (không bị vỡ ảnh).
  * 4. Mở link bằng trình duyệt hệ thống ngoài máy tính qua @tauri-apps/plugin-opener.
  */
-export function MarkdownView({
+export function XemMarkdown({
   content,
   className,
   owner,

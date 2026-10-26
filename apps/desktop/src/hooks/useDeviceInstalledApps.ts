@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
-import { useInstallStore, type CaiDatTienTrinh } from '../kho-trang-thai/useCaiDatUngDungStore';
-import { libraryService } from '../dich-vu/thu-vien/thu-vien.service';
+import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
+import {
+  useCaiDatUngDungStore,
+  type CaiDatTienTrinh,
+} from '../kho-trang-thai/useCaiDatUngDungStore';
+import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import type { UngDungDaCaiDto } from '@forgestore/types';
 
 export interface TrangThaiCaiDatApp {
@@ -41,7 +44,7 @@ export function kiemTraAppDaCaiHelper(params: {
     if (matchInBackend) return true;
   }
 
-  // 2. Kiểm tra trong RAM useInstallStore (hỗ trợ cả khách hoặc vừa cài xong chưa sync)
+  // 2. Kiểm tra trong RAM useCaiDatUngDungStore (hỗ trợ cả khách hoặc vừa cài xong chưa sync)
   for (const k of keys) {
     const local = caiDatMap[k];
     if (local?.trangThai === 'DA_CAI_DAT') return true;
@@ -94,11 +97,11 @@ export function layTrangThaiCaiDatHelper(params: {
 /**
  * Hook dùng chung tra cứu trạng thái ứng dụng đã cài đặt trên thiết bị hiện tại (L-02)
  * Đồng bộ qua chung React Query key ['device-installed-apps', user?.maNguoiDung, maThietBi]
- * Kết hợp dữ liệu RAM từ useInstallStore để phản hồi tức thì khi đang tải/cài
+ * Kết hợp dữ liệu RAM từ useCaiDatUngDungStore để phản hồi tức thì khi đang tải/cài
  */
 export function useDeviceInstalledApps() {
-  const { user, isAuthenticated, maThietBi } = useAuthStore();
-  const caiDatMap = useInstallStore((s) => s.caiDatMap);
+  const { user, isAuthenticated, maThietBi } = useXacThucStore();
+  const caiDatMap = useCaiDatUngDungStore((s) => s.caiDatMap);
 
   const {
     data: installedList = [],
@@ -107,7 +110,7 @@ export function useDeviceInstalledApps() {
   } = useQuery<UngDungDaCaiDto[]>({
     queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
     queryFn: () =>
-      maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
+      maThietBi ? thuVienService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
     enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
   });

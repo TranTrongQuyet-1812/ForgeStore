@@ -36,7 +36,7 @@ interface SettingsState {
   chonThuMucTerminalQuaDialog: () => Promise<string | null>;
 }
 
-export const useSettingsStore = create<SettingsState>()(
+export const useCaiDatStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       thuMucPortable: '',
@@ -79,7 +79,7 @@ export const useSettingsStore = create<SettingsState>()(
           const errMsg = err instanceof Error ? err.message : String(err);
           // L-07: Hiển thị lý do từ chối thư mục hệ thống hoặc không có quyền ghi, giữ nguyên giá trị cũ
           toast.error(errMsg || 'Thư mục không hợp lệ hoặc không có quyền ghi.');
-          console.error('[useSettingsStore] Lỗi khi mở hộp thoại chọn thư mục:', err);
+          console.error('[useCaiDatStore] Lỗi khi mở hộp thoại chọn thư mục:', err);
           return null;
         }
       },
@@ -122,7 +122,7 @@ export const useSettingsStore = create<SettingsState>()(
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           toast.error(errMsg || 'Thư mục không hợp lệ hoặc không có quyền truy cập.');
-          console.error('[useSettingsStore] Lỗi khi chọn thư mục làm việc Terminal:', err);
+          console.error('[useCaiDatStore] Lỗi khi chọn thư mục làm việc Terminal:', err);
           return null;
         }
       },

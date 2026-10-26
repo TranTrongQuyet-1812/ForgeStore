@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { CacheService } from '../../redis/cache.service';
-import { AppsService } from '../ung-dung.service';
-import { TrendingDecayJob } from '../jobs/suy-giam-thinh-hanh.job';
+import { UngDungService } from '../ung-dung.service';
+import { SuyGiamThinhHanhJob } from '../jobs/suy-giam-thinh-hanh.job';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { ReadmeTranslationService } from '../../ai/translation/services/readme-translation.service';
 import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
@@ -71,8 +71,8 @@ export const DANH_SACH_SEED_REPOS: string[] = [
  * 6. Bật tắt được: Biến môi trường INGESTION_ENABLED khóa toàn diện cả nạp lẫn dịch nền định kỳ.
  */
 @Injectable()
-export class RepoIngestionPipelineService {
-  private readonly logger = new Logger(RepoIngestionPipelineService.name);
+export class DayChuyenNapRepoService {
+  private readonly logger = new Logger(DayChuyenNapRepoService.name);
   public static readonly LOCK_KEY = 'fs:ingestion:lock';
   public static readonly LOCK_TTL_SECONDS = 900; // 15 phút
   public static readonly BUDGET_PREFIX = 'fs:ai:translation:budget:readme:';
@@ -81,8 +81,8 @@ export class RepoIngestionPipelineService {
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
     private readonly cacheService: CacheService,
-    private readonly appsService: AppsService,
-    private readonly trendingDecayJob: TrendingDecayJob,
+    private readonly appsService: UngDungService,
+    private readonly trendingDecayJob: SuyGiamThinhHanhJob,
     private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
     private readonly readmeTranslationService: ReadmeTranslationService,
     private readonly config: ConfigService,
@@ -206,8 +206,8 @@ export class RepoIngestionPipelineService {
     // Chốt chặn 3: Khóa phân tán Redis an toàn qua withLock (SET NX PX kèm Lua script)
     try {
       return await this.cacheService.withLock<KetQuaNapLau>(
-        RepoIngestionPipelineService.LOCK_KEY,
-        RepoIngestionPipelineService.LOCK_TTL_SECONDS * 1000,
+        DayChuyenNapRepoService.LOCK_KEY,
+        DayChuyenNapRepoService.LOCK_TTL_SECONDS * 1000,
         async () => {
           return await this.thucThiSangLocVaNap(limit);
         },
@@ -536,7 +536,7 @@ export class RepoIngestionPipelineService {
 
     // 2. Dịch README có ngân sách ngày
     const today = new Date().toISOString().slice(0, 10);
-    const budgetKey = `${RepoIngestionPipelineService.BUDGET_PREFIX}${today}`;
+    const budgetKey = `${DayChuyenNapRepoService.BUDGET_PREFIX}${today}`;
     const usedToday = (await this.cacheService.lay<number>(budgetKey)) || 0;
     const dailyLimit =
       maxReadmeBudget ?? this.config.get<number>('INGESTION_DAILY_README_BUDGET', 50);

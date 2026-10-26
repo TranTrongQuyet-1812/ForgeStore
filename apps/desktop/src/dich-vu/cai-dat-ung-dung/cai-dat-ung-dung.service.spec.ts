@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useInstallStore } from '../../kho-trang-thai/useCaiDatUngDungStore';
-import { installService } from './cai-dat-ung-dung.service';
+import { useCaiDatUngDungStore } from '../../kho-trang-thai/useCaiDatUngDungStore';
+import { caiDatUngDungService } from './cai-dat-ung-dung.service';
 import type { ThamSoCaiDat, TienDoTaiFrontend } from './kieu-cai-dat-ung-dung';
 
-describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
+describe('CaiDatUngDungService & useCaiDatUngDungStore (P3-08..P3-11)', () => {
   beforeEach(() => {
     // Reset zustand store before each test
-    useInstallStore.setState({ caiDatMap: {} });
+    useCaiDatUngDungStore.setState({ caiDatMap: {} });
   });
 
-  describe('InstallService Web Dev Flow', () => {
+  describe('CaiDatUngDungService Web Dev Flow', () => {
     it('thực thi trọn vẹn luồng tải giả lập với đầy đủ các trạng thái', async () => {
       const params: ThamSoCaiDat = {
         maUngDung: 'app-test-123',
@@ -25,7 +25,7 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         capturedStates.push(tienDo.trangThai);
       };
 
-      const res = await installService.batDauTaiVaCaiDat(params, onProgress);
+      const res = await caiDatUngDungService.batDauTaiVaCaiDat(params, onProgress);
 
       expect(res.thanh_cong).toBe(true);
       expect(res.loai_cai_dat).toBe('EXE');
@@ -39,12 +39,12 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
     });
 
     it('hủy tải thành công và trả về true', async () => {
-      const res = await installService.huyTai('app-cancel-123');
+      const res = await caiDatUngDungService.huyTai('app-cancel-123');
       expect(res).toBe(true);
     });
   });
 
-  describe('useInstallStore State Management', () => {
+  describe('useCaiDatUngDungStore State Management', () => {
     it('quản lý trạng thái cài đặt thành công trên Store', async () => {
       const params: ThamSoCaiDat = {
         maUngDung: 'rustdesk-id',
@@ -54,38 +54,38 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         loaiTep: 'EXE',
       };
 
-      const promise = useInstallStore.getState().batDauCaiDat(params);
+      const promise = useCaiDatUngDungStore.getState().batDauCaiDat(params);
 
       // Ngay sau khi gọi, trạng thái phải là DANG_TAI
-      const initialInfo = useInstallStore.getState().layThongTinApp('rustdesk-id');
+      const initialInfo = useCaiDatUngDungStore.getState().layThongTinApp('rustdesk-id');
       expect(initialInfo).toBeDefined();
       expect(initialInfo?.trangThai).toBe('DANG_TAI');
 
       const success = await promise;
       expect(success).toBe(true);
 
-      const finalInfo = useInstallStore.getState().layThongTinApp('rustdesk-id');
+      const finalInfo = useCaiDatUngDungStore.getState().layThongTinApp('rustdesk-id');
       expect(finalInfo?.trangThai).toBe('DA_CAI_DAT');
       expect(finalInfo?.phanTram).toBe(100);
       expect(finalInfo?.duongDanThucThi).toContain('RustDesk.exe');
     });
 
     it('xử lý trạng thái khi người dùng nhấn hủy tải', async () => {
-      useInstallStore.getState().capNhatTrangThai('app-to-cancel', {
+      useCaiDatUngDungStore.getState().capNhatTrangThai('app-to-cancel', {
         tenApp: 'Test App',
         trangThai: 'DANG_TAI',
         phanTram: 45,
       });
 
-      await useInstallStore.getState().huyCaiDat('app-to-cancel');
+      await useCaiDatUngDungStore.getState().huyCaiDat('app-to-cancel');
 
-      const info = useInstallStore.getState().layThongTinApp('app-to-cancel');
+      const info = useCaiDatUngDungStore.getState().layThongTinApp('app-to-cancel');
       expect(info?.trangThai).toBe('DA_HUY');
       expect(info?.phanTram).toBe(0);
     });
 
     it('xử lý ghi nhận lỗi khi tải thất bại', async () => {
-      vi.spyOn(installService, 'batDauTaiVaCaiDat').mockRejectedValueOnce(
+      vi.spyOn(caiDatUngDungService, 'batDauTaiVaCaiDat').mockRejectedValueOnce(
         new Error('LỖI_XAC_MINH_SHA256: Mã băm không khớp'),
       );
 
@@ -97,10 +97,10 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         loaiTep: 'EXE',
       };
 
-      const success = await useInstallStore.getState().batDauCaiDat(params);
+      const success = await useCaiDatUngDungStore.getState().batDauCaiDat(params);
       expect(success).toBe(false);
 
-      const info = useInstallStore.getState().layThongTinApp('bad-sha-app');
+      const info = useCaiDatUngDungStore.getState().layThongTinApp('bad-sha-app');
       expect(info?.trangThai).toBe('LOI');
       expect(info?.thongDiepLoi).toContain('LỖI_XAC_MINH_SHA256');
     });
@@ -154,10 +154,10 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
       try {
         mockLocalStorage.setItem('forgestore_install_tasks', JSON.stringify(mockStorageData));
 
-        await useInstallStore.persist.rehydrate();
+        await useCaiDatUngDungStore.persist.rehydrate();
 
-        expect(useInstallStore.persist.hasHydrated()).toBe(true);
-        const stuckApp = useInstallStore.getState().layThongTinApp('stuck-download-app');
+        expect(useCaiDatUngDungStore.persist.hasHydrated()).toBe(true);
+        const stuckApp = useCaiDatUngDungStore.getState().layThongTinApp('stuck-download-app');
         expect(stuckApp).toBeDefined();
         expect(stuckApp?.trangThai).toBe('DA_HUY');
         expect(stuckApp?.phanTram).toBe(0);
@@ -167,7 +167,9 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         );
 
         // Đảm bảo app đã cài đặt vẫn giữ nguyên trạng thái và đường dẫn thư mục
-        const installedApp = useInstallStore.getState().layThongTinApp('already-installed-app');
+        const installedApp = useCaiDatUngDungStore
+          .getState()
+          .layThongTinApp('already-installed-app');
         expect(installedApp).toBeDefined();
         expect(installedApp?.trangThai).toBe('DA_CAI_DAT');
         expect(installedApp?.duongDanThuMuc).toBe('D:\\Apps\\Portable');
@@ -183,12 +185,12 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
 
   describe('Registry & Native Uninstaller (A4)', () => {
     it('kiemTraAppRegistry trả về null trong môi trường Web dev', async () => {
-      const res = await installService.kiemTraAppRegistry('Notepad++');
+      const res = await caiDatUngDungService.kiemTraAppRegistry('Notepad++');
       expect(res).toBeNull();
     });
 
     it('goCaiDatQuaRegistry trả về true trong môi trường Web dev fallback', async () => {
-      const res = await installService.goCaiDatQuaRegistry(
+      const res = await caiDatUngDungService.goCaiDatQuaRegistry(
         '"C:\\Program Files\\App\\uninstall.exe"',
       );
       expect(res).toBe(true);
@@ -198,7 +200,7 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
   describe('Safe Folder Opener (A1, TC-09, SEC-02)', () => {
     it('moThuMuc chạy fallback an toàn trong môi trường Web dev', async () => {
       const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-      await installService.moThuMuc('D:\\ForgeStore_Apps\\Notepad++');
+      await caiDatUngDungService.moThuMuc('D:\\ForgeStore_Apps\\Notepad++');
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining(
           '[WebDev Preview] Giả lập mở thư mục tại: D:\\ForgeStore_Apps\\Notepad++',
@@ -209,15 +211,15 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
 
     it('moThuMuc gọi native mo_thu_muc trong môi trường Tauri', async () => {
       vi.spyOn(
-        installService as unknown as { isTauriEnv: () => boolean },
-        'isTauriEnv',
+        caiDatUngDungService as unknown as { laMoiTruongTauri: () => boolean },
+        'laMoiTruongTauri',
       ).mockReturnValue(true);
       const mockInvoke = vi.fn().mockResolvedValue(undefined);
       vi.doMock('@tauri-apps/api/core', () => ({
         invoke: mockInvoke,
       }));
 
-      await installService.moThuMuc('D:\\ForgeStore_Apps\\PortableApp');
+      await caiDatUngDungService.moThuMuc('D:\\ForgeStore_Apps\\PortableApp');
       expect(mockInvoke).toHaveBeenCalledWith('mo_thu_muc', {
         duongDan: 'D:\\ForgeStore_Apps\\PortableApp',
       });
@@ -228,8 +230,8 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
 
     it('moThuMuc fallback sang revealItemInDir nếu mo_thu_muc native lỗi', async () => {
       vi.spyOn(
-        installService as unknown as { isTauriEnv: () => boolean },
-        'isTauriEnv',
+        caiDatUngDungService as unknown as { laMoiTruongTauri: () => boolean },
+        'laMoiTruongTauri',
       ).mockReturnValue(true);
       const mockInvoke = vi.fn().mockRejectedValue(new Error('Lỗi invoke'));
       const mockReveal = vi.fn().mockResolvedValue(undefined);
@@ -241,7 +243,7 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         revealItemInDir: mockReveal,
       }));
 
-      await installService.moThuMuc('D:\\ForgeStore_Apps\\FallbackDir');
+      await caiDatUngDungService.moThuMuc('D:\\ForgeStore_Apps\\FallbackDir');
       expect(mockInvoke).toHaveBeenCalled();
       expect(mockReveal).toHaveBeenCalledWith('D:\\ForgeStore_Apps\\FallbackDir');
 
@@ -252,35 +254,35 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
 
     it('moThuMuc bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      await installService.moThuMuc('');
-      await installService.moThuMuc('   ');
-      await installService.moThuMuc(null);
-      await installService.moThuMuc(undefined);
+      await caiDatUngDungService.moThuMuc('');
+      await caiDatUngDungService.moThuMuc('   ');
+      await caiDatUngDungService.moThuMuc(null);
+      await caiDatUngDungService.moThuMuc(undefined);
       expect(warnSpy).toHaveBeenCalledTimes(4);
       warnSpy.mockRestore();
     });
 
     it('moUngDung bỏ qua an toàn và không gọi native khi đường dẫn rỗng', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      await installService.moUngDung('');
-      await installService.moUngDung('   ');
-      await installService.moUngDung(null);
-      await installService.moUngDung(undefined);
+      await caiDatUngDungService.moUngDung('');
+      await caiDatUngDungService.moUngDung('   ');
+      await caiDatUngDungService.moUngDung(null);
+      await caiDatUngDungService.moUngDung(undefined);
       expect(warnSpy).toHaveBeenCalledTimes(4);
       warnSpy.mockRestore();
     });
 
     it('moUngDungTuRegistry bỏ qua an toàn và trả về false khi khoaRegistry rỗng', async () => {
-      const resEmpty = await installService.moUngDungTuRegistry('');
-      const resBlank = await installService.moUngDungTuRegistry('   ');
+      const resEmpty = await caiDatUngDungService.moUngDungTuRegistry('');
+      const resBlank = await caiDatUngDungService.moUngDungTuRegistry('   ');
       expect(resEmpty).toBe(false);
       expect(resBlank).toBe(false);
     });
 
     it('moUngDungTuRegistry gọi command native mo_ung_dung_tu_registry trong môi trường Tauri', async () => {
       vi.spyOn(
-        installService as unknown as { isTauriEnv: () => boolean },
-        'isTauriEnv',
+        caiDatUngDungService as unknown as { laMoiTruongTauri: () => boolean },
+        'laMoiTruongTauri',
       ).mockReturnValue(true);
       const mockInvoke = vi.fn().mockResolvedValue(undefined);
 
@@ -288,7 +290,7 @@ describe('InstallService & useInstallStore (P3-08..P3-11)', () => {
         invoke: mockInvoke,
       }));
 
-      const res = await installService.moUngDungTuRegistry('Notepad++', 'Notepad++');
+      const res = await caiDatUngDungService.moUngDungTuRegistry('Notepad++', 'Notepad++');
       expect(res).toBe(true);
       expect(mockInvoke).toHaveBeenCalledWith('mo_ung_dung_tu_registry', {
         khoaRegistry: 'Notepad++',

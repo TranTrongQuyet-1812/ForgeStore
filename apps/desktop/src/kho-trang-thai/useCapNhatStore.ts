@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { updaterService } from '../dich-vu/cap-nhat/cap-nhat.service';
+import { capNhatService } from '../dich-vu/cap-nhat/cap-nhat.service';
 import { soSanhPhienBan, type CheckUpdatesItemDto } from '@forgestore/types';
 
 interface UpdaterState {
@@ -51,7 +51,7 @@ const safeStorage = {
   },
 };
 
-export const useUpdaterStore = create<UpdaterState>()(
+export const useCapNhatStore = create<UpdaterState>()(
   persist(
     (set, get) => ({
       soLuongBanCapNhat: 0,
@@ -104,7 +104,7 @@ export const useUpdaterStore = create<UpdaterState>()(
         // Chặn gọi API nếu deviceId không phải là UUID v4 hợp lệ (tránh 400 Bad Request)
         if (!deviceId || !UUID_REGEX.test(deviceId)) {
           console.warn(
-            `[useUpdaterStore] Bỏ qua kiểm tra cập nhật: deviceId không phải UUID hợp lệ (${deviceId})`,
+            `[useCapNhatStore] Bỏ qua kiểm tra cập nhật: deviceId không phải UUID hợp lệ (${deviceId})`,
           );
           set({ dangKiemTra: false });
           return 0;
@@ -112,7 +112,7 @@ export const useUpdaterStore = create<UpdaterState>()(
 
         set({ dangKiemTra: true });
         try {
-          const res = await updaterService.kiemTraCapNhat(deviceId, danhSach);
+          const res = await capNhatService.kiemTraCapNhat(deviceId, danhSach);
           // Lọc bỏ các bản cập nhật đã được người dùng chọn bỏ qua (P3B-17.2)
           const updates = res.danhSachCapNhat.filter((item) => {
             if (!item.coBanCapNhat) return false;
@@ -129,7 +129,7 @@ export const useUpdaterStore = create<UpdaterState>()(
 
           return count;
         } catch (err) {
-          console.warn('[useUpdaterStore] Lỗi kiểm tra cập nhật:', err);
+          console.warn('[useCapNhatStore] Lỗi kiểm tra cập nhật:', err);
           set({ dangKiemTra: false });
           return 0;
         }

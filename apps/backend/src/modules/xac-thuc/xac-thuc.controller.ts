@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
-import { AuthService } from './xac-thuc.service';
+import { XacThucService } from './xac-thuc.service';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { AuthExchangeDto } from './dto/trao-doi-xac-thuc.dto';
@@ -13,8 +13,8 @@ import { dungTrangQuayLaiApp, TrangThaiQuayLai } from './trang-quay-lai-app';
 
 @ApiTags('Xác thực (Auth)')
 @Controller('auth')
-export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+export class XacThucController {
+  constructor(private readonly authService: XacThucService) {}
 
   /**
    * Trả trang HTML trung gian (thay cho 302 thẳng sang deep link) để trình duyệt hiển thị

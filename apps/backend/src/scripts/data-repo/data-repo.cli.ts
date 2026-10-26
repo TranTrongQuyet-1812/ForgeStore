@@ -310,11 +310,11 @@ async function lenhDay(): Promise<void> {
 
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
-    const { AppsService } = await import('../../modules/ung-dung/ung-dung.service');
+    const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
     const { CacheService } = await import('../../modules/redis/cache.service');
     const { tinhMaBamMoTa } = await import('./data-repo.core');
     const prisma = app.get(PrismaService);
-    const apps = app.get(AppsService);
+    const apps = app.get(UngDungService);
     const cache = app.get(CacheService);
     const nhan = nhanLo(lo);
 
@@ -833,9 +833,9 @@ async function lenhPhanTich(): Promise<void> {
   if (!repo) throw new Error('Thiếu --repo owner/repo');
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
-    const { AppsService } = await import('../../modules/ung-dung/ung-dung.service');
+    const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
     const prisma = app.get(PrismaService);
-    const apps = app.get(AppsService);
+    const apps = app.get(UngDungService);
     const ud = await prisma.ungDung.findFirst({
       where: { tenRepoDayDu: { equals: repo, mode: 'insensitive' } },
       select: { maUngDung: true, tenRepoDayDu: true },

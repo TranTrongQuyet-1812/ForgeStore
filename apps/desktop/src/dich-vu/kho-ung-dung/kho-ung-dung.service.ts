@@ -25,11 +25,11 @@ export interface QueryAppsParams {
 /**
  * Service giao tiếp với Backend để nạp danh sách ứng dụng, chi tiết và dữ liệu Storefront
  */
-export class StoreService {
+export class KhoUngDungService {
   /**
    * Lấy danh sách ứng dụng theo bộ lọc, sắp xếp và phân trang (P2-23 / P3-05)
    */
-  async layDanhSachApps(params: QueryAppsParams = {}): Promise<TrangKetQua<UngDungTomTatDto>> {
+  async layDanhSachUngDung(params: QueryAppsParams = {}): Promise<TrangKetQua<UngDungTomTatDto>> {
     const query = new URLSearchParams();
     query.set('platform', params.platform || 'windows');
     if (params.category && params.category !== 'Tất cả') {
@@ -49,8 +49,8 @@ export class StoreService {
   /**
    * Lấy danh sách ứng dụng nổi bật (Featured Apps cho Hero Spotlight Carousel)
    */
-  async layAppsNoiBat(): Promise<UngDungTomTatDto[]> {
-    const result = await this.layDanhSachApps({
+  async layUngDungNoiBat(): Promise<UngDungTomTatDto[]> {
+    const result = await this.layDanhSachUngDung({
       featured: true,
       limit: 10,
     });
@@ -106,14 +106,14 @@ export class StoreService {
 
   /**
    * Lấy tài liệu README song ngữ của ứng dụng (P3B-05.7 / P3B-05.9).
-   * Nếu có cờ force = true, tự động ủy quyền sang dichLaiReadmeApp (Fix Claude DELIV-77.7).
+   * Nếu có cờ force = true, tự động ủy quyền sang dichLaiReadmeUngDung (Fix Claude DELIV-77.7).
    */
   async layReadmeApp(
     maUngDungHoacSlug: string,
     force?: boolean,
   ): Promise<ChiTietReadmeResponseDto> {
     if (force) {
-      return this.dichLaiReadmeApp(maUngDungHoacSlug);
+      return this.dichLaiReadmeUngDung(maUngDungHoacSlug);
     }
     const basePath = maUngDungHoacSlug.includes('/')
       ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
@@ -125,7 +125,7 @@ export class StoreService {
    * Yêu cầu dịch lại README khi gặp lỗi thất bại (P3B-05.7 / Fix Claude DELIV-77.7).
    * Gọi tới endpoint POST /apps/.../readme/retry chuyên biệt với rate-limit riêng.
    */
-  async dichLaiReadmeApp(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
+  async dichLaiReadmeUngDung(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
     const retryPath = maUngDungHoacSlug.includes('/')
       ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme/retry`
       : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme/retry`;
@@ -136,7 +136,7 @@ export class StoreService {
    * Ánh xạ từ UngDungTomTatDto (Backend) sang AppCardData (Desktop UI) (L-03, P3B-04)
    * Ưu tiên moTaVi (bản dịch tiếng Việt chuẩn xác), fallback sang khauHieuTiengViet
    */
-  mapDtoToAppCard(dto: UngDungTomTatDto): AppCardData {
+  anhXaDtoSangTheUngDung(dto: UngDungTomTatDto): AppCardData {
     const parts = dto.tenRepoDayDu.split('/');
     const repoName = parts.length > 1 ? parts[1] : dto.tenKhoChua;
 
@@ -165,8 +165,8 @@ export class StoreService {
   /**
    * Ánh xạ từ UngDungChiTietDto sang AppCardData (L-03, P3B-04)
    */
-  mapChiTietToAppCard(dto: UngDungChiTietDto): AppCardData {
-    const base = this.mapDtoToAppCard(dto);
+  anhXaChiTietSangTheUngDung(dto: UngDungChiTietDto): AppCardData {
+    const base = this.anhXaDtoSangTheUngDung(dto);
     return {
       ...base,
       moTaNgan:
@@ -182,4 +182,4 @@ export class StoreService {
 }
 
 // Singleton instance dùng cho toàn app Desktop
-export const storeService = new StoreService();
+export const khoUngDungService = new KhoUngDungService();

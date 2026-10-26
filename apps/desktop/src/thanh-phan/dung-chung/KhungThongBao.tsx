@@ -1,9 +1,9 @@
 import React from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
-import { useToastStore, ToastType } from '../../kho-trang-thai/useThongBaoStore';
+import { useThongBaoStore, ToastType } from '../../kho-trang-thai/useThongBaoStore';
 
-export const ToastContainer: React.FC = () => {
-  const { toasts, removeToast } = useToastStore();
+export const KhungThongBao: React.FC = () => {
+  const { toasts, removeToast } = useThongBaoStore();
 
   if (toasts.length === 0) return null;
 

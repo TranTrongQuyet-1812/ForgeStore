@@ -7,7 +7,7 @@ import type {
   XacNhanCaiDatCliResponse,
 } from '@forgestore/types';
 
-export const libraryService = {
+export const thuVienService = {
   /**
    * Lấy danh sách ứng dụng đã cài đặt trên thiết bị hiện tại (P3-12.2)
    */

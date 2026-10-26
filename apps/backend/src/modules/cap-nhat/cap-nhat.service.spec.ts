@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { UpdaterService, timTepTuongDong } from './cap-nhat.service';
+import { CapNhatService, timTepTuongDong } from './cap-nhat.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-describe('UpdaterService (P2-52)', () => {
-  let service: UpdaterService;
+describe('CapNhatService (P2-52)', () => {
+  let service: CapNhatService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockPrisma: any;
 
@@ -26,7 +26,7 @@ describe('UpdaterService (P2-52)', () => {
       },
     };
 
-    service = new UpdaterService(mockPrisma as unknown as PrismaService);
+    service = new CapNhatService(mockPrisma as unknown as PrismaService);
   });
 
   const maThietBi = 'dev-uuid-1';

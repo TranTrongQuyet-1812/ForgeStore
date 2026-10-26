@@ -19,22 +19,22 @@ import {
   BellOff,
   RotateCcw,
 } from 'lucide-react';
-import { useNavStore } from '../kho-trang-thai/useDieuHuongStore';
-import { useInstallStore } from '../kho-trang-thai/useCaiDatUngDungStore';
-import { useUpdaterStore } from '../kho-trang-thai/useCapNhatStore';
-import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
-import { libraryService } from '../dich-vu/thu-vien/thu-vien.service';
-import { deviceService, DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
-import { installService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { useCaiDatUngDungStore } from '../kho-trang-thai/useCaiDatUngDungStore';
+import { useCapNhatStore } from '../kho-trang-thai/useCapNhatStore';
+import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
+import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
+import { thietBiService, DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
+import { caiDatUngDungService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
 import type { ThongTinUngDungRegistry } from '../dich-vu/cai-dat-ung-dung/kieu-cai-dat-ung-dung';
-import { authService } from '../dich-vu/xac-thuc/xac-thuc.service';
+import { xacThucService } from '../dich-vu/xac-thuc/xac-thuc.service';
 import { confirmDialog } from '../kho-trang-thai/useHopThoaiStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
 import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
 
-export const LibraryPage: React.FC = () => {
-  const { navigateTo, openAppDetail } = useNavStore();
-  const { caiDatMap, goCaiDatLocal, batDauCaiDat, layBienThe } = useInstallStore();
+export const TrangThuVien: React.FC = () => {
+  const { navigateTo, openAppDetail } = useDieuHuongStore();
+  const { caiDatMap, goCaiDatLocal, batDauCaiDat, layBienThe } = useCaiDatUngDungStore();
   const {
     soLuongBanCapNhat,
     danhSachCapNhat,
@@ -43,8 +43,8 @@ export const LibraryPage: React.FC = () => {
     boQuaPhienBan,
     khoiPhucPhienBan,
     kiemTraDaBoQua,
-  } = useUpdaterStore();
-  const { user, isAuthenticated, maThietBi } = useAuthStore();
+  } = useCapNhatStore();
+  const { user, isAuthenticated, maThietBi } = useXacThucStore();
   const queryClient = useQueryClient();
 
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
@@ -74,7 +74,7 @@ export const LibraryPage: React.FC = () => {
 
   // 1. Lấy thông tin thiết bị máy trạm
   useEffect(() => {
-    deviceService.getDeviceInfo().then((dev) => {
+    thietBiService.getDeviceInfo().then((dev) => {
       setDeviceInfo(dev);
     });
   }, []);
@@ -87,7 +87,7 @@ export const LibraryPage: React.FC = () => {
   } = useQuery({
     queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
     queryFn: () =>
-      maThietBi ? libraryService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
+      maThietBi ? thuVienService.layDanhSachAppDaCai(maThietBi) : Promise.resolve([]),
     enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
   });
@@ -117,11 +117,11 @@ export const LibraryPage: React.FC = () => {
         }
 
         const ten = app.ungDung?.tenKhoChua || app.ungDung?.tenRepoDayDu || app.maUngDung;
-        const currentCaiDatMap = useInstallStore.getState().caiDatMap;
+        const currentCaiDatMap = useCaiDatUngDungStore.getState().caiDatMap;
         const localApp = currentCaiDatMap[app.maUngDung];
         const regKey = app.khoaRegistry || localApp?.registryKey;
         const regDisp = app.tenHienThiRegistry || localApp?.registryDisplayName;
-        const regInfo = await installService.kiemTraAppRegistry(ten, regKey, regDisp);
+        const regInfo = await caiDatUngDungService.kiemTraAppRegistry(ten, regKey, regDisp);
 
         // DELIV-40.2 & FE-R7-03: Tự động lưu ngược khóa Registry cho app cũ bằng endpoint riêng
         // Dùng syncedRegistryKeysRef để tránh spam PUT request khi chuyển tab
@@ -132,14 +132,14 @@ export const LibraryPage: React.FC = () => {
           !syncedRegistryKeysRef.current.has(app.maUngDung)
         ) {
           syncedRegistryKeysRef.current.add(app.maUngDung);
-          libraryService
+          thuVienService
             .capNhatKhoaRegistry(maThietBi, app.maUngDung, {
               khoaRegistry: regInfo.registry_key,
               tenHienThiRegistry: regInfo.display_name || undefined,
             })
             .catch((err) => {
               syncedRegistryKeysRef.current.delete(app.maUngDung);
-              console.warn('[LibraryPage] Không thể tự động lưu khóa registry lên backend:', err);
+              console.warn('[TrangThuVien] Không thể tự động lưu khóa registry lên backend:', err);
             });
         }
 
@@ -461,7 +461,7 @@ export const LibraryPage: React.FC = () => {
     regInfo?: ThongTinUngDungRegistry | null;
   }) => {
     if (app.duongDanThucThi) {
-      await installService.moUngDung(app.duongDanThucThi);
+      await caiDatUngDungService.moUngDung(app.duongDanThucThi);
       return;
     }
 
@@ -469,17 +469,17 @@ export const LibraryPage: React.FC = () => {
     const regKey = app.regInfo?.registry_key || app.khoaRegistry;
     if (regKey) {
       try {
-        const ok = await installService.moUngDungTuRegistry(regKey, app.tenApp);
+        const ok = await caiDatUngDungService.moUngDungTuRegistry(regKey, app.tenApp);
         if (ok) return;
       } catch (err) {
-        console.warn(`[LibraryPage] Không thể mở app từ Registry [${regKey}]:`, err);
+        console.warn(`[TrangThuVien] Không thể mở app từ Registry [${regKey}]:`, err);
       }
     }
 
     // Nếu là app giả lập trong RAM thì thử moApp
     const localApp = caiDatMap[app.maUngDung];
     if (localApp?.duongDanThucThi) {
-      await installService.moUngDung(localApp.duongDanThucThi);
+      await caiDatUngDungService.moUngDung(localApp.duongDanThucThi);
       return;
     }
 
@@ -497,7 +497,7 @@ export const LibraryPage: React.FC = () => {
   }) => {
     const dir = layThuMucCaiDatThucTe(app);
     if (dir) {
-      installService.moThuMuc(dir);
+      caiDatUngDungService.moThuMuc(dir);
     } else {
       toast.error(`Không thể xác định thư mục cài đặt của "${app.tenApp}".`);
     }
@@ -560,7 +560,7 @@ export const LibraryPage: React.FC = () => {
     if (!maThietBi) return;
     try {
       setIsConfirmingCliId(app.maUngDung);
-      const res = await libraryService.xacNhanCaiDatCli(maThietBi, app.maUngDung);
+      const res = await thuVienService.xacNhanCaiDatCli(maThietBi, app.maUngDung);
       if (res?.thanhCong) {
         toast.success(`Đã xác nhận cài đặt "${app.tenApp}". Bản ghi sẽ không bị hết hạn.`);
         queryClient.invalidateQueries({
@@ -597,7 +597,7 @@ export const LibraryPage: React.FC = () => {
     if (!cliUninstallModalApp || !maThietBi) return;
     try {
       setIsUninstallingCli(true);
-      await libraryService.goCaiDat(maThietBi, cliUninstallModalApp.maUngDung);
+      await thuVienService.goCaiDat(maThietBi, cliUninstallModalApp.maUngDung);
       goCaiDatLocal(cliUninstallModalApp.maUngDung);
       queryClient.invalidateQueries({
         queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
@@ -653,7 +653,7 @@ export const LibraryPage: React.FC = () => {
           setIsUninstallingId(app.maUngDung);
           goCaiDatLocal(app.maUngDung);
           if (maThietBi) {
-            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            await thuVienService.goCaiDat(maThietBi, app.maUngDung);
             queryClient.invalidateQueries({
               queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
             });
@@ -685,7 +685,7 @@ export const LibraryPage: React.FC = () => {
       try {
         setIsUninstallingId(app.maUngDung);
         const keyToUse = app.regInfo.registry_key || app.khoaRegistry || undefined;
-        await installService.goCaiDatQuaRegistry(
+        await caiDatUngDungService.goCaiDatQuaRegistry(
           app.tenApp,
           app.regInfo.uninstall_string,
           keyToUse,
@@ -693,7 +693,7 @@ export const LibraryPage: React.FC = () => {
 
         // Sau khi bộ gỡ chính chủ chạy xong thành công: Xóa bản ghi trên Backend
         if (maThietBi) {
-          await libraryService.goCaiDat(maThietBi, app.maUngDung);
+          await thuVienService.goCaiDat(maThietBi, app.maUngDung);
         }
         goCaiDatLocal(app.maUngDung);
         queryClient.invalidateQueries({
@@ -724,7 +724,7 @@ export const LibraryPage: React.FC = () => {
           setIsUninstallingId(app.maUngDung);
           goCaiDatLocal(app.maUngDung);
           if (maThietBi) {
-            await libraryService.goCaiDat(maThietBi, app.maUngDung);
+            await thuVienService.goCaiDat(maThietBi, app.maUngDung);
             queryClient.invalidateQueries({
               queryKey: ['device-installed-apps', user?.maNguoiDung, maThietBi],
             });
@@ -796,7 +796,7 @@ export const LibraryPage: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => authService.loginWithGithub()}
+            onClick={() => xacThucService.dangNhapGithub()}
             className="btn-tactile h-8 px-4 rounded-lg bg-accent-forge hover:bg-accent-forge/90 text-white text-xs font-medium transition-all shadow-xs shrink-0"
           >
             Đăng nhập ngay

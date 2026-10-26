@@ -1,16 +1,16 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Heart, Sparkles, LogIn, Compass, RefreshCw, AlertCircle } from 'lucide-react';
-import { AppCard, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
-import { useNavStore } from '../kho-trang-thai/useDieuHuongStore';
-import { useAuthStore } from '../kho-trang-thai/useXacThucStore';
-import { favoritesService } from '../dich-vu/yeu-thich/yeu-thich.service';
-import { storeService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
+import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
+import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import type { UngDungTomTatDto } from '@forgestore/types';
 
-export const FavoritesPage: React.FC = () => {
-  const { navigateTo, setAuthModalOpen } = useNavStore();
-  const { isAuthenticated } = useAuthStore();
+export const TrangYeuThich: React.FC = () => {
+  const { navigateTo, setAuthModalOpen } = useDieuHuongStore();
+  const { isAuthenticated } = useXacThucStore();
 
   // Nạp danh sách ứng dụng yêu thích từ API backend (P3-12.1)
   const {
@@ -20,14 +20,14 @@ export const FavoritesPage: React.FC = () => {
     refetch,
   } = useQuery({
     queryKey: ['user-favorites', isAuthenticated],
-    queryFn: () => favoritesService.layDanhSachYeuThich(1, 50),
+    queryFn: () => yeuThichService.layDanhSachYeuThich(1, 50),
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5, // L-11: 5 phút cache, mở lại kho yêu thích hiển thị ngay lập tức không chờ server
   });
 
   const rawApps = favoritesResponse?.duLieu || [];
   const displayApps: AppCardData[] = rawApps.map((dto: UngDungTomTatDto) =>
-    storeService.mapDtoToAppCard(dto),
+    khoUngDungService.anhXaDtoSangTheUngDung(dto),
   );
 
   return (
@@ -129,7 +129,7 @@ export const FavoritesPage: React.FC = () => {
       {!isLoading && !isError && displayApps.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {displayApps.map((app, idx) => (
-            <AppCard key={app.id} app={app} staggerIndex={idx} />
+            <TheUngDung key={app.id} app={app} staggerIndex={idx} />
           ))}
         </div>
       )}

@@ -2,13 +2,13 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { DanhMucDto } from '@forgestore/types';
 import { CongKhai } from '../../../common/decorators/cong-khai.decorator';
-import { AppsService } from '../ung-dung.service';
+import { UngDungService } from '../ung-dung.service';
 import { PlatformFilter } from '../dto/truy-van-ung-dung.dto';
 
 @ApiTags('Categories - Danh Mục Ứng Dụng')
 @Controller('categories')
-export class CategoriesController {
-  constructor(private readonly appsService: AppsService) {}
+export class DanhMucController {
+  constructor(private readonly appsService: UngDungService) {}
 
   @CongKhai()
   @Get()

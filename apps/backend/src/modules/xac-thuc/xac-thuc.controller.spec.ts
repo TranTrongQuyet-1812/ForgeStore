@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Response } from 'express';
-import { AuthController } from './xac-thuc.controller';
-import { AuthService } from './xac-thuc.service';
+import { XacThucController } from './xac-thuc.controller';
+import { XacThucService } from './xac-thuc.service';
 import { DUONG_DAN_XONG, dungTrangQuayLaiApp } from './trang-quay-lai-app';
 
-describe('AuthController (Unit Tests)', () => {
-  let controller: AuthController;
+describe('XacThucController (Unit Tests)', () => {
+  let controller: XacThucController;
   let mockAuthService: {
     khoiTaoGithubAuth: ReturnType<typeof vi.fn>;
     xuLyGithubCallback: ReturnType<typeof vi.fn>;
@@ -53,7 +53,7 @@ describe('AuthController (Unit Tests)', () => {
     mockResponse.set.mockReturnValue(mockResponse);
     mockResponse.send.mockReturnValue(mockResponse);
 
-    controller = new AuthController(mockAuthService as unknown as AuthService);
+    controller = new XacThucController(mockAuthService as unknown as XacThucService);
   });
 
   describe('Google OAuth Callback & Google Workspace hd parameter resilience', () => {

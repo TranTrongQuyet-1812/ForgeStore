@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SearchController } from './tim-kiem.controller';
-import { AppsService } from '../ung-dung.service';
+import { TimKiemController } from './tim-kiem.controller';
+import { UngDungService } from '../ung-dung.service';
 import { SearchQueryDto } from '../dto/tim-kiem.dto';
 
-describe('SearchController (P2-40)', () => {
-  it('Gọi timKiemThongMinh của AppsService và trả về kết quả', async () => {
+describe('TimKiemController (P2-40)', () => {
+  it('Gọi timKiemThongMinh của UngDungService và trả về kết quả', async () => {
     const mockAppsService = {
       timKiemThongMinh: vi.fn().mockResolvedValue({
         duLieu: [],
@@ -15,9 +15,9 @@ describe('SearchController (P2-40)', () => {
         loaiTruyVan: 'TEN_APP',
         nguonKetQua: 'CSDL',
       }),
-    } as unknown as AppsService;
+    } as unknown as UngDungService;
 
-    const controller = new SearchController(mockAppsService);
+    const controller = new TimKiemController(mockAppsService);
     const query: SearchQueryDto = { q: 'vlc', page: 1, limit: 20 };
 
     const res = await controller.timKiem(query);

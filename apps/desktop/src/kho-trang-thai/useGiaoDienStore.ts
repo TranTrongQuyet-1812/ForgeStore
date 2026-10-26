@@ -8,7 +8,7 @@ interface ThemeState {
   toggleTheme: () => void;
 }
 
-export const useThemeStore = create<ThemeState>((set) => ({
+export const useGiaoDienStore = create<ThemeState>((set) => ({
   theme: 'dark',
   setTheme: (theme) => {
     document.documentElement.classList.remove('dark', 'light');

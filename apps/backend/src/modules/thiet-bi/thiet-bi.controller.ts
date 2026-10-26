@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { DevicesService } from './thiet-bi.service';
+import { ThietBiService } from './thiet-bi.service';
 import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 import {
   CapNhatKhoaRegistryDto,
@@ -13,8 +13,8 @@ import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface
 @ApiTags('Thiết bị (Devices)')
 @ApiBearerAuth()
 @Controller('devices')
-export class DevicesController {
-  constructor(private readonly devicesService: DevicesService) {}
+export class ThietBiController {
+  constructor(private readonly devicesService: ThietBiService) {}
 
   @Get()
   @ApiOperation({

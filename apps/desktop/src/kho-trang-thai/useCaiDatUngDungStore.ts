@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { installService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
-import { libraryService } from '../dich-vu/thu-vien/thu-vien.service';
+import { caiDatUngDungService } from '../dich-vu/cai-dat-ung-dung/cai-dat-ung-dung.service';
+import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { queryClient } from '../dich-vu/api/query-client';
 import { apiClient } from '../dich-vu/api/api-client';
-import { useAuthStore } from './useXacThucStore';
+import { useXacThucStore } from './useXacThucStore';
 import { taoMauTenTepWildcard } from '@forgestore/types';
 import type {
   ThamSoCaiDat,
@@ -64,7 +64,7 @@ interface InstallState {
   layBienThe: (maUngDung: string) => string | undefined;
 }
 
-export const useInstallStore = create<InstallState>()(
+export const useCaiDatUngDungStore = create<InstallState>()(
   persist(
     (set, get) => ({
       caiDatMap: {},
@@ -130,7 +130,7 @@ export const useInstallStore = create<InstallState>()(
         });
 
         try {
-          const res = await installService.batDauTaiVaCaiDat(params, (tienDo) => {
+          const res = await caiDatUngDungService.batDauTaiVaCaiDat(params, (tienDo) => {
             get().capNhatTrangThai(maUngDung, {
               trangThai: tienDo.trangThai,
               phanTram: tienDo.phanTram,
@@ -164,9 +164,9 @@ export const useInstallStore = create<InstallState>()(
             // Tuyệt đối KHÔNG ghi nhận bản ZIP portable vào Thư viện máy (Nguyên tắc 3 & A1)
             if (!isPortableZip) {
               try {
-                const maThietBi = useAuthStore.getState().maThietBi;
+                const maThietBi = useXacThucStore.getState().maThietBi;
                 if (maThietBi) {
-                  await libraryService.ghiNhanCaiDat(maThietBi, {
+                  await thuVienService.ghiNhanCaiDat(maThietBi, {
                     maUngDung,
                     phienBanHienTai: params.phienBan || '0.0.0',
                     maTepDaCai: params.maTep,
@@ -179,7 +179,7 @@ export const useInstallStore = create<InstallState>()(
                 }
               } catch (syncErr) {
                 console.warn(
-                  '[useInstallStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
+                  '[useCaiDatUngDungStore] Không thể đồng bộ ghi nhận cài đặt lên backend:',
                   syncErr,
                 );
               }
@@ -233,7 +233,7 @@ export const useInstallStore = create<InstallState>()(
 
       huyCaiDat: async (maUngDung) => {
         const currentTrangThai = get().caiDatMap[maUngDung]?.trangThai;
-        await installService.huyTai(maUngDung);
+        await caiDatUngDungService.huyTai(maUngDung);
         get().capNhatTrangThai(maUngDung, {
           trangThai: 'DA_HUY',
           phanTram: 0,
@@ -260,7 +260,7 @@ export const useInstallStore = create<InstallState>()(
       moApp: async (maUngDung) => {
         const appInfo = get().caiDatMap[maUngDung];
         if (appInfo?.duongDanThucThi) {
-          await installService.moUngDung(appInfo.duongDanThucThi);
+          await caiDatUngDungService.moUngDung(appInfo.duongDanThucThi);
         } else {
           console.warn(`Không tìm thấy đường dẫn thực thi cho app '${maUngDung}'`);
         }
@@ -284,7 +284,7 @@ export const useInstallStore = create<InstallState>()(
       }),
       merge: (persistedState, currentState) => {
         // FE-R7-01 / EC-03: Reset các Zombie Tasks đang tải dở dang khi tắt/mở app về DA_HUY
-        // Sửa trực tiếp trên persistedState trước khi gộp vào store, triệt tiêu lỗi TDZ useInstallStore.setState
+        // Sửa trực tiếp trên persistedState trước khi gộp vào store, triệt tiêu lỗi TDZ useCaiDatUngDungStore.setState
         const typed = persistedState as Partial<InstallState> | undefined;
         if (!typed) {
           return currentState;
@@ -319,5 +319,5 @@ export const useInstallStore = create<InstallState>()(
 
 // Tự động dọn sạch các trạng thái tạm khi người dùng đăng xuất (A3)
 apiClient.onLogout(() => {
-  useInstallStore.getState().xoaTrangThaiTam();
+  useCaiDatUngDungStore.getState().xoaTrangThaiTam();
 });

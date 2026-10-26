@@ -32,7 +32,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
-import { FavoritesService } from '../yeu-thich/yeu-thich.service';
+import { YeuThichService } from '../yeu-thich/yeu-thich.service';
 import { JevClientService } from '../ai/services/jev-client.service';
 import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
@@ -131,8 +131,8 @@ export function chuanHoaSha256(raw?: string | null): string | null {
 }
 
 @Injectable()
-export class AppsService {
-  private readonly logger = new Logger(AppsService.name);
+export class UngDungService {
+  private readonly logger = new Logger(UngDungService.name);
 
   public readonly CACHE_KEY_LIST = 'fs:apps:list:';
   public readonly CACHE_KEY_DETAIL = 'fs:apps:detail:';
@@ -151,7 +151,7 @@ export class AppsService {
     private readonly apkInspectorService: ApkInspectorService,
     private readonly semanticSearchService: SemanticSearchService,
     private readonly searchTranslatorService: SearchTranslatorService,
-    @Optional() private readonly favoritesService?: FavoritesService,
+    @Optional() private readonly favoritesService?: YeuThichService,
   ) {}
 
   /**
@@ -916,7 +916,7 @@ export class AppsService {
 
   /**
    * Lấy tập hợp mã ứng dụng đã yêu thích của user từ Redis Cache (TTL 5 phút)
-   * Tái sử dụng qua FavoritesService để khử trùng lặp code (R-05).
+   * Tái sử dụng qua YeuThichService để khử trùng lặp code (R-05).
    */
   private async layTapHopYeuThichCuaUser(userId: string): Promise<Set<string>> {
     if (this.favoritesService) {
@@ -1201,14 +1201,14 @@ export class AppsService {
         const targetChip = this.chuyenDoiAbiSangEnum(rawAbi);
         const match = apkFiles.find((f) => f.kienTrucChip === targetChip);
         if (match) {
-          return this.dongGoiResponseAsset(match, 'LUAT');
+          return this.dongGoiTaiSanPhanHoi(match, 'LUAT');
         }
       }
 
       // 3.2. Thử khớp bản dùng chung (Universal APK)
       const universalMatch = apkFiles.find((f) => f.kienTrucChip === KienTrucChip.DUNG_CHUNG);
       if (universalMatch) {
-        return this.dongGoiResponseAsset(universalMatch, 'LUAT');
+        return this.dongGoiTaiSanPhanHoi(universalMatch, 'LUAT');
       }
 
       // 3.3. Tên file mơ hồ -> Hỏi Jev AI primitive Choice (P2-33.7)
@@ -1237,7 +1237,7 @@ export class AppsService {
           if (resJev.luaChon && resJev.luaChon !== 'KHONG_FILE_NAO_PHU_HOP') {
             const selected = ambiguousFiles.find((f) => f.maTep === resJev.luaChon);
             if (selected) {
-              return this.dongGoiResponseAsset(selected, 'JEV', resJev.doTinCay);
+              return this.dongGoiTaiSanPhanHoi(selected, 'JEV', resJev.doTinCay);
             }
           }
         } catch (err: unknown) {
@@ -1270,7 +1270,7 @@ export class AppsService {
       }
 
       // Ưu tiên các file GUI/Installer tiêu chuẩn trước bản CLI, debug, unsigned
-      const isPreferredFile = (fileName: string) => {
+      const laTepUuTien = (fileName: string) => {
         const lower = fileName.toLowerCase();
         return !lower.includes('cli') && !lower.includes('debug') && !lower.includes('unsigned');
       };
@@ -1281,30 +1281,30 @@ export class AppsService {
           (f) =>
             f.dinhDangTep === DinhDangTep.MSI &&
             f.kienTrucChip === KienTrucChip.X86_64 &&
-            isPreferredFile(f.tenTep),
+            laTepUuTien(f.tenTep),
         ) ||
         winFiles.find(
           (f) => f.dinhDangTep === DinhDangTep.MSI && f.kienTrucChip === KienTrucChip.X86_64,
         );
-      if (msiX64) return this.dongGoiResponseAsset(msiX64, 'LUAT');
+      if (msiX64) return this.dongGoiTaiSanPhanHoi(msiX64, 'LUAT');
 
       const exeX64 =
         winFiles.find(
           (f) =>
             f.dinhDangTep === DinhDangTep.EXE &&
             f.kienTrucChip === KienTrucChip.X86_64 &&
-            isPreferredFile(f.tenTep),
+            laTepUuTien(f.tenTep),
         ) ||
         winFiles.find(
           (f) => f.dinhDangTep === DinhDangTep.EXE && f.kienTrucChip === KienTrucChip.X86_64,
         );
-      if (exeX64) return this.dongGoiResponseAsset(exeX64, 'LUAT');
+      if (exeX64) return this.dongGoiTaiSanPhanHoi(exeX64, 'LUAT');
 
       // 4.2. ZIP_PORTABLE X86_64
       const zipX64 = winFiles.find(
         (f) => f.dinhDangTep === DinhDangTep.ZIP_PORTABLE && f.kienTrucChip === KienTrucChip.X86_64,
       );
-      if (zipX64) return this.dongGoiResponseAsset(zipX64, 'LUAT');
+      if (zipX64) return this.dongGoiTaiSanPhanHoi(zipX64, 'LUAT');
 
       // 4.3. EXE hoặc MSI X86 (32-bit)
       const exeX86 = winFiles.find(
@@ -1312,17 +1312,17 @@ export class AppsService {
           (f.dinhDangTep === DinhDangTep.EXE || f.dinhDangTep === DinhDangTep.MSI) &&
           f.kienTrucChip === KienTrucChip.X86,
       );
-      if (exeX86) return this.dongGoiResponseAsset(exeX86, 'LUAT');
+      if (exeX86) return this.dongGoiTaiSanPhanHoi(exeX86, 'LUAT');
 
       // 4.4. ZIP_PORTABLE X86
       const zipX86 = winFiles.find(
         (f) => f.dinhDangTep === DinhDangTep.ZIP_PORTABLE && f.kienTrucChip === KienTrucChip.X86,
       );
-      if (zipX86) return this.dongGoiResponseAsset(zipX86, 'LUAT');
+      if (zipX86) return this.dongGoiTaiSanPhanHoi(zipX86, 'LUAT');
 
       // 4.5. File Windows bất kỳ còn lại
       if (winFiles.length > 0 && winFiles[0]) {
-        return this.dongGoiResponseAsset(winFiles[0], 'LUAT');
+        return this.dongGoiTaiSanPhanHoi(winFiles[0], 'LUAT');
       }
 
       throw new NotFoundException({
@@ -1345,7 +1345,7 @@ export class AppsService {
     return KienTrucChip.KHONG_XAC_DINH;
   }
 
-  private dongGoiResponseAsset(
+  private dongGoiTaiSanPhanHoi(
     file: TepCaiDat,
     nguonQuyetDinh: 'LUAT' | 'JEV' | 'DU_PHONG',
     doTinCay?: number,
@@ -1732,7 +1732,7 @@ export class AppsService {
   /**
    * Prewarm phân tích Dual-AI cho các ứng dụng (P2-31.5, phục vụ demo P6-07).
    */
-  async chayPrewarmAI(danhSachAppIds?: string[]): Promise<{ daChay: number; thanhCong: number }> {
+  async chayLamNongAI(danhSachAppIds?: string[]): Promise<{ daChay: number; thanhCong: number }> {
     let appsToWarm: { maUngDung: string }[];
     if (danhSachAppIds && danhSachAppIds.length > 0) {
       appsToWarm = await this.prisma.ungDung.findMany({

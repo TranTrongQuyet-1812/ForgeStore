@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TrendingDecayJob } from './suy-giam-thinh-hanh.job';
+import { SuyGiamThinhHanhJob } from './suy-giam-thinh-hanh.job';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
 
-describe('TrendingDecayJob (P3B-03.4, DELIV-72.4)', () => {
-  let job: TrendingDecayJob;
+describe('SuyGiamThinhHanhJob (P3B-03.4, DELIV-72.4)', () => {
+  let job: SuyGiamThinhHanhJob;
   let mockPrisma: {
     ungDung: {
       findMany: ReturnType<typeof vi.fn>;
@@ -27,7 +27,7 @@ describe('TrendingDecayJob (P3B-03.4, DELIV-72.4)', () => {
       xoaTheoPrefix: vi.fn().mockResolvedValue(true),
     };
 
-    job = new TrendingDecayJob(
+    job = new SuyGiamThinhHanhJob(
       mockPrisma as unknown as PrismaService,
       mockCacheService as unknown as CacheService,
     );

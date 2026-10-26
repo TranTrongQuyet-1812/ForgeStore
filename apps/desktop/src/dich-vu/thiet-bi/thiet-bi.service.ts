@@ -25,7 +25,7 @@ interface NativeDeviceInfo {
 
 const DEV_FALLBACK_DEVICE_ID = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
-export const deviceService = {
+export const thietBiService = {
   /**
    * Lấy thông tin thiết bị máy trạm hiện tại
    */

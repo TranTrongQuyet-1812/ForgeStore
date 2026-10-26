@@ -1,7 +1,7 @@
 import React from 'react';
 import { Star, Download, Check, Loader2 } from 'lucide-react';
-import { TrustPill } from './NhanTinCay';
-import { useNavStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { NhanTinCay } from './NhanTinCay';
+import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 
 export interface AppCardData {
@@ -28,8 +28,8 @@ interface AppCardProps {
   staggerIndex?: number;
 }
 
-export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
-  const { openAppDetail } = useNavStore();
+export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
+  const { openAppDetail } = useDieuHuongStore();
   const { layTrangThaiCaiDat } = useDeviceInstalledApps();
   const trangThaiCaiDat = layTrangThaiCaiDat(app.id, app.repoHandle);
 
@@ -141,7 +141,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
 
       {/* Chân card: Trust Pill & Nút Cài đặt / Đã cài (L-02) */}
       <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
-        <TrustPill score={app.diemUyTin} size="sm" />
+        <NhanTinCay score={app.diemUyTin} size="sm" />
 
         <button
           onClick={(e) => {

@@ -11,7 +11,7 @@
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
 export class DesktopLogger {
-  private isTauriEnv(): boolean {
+  private laMoiTruongTauri(): boolean {
     return (
       typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
     );
@@ -42,7 +42,7 @@ export class DesktopLogger {
   async ghiLog(level: LogLevel, thongDiep: string, nguon: string = 'DesktopApp'): Promise<void> {
     const cleaned = this.lamSachThongDiep(thongDiep);
 
-    if (this.isTauriEnv()) {
+    if (this.laMoiTruongTauri()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('ghi_log_desktop', {
@@ -91,7 +91,7 @@ export class DesktopLogger {
    * Mở thư mục logs trong trình quản lý tệp Windows Explorer
    */
   async moThuMucLog(): Promise<void> {
-    if (this.isTauriEnv()) {
+    if (this.laMoiTruongTauri()) {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('mo_thu_muc_log_cmd');
     } else {
@@ -103,7 +103,7 @@ export class DesktopLogger {
    * Lấy đường dẫn tệp log hiện tại
    */
   async layDuongDanLog(): Promise<string> {
-    if (this.isTauriEnv()) {
+    if (this.laMoiTruongTauri()) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         return await invoke<string>('lay_duong_dan_tep_log');

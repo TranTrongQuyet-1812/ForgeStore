@@ -147,7 +147,7 @@ describe('CLI Guide Logic & Display Rules (DELIV-33.3)', () => {
       };
       const updateItem = { coBanCapNhat: true };
 
-      // Mô phỏng logic ánh xạ mergedAppsMap trong LibraryPage.tsx
+      // Mô phỏng logic ánh xạ mergedAppsMap trong TrangThuVien.tsx
       const mergedItem = {
         maUngDung: bApp.maUngDung,
         phienBanHienTai: bApp.phienBanHienTai,

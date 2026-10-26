@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { StoreService } from './kho-ung-dung.service';
+import { KhoUngDungService } from './kho-ung-dung.service';
 import { apiClient } from '../api/api-client';
 import type { UngDungTomTatDto, UngDungChiTietDto, TrangKetQua } from '@forgestore/types';
 import { MucDoUyTin } from '@forgestore/types';
@@ -11,15 +11,15 @@ vi.mock('../api/api-client', () => ({
   },
 }));
 
-describe('StoreService (P3-05 Storefront API Client)', () => {
-  let service: StoreService;
+describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
+  let service: KhoUngDungService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new StoreService();
+    service = new KhoUngDungService();
   });
 
-  it('layDanhSachApps gọi đúng endpoint với đầy đủ tham số query', async () => {
+  it('layDanhSachUngDung gọi đúng endpoint với đầy đủ tham số query', async () => {
     const mockResult: TrangKetQua<UngDungTomTatDto> = {
       duLieu: [],
       tongSo: 0,
@@ -29,7 +29,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     };
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockResult);
 
-    const result = await service.layDanhSachApps({
+    const result = await service.layDanhSachUngDung({
       platform: 'windows',
       category: 'Tiện ích hệ thống',
       sort: 'trending',
@@ -44,10 +44,10 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(result).toEqual(mockResult);
   });
 
-  it('layDanhSachApps bỏ qua category nếu là "Tất cả"', async () => {
+  it('layDanhSachUngDung bỏ qua category nếu là "Tất cả"', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ duLieu: [] });
 
-    await service.layDanhSachApps({
+    await service.layDanhSachUngDung({
       category: 'Tất cả',
       sort: 'stars',
     });
@@ -55,10 +55,10 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=stars');
   });
 
-  it('layDanhSachApps đính kèm window khi có tham số window', async () => {
+  it('layDanhSachUngDung đính kèm window khi có tham số window', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ duLieu: [] });
 
-    await service.layDanhSachApps({
+    await service.layDanhSachUngDung({
       sort: 'trending',
       window: 'week',
     });
@@ -66,7 +66,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=trending&window=week');
   });
 
-  it('layAppsNoiBat gọi endpoint với featured=true và limit=10', async () => {
+  it('layUngDungNoiBat gọi endpoint với featured=true và limit=10', async () => {
     const mockApp: UngDungTomTatDto = {
       maUngDung: 'app-1',
       tenRepoDayDu: 'rustdesk/rustdesk',
@@ -91,7 +91,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       tongSoTrang: 1,
     });
 
-    const items = await service.layAppsNoiBat();
+    const items = await service.layUngDungNoiBat();
     expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&limit=10&featured=true');
     expect(items).toHaveLength(1);
     expect(items[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
@@ -113,7 +113,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     );
   });
 
-  it('mapDtoToAppCard chuyển đổi UngDungTomTatDto sang AppCardData chính xác với dữ liệu thật (L-03)', () => {
+  it('anhXaDtoSangTheUngDung chuyển đổi UngDungTomTatDto sang AppCardData chính xác với dữ liệu thật (L-03)', () => {
     const dto: UngDungTomTatDto = {
       maUngDung: 'app-powertoys',
       tenRepoDayDu: 'microsoft/PowerToys',
@@ -134,7 +134,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       loaiGiayPhep: 'MIT',
     };
 
-    const card = service.mapDtoToAppCard(dto);
+    const card = service.anhXaDtoSangTheUngDung(dto);
 
     expect(card.id).toBe('app-powertoys');
     expect(card.tenApp).toBe('PowerToys');
@@ -151,7 +151,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(card.isVerifiedFoss).toBe(true);
   });
 
-  it('mapChiTietToAppCard ưu tiên slogan AI từ phanTichAi và giấy phép thật', () => {
+  it('anhXaChiTietSangTheUngDung ưu tiên slogan AI từ phanTichAi và giấy phép thật', () => {
     const detailDto: UngDungChiTietDto = {
       maUngDung: 'app-obsidian',
       tenRepoDayDu: 'obsidianmd/obsidian',
@@ -181,7 +181,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       },
     };
 
-    const card = service.mapChiTietToAppCard(detailDto);
+    const card = service.anhXaChiTietSangTheUngDung(detailDto);
 
     expect(card.moTaNgan).toBe('Ghi chú kiến thức cá nhân Second Brain');
     expect(card.giayPhep).toBe('MIT');
@@ -262,7 +262,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     );
   });
 
-  it('mapChiTietToAppCard fallback mượt mà khi ứng dụng chưa có phanTichAi', () => {
+  it('anhXaChiTietSangTheUngDung fallback mượt mà khi ứng dụng chưa có phanTichAi', () => {
     const detailWithoutAi: UngDungChiTietDto = {
       maUngDung: 'app-no-ai',
       tenRepoDayDu: 'sample/unprocessed-app',
@@ -283,7 +283,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       phanTichAi: null,
     };
 
-    const card = service.mapChiTietToAppCard(detailWithoutAi);
+    const card = service.anhXaChiTietSangTheUngDung(detailWithoutAi);
     expect(card.moTaNgan).toBe('A helpful desktop utility');
     expect(card.diemUyTin).toBeNull();
     expect(card.giayPhep).toBeUndefined();
@@ -307,7 +307,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       loaiGiayPhep: 'GPL-3.0',
     };
 
-    const card = service.mapDtoToAppCard(dbeaverDto);
+    const card = service.anhXaDtoSangTheUngDung(dbeaverDto);
     expect(card.dinhDangFile).toEqual(['EXE', 'ZIP']);
     expect(card.dinhDangFile).not.toContain('MSI');
     expect(card.kienTruc).toEqual(['x64']);
@@ -332,7 +332,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       loaiGiayPhep: 'GPL-3.0',
     };
 
-    const card = service.mapDtoToAppCard(cryptoDto);
+    const card = service.anhXaDtoSangTheUngDung(cryptoDto);
     expect(card.dinhDangFile).toEqual(['EXE', 'MSI']);
     expect(card.kienTruc).toEqual(['x64']);
     expect(card.kienTruc).not.toContain('ARM64');
@@ -355,7 +355,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       // dinhDangCoSan: undefined,
     };
 
-    const card = service.mapDtoToAppCard(rawDto);
+    const card = service.anhXaDtoSangTheUngDung(rawDto);
     expect(card.phienBanMoiNhat).toBeUndefined();
     expect(card.diemUyTin).toBeNull();
     expect(card.dinhDangFile).toBeUndefined();
@@ -456,18 +456,18 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme');
     expect(resSlug.banDich).toBe('# Tài liệu tiếng Việt');
 
-    // Kiểm tra dichLaiReadmeApp gọi POST /retry chuyên biệt (Fix Claude DELIV-77.7)
+    // Kiểm tra dichLaiReadmeUngDung gọi POST /retry chuyên biệt (Fix Claude DELIV-77.7)
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
-    await service.dichLaiReadmeApp('rustdesk/rustdesk');
+    await service.dichLaiReadmeUngDung('rustdesk/rustdesk');
     expect(apiClient.post).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme/retry', {});
 
-    // Kiểm tra layReadmeApp với force = true ủy quyền sang dichLaiReadmeApp
+    // Kiểm tra layReadmeApp với force = true ủy quyền sang dichLaiReadmeUngDung
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
     await service.layReadmeApp('uuid-123', true);
     expect(apiClient.post).toHaveBeenCalledWith('/apps/uuid-123/readme/retry', {});
   });
 
-  it('mapDtoToAppCard ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {
+  it('anhXaDtoSangTheUngDung ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {
     const dto: UngDungTomTatDto = {
       maUngDung: 'app-sample',
       tenRepoDayDu: 'sample/app',
@@ -483,11 +483,11 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       khauHieuTiengViet: 'Khẩu hiệu tóm tắt AI cũ',
     };
 
-    const card = service.mapDtoToAppCard(dto);
+    const card = service.anhXaDtoSangTheUngDung(dto);
     expect(card.moTaNgan).toBe('Bản dịch mô tả tiếng Việt chuẩn xác chất lượng cao');
   });
 
-  it('mapChiTietToAppCard ưu tiên moTaVi hơn phanTichAi.khauHieuTiengViet và moTaGocTiengAnh (P3B-04)', () => {
+  it('anhXaChiTietSangTheUngDung ưu tiên moTaVi hơn phanTichAi.khauHieuTiengViet và moTaGocTiengAnh (P3B-04)', () => {
     const detailDto: UngDungChiTietDto = {
       maUngDung: 'app-sample-detail',
       tenRepoDayDu: 'sample/app-detail',
@@ -517,7 +517,7 @@ describe('StoreService (P3-05 Storefront API Client)', () => {
       },
     };
 
-    const card = service.mapChiTietToAppCard(detailDto);
+    const card = service.anhXaChiTietSangTheUngDung(detailDto);
     expect(card.moTaNgan).toBe('Mô tả tiếng Việt được dịch từ gom lô JSON');
   });
 });

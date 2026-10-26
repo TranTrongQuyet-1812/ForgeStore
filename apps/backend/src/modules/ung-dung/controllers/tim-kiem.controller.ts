@@ -3,13 +3,13 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { TimKiemResponseDto } from '@forgestore/types';
 import { CongKhai } from '../../../common/decorators/cong-khai.decorator';
-import { AppsService } from '../ung-dung.service';
+import { UngDungService } from '../ung-dung.service';
 import { SearchQueryDto } from '../dto/tim-kiem.dto';
 
 @ApiTags('Search - Tìm Kiếm Thông Minh (Module 1)')
 @Controller('search')
-export class SearchController {
-  constructor(private readonly appsService: AppsService) {}
+export class TimKiemController {
+  constructor(private readonly appsService: UngDungService) {}
 
   @CongKhai()
   @Throttle({ default: { limit: 30, ttl: 60000 } })

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
-import { AppsService } from '../ung-dung.service';
-import { ReleaseScannerJob } from './quet-ban-phat-hanh.job';
+import { UngDungService } from '../ung-dung.service';
+import { QuetBanPhatHanhJob } from './quet-ban-phat-hanh.job';
 
 interface MockPrisma {
   ungDung: {
@@ -19,8 +19,8 @@ interface MockAppsService {
   dongBoRepo: ReturnType<typeof vi.fn>;
 }
 
-describe('ReleaseScannerJob (P2-25)', () => {
-  let job: ReleaseScannerJob;
+describe('QuetBanPhatHanhJob (P2-25)', () => {
+  let job: QuetBanPhatHanhJob;
   let mockPrisma: MockPrisma;
   let mockGithubService: MockGithubService;
   let mockAppsService: MockAppsService;
@@ -43,10 +43,10 @@ describe('ReleaseScannerJob (P2-25)', () => {
       dongBoRepo: vi.fn(),
     };
 
-    job = new ReleaseScannerJob(
+    job = new QuetBanPhatHanhJob(
       mockPrisma as unknown as PrismaService,
       mockGithubService as unknown as GithubService,
-      mockAppsService as unknown as AppsService,
+      mockAppsService as unknown as UngDungService,
     );
   });
 

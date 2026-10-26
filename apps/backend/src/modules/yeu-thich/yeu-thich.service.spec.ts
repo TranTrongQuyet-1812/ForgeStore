@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
-import { FavoritesService } from './yeu-thich.service';
+import { YeuThichService } from './yeu-thich.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-describe('FavoritesService (P2-50)', () => {
-  let service: FavoritesService;
+describe('YeuThichService (P2-50)', () => {
+  let service: YeuThichService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prisma: any;
 
@@ -27,7 +27,7 @@ describe('FavoritesService (P2-50)', () => {
       },
     };
 
-    service = new FavoritesService(prisma as unknown as PrismaService);
+    service = new YeuThichService(prisma as unknown as PrismaService);
   });
 
   describe('chuyenDoiYeuThich (P2-50.2 & P2-50.3 & L-11)', () => {

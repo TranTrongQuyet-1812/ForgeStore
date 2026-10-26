@@ -30,8 +30,8 @@ export interface DangKyThietBiParams {
 }
 
 @Injectable()
-export class DevicesService {
-  private readonly logger = new Logger(DevicesService.name);
+export class ThietBiService {
+  private readonly logger = new Logger(ThietBiService.name);
 
   constructor(
     private readonly prisma: PrismaService,

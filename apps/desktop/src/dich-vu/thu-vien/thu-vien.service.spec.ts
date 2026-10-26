@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { libraryService } from './thu-vien.service';
+import { thuVienService } from './thu-vien.service';
 import { apiClient } from '../api/api-client';
 import type { GhiNhanCaiDatRequest, UngDungDaCaiDto } from '@forgestore/types';
 import { NenTangHoTro } from '@forgestore/types';
@@ -37,7 +37,7 @@ describe('LibraryService (P3-12.2)', () => {
 
     const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce(mockData as never);
 
-    const res = await libraryService.layDanhSachAppDaCai('device-123');
+    const res = await thuVienService.layDanhSachAppDaCai('device-123');
 
     expect(getSpy).toHaveBeenCalledWith('/devices/device-123/installed');
     expect(res).toHaveLength(1);
@@ -48,7 +48,7 @@ describe('LibraryService (P3-12.2)', () => {
   it('trả về mảng rỗng khi lấy danh sách ứng dụng thất bại do mạng', async () => {
     vi.spyOn(apiClient, 'get').mockRejectedValueOnce(new Error('Network error'));
 
-    const res = await libraryService.layDanhSachAppDaCai('device-123');
+    const res = await thuVienService.layDanhSachAppDaCai('device-123');
 
     expect(res).toEqual([]);
   });
@@ -72,7 +72,7 @@ describe('LibraryService (P3-12.2)', () => {
 
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockResponse as never);
 
-    const res = await libraryService.ghiNhanCaiDat('device-123', dto);
+    const res = await thuVienService.ghiNhanCaiDat('device-123', dto);
 
     expect(postSpy).toHaveBeenCalledWith('/devices/device-123/installed', dto);
     expect(res).not.toBeNull();
@@ -87,7 +87,7 @@ describe('LibraryService (P3-12.2)', () => {
 
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Server 500'));
 
-    const res = await libraryService.ghiNhanCaiDat('device-123', dto);
+    const res = await thuVienService.ghiNhanCaiDat('device-123', dto);
 
     expect(res).toBeNull();
   });
@@ -97,7 +97,7 @@ describe('LibraryService (P3-12.2)', () => {
       .spyOn(apiClient, 'delete')
       .mockResolvedValueOnce({ success: true } as never);
 
-    const ok = await libraryService.goCaiDat('device-123', 'app-obsidian');
+    const ok = await thuVienService.goCaiDat('device-123', 'app-obsidian');
 
     expect(deleteSpy).toHaveBeenCalledWith('/devices/device-123/installed/app-obsidian');
     expect(ok).toBe(true);
@@ -106,7 +106,7 @@ describe('LibraryService (P3-12.2)', () => {
   it('trả về false khi gỡ ứng dụng gặp lỗi', async () => {
     vi.spyOn(apiClient, 'delete').mockRejectedValueOnce(new Error('Device not found'));
 
-    const ok = await libraryService.goCaiDat('device-123', 'app-obsidian');
+    const ok = await thuVienService.goCaiDat('device-123', 'app-obsidian');
 
     expect(ok).toBe(false);
   });
@@ -114,7 +114,7 @@ describe('LibraryService (P3-12.2)', () => {
   it('cập nhật khóa registry thành công qua PATCH endpoint (DELIV-40.2)', async () => {
     const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce({ success: true } as never);
 
-    const ok = await libraryService.capNhatKhoaRegistry('device-123', 'app-npp', {
+    const ok = await thuVienService.capNhatKhoaRegistry('device-123', 'app-npp', {
       khoaRegistry: 'Notepad++',
       tenHienThiRegistry: 'Notepad++ (64-bit x64)',
     });
@@ -129,7 +129,7 @@ describe('LibraryService (P3-12.2)', () => {
   it('trả về false khi cập nhật khóa registry gặp lỗi (DELIV-40.2)', async () => {
     vi.spyOn(apiClient, 'patch').mockRejectedValueOnce(new Error('Network error'));
 
-    const ok = await libraryService.capNhatKhoaRegistry('device-123', 'app-npp', {
+    const ok = await thuVienService.capNhatKhoaRegistry('device-123', 'app-npp', {
       khoaRegistry: 'Notepad++',
     });
 
@@ -152,7 +152,7 @@ describe('LibraryService (P3-12.2)', () => {
 
       const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockResult as never);
 
-      const res = await libraryService.ghiNhanCaiDatCli('device-123', {
+      const res = await thuVienService.ghiNhanCaiDatCli('device-123', {
         maUngDung: 'app-fastfetch',
         trinhQuanLy: 'winget',
         tenGoi: 'Fastfetch-cli.Fastfetch',
@@ -172,7 +172,7 @@ describe('LibraryService (P3-12.2)', () => {
     it('trả về null khi ghi nhận CLI gặp lỗi', async () => {
       vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Bad request'));
 
-      const res = await libraryService.ghiNhanCaiDatCli('device-123', {
+      const res = await thuVienService.ghiNhanCaiDatCli('device-123', {
         maUngDung: 'app-fastfetch',
         trinhQuanLy: 'winget',
         tenGoi: 'Fastfetch-cli.Fastfetch',
@@ -191,7 +191,7 @@ describe('LibraryService (P3-12.2)', () => {
 
       const patchSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce(mockResult as never);
 
-      const res = await libraryService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
+      const res = await thuVienService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
 
       expect(patchSpy).toHaveBeenCalledWith(
         '/devices/device-123/installed/app-fastfetch/confirm-cli',
@@ -203,7 +203,7 @@ describe('LibraryService (P3-12.2)', () => {
     it('trả về null khi xác nhận CLI thất bại', async () => {
       vi.spyOn(apiClient, 'patch').mockRejectedValueOnce(new Error('Not found'));
 
-      const res = await libraryService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
+      const res = await thuVienService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
 
       expect(res).toBeNull();
     });

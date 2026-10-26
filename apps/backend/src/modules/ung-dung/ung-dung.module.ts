@@ -3,40 +3,40 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { GithubModule } from '../github/github.module';
 import { AiModule } from '../ai/ai.module';
-import { FavoritesModule } from '../yeu-thich/yeu-thich.module';
-import { AppsController } from './ung-dung.controller';
-import { AiAdminController } from './controllers/ai-quan-tri.controller';
-import { SearchController } from './controllers/tim-kiem.controller';
-import { ReposController } from './controllers/kho-chua.controller';
-import { CategoriesController } from './controllers/danh-muc.controller';
-import { AppsService } from './ung-dung.service';
-import { ReleaseScannerJob } from './jobs/quet-ban-phat-hanh.job';
-import { TrendingDecayJob } from './jobs/suy-giam-thinh-hanh.job';
-import { RepoIngestionPipelineService } from './services/day-chuyen-nap-repo.service';
-import { RepoIngestionJob } from './jobs/nap-repo.job';
+import { YeuThichModule } from '../yeu-thich/yeu-thich.module';
+import { UngDungController } from './ung-dung.controller';
+import { AiQuanTriController } from './controllers/ai-quan-tri.controller';
+import { TimKiemController } from './controllers/tim-kiem.controller';
+import { KhoChuaController } from './controllers/kho-chua.controller';
+import { DanhMucController } from './controllers/danh-muc.controller';
+import { UngDungService } from './ung-dung.service';
+import { QuetBanPhatHanhJob } from './jobs/quet-ban-phat-hanh.job';
+import { SuyGiamThinhHanhJob } from './jobs/suy-giam-thinh-hanh.job';
+import { DayChuyenNapRepoService } from './services/day-chuyen-nap-repo.service';
+import { NapRepoJob } from './jobs/nap-repo.job';
 
 @Module({
-  imports: [PrismaModule, RedisModule, GithubModule, AiModule, FavoritesModule],
+  imports: [PrismaModule, RedisModule, GithubModule, AiModule, YeuThichModule],
   controllers: [
-    AppsController,
-    AiAdminController,
-    SearchController,
-    ReposController,
-    CategoriesController,
+    UngDungController,
+    AiQuanTriController,
+    TimKiemController,
+    KhoChuaController,
+    DanhMucController,
   ],
   providers: [
-    AppsService,
-    ReleaseScannerJob,
-    TrendingDecayJob,
-    RepoIngestionPipelineService,
-    RepoIngestionJob,
+    UngDungService,
+    QuetBanPhatHanhJob,
+    SuyGiamThinhHanhJob,
+    DayChuyenNapRepoService,
+    NapRepoJob,
   ],
   exports: [
-    AppsService,
-    ReleaseScannerJob,
-    TrendingDecayJob,
-    RepoIngestionPipelineService,
-    RepoIngestionJob,
+    UngDungService,
+    QuetBanPhatHanhJob,
+    SuyGiamThinhHanhJob,
+    DayChuyenNapRepoService,
+    NapRepoJob,
   ],
 })
-export class AppsModule {}
+export class UngDungModule {}

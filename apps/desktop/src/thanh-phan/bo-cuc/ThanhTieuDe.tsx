@@ -16,11 +16,11 @@ import {
   Settings,
   ChevronDown,
 } from 'lucide-react';
-import { useThemeStore } from '../../kho-trang-thai/useGiaoDienStore';
-import { useNavStore } from '../../kho-trang-thai/useDieuHuongStore';
-import { useAuthStore } from '../../kho-trang-thai/useXacThucStore';
+import { useGiaoDienStore } from '../../kho-trang-thai/useGiaoDienStore';
+import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import { confirmDialog } from '../../kho-trang-thai/useHopThoaiStore';
-import { authService } from '../../dich-vu/xac-thuc/xac-thuc.service';
+import { xacThucService } from '../../dich-vu/xac-thuc/xac-thuc.service';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
 
 const TAB_CONFIGS: Record<
@@ -35,10 +35,10 @@ const TAB_CONFIGS: Record<
   settings: { label: 'Cài đặt', icon: Settings },
 };
 
-export const Titlebar: React.FC = () => {
-  const { theme, toggleTheme } = useThemeStore();
-  const { currentTab, setSearchModalOpen, setAuthModalOpen, navigateTo } = useNavStore();
-  const { user, isAuthenticated, isLoading } = useAuthStore();
+export const ThanhTieuDe: React.FC = () => {
+  const { theme, toggleTheme } = useGiaoDienStore();
+  const { currentTab, setSearchModalOpen, setAuthModalOpen, navigateTo } = useDieuHuongStore();
+  const { user, isAuthenticated, isLoading } = useXacThucStore();
   const [isMaximized, setIsMaximized] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -271,7 +271,7 @@ export const Titlebar: React.FC = () => {
                         icon: 'logout',
                       });
                       if (confirmed) {
-                        authService.logout();
+                        xacThucService.logout();
                       }
                     }}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 mt-1 rounded-lg text-left hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-xs font-medium group"

@@ -7,16 +7,16 @@ import { validateEnv } from './common/config/env.validation';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
-import { HealthModule } from './modules/suc-khoe/suc-khoe.module';
+import { SucKhoeModule } from './modules/suc-khoe/suc-khoe.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { DevicesModule } from './modules/thiet-bi/thiet-bi.module';
-import { AuthModule } from './modules/xac-thuc/xac-thuc.module';
+import { ThietBiModule } from './modules/thiet-bi/thiet-bi.module';
+import { XacThucModule } from './modules/xac-thuc/xac-thuc.module';
 import { GithubModule } from './modules/github/github.module';
-import { AppsModule } from './modules/ung-dung/ung-dung.module';
+import { UngDungModule } from './modules/ung-dung/ung-dung.module';
 import { AiModule } from './modules/ai/ai.module';
-import { FavoritesModule } from './modules/yeu-thich/yeu-thich.module';
-import { UpdaterModule } from './modules/cap-nhat/cap-nhat.module';
-import { ReviewsModule } from './modules/danh-gia/danh-gia.module';
+import { YeuThichModule } from './modules/yeu-thich/yeu-thich.module';
+import { CapNhatModule } from './modules/cap-nhat/cap-nhat.module';
+import { DanhGiaModule } from './modules/danh-gia/danh-gia.module';
 import { JwtAuthGuard } from './modules/xac-thuc/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/xac-thuc/guards/roles.guard';
 import { AppController } from './app.controller';
@@ -37,15 +37,15 @@ import { AppController } from './app.controller';
     ]),
     PrismaModule,
     RedisModule,
-    HealthModule,
-    DevicesModule,
-    AuthModule,
+    SucKhoeModule,
+    ThietBiModule,
+    XacThucModule,
     GithubModule,
-    AppsModule,
+    UngDungModule,
     AiModule,
-    FavoritesModule,
-    UpdaterModule,
-    ReviewsModule,
+    YeuThichModule,
+    CapNhatModule,
+    DanhGiaModule,
   ],
   providers: [
     {

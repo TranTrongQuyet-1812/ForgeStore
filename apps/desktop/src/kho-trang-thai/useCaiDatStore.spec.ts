@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useSettingsStore } from './useCaiDatStore';
+import { useCaiDatStore } from './useCaiDatStore';
 
-describe('P3B-18 & D-27: useSettingsStore - Terminal & Portable Settings', () => {
+describe('P3B-18 & D-27: useCaiDatStore - Terminal & Portable Settings', () => {
   beforeEach(() => {
     // Reset state before each test
-    useSettingsStore.setState({
+    useCaiDatStore.setState({
       thuMucPortable: '',
       trinhTerminal: 'windows-terminal',
       thuMucLamViecTerminal: '',
@@ -12,49 +12,49 @@ describe('P3B-18 & D-27: useSettingsStore - Terminal & Portable Settings', () =>
   });
 
   it('khởi tạo với giá trị mặc định chính xác (D-27)', () => {
-    const state = useSettingsStore.getState();
+    const state = useCaiDatStore.getState();
     expect(state.trinhTerminal).toBe('windows-terminal');
     expect(state.thuMucLamViecTerminal).toBe('');
     expect(state.thuMucPortable).toBe('');
   });
 
   it('setTrinhTerminal cho phép chuyển đổi giữa windows-terminal, powershell và cmd', () => {
-    const { setTrinhTerminal } = useSettingsStore.getState();
+    const { setTrinhTerminal } = useCaiDatStore.getState();
 
     setTrinhTerminal('powershell');
-    expect(useSettingsStore.getState().trinhTerminal).toBe('powershell');
+    expect(useCaiDatStore.getState().trinhTerminal).toBe('powershell');
 
     setTrinhTerminal('cmd');
-    expect(useSettingsStore.getState().trinhTerminal).toBe('cmd');
+    expect(useCaiDatStore.getState().trinhTerminal).toBe('cmd');
 
     setTrinhTerminal('windows-terminal');
-    expect(useSettingsStore.getState().trinhTerminal).toBe('windows-terminal');
+    expect(useCaiDatStore.getState().trinhTerminal).toBe('windows-terminal');
   });
 
   it('setThuMucLamViecTerminal lưu đường dẫn đã trim', () => {
-    const { setThuMucLamViecTerminal } = useSettingsStore.getState();
+    const { setThuMucLamViecTerminal } = useCaiDatStore.getState();
 
     setThuMucLamViecTerminal('  D:\\Projects\\ForgeApps  ');
-    expect(useSettingsStore.getState().thuMucLamViecTerminal).toBe('D:\\Projects\\ForgeApps');
+    expect(useCaiDatStore.getState().thuMucLamViecTerminal).toBe('D:\\Projects\\ForgeApps');
   });
 
   it('datLaiMacDinhTerminal khôi phục về chuỗi rỗng (%USERPROFILE%)', () => {
-    const { setThuMucLamViecTerminal, datLaiMacDinhTerminal } = useSettingsStore.getState();
+    const { setThuMucLamViecTerminal, datLaiMacDinhTerminal } = useCaiDatStore.getState();
 
     setThuMucLamViecTerminal('D:\\CustomDir');
-    expect(useSettingsStore.getState().thuMucLamViecTerminal).toBe('D:\\CustomDir');
+    expect(useCaiDatStore.getState().thuMucLamViecTerminal).toBe('D:\\CustomDir');
 
     datLaiMacDinhTerminal();
-    expect(useSettingsStore.getState().thuMucLamViecTerminal).toBe('');
+    expect(useCaiDatStore.getState().thuMucLamViecTerminal).toBe('');
   });
 
   it('quản lý thư mục Portable .zip hoạt động độc lập', () => {
-    const { setThuMucPortable, datLaiMacDinh } = useSettingsStore.getState();
+    const { setThuMucPortable, datLaiMacDinh } = useCaiDatStore.getState();
 
     setThuMucPortable('E:\\PortableApps');
-    expect(useSettingsStore.getState().thuMucPortable).toBe('E:\\PortableApps');
+    expect(useCaiDatStore.getState().thuMucPortable).toBe('E:\\PortableApps');
 
     datLaiMacDinh();
-    expect(useSettingsStore.getState().thuMucPortable).toBe('');
+    expect(useCaiDatStore.getState().thuMucPortable).toBe('');
   });
 });

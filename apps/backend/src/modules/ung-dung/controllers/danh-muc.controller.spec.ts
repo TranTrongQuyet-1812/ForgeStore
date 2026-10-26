@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CategoriesController } from './danh-muc.controller';
-import { AppsService } from '../ung-dung.service';
+import { DanhMucController } from './danh-muc.controller';
+import { UngDungService } from '../ung-dung.service';
 import { PlatformFilter } from '../dto/truy-van-ung-dung.dto';
 import { DanhMucDto } from '@forgestore/types';
 
-describe('CategoriesController (K3)', () => {
-  let controller: CategoriesController;
-  let appsService: Partial<AppsService>;
+describe('DanhMucController (K3)', () => {
+  let controller: DanhMucController;
+  let appsService: Partial<UngDungService>;
 
   beforeEach(() => {
     appsService = {
       layDanhSachDanhMuc: vi.fn(),
     };
-    controller = new CategoriesController(appsService as AppsService);
+    controller = new DanhMucController(appsService as UngDungService);
   });
 
   it('gọi layDanhSachDanhMuc với platform=windows và trả về kết quả', async () => {

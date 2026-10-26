@@ -13,10 +13,10 @@ import {
   PackageOpen,
   Loader2,
 } from 'lucide-react';
-import { AppCard, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
-import { TrustPill } from '../thanh-phan/dung-chung/NhanTinCay';
-import { useNavStore } from '../kho-trang-thai/useDieuHuongStore';
-import { storeService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
+import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
 import type { UngDungTomTatDto } from '@forgestore/types';
 
@@ -33,15 +33,15 @@ interface SpotlightConfig {
   gradient: string;
 }
 
-export const ExplorePage: React.FC = () => {
-  const { openAppDetail, selectedCategory, setSelectedCategory } = useNavStore();
+export const TrangKhamPha: React.FC = () => {
+  const { openAppDetail, selectedCategory, setSelectedCategory } = useDieuHuongStore();
   const { layTrangThaiCaiDat } = useDeviceInstalledApps();
   const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
 
-  // Đồng bộ danh mục khi được chọn từ CategoriesPage
+  // Đồng bộ danh mục khi được chọn từ TrangDanhMuc
   useEffect(() => {
     if (selectedCategory) {
       setActiveCategory(selectedCategory);
@@ -63,7 +63,7 @@ export const ExplorePage: React.FC = () => {
       activeSort === 'trending' ? timeWindow : undefined,
     ],
     queryFn: () =>
-      storeService.layDanhSachApps({
+      khoUngDungService.layDanhSachUngDung({
         platform: 'windows',
         category: activeCategory !== 'Tất cả' ? activeCategory : undefined,
         sort: activeSort,
@@ -78,14 +78,14 @@ export const ExplorePage: React.FC = () => {
   // Đấu nối TanStack Query: Nạp các ứng dụng nổi bật (Featured Apps)
   const { data: featuredAppsData, isLoading: isFeaturedLoading } = useQuery({
     queryKey: ['featured-apps'],
-    queryFn: () => storeService.layAppsNoiBat(),
+    queryFn: () => khoUngDungService.layUngDungNoiBat(),
     staleTime: 1000 * 60 * 10,
   });
 
   // Đấu nối TanStack Query: Nạp danh mục ứng dụng động có app khả dụng trên Windows (K3)
   const { data: serverCategories = [] } = useQuery({
     queryKey: ['store-categories', 'windows'],
-    queryFn: () => storeService.layDanhSachDanhMuc('windows'),
+    queryFn: () => khoUngDungService.layDanhSachDanhMuc('windows'),
     staleTime: 1000 * 60 * 5, // 5 phút cache
   });
 
@@ -109,14 +109,18 @@ export const ExplorePage: React.FC = () => {
   // Chuyển đổi dữ liệu backend DTO sang AppCardData, hoàn toàn từ dữ liệu sống (B3)
   const liveApps = useMemo(() => {
     if (appsResponse?.duLieu && appsResponse.duLieu.length > 0) {
-      return appsResponse.duLieu.map((dto: UngDungTomTatDto) => storeService.mapDtoToAppCard(dto));
+      return appsResponse.duLieu.map((dto: UngDungTomTatDto) =>
+        khoUngDungService.anhXaDtoSangTheUngDung(dto),
+      );
     }
     return [];
   }, [appsResponse]);
 
   const featuredAppsList = useMemo(() => {
     if (featuredAppsData && featuredAppsData.length > 0) {
-      return featuredAppsData.map((dto: UngDungTomTatDto) => storeService.mapDtoToAppCard(dto));
+      return featuredAppsData.map((dto: UngDungTomTatDto) =>
+        khoUngDungService.anhXaDtoSangTheUngDung(dto),
+      );
     }
     return [];
   }, [featuredAppsData]);
@@ -323,7 +327,7 @@ export const ExplorePage: React.FC = () => {
                       {spotlightApp.kichThuocFile}
                     </span>
                   )}
-                  <TrustPill score={spotlightApp.diemUyTin} size="sm" showLabel />
+                  <NhanTinCay score={spotlightApp.diemUyTin} size="sm" showLabel />
                 </div>
               </div>
 
@@ -599,7 +603,7 @@ export const ExplorePage: React.FC = () => {
           /* Lưới ứng dụng thật với hiệu ứng Sibling Stagger Wave */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {processedApps.map((app, index) => (
-              <AppCard key={app.id} app={app} staggerIndex={index} />
+              <TheUngDung key={app.id} app={app} staggerIndex={index} />
             ))}
           </div>
         )}

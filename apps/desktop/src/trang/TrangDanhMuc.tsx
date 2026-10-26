@@ -13,8 +13,8 @@ import {
   ArrowRight,
   PackageOpen,
 } from 'lucide-react';
-import { useNavStore } from '../kho-trang-thai/useDieuHuongStore';
-import { storeService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 
 const CATEGORY_META: Record<
   string,
@@ -66,13 +66,13 @@ const CATEGORY_META: Record<
   },
 };
 
-export const CategoriesPage: React.FC = () => {
-  const { openCategory } = useNavStore();
+export const TrangDanhMuc: React.FC = () => {
+  const { openCategory } = useDieuHuongStore();
 
   // Nạp danh mục động từ Backend có app khả dụng trên Windows (K3)
   const { data: serverCategories = [], isLoading } = useQuery({
     queryKey: ['store-categories', 'windows'],
-    queryFn: () => storeService.layDanhSachDanhMuc('windows'),
+    queryFn: () => khoUngDungService.layDanhSachDanhMuc('windows'),
     staleTime: 1000 * 60 * 5,
   });
 

@@ -6,8 +6,8 @@ import { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
 import { trichXuatDinhDangVaKienTruc } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
 
 @Injectable()
-export class FavoritesService {
-  private readonly logger = new Logger(FavoritesService.name);
+export class YeuThichService {
+  private readonly logger = new Logger(YeuThichService.name);
 
   constructor(
     private readonly prisma: PrismaService,

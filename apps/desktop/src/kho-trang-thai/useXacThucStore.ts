@@ -30,7 +30,7 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useXacThucStore = create<AuthState>((set, get) => ({
   user: null,
   thietBi: null,
   maThietBi: null,
@@ -76,7 +76,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().fetchProfile();
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        console.warn('[useAuthStore] Phiên đăng nhập trước đó đã hết hạn hoặc không hợp lệ.');
+        console.warn('[useXacThucStore] Phiên đăng nhập trước đó đã hết hạn hoặc không hợp lệ.');
         await tokenStorage.clearAllTokens();
         set({
           user: null,
@@ -87,7 +87,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
       } else {
         console.warn(
-          '[useAuthStore] Không thể kết nối tới máy chủ khi khôi phục phiên (mất mạng/timeout/5xx): Giữ nguyên token để thử lại sau.',
+          '[useXacThucStore] Không thể kết nối tới máy chủ khi khôi phục phiên (mất mạng/timeout/5xx): Giữ nguyên token để thử lại sau.',
           err,
         );
         set({ isAuthenticated: false });
@@ -149,19 +149,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Bỏ qua nếu chưa nạp được danh sách thiết bị
       }
     } catch (err) {
-      console.error('[useAuthStore] Không thể tải thông tin hồ sơ:', err);
+      console.error('[useXacThucStore] Không thể tải thông tin hồ sơ:', err);
     }
   },
 }));
 
 // Tự động lắng nghe các sự kiện đăng xuất và làm mới token từ API Client
 apiClient.onLogout(() => {
-  useAuthStore.getState().logout();
+  useXacThucStore.getState().logout();
 });
 
 apiClient.onTokenRefresh((newToken) => {
   const did = parseJwtDid(newToken);
-  useAuthStore.setState((prev) => ({
+  useXacThucStore.setState((prev) => ({
     accessToken: newToken,
     maThietBi: did || prev.maThietBi,
     isAuthenticated: true,

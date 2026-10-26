@@ -9,19 +9,19 @@
  * 4. Lắng nghe Deep Link URL `forgestore://auth?a=...&code=...` qua plugin deep-link.
  * 5. Bỏ qua các deep link hủy từ tab cũ (`sessionId !== currentSessionId`) để không gây gián đoạn phiên đang chờ.
  * 6. Đổi mã 1 lần lấy cặp JWT Tokens qua `POST /auth/exchange` kèm thông tin thiết bị (SHA-256 MachineGuid).
- * 7. Cập nhật state đăng nhập vào Zustand useAuthStore và Windows Credential Manager.
+ * 7. Cập nhật state đăng nhập vào Zustand useXacThucStore và Windows Credential Manager.
  */
 
 import { apiClient } from '../api/api-client';
 import { isTauri } from './luu-tru-token';
 import { pkce } from './pkce';
-import { deviceService } from '../thiet-bi/thiet-bi.service';
-import { useAuthStore } from '../../kho-trang-thai/useXacThucStore';
+import { thietBiService } from '../thiet-bi/thiet-bi.service';
+import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import type { AuthResponseDto } from '@forgestore/types';
 
 export const DEEP_LINK_SCHEME = 'forgestore://auth';
 
-export class AuthService {
+export class XacThucService {
   private isListening = false;
   private unlistenDeepLink: (() => void) | null = null;
   private authErrorListeners = new Set<(error: string) => void>();
@@ -37,12 +37,12 @@ export class AuthService {
     };
   }
 
-  private notifyAuthError(error: string): void {
+  private thongBaoLoiXacThuc(error: string): void {
     for (const listener of this.authErrorListeners) {
       try {
         listener(error);
       } catch (err) {
-        console.error('[AuthService] Lỗi trong authErrorListener:', err);
+        console.error('[XacThucService] Lỗi trong authErrorListener:', err);
       }
     }
   }
@@ -50,14 +50,14 @@ export class AuthService {
   /**
    * Lấy mã phiên đăng nhập đang hoạt động
    */
-  public getCurrentSessionId(): string | null {
+  public laySessionIdHienTai(): string | null {
     return this.currentSessionId;
   }
 
   /**
    * Hủy phiên đăng nhập hiện tại khi người dùng bấm "Hủy kết nối và thử lại"
    */
-  public cancelCurrentLogin(): void {
+  public huyDangNhapHienTai(): void {
     this.currentSessionId = null;
   }
 
@@ -66,7 +66,7 @@ export class AuthService {
    */
   public async init(): Promise<void> {
     // 1. Khởi tạo phiên từ Windows Credential Manager
-    await useAuthStore.getState().initAuth();
+    await useXacThucStore.getState().initAuth();
 
     // 2. Lắng nghe Deep Link nếu chạy trên Tauri native (P3-04 & Điểm 2)
     if (isTauri() && !this.isListening) {
@@ -84,7 +84,7 @@ export class AuthService {
             }
           }
         } catch (coldErr) {
-          console.warn('[AuthService] Lỗi khi đọc getCurrent deep-link:', coldErr);
+          console.warn('[XacThucService] Lỗi khi đọc getCurrent deep-link:', coldErr);
         }
 
         // Lắng nghe deep link từ plugin deep-link khi app đang chạy (single-instance tự động chuyển tiếp)
@@ -98,7 +98,7 @@ export class AuthService {
 
         this.isListening = true;
       } catch (err) {
-        console.error('[AuthService] Không thể khởi tạo deep-link listener:', err);
+        console.error('[XacThucService] Không thể khởi tạo deep-link listener:', err);
       }
     }
   }
@@ -106,14 +106,14 @@ export class AuthService {
   /**
    * Bắt đầu đăng nhập GitHub với PKCE
    */
-  public async loginWithGithub(): Promise<void> {
+  public async dangNhapGithub(): Promise<void> {
     await this.startOAuthFlow('/auth/github');
   }
 
   /**
    * Bắt đầu đăng nhập Google với PKCE (P3B-15)
    */
-  public async loginWithGoogle(): Promise<void> {
+  public async dangNhapGoogle(): Promise<void> {
     await this.startOAuthFlow('/auth/google');
   }
 
@@ -144,7 +144,7 @@ export class AuthService {
         await openUrl(authUrl);
         return;
       } catch (err) {
-        console.warn('[AuthService] Lỗi khi dùng plugin opener, fallback window.open:', err);
+        console.warn('[XacThucService] Lỗi khi dùng plugin opener, fallback window.open:', err);
       }
     }
 
@@ -173,29 +173,29 @@ export class AuthService {
         }
 
         // Nếu app đã đăng nhập xong rồi, bỏ qua lỗi từ các tab thừa còn lại
-        if (useAuthStore.getState().isAuthenticated) {
+        if (useXacThucStore.getState().isAuthenticated) {
           return false;
         }
 
         // Nếu lỗi gửi về từ một tab cũ (không khớp phiên đang chờ hiện tại), bỏ qua và không tắt spinner
         if (sessionId && this.currentSessionId && sessionId !== this.currentSessionId) {
           console.warn(
-            `[AuthService] Bỏ qua deep link lỗi từ phiên cũ [${sessionId}]. Phiên hiện tại đang chờ là [${this.currentSessionId}].`,
+            `[XacThucService] Bỏ qua deep link lỗi từ phiên cũ [${sessionId}]. Phiên hiện tại đang chờ là [${this.currentSessionId}].`,
           );
           return false;
         }
 
         this.currentSessionId = null;
-        console.warn(`[AuthService] Đăng nhập không thành công: ${error}`);
-        this.notifyAuthError(error);
+        console.warn(`[XacThucService] Đăng nhập không thành công: ${error}`);
+        this.thongBaoLoiXacThuc(error);
         return false;
       }
 
       const code = parsedUrl.searchParams.get('code');
 
       if (!code) {
-        console.warn('[AuthService] Deep link không chứa mã code xác thực:', urlStr);
-        this.notifyAuthError('MISSING_CODE');
+        console.warn('[XacThucService] Deep link không chứa mã code xác thực:', urlStr);
+        this.thongBaoLoiXacThuc('MISSING_CODE');
         return false;
       }
 
@@ -203,14 +203,14 @@ export class AuthService {
       const verifier = pkce.getAndClearVerifier(sessionId);
       if (!verifier) {
         console.error(
-          `[AuthService] Không tìm thấy PKCE Verifier hợp lệ cho phiên [${sessionId ?? 'default'}]. Phiên đăng nhập có thể đã hết hạn.`,
+          `[XacThucService] Không tìm thấy PKCE Verifier hợp lệ cho phiên [${sessionId ?? 'default'}]. Phiên đăng nhập có thể đã hết hạn.`,
         );
-        this.notifyAuthError('EXPIRED_VERIFIER');
+        this.thongBaoLoiXacThuc('EXPIRED_VERIFIER');
         return false;
       }
 
       // Thu thập thông tin phần cứng máy trạm (MachineGuid băm SHA-256)
-      const thietBi = await deviceService.getDeviceInfo();
+      const thietBi = await thietBiService.getDeviceInfo();
 
       // Gửi yêu cầu đổi mã 1 lần lấy cặp JWT tokens (Zero-Token-on-URL)
       const authRes = await apiClient.post<AuthResponseDto>('/auth/exchange', {
@@ -222,11 +222,11 @@ export class AuthService {
       this.currentSessionId = null;
 
       // Lưu trữ phiên an toàn vào RAM & Windows Credential Manager
-      await useAuthStore.getState().setAuth(authRes);
+      await useXacThucStore.getState().setAuth(authRes);
       return true;
     } catch (err) {
-      console.error('[AuthService] Lỗi trong quá trình đổi mã xác thực:', err);
-      this.notifyAuthError('EXCHANGE_FAILED');
+      console.error('[XacThucService] Lỗi trong quá trình đổi mã xác thực:', err);
+      this.thongBaoLoiXacThuc('EXCHANGE_FAILED');
       return false;
     }
   }
@@ -236,12 +236,12 @@ export class AuthService {
    */
   public async logout(): Promise<void> {
     try {
-      if (useAuthStore.getState().isAuthenticated) {
+      if (useXacThucStore.getState().isAuthenticated) {
         await apiClient.post('/auth/logout').catch(() => {});
       }
     } finally {
       this.currentSessionId = null;
-      await useAuthStore.getState().logout();
+      await useXacThucStore.getState().logout();
     }
   }
 
@@ -257,4 +257,4 @@ export class AuthService {
   }
 }
 
-export const authService = new AuthService();
+export const xacThucService = new XacThucService();

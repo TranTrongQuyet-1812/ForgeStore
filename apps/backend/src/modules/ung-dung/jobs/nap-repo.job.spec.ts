@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RepoIngestionJob } from './nap-repo.job';
+import { NapRepoJob } from './nap-repo.job';
 
-describe('RepoIngestionJob (P3B-06 & P3B-05.4)', () => {
-  let job: RepoIngestionJob;
+describe('NapRepoJob (P3B-06 & P3B-05.4)', () => {
+  let job: NapRepoJob;
 
   const mockPipelineService = {
     isIngestionEnabled: vi.fn(),
@@ -14,7 +14,7 @@ describe('RepoIngestionJob (P3B-06 & P3B-05.4)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPipelineService.isIngestionEnabled.mockReturnValue(true);
-    job = new RepoIngestionJob(mockPipelineService as any);
+    job = new NapRepoJob(mockPipelineService as any);
   });
 
   it('handleCron kích hoạt chayChuKyDinhKy khi INGESTION_ENABLED = true', async () => {

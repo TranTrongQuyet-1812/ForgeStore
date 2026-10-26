@@ -100,8 +100,8 @@ export function timTepTuongDong(
 }
 
 @Injectable()
-export class UpdaterService {
-  private readonly logger = new Logger(UpdaterService.name);
+export class CapNhatService {
+  private readonly logger = new Logger(CapNhatService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 

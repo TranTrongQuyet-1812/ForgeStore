@@ -19,7 +19,7 @@ export interface HealthResponseDto {
 @SkipThrottle()
 @CongKhai()
 @Controller('health')
-export class HealthController {
+export class SucKhoeController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,

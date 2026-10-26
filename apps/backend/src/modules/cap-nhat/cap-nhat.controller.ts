@@ -2,14 +2,14 @@ import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface';
-import { UpdaterService } from './cap-nhat.service';
+import { CapNhatService } from './cap-nhat.service';
 import { CheckUpdatesDto } from './dto/kiem-tra-cap-nhat.dto';
 
 @ApiTags('Updater - Cập Nhật Ứng Dụng')
 @ApiBearerAuth()
 @Controller('apps')
-export class UpdaterController {
-  constructor(private readonly updaterService: UpdaterService) {}
+export class CapNhatController {
+  constructor(private readonly updaterService: CapNhatService) {}
 
   @Post('check-updates')
   @HttpCode(HttpStatus.OK)

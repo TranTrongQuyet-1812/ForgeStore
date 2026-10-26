@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { favoritesService } from './yeu-thich.service';
+import { yeuThichService } from './yeu-thich.service';
 import { apiClient } from '../api/api-client';
 
 describe('FavoritesService (P3-12.1)', () => {
@@ -32,7 +32,7 @@ describe('FavoritesService (P3-12.1)', () => {
 
     const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce(mockResponse as never);
 
-    const res = await favoritesService.layDanhSachYeuThich(1, 20);
+    const res = await yeuThichService.layDanhSachYeuThich(1, 20);
 
     expect(getSpy).toHaveBeenCalledWith('/user/favorites?page=1&limit=20');
     expect(res.duLieu).toHaveLength(1);
@@ -47,7 +47,7 @@ describe('FavoritesService (P3-12.1)', () => {
 
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(mockToggleRes as never);
 
-    const res = await favoritesService.chuyenDoiYeuThich('app-uuid-1');
+    const res = await yeuThichService.chuyenDoiYeuThich('app-uuid-1');
 
     // Header lạ như x-device-type không nằm trong allowedHeaders của backend,
     // WebView2 sẽ chặn request ở bước preflight nên backend không bao giờ nhận được.
@@ -61,7 +61,7 @@ describe('FavoritesService (P3-12.1)', () => {
       .spyOn(apiClient, 'post')
       .mockResolvedValueOnce({ daYeuThich: false, tongSoYeuThich: 0 } as never);
 
-    await favoritesService.chuyenDoiYeuThich('microsoft/PowerToys');
+    await yeuThichService.chuyenDoiYeuThich('microsoft/PowerToys');
 
     expect(postSpy).toHaveBeenCalledWith('/apps/microsoft%2FPowerToys/favorite');
   });

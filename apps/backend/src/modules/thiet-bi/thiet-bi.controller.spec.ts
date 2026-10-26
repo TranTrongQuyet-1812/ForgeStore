@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DevicesController } from './thiet-bi.controller';
-import { DevicesService } from './thiet-bi.service';
+import { ThietBiController } from './thiet-bi.controller';
+import { ThietBiService } from './thiet-bi.service';
 import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface';
 import {
   GhiNhanCaiDatCliDto,
@@ -9,9 +9,9 @@ import {
 } from './dto/ung-dung-da-cai.dto';
 import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 
-describe('DevicesController', () => {
-  let controller: DevicesController;
-  let mockService: Partial<Record<keyof DevicesService, ReturnType<typeof vi.fn>>>;
+describe('ThietBiController', () => {
+  let controller: ThietBiController;
+  let mockService: Partial<Record<keyof ThietBiService, ReturnType<typeof vi.fn>>>;
 
   const mockUser: UserSessionContext = {
     maNguoiDung: 'user-uuid-1',
@@ -34,7 +34,7 @@ describe('DevicesController', () => {
       capNhatKhoaRegistry: vi.fn(),
     };
 
-    controller = new DevicesController(mockService as unknown as DevicesService);
+    controller = new ThietBiController(mockService as unknown as ThietBiService);
   });
 
   describe('layDanhSach', () => {

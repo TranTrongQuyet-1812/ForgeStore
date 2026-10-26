@@ -24,7 +24,7 @@ function clearToastTimer(id: string) {
   }
 }
 
-export const useToastStore = create<ToastState>((set) => ({
+export const useThongBaoStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (type, message) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -62,7 +62,7 @@ export const useToastStore = create<ToastState>((set) => ({
  * Tiện ích gửi thông báo nhanh (Toast) thay thế cho window.alert
  */
 export const toast = {
-  success: (message: string) => useToastStore.getState().addToast('success', message),
-  error: (message: string) => useToastStore.getState().addToast('error', message),
-  info: (message: string) => useToastStore.getState().addToast('info', message),
+  success: (message: string) => useThongBaoStore.getState().addToast('success', message),
+  error: (message: string) => useThongBaoStore.getState().addToast('error', message),
+  info: (message: string) => useThongBaoStore.getState().addToast('info', message),
 };

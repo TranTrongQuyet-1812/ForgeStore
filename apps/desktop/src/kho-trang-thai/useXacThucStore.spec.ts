@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useAuthStore } from './useXacThucStore';
+import { useXacThucStore } from './useXacThucStore';
 import { tokenStorage } from '../dich-vu/xac-thuc/luu-tru-token';
 import { VaiTro } from '@forgestore/types';
 
-describe('useAuthStore (P3-03.4)', () => {
+describe('useXacThucStore (P3-03.4)', () => {
   const originalFetch = global.fetch;
 
   beforeEach(async () => {
     await tokenStorage.clearAllTokens();
-    useAuthStore.setState({
+    useXacThucStore.setState({
       user: null,
       accessToken: null,
       isAuthenticated: false,
@@ -22,9 +22,9 @@ describe('useAuthStore (P3-03.4)', () => {
   });
 
   it('initAuth khi không có refresh token trong máy: kết thúc loading và giữ trạng thái chưa đăng nhập', async () => {
-    await useAuthStore.getState().initAuth();
+    await useXacThucStore.getState().initAuth();
 
-    const state = useAuthStore.getState();
+    const state = useXacThucStore.getState();
     expect(state.isAuthenticated).toBe(false);
     expect(state.user).toBeNull();
     expect(state.isLoading).toBe(false);
@@ -62,9 +62,9 @@ describe('useAuthStore (P3-03.4)', () => {
 
     global.fetch = mockFetch;
 
-    await useAuthStore.getState().initAuth();
+    await useXacThucStore.getState().initAuth();
 
-    const state = useAuthStore.getState();
+    const state = useXacThucStore.getState();
     expect(state.isAuthenticated).toBe(true);
     expect(state.accessToken).toBe('new-session-access-token');
     expect(state.user?.tenDangNhap).toBe('trantrongquyet');
@@ -74,7 +74,7 @@ describe('useAuthStore (P3-03.4)', () => {
   it('logout: dọn sạch dữ liệu trong store và xóa token khỏi storage', async () => {
     tokenStorage.setAccessToken('active-access');
     await tokenStorage.setRefreshToken('active-refresh');
-    useAuthStore.setState({
+    useXacThucStore.setState({
       user: {
         maNguoiDung: 'user-1',
         tenDangNhap: 'quyet',
@@ -85,9 +85,9 @@ describe('useAuthStore (P3-03.4)', () => {
       isAuthenticated: true,
     });
 
-    await useAuthStore.getState().logout();
+    await useXacThucStore.getState().logout();
 
-    const state = useAuthStore.getState();
+    const state = useXacThucStore.getState();
     expect(state.isAuthenticated).toBe(false);
     expect(state.user).toBeNull();
     expect(state.accessToken).toBeNull();
@@ -101,9 +101,9 @@ describe('useAuthStore (P3-03.4)', () => {
     const mockFetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
     global.fetch = mockFetch;
 
-    await useAuthStore.getState().initAuth();
+    await useXacThucStore.getState().initAuth();
 
-    const state = useAuthStore.getState();
+    const state = useXacThucStore.getState();
     expect(state.isAuthenticated).toBe(false);
     expect(state.isLoading).toBe(false);
     // Refresh token vẫn được bảo toàn trong Windows Credential Manager!

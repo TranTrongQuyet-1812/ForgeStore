@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { RepoIngestionPipelineService, DANH_SACH_SEED_REPOS } from './day-chuyen-nap-repo.service';
+import { DayChuyenNapRepoService, DANH_SACH_SEED_REPOS } from './day-chuyen-nap-repo.service';
 import { TrangThaiUngVienRepo, LyDoLoaiUngVien } from '@prisma/client';
 
-describe('RepoIngestionPipelineService (P3B-06 & P3B-05.4)', () => {
-  let service: RepoIngestionPipelineService;
+describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
+  let service: DayChuyenNapRepoService;
 
   const mockPrisma = {
     ungVienRepo: {
@@ -63,7 +63,7 @@ describe('RepoIngestionPipelineService (P3B-06 & P3B-05.4)', () => {
       return defaultVal;
     });
 
-    service = new RepoIngestionPipelineService(
+    service = new DayChuyenNapRepoService(
       mockPrisma as any,
       mockGithubService as any,
       mockCacheService as any,

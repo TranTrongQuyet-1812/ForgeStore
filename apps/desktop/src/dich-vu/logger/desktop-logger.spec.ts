@@ -28,11 +28,11 @@ describe('DesktopLogger - Ghi log an toàn ra file cho Desktop Client (P3B-19)',
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await desktopLogger.ghiLogWarn(
         'Payload debug: {"password":"mySecretPassword123","username":"user1"}',
-        'AuthService',
+        'XacThucService',
       );
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[WARN] [AuthService]',
+        '[WARN] [XacThucService]',
         'Payload debug: {"password":"[REDACTED]","username":"user1"}',
       );
     });
@@ -54,11 +54,11 @@ describe('DesktopLogger - Ghi log an toàn ra file cho Desktop Client (P3B-19)',
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await desktopLogger.ghiLogWarn(
         'Token response: {"access_token": "secret_acc", "refreshToken": "secret_ref", "apiKey": "secret_key"}',
-        'AuthService',
+        'XacThucService',
       );
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[WARN] [AuthService]',
+        '[WARN] [XacThucService]',
         'Token response: {"access_token":"[REDACTED]", "refreshToken":"[REDACTED]", "apiKey":"[REDACTED]"}',
       );
     });
@@ -103,9 +103,10 @@ describe('DesktopLogger - Ghi log an toàn ra file cho Desktop Client (P3B-19)',
       }));
 
       const logger = new DesktopLogger();
-      vi.spyOn(logger as unknown as { isTauriEnv: () => boolean }, 'isTauriEnv').mockReturnValue(
-        true,
-      );
+      vi.spyOn(
+        logger as unknown as { laMoiTruongTauri: () => boolean },
+        'laMoiTruongTauri',
+      ).mockReturnValue(true);
 
       await logger.ghiLogInfo('Tải file thành công', 'Downloader');
 
@@ -136,9 +137,10 @@ describe('DesktopLogger - Ghi log an toàn ra file cho Desktop Client (P3B-19)',
       }));
 
       const logger = new DesktopLogger();
-      vi.spyOn(logger as unknown as { isTauriEnv: () => boolean }, 'isTauriEnv').mockReturnValue(
-        true,
-      );
+      vi.spyOn(
+        logger as unknown as { laMoiTruongTauri: () => boolean },
+        'laMoiTruongTauri',
+      ).mockReturnValue(true);
 
       const path = await logger.layDuongDanLog();
       expect(path).toBe(

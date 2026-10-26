@@ -10,7 +10,7 @@ import {
   UngDungTomTatDto,
 } from '@forgestore/types';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
-import { AppsService } from './ung-dung.service';
+import { UngDungService } from './ung-dung.service';
 import { ReadmeTranslationService } from '../ai/translation/services/readme-translation.service';
 import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/truy-van-ung-dung.dto';
 import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
@@ -19,9 +19,9 @@ import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 
 @ApiTags('Apps - Kho Ứng Dụng')
 @Controller('apps')
-export class AppsController {
+export class UngDungController {
   constructor(
-    private readonly appsService: AppsService,
+    private readonly appsService: UngDungService,
     private readonly readmeTranslationService: ReadmeTranslationService,
   ) {}
 

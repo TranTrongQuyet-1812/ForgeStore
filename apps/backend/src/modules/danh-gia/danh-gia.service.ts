@@ -15,8 +15,8 @@ import { DanhGiaDto, TrangKetQua } from '@forgestore/types';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
-export class ReviewsService {
-  private readonly logger = new Logger(ReviewsService.name);
+export class DanhGiaService {
+  private readonly logger = new Logger(DanhGiaService.name);
   private readonly HELPFUL_TTL = 30 * 24 * 60 * 60; // 30 ngày (2.592.000s)
 
   constructor(

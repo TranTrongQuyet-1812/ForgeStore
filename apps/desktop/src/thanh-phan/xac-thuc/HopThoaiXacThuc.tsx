@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, ShieldCheck, Loader2 } from 'lucide-react';
-import { useNavStore } from '../../kho-trang-thai/useDieuHuongStore';
-import { useAuthStore } from '../../kho-trang-thai/useXacThucStore';
-import { authService } from '../../dich-vu/xac-thuc/xac-thuc.service';
+import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
+import { xacThucService } from '../../dich-vu/xac-thuc/xac-thuc.service';
 
-export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, setAuthModalOpen } = useNavStore();
-  const { isAuthenticated } = useAuthStore();
+export const HopThoaiXacThuc: React.FC = () => {
+  const { isAuthModalOpen, setAuthModalOpen } = useDieuHuongStore();
+  const { isAuthenticated } = useXacThucStore();
   const [loadingProvider, setLoadingProvider] = useState<'google' | 'github' | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -20,7 +20,7 @@ export const AuthModal: React.FC = () => {
 
   // Lắng nghe sự kiện lỗi xác thực hoặc người dùng hủy từ deep link
   useEffect(() => {
-    const unsubscribe = authService.onAuthError(() => {
+    const unsubscribe = xacThucService.onAuthError(() => {
       setLoadingProvider(null);
     });
     return unsubscribe;
@@ -41,7 +41,7 @@ export const AuthModal: React.FC = () => {
       if (e.key === 'Escape' && isAuthModalOpen) {
         setAuthModalOpen(false);
         setLoadingProvider(null);
-        authService.cancelCurrentLogin();
+        xacThucService.huyDangNhapHienTai();
       }
     };
 
@@ -58,7 +58,7 @@ export const AuthModal: React.FC = () => {
   const handleLoginGoogle = async () => {
     setLoadingProvider('google');
     try {
-      await authService.loginWithGoogle();
+      await xacThucService.dangNhapGoogle();
     } catch {
       setLoadingProvider(null);
     }
@@ -67,7 +67,7 @@ export const AuthModal: React.FC = () => {
   const handleLoginGithub = async () => {
     setLoadingProvider('github');
     try {
-      await authService.loginWithGithub();
+      await xacThucService.dangNhapGithub();
     } catch {
       setLoadingProvider(null);
     }
@@ -81,7 +81,7 @@ export const AuthModal: React.FC = () => {
         if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
           setAuthModalOpen(false);
           setLoadingProvider(null);
-          authService.cancelCurrentLogin();
+          xacThucService.huyDangNhapHienTai();
         }
       }}
     >
@@ -94,7 +94,7 @@ export const AuthModal: React.FC = () => {
           onClick={() => {
             setAuthModalOpen(false);
             setLoadingProvider(null);
-            authService.cancelCurrentLogin();
+            xacThucService.huyDangNhapHienTai();
           }}
           className="absolute top-4 right-4 w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors cursor-pointer"
           title="Đóng (Esc)"
@@ -102,7 +102,7 @@ export const AuthModal: React.FC = () => {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Logo chính thức của ForgeStore (đồng bộ với Sidebar) */}
+        {/* Logo chính thức của ForgeStore (đồng bộ với ThanhBen) */}
         <div className="w-12 h-12 rounded-2xl bg-surface border border-border flex items-center justify-center p-2 mx-auto mb-4 shrink-0 shadow-md shadow-black/10 dark:shadow-black/40">
           <img
             src="/logo.png"
@@ -182,7 +182,7 @@ export const AuthModal: React.FC = () => {
               type="button"
               onClick={() => {
                 setLoadingProvider(null);
-                authService.cancelCurrentLogin();
+                xacThucService.huyDangNhapHienTai();
               }}
               className="text-[11px] text-muted hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer inline-flex items-center gap-1 font-medium underline underline-offset-4"
             >

@@ -1,7 +1,7 @@
 import { apiClient } from '../api/api-client';
 import type { CheckUpdatesRequest, CheckUpdatesResponseDto } from '@forgestore/types';
 
-export const updaterService = {
+export const capNhatService = {
   /**
    * Kiểm tra các bản cập nhật cho các ứng dụng đã cài trên máy (P3-12.3, B2, BE-02)
    */

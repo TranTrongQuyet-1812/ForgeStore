@@ -1,14 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AuthService } from './xac-thuc.service';
+import { XacThucService } from './xac-thuc.service';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 import { UserSessionContext } from './interfaces/jwt-payload.interface';
 
 @ApiTags('Người dùng (User Profile)')
 @ApiBearerAuth()
 @Controller('user')
-export class UserController {
-  constructor(private readonly authService: AuthService) {}
+export class NguoiDungController {
+  constructor(private readonly authService: XacThucService) {}
 
   @Get('profile')
   @ApiOperation({

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { DevicesService } from './thiet-bi.service';
-import { DevicesController } from './thiet-bi.controller';
+import { ThietBiService } from './thiet-bi.service';
+import { ThietBiController } from './thiet-bi.controller';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [RedisModule],
-  controllers: [DevicesController],
-  providers: [DevicesService],
-  exports: [DevicesService],
+  controllers: [ThietBiController],
+  providers: [ThietBiService],
+  exports: [ThietBiService],
 })
-export class DevicesModule {}
+export class ThietBiModule {}

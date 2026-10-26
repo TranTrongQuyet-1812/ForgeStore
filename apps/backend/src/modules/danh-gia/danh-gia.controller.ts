@@ -13,7 +13,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
-import { ReviewsService } from './danh-gia.service';
+import { DanhGiaService } from './danh-gia.service';
 import { CreateReviewDto } from './dto/tao-danh-gia.dto';
 import { UpdateReviewDto } from './dto/cap-nhat-danh-gia.dto';
 import { QueryReviewsDto } from './dto/truy-van-danh-gia.dto';
@@ -25,8 +25,8 @@ import { VaiTro } from '@prisma/client';
 
 @ApiTags('Reviews')
 @Controller()
-export class ReviewsController {
-  constructor(private readonly reviewsService: ReviewsService) {}
+export class DanhGiaController {
+  constructor(private readonly reviewsService: DanhGiaService) {}
 
   @Get('apps/:id/reviews')
   @CongKhai()

@@ -8,19 +8,19 @@ import { VaiTro } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { CACHE_PREFIX, DEFAULT_TTL } from '../redis/redis.constants';
-import { DevicesService } from '../thiet-bi/thiet-bi.service';
+import { ThietBiService } from '../thiet-bi/thiet-bi.service';
 import { AuthExchangeDto } from './dto/trao-doi-xac-thuc.dto';
 import { RefreshTokenDto } from './dto/lam-moi-token.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @Injectable()
-export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
+export class XacThucService {
+  private readonly logger = new Logger(XacThucService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
-    private readonly devicesService: DevicesService,
+    private readonly devicesService: ThietBiService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}

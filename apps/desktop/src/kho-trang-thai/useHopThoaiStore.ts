@@ -21,7 +21,7 @@ interface DialogState {
   close: () => void;
 }
 
-export const useDialogStore = create<DialogState>((set) => ({
+export const useHopThoaiStore = create<DialogState>((set) => ({
   isOpen: false,
   options: null,
   open: (options) => set({ isOpen: true, options }),
@@ -47,17 +47,17 @@ export function confirmDialog(
   return new Promise<boolean>((resolve) => {
     activeDialogResolver = resolve;
 
-    useDialogStore.getState().open({
+    useHopThoaiStore.getState().open({
       ...options,
       onConfirm: () => {
-        useDialogStore.getState().close();
+        useHopThoaiStore.getState().close();
         if (activeDialogResolver === resolve) {
           activeDialogResolver = null;
         }
         resolve(true);
       },
       onCancel: () => {
-        useDialogStore.getState().close();
+        useHopThoaiStore.getState().close();
         if (activeDialogResolver === resolve) {
           activeDialogResolver = null;
         }

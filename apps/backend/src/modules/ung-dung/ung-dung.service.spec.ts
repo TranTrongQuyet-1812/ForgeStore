@@ -4,7 +4,7 @@ import { DinhDangTep, KienTrucChip, NenTangHoTro } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GithubService } from '../github/github.service';
 import { CacheService } from '../redis/cache.service';
-import { AppsService, daCoKetQuaBocTachCli, PHIEN_BAN_BOC_TACH_CLI } from './ung-dung.service';
+import { UngDungService, daCoKetQuaBocTachCli, PHIEN_BAN_BOC_TACH_CLI } from './ung-dung.service';
 import {
   AppSortOption,
   PlatformFilter,
@@ -58,8 +58,8 @@ interface MockCacheService {
   withLock: ReturnType<typeof vi.fn>;
 }
 
-describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
-  let service: AppsService;
+describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
+  let service: UngDungService;
   let mockPrisma: MockPrisma;
   let mockGithubService: MockGithubService;
   let mockCacheService: MockCacheService;
@@ -242,7 +242,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         .mockResolvedValue('video player topic:video-player stars:>=100 archived:false'),
     };
 
-    service = new AppsService(
+    service = new UngDungService(
       mockPrisma as unknown as PrismaService,
       mockGithubService as unknown as GithubService,
       mockCacheService as unknown as CacheService,
@@ -1089,7 +1089,7 @@ describe('AppsService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       ]);
       mockPrisma.phanTichAI.findUnique.mockResolvedValue({ maPhanTich: 'done' });
 
-      const res = await service.chayPrewarmAI(['app-1', 'app-2']);
+      const res = await service.chayLamNongAI(['app-1', 'app-2']);
       expect(res.daChay).toBe(2);
       expect(res.thanhCong).toBe(2);
     });

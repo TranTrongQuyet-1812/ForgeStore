@@ -9,7 +9,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
-import { FavoritesService } from './yeu-thich.service';
+import { YeuThichService } from './yeu-thich.service';
 import { QueryFavoritesDto } from './dto/truy-van-yeu-thich.dto';
 import { JwtAuthGuard } from '../xac-thuc/guards/jwt-auth.guard';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
@@ -18,8 +18,8 @@ import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @Controller()
-export class FavoritesController {
-  constructor(private readonly favoritesService: FavoritesService) {}
+export class YeuThichController {
+  constructor(private readonly favoritesService: YeuThichService) {}
 
   @Get('user/favorites')
   @ApiOperation({

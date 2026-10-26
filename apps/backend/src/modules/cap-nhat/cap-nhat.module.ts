@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { UpdaterService } from './cap-nhat.service';
-import { UpdaterController } from './cap-nhat.controller';
+import { CapNhatService } from './cap-nhat.service';
+import { CapNhatController } from './cap-nhat.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [UpdaterController],
-  providers: [UpdaterService],
-  exports: [UpdaterService],
+  controllers: [CapNhatController],
+  providers: [CapNhatService],
+  exports: [CapNhatService],
 })
-export class UpdaterModule {}
+export class CapNhatModule {}

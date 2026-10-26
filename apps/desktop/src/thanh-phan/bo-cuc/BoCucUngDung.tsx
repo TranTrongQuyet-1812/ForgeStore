@@ -1,49 +1,49 @@
 import React from 'react';
-import { Titlebar } from './ThanhTieuDe';
-import { Sidebar } from './ThanhBen';
-import { useNavStore } from '../../kho-trang-thai/useDieuHuongStore';
-import { ExplorePage } from '../../trang/TrangKhamPha';
-import { DetailPage } from '../../trang/TrangChiTiet';
-import { LibraryPage } from '../../trang/TrangThuVien';
-import { FavoritesPage } from '../../trang/TrangYeuThich';
-import { CategoriesPage } from '../../trang/TrangDanhMuc';
-import { SettingsPage } from '../../trang/TrangCaiDat';
-import { SearchModal } from '../tim-kiem/HopThoaiTimKiem';
-import { AuthModal } from '../xac-thuc/HopThoaiXacThuc';
-import { ConfirmDialog } from '../dung-chung/HopThoaiXacNhan';
-import { ToastContainer } from '../dung-chung/KhungThongBao';
+import { ThanhTieuDe } from './ThanhTieuDe';
+import { ThanhBen } from './ThanhBen';
+import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { TrangKhamPha } from '../../trang/TrangKhamPha';
+import { TrangChiTiet } from '../../trang/TrangChiTiet';
+import { TrangThuVien } from '../../trang/TrangThuVien';
+import { TrangYeuThich } from '../../trang/TrangYeuThich';
+import { TrangDanhMuc } from '../../trang/TrangDanhMuc';
+import { TrangCaiDat } from '../../trang/TrangCaiDat';
+import { HopThoaiTimKiem } from '../tim-kiem/HopThoaiTimKiem';
+import { HopThoaiXacThuc } from '../xac-thuc/HopThoaiXacThuc';
+import { HopThoaiXacNhan } from '../dung-chung/HopThoaiXacNhan';
+import { KhungThongBao } from '../dung-chung/KhungThongBao';
 
-export const AppLayout: React.FC = () => {
-  const { currentTab } = useNavStore();
+export const BoCucUngDung: React.FC = () => {
+  const { currentTab } = useDieuHuongStore();
 
   const renderContent = () => {
     switch (currentTab) {
       case 'explore':
-        return <ExplorePage />;
+        return <TrangKhamPha />;
       case 'detail':
-        return <DetailPage />;
+        return <TrangChiTiet />;
       case 'library':
-        return <LibraryPage />;
+        return <TrangThuVien />;
       case 'favorites':
-        return <FavoritesPage />;
+        return <TrangYeuThich />;
       case 'categories':
-        return <CategoriesPage />;
+        return <TrangDanhMuc />;
       case 'settings':
-        return <SettingsPage />;
+        return <TrangCaiDat />;
       default:
-        return <ExplorePage />;
+        return <TrangKhamPha />;
     }
   };
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-canvas text-primary font-body select-none">
-      {/* 1. Thanh điều hướng dọc Full-Height Sidebar (260px) */}
-      <Sidebar />
+      {/* 1. Thanh điều hướng dọc Full-Height ThanhBen (260px) */}
+      <ThanhBen />
 
-      {/* 2. Cột nội dung bên phải: Header (Titlebar) + Vùng cuộn chính */}
+      {/* 2. Cột nội dung bên phải: Header (ThanhTieuDe) + Vùng cuộn chính */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        {/* Thanh tiêu đề Custom Titlebar Frameless */}
-        <Titlebar />
+        {/* Thanh tiêu đề Custom ThanhTieuDe Frameless */}
+        <ThanhTieuDe />
 
         {/* Vùng cuộn nội dung chính với Zero-Latency Crossfade & Micro-Elevation */}
         <main
@@ -55,16 +55,16 @@ export const AppLayout: React.FC = () => {
       </div>
 
       {/* 3. Modal tìm kiếm nhanh Ctrl+K (Toàn cục) */}
-      <SearchModal />
+      <HopThoaiTimKiem />
 
       {/* 4. Hộp thoại xác thực tài khoản trung tâm (Toàn cục) */}
-      <AuthModal />
+      <HopThoaiXacThuc />
 
       {/* 5. Hộp thoại xác nhận hành động toàn cục (Thay thế triệt để window.confirm) */}
-      <ConfirmDialog />
+      <HopThoaiXacNhan />
 
       {/* 6. Hệ thống thông báo nhanh toàn cục (Thay thế triệt để window.alert) */}
-      <ToastContainer />
+      <KhungThongBao />
     </div>
   );
 };
