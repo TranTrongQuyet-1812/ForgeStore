@@ -35,7 +35,11 @@ local.properties
 .DS_Store
 Thumbs.db
 .antigravity/
+.agents/
 scratchpad/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
 
 # Logs
 *.log
