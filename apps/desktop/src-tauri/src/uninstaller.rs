@@ -444,7 +444,7 @@ pub fn chay_go_cai_dat_registry(uninstall_string: &str) -> Result<bool, String> 
             unsafe {
                 // FE-V3-01: Đặt timeout tối đa 10 phút (600.000 ms), tránh khóa luồng vĩnh viễn nếu uninstaller bị treo
                 const TIMEOUT_MS: u32 = 10 * 60 * 1000;
-                const WAIT_TIMEOUT_VAL: u32 = 258; // WAIT_TIMEOUT Win32 code
+                const WAIT_TIMEOUT_VAL: u32 = 258; // Mã WAIT_TIMEOUT theo chuẩn Win32 API
 
                 let wait_res = WaitForSingleObject(h_process, TIMEOUT_MS);
                 if wait_res == WAIT_TIMEOUT_VAL {

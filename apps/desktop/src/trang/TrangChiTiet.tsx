@@ -198,7 +198,7 @@ export function tinhTrangThaiHieuLuc(params: {
     }
     return 'CHUA_CAI';
   } else {
-    // Tab EXE / MSI:
+    // Thẻ phân loại EXE / MSI:
     // FE-V3-03 & FE-EC-02: Tab EXE chỉ hiển thị tiến trình nếu tệp đang tải/cài KHÔNG phải là ZIP
     if (isProgress) {
       if (params.installedFileType === undefined || !isZipFile) {
@@ -240,7 +240,7 @@ export function laUrlTaiVeAnToan(url: string | null | undefined): boolean {
     if (parsed.username || parsed.password) return false;
 
     const hostname = parsed.hostname.toLowerCase();
-    // Trusted GitHub domains cho release downloads
+    // Danh sách miền GitHub tin cậy để tải bản phát hành
     return (
       hostname === 'github.com' ||
       hostname.endsWith('.github.com') ||
@@ -1034,7 +1034,7 @@ export const TrangChiTiet: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 p-6 md:p-8 max-w-7xl mx-auto w-full select-none">
-        {/* Breadcrumb Skeleton */}
+        {/* Khung xương tải đường dẫn điều hướng (Breadcrumb Skeleton) */}
         <div className="flex items-center gap-2">
           <div className="w-16 h-4 rounded skeleton-shimmer" />
           <div className="w-3 h-4 rounded skeleton-shimmer" />
@@ -1043,7 +1043,7 @@ export const TrangChiTiet: React.FC = () => {
           <div className="w-32 h-4 rounded skeleton-shimmer" />
         </div>
 
-        {/* Pro Split-View Skeleton */}
+        {/* Khung xương tải giao diện chia đôi (Split-View Skeleton) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-8 flex flex-col gap-6">
             <div className="tactile-card p-6 rounded-2xl flex items-start gap-5">

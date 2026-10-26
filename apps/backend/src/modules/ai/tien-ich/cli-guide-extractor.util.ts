@@ -255,7 +255,7 @@ export function kiemTraRuiRoCao(lenh: string): { ruiRoCao: boolean; lyDo?: strin
     };
   }
 
-  // 2. PowerShell Invoke-Expression / EncodedCommand / ExecutionPolicy Bypass (SEC-01, SEC-VULN-03 & SEC-R4-04)
+  // 2. Vượt rào thực thi PowerShell Invoke-Expression / EncodedCommand / ExecutionPolicy (SEC-01, SEC-VULN-03 & SEC-R4-04)
   if (
     /(iwr|irm)\b.*?\|\s*iex\b/i.test(l) ||
     /(?:iex|Invoke-Expression|[.&])\s*\(?\s*(?:iwr|irm|Invoke-WebRequest|.*?(?:DownloadString|WebClient))\b/i.test(

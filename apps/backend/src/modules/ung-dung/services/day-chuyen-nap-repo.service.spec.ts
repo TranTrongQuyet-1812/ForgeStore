@@ -128,7 +128,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
   describe('sangLocVaNapLauNho (P3B-06.2, 06.3 & 6 Chốt Chặn)', () => {
     it('Chốt chặn 6: bỏ qua nếu INGESTION_ENABLED = false và không forceRun', async () => {
-      mockConfig.get.mockReturnValueOnce(false); // INGESTION_ENABLED = false
+      mockConfig.get.mockReturnValueOnce(false); // Tắt tính năng nạp tự động (INGESTION_ENABLED = false)
 
       const res = await service.sangLocVaNapLauNho(30, false);
 
@@ -382,7 +382,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
   describe('dichNenTheoNganSachNgay (P3B-05.4 - Chốt chặn 3 & 4: Chống bão AI và đếm chuẩn ngân sách)', () => {
     it('bỏ qua dịch nền nếu INGESTION_ENABLED = false và không forceRun', async () => {
-      mockConfig.get.mockReturnValueOnce(false); // INGESTION_ENABLED = false
+      mockConfig.get.mockReturnValueOnce(false); // Tắt tính năng nạp tự động (INGESTION_ENABLED = false)
 
       const res = await service.dichNenTheoNganSachNgay(50, false);
 

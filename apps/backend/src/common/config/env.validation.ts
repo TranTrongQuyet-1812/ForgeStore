@@ -4,7 +4,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // PostgreSQL 17 + pgvector (Dokploy Self-Hosted)
+  // Cơ sở dữ liệu PostgreSQL 17 + pgvector (Dokploy tự lưu trữ)
   DATABASE_URL: z
     .string({ required_error: 'DATABASE_URL là bắt buộc (kết nối PostgreSQL 17)' })
     .min(1, 'DATABASE_URL không được để trống'),
@@ -25,7 +25,7 @@ export const envSchema = z.object({
 
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(30),
 
-  // GitHub Integration
+  // Tích hợp dịch vụ GitHub
   GITHUB_CLIENT_ID: z
     .string({ required_error: 'GITHUB_CLIENT_ID là bắt buộc' })
     .min(1, 'GITHUB_CLIENT_ID không được để trống'),
@@ -67,7 +67,7 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_CALLBACK_URL: z.string().optional(),
 
-  // App & Deep Link
+  // Ứng dụng & Liên kết sâu (Deep Link)
   APP_DEEP_LINK_SCHEME: z.string().default('forgestore'),
   DESKTOP_ORIGIN: z.string().default('tauri://localhost'),
   LANDING_ORIGIN: z.string().default('http://localhost:3000'),

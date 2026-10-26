@@ -5,7 +5,7 @@ import type { ThamSoCaiDat, TienDoTaiFrontend } from './kieu-cai-dat-ung-dung';
 
 describe('CaiDatUngDungService & useCaiDatUngDungStore (P3-08..P3-11)', () => {
   beforeEach(() => {
-    // Reset zustand store before each test
+    // Đặt lại kho trạng thái Zustand trước mỗi bài kiểm thử
     useCaiDatUngDungStore.setState({ caiDatMap: {} });
   });
 

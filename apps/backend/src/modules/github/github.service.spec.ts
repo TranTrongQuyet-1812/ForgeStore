@@ -104,7 +104,7 @@ describe('GithubService (P2-20)', () => {
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
-        status: 304, // NOT MODIFIED
+        status: 304, // Không thay đổi (NOT MODIFIED)
         headers: mockHeaders,
       } as unknown as Response);
 

@@ -4,7 +4,7 @@ import { CacheService } from '../../redis/cache.service';
 
 export interface TokenBucketState {
   tokens: number;
-  lastRefill: number; // Unix timestamp in ms
+  lastRefill: number; // Dấu thời gian Unix tính bằng mili-giây
 }
 
 export interface KetQuaCapToken {

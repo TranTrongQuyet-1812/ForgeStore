@@ -137,7 +137,7 @@ describe('XacThucService', () => {
   });
 
   describe('P2-10 & Điểm 1 & Điểm D: khoiTaoGithubAuth & Vá Open Redirect', () => {
-    const validChallenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'; // 43 chars S256 base64url
+    const validChallenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'; // 43 ký tự S256 chuẩn base64url
 
     it('khởi tạo luồng GitHub OAuth với deep link forgestore:// hợp lệ', async () => {
       const redirect = 'forgestore://auth/callback';
@@ -980,9 +980,9 @@ describe('XacThucService', () => {
       });
       vi.stubGlobal('fetch', mockFetch);
 
-      // findUnique by maDinhDanhGoogle returns null
+      // findUnique theo maDinhDanhGoogle trả về null
       mockPrisma.nguoiDung.findUnique.mockResolvedValue(null);
-      // findFirst by email returns existing GitHub user
+      // findFirst theo email trả về người dùng GitHub đã tồn tại
       const existingUser = {
         maNguoiDung: 'existing-user-uuid',
         maDinhDanhGithub: 'gh-123',

@@ -90,8 +90,8 @@ export interface UngDungTomTatDto {
   nenTangHoTro: NenTangHoTro | null;
   duocNoiBat: boolean;
   daXacMinh: boolean;
-  tenGoiAndroid?: string | null; // Package name Android (D-13)
-  khauHieuTiengViet?: string | null; // Slogan Gemini
+  tenGoiAndroid?: string | null; // Tên gói ứng dụng Android (Package Name - D-13)
+  khauHieuTiengViet?: string | null; // Khẩu hiệu tiếng Việt do Gemini tóm tắt
   diemUyTin?: number | null; // 0 - 100
   mucDoAnToan?: MucDoUyTin | null;
   phienBanMoiNhat?: string | null;

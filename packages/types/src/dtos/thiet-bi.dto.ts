@@ -7,7 +7,7 @@ import type { UngDungTomTatDto, BanPhatHanhDto } from './ung-dung.dto.js';
 export interface ThietBiDto {
   maThietBi: string;
   maNguoiDung: string;
-  dinhDanhPhanCung: string; // Hardware Fingerprint (Hardware UUID / Android ID)
+  dinhDanhPhanCung: string; // Mã vân tay phần cứng (Hardware UUID / Android ID)
   tenThietBi: string;
   loaiThietBi: LoaiThietBi;
   ngayDangKy: string | Date;

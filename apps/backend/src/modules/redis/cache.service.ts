@@ -5,7 +5,7 @@ import { REDIS_CLIENT } from './redis.constants';
 
 interface MemoryCacheEntry {
   data: string;
-  expiresAt: number; // Unix timestamp in ms
+  expiresAt: number; // Dấu thời gian Unix tính bằng mili-giây
 }
 
 @Injectable()
@@ -56,7 +56,7 @@ export class CacheService {
       );
     }
 
-    // In-memory fallback
+    // Dự phòng trên bộ nhớ tạm (In-memory fallback)
     const memEntry = this.memoryFallback.get(key);
     if (memEntry) {
       if (memEntry.expiresAt > Date.now()) {

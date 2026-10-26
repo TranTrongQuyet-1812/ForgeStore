@@ -84,7 +84,7 @@ describe('XacThucService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exch
     // 1. Giả lập đã có verifier được lưu từ bước login
     pkce.saveVerifier('mock-saved-pkce-verifier-123', sessionId);
 
-    // 2. Mock fetch cho endpoint /auth/exchange
+    // 2. Giả lập lệnh gọi fetch cho điểm cuối /auth/exchange
     const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes('/auth/exchange')) {
         const body = JSON.parse(init?.body as string);

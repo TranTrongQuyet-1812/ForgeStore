@@ -47,7 +47,7 @@ export const thietBiService = {
       }
     }
 
-    // Web Dev Fallback
+    // Dự phòng cho môi trường phát triển Web (Web Dev Fallback)
     return {
       dinhDanhPhanCung: DEV_FALLBACK_DEVICE_ID,
       tenThietBi: 'ForgeStore Windows Dev PC',

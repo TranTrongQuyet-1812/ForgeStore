@@ -55,7 +55,7 @@ export class CaiDatUngDungService {
         return false;
       }
     } else {
-      // Mock Web dev cancellation
+      // Giả lập hủy tiến trình trên môi trường Web dev
       return true;
     }
   }
@@ -343,7 +343,7 @@ export class CaiDatUngDungService {
       }
       return res;
     }
-    // Web dev preview fallback
+    // Dự phòng khi xem trước trên môi trường Web dev
     return true;
   }
 
@@ -362,7 +362,7 @@ export class CaiDatUngDungService {
       });
       return true;
     }
-    // Web dev preview fallback
+    // Dự phòng khi xem trước trên môi trường Web dev
     return true;
   }
 }

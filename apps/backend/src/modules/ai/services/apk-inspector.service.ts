@@ -261,7 +261,7 @@ export class ApkInspectorService {
 
       while (cdCursor + 46 <= cdBuf.length) {
         const sig = cdBuf.readUInt32LE(cdCursor);
-        if (sig !== 0x02014b50) break; // End of entries
+        if (sig !== 0x02014b50) break; // Kết thúc danh sách mục
 
         const compressionMethod = cdBuf.readUInt16LE(cdCursor + 10);
         const compressedSize = cdBuf.readUInt32LE(cdCursor + 20);
@@ -309,7 +309,7 @@ export class ApkInspectorService {
         };
       }
 
-      const manifestFetchSize = 30 + 1024 + manifestEntry.compressedSize; // 30 bytes header + buffer extra field
+      const manifestFetchSize = 30 + 1024 + manifestEntry.compressedSize; // Tiêu đề 30 byte + trường mở rộng bộ đệm
       // SEC-R7-02: Bổ sung redirect: 'manual' chặn Blind SSRF chaining
       const manifestRes = await fetch(finalUrl, {
         headers: {

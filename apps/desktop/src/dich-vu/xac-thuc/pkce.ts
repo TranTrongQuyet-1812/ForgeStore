@@ -75,7 +75,7 @@ function saveMap(map: Map<string, StoredVerifier>): void {
         window.sessionStorage.removeItem(PKCE_LEGACY_STORAGE_KEY);
       }
     } catch {
-      // Fallback in-memory
+      // Dự phòng lưu trữ trên bộ nhớ tạm (In-memory fallback)
     }
   }
 }
@@ -119,7 +119,7 @@ export const pkce = {
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const base64 = btoa(String.fromCharCode(...hashArray));
-    // Base64URL
+    // Mã hóa chuẩn Base64URL
     return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   },
 

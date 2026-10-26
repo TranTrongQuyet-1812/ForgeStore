@@ -554,7 +554,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.kichThuocTrang).toBe(50);
       expect(mockPrisma.ungDung.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          take: 50, // Capped at 50 per P2-23.1
+          take: 50, // Giới hạn tối đa 50 bản ghi theo P2-23.1
         }),
       );
     });
@@ -1035,7 +1035,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         maPhanTich: 'new-analysis-uuid',
       });
 
-      // 10 request song song
+      // 10 yêu cầu đồng thời (song song)
       await Promise.all(
         Array.from({ length: 10 }).map(() => service.phanTichUngDung('app-uuid-rustdesk')),
       );
@@ -1396,7 +1396,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         },
       });
 
-      // Mock Lazy AI
+      // Giả lập xử lý AI tải chậm (Lazy AI)
       vi.spyOn(service, 'phanTichUngDung').mockResolvedValueOnce(undefined as unknown as never);
 
       const res = await service.kiemDinhVaNapRepo({

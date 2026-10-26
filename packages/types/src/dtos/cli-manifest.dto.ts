@@ -95,7 +95,7 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     mauLenhCai: 'pip install {tenGoi}',
     mauLenhCapNhat: 'pip install --upgrade {tenGoi}',
     mauLenhGo: 'pip uninstall -y {tenGoi}',
-    // Python PEP 508 package name (VD: open-webui, yt-dlp, black, torch)
+    // Tên gói Python theo chuẩn PEP 508 (VD: open-webui, yt-dlp, black, torch)
     regexTenGoi: '^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$',
     regexPhienBan: '^[0-9]+(?:\\.[0-9a-zA-Z._-]+)*$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
@@ -107,7 +107,7 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     mauLenhCai: 'docker run -d --name {tenContainer} {tenGoi}',
     mauLenhCapNhat: 'docker pull {tenGoi}',
     mauLenhGo: 'docker rm -f {tenContainer}',
-    // Docker Image Tag (VD: ghcr.io/open-webui/open-webui:main, nginx:latest, postgres:16-alpine)
+    // Thẻ định danh ảnh Docker (Docker Image Tag - VD: ghcr.io/open-webui/open-webui:main, nginx:latest, postgres:16-alpine)
     regexTenGoi:
       '^(?:(?:[a-zA-Z0-9][a-zA-Z0-9_.-]*(?:\\:[0-9]+)?\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)?$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,

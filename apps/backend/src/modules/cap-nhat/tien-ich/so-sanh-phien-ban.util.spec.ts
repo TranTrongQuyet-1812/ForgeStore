@@ -181,7 +181,7 @@ describe('VersionComparatorUtil (P2-52 & P3B-17)', () => {
         description: 'bản universal và bản thường tương đương nhau',
       },
 
-      // 6. Build Metadata
+      // 6. Siêu dữ liệu bản dựng (Build Metadata)
       {
         current: '1.0.0+20240101',
         target: '1.0.0+20240201',

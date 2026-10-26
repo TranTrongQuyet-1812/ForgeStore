@@ -32,7 +32,7 @@ import { AppController } from './app.controller';
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 60 giây
-        limit: 100, // 100 requests per minute
+        limit: 100, // Giới hạn 100 yêu cầu mỗi phút
       },
     ]),
     PrismaModule,

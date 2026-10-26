@@ -160,13 +160,13 @@ describe('ApkInspectorService (P2-35: HTTP Range Request APK Inspector)', () => 
     const tailBuf = Buffer.alloc(tailSize);
 
     const eocdOffset = tailSize - 22;
-    tailBuf.writeUInt32LE(0x06054b50, eocdOffset); // EOCD signature
+    tailBuf.writeUInt32LE(0x06054b50, eocdOffset); // Chữ ký kết thúc thư mục trung tâm (EOCD signature)
     tailBuf.writeUInt32LE(500, eocdOffset + 12); // cdSize = 500
     const cdOffset = totalSize - 5000;
     tailBuf.writeUInt32LE(cdOffset, eocdOffset + 16); // cdOffset trong tail
 
     const cdStartInTail = cdOffset - tailStart;
-    tailBuf.writeUInt32LE(0x02014b50, cdStartInTail); // CD entry signature
+    tailBuf.writeUInt32LE(0x02014b50, cdStartInTail); // Chữ ký mục thư mục trung tâm (CD entry signature)
     tailBuf.writeUInt16LE(8, cdStartInTail + 10); // compressionMethod = 8
     tailBuf.writeUInt32LE(10 * 1024 * 1024, cdStartInTail + 20); // compressedSize = 10MB (> 512KB)
     const fileName = 'AndroidManifest.xml';

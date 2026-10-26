@@ -200,10 +200,10 @@ export const ThanhTieuDe: React.FC = () => {
               />
             </button>
 
-            {/* User Profile Dropdown Menu (Raycast / Linear / macOS Account Menu) */}
+            {/* Menu thả xuống thông tin người dùng (Phong cách Raycast / Linear / macOS Account Menu) */}
             {isUserMenuOpen && (
               <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-surface-elevated border border-border shadow-[0_16px_40px_rgba(0,0,0,0.35)] z-50 animate-fade-in select-none overflow-hidden backdrop-blur-xl">
-                {/* 1. Header Profile Info */}
+                {/* 1. Thông tin hồ sơ ở phần đầu */}
                 <div className="px-3.5 py-3 border-b border-border/60">
                   <div className="flex items-center gap-3">
                     {user.duongDanAvatar && !avatarError ? (
@@ -231,7 +231,7 @@ export const ThanhTieuDe: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. Quick Navigation Shortcuts */}
+                {/* 2. Phím tắt điều hướng nhanh */}
                 <div className="p-1.5 space-y-0.5">
                   <button
                     onClick={() => {
@@ -256,7 +256,7 @@ export const ThanhTieuDe: React.FC = () => {
                   </button>
                 </div>
 
-                {/* 3. Action Logout */}
+                {/* 3. Thao tác đăng xuất */}
                 <div className="p-1.5 pt-0 border-t border-border/60">
                   <button
                     onClick={async () => {

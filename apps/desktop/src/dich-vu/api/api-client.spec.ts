@@ -82,7 +82,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       const authHeader = getHeader(init?.headers, 'Authorization');
 
-      // 1. Endpoint refresh token
+      // 1. Điểm cuối làm mới mã xác thực (refresh token)
       if (url.includes('/auth/refresh')) {
         refreshCount++;
         return {

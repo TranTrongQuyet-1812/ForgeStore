@@ -453,7 +453,7 @@ export const BO_DU_LIEU_RELEASE: ReleaseTestCase[] = [
     id: 'R22',
     repo: 'secret-chat/chat-secure',
     files: [
-      { tenTep: 'build-variant-modern-phone.apk', dinhDang: 'APK' }, // modern phone = arm64
+      { tenTep: 'build-variant-modern-phone.apk', dinhDang: 'APK' }, // điện thoại hiện đại = arm64
       { tenTep: 'build-variant-legacy.apk', dinhDang: 'APK' },
     ],
     groundTruth: {
@@ -487,7 +487,7 @@ export const BO_DU_LIEU_RELEASE: ReleaseTestCase[] = [
     id: 'R25',
     repo: 'editor-labs/mark-write',
     files: [
-      { tenTep: 'output-aarch64.apk', dinhDang: 'APK' }, // aarch64 = arm64
+      { tenTep: 'output-aarch64.apk', dinhDang: 'APK' }, // kiến trúc aarch64 tương đương arm64
       { tenTep: 'output-amd64.apk', dinhDang: 'APK' }, // amd64 = x86_64
       { tenTep: 'MarkWrite-x64.msi', dinhDang: 'MSI' },
     ],

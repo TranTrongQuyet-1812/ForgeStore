@@ -3,7 +3,7 @@ import { useCaiDatStore } from './useCaiDatStore';
 
 describe('P3B-18 & D-27: useCaiDatStore - Terminal & Portable Settings', () => {
   beforeEach(() => {
-    // Reset state before each test
+    // Đặt lại trạng thái trước mỗi bài kiểm thử
     useCaiDatStore.setState({
       thuMucPortable: '',
       trinhTerminal: 'windows-terminal',

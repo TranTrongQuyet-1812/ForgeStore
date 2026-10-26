@@ -56,7 +56,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         isProduction ? undefined : exception.stack,
       );
       if (!isProduction) {
-        // Sanitize credentials out of error message (e.g. database connection strings)
+        // Loại bỏ thông tin xác thực nhạy cảm khỏi thông báo lỗi (ví dụ: chuỗi kết nối cơ sở dữ liệu)
         chiTiet = exception.message.replace(/:\/\/[^:]+:[^@]+@/g, '://***:***@');
       }
     } else {

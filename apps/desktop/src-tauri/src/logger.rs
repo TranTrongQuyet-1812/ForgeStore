@@ -123,7 +123,7 @@ pub fn lam_sach_thong_diep_log(thong_diep: &str) -> String {
 
             if end_rel > 0 {
                 cleaned.replace_range(abs_start..abs_start + end_rel, "[REDACTED]");
-                cur_search = abs_start + 10; // 10 == "[REDACTED]".len()
+                cur_search = abs_start + 10; // 10 tương đương độ dài của chuỗi "[REDACTED]"
             } else {
                 cur_search = abs_start;
             }

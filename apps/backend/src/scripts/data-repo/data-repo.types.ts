@@ -5,7 +5,7 @@
 
 /** 01_da_cao: dữ liệu thô lấy từ GitHub, CHƯA đụng DB. */
 export interface BanGhiDaCao {
-  repo: string; // owner/repo
+  repo: string; // Định dạng chủ_sở_hữu/tên_kho (owner/repo)
   lo: string;
   caoLuc: string; // ISO
   sao: number;

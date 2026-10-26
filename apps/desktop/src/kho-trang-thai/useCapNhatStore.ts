@@ -6,7 +6,7 @@ import { soSanhPhienBan, type CheckUpdatesItemDto } from '@forgestore/types';
 interface UpdaterState {
   soLuongBanCapNhat: number;
   danhSachCapNhat: CheckUpdatesItemDto[];
-  danhSachBoQuaVersion: Record<string, string>; // { [maUngDung]: ignoredVersion }
+  danhSachBoQuaVersion: Record<string, string>; // Bản đồ ánh xạ { [maUngDung]: phienBanBoQua }
   dangKiemTra: boolean;
   thoiGianKiemTraCuoi: number | null;
 

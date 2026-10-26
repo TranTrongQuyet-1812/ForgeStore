@@ -21,8 +21,8 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
 
   it('Giải mã chính xác cấu trúc AXML chứa package và permissions', () => {
     // Xây dựng buffer AXML tối giản hợp lệ:
-    // Header (8 bytes): type 0x00080003, size
-    // StringPool chunk (type 0x0001)
+    // Tiêu đề (8 byte): loại 0x00080003, kích thước
+    // Khối StringPool (loại 0x0001)
     // Start Element manifest (type 0x0102) với attr package
     // Start Element uses-permission với attr name
 
@@ -56,11 +56,11 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     const poolHeaderSize = 28 + strings.length * 4;
     const poolChunkSize = poolHeaderSize + allStrData.length;
     const poolBuf = Buffer.alloc(poolHeaderSize);
-    poolBuf.writeUInt16LE(0x0001, 0); // RES_STRING_POOL_TYPE
-    poolBuf.writeUInt16LE(0x001c, 2); // header size
+    poolBuf.writeUInt16LE(0x0001, 0); // Loại khối RES_STRING_POOL_TYPE
+    poolBuf.writeUInt16LE(0x001c, 2); // kích thước phần đầu
     poolBuf.writeUInt32LE(poolChunkSize, 4);
-    poolBuf.writeUInt32LE(strings.length, 8); // string count
-    poolBuf.writeUInt32LE(0, 12); // style count
+    poolBuf.writeUInt32LE(strings.length, 8); // số lượng chuỗi
+    poolBuf.writeUInt32LE(0, 12); // số lượng kiểu dáng (style)
     poolBuf.writeUInt32LE(0, 16); // flags (UTF-16LE)
     poolBuf.writeUInt32LE(poolHeaderSize, 20); // stringsStart
 
@@ -70,7 +70,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     const fullPoolChunk = Buffer.concat([poolBuf, allStrData]);
 
     // Tạo Element 1: manifest (package="org.forgestore.testapp")
-    // chunk type 0x0102, headerSize 16, attrStart 20, attrSize 20, attrCount 1
+    // loại khối 0x0102, kích thước tiêu đề 16, bắt đầu thuộc tính 20, kích thước thuộc tính 20, số lượng thuộc tính 1
     const elemManifest = Buffer.alloc(36 + 20);
     elemManifest.writeUInt16LE(0x0102, 0);
     elemManifest.writeUInt16LE(16, 2);
@@ -80,7 +80,7 @@ describe('axml-parser.util (Android Binary XML Parser - P2-35.4)', () => {
     elemManifest.writeUInt16LE(20, 26); // attrSize
     elemManifest.writeUInt16LE(1, 28); // attrCount: 1
 
-    // Attr package="org.forgestore.testapp"
+    // Thuộc tính package="org.forgestore.testapp"
     elemManifest.writeUInt32LE(1, 36 + 4); // attrNameIdx: 1 ('package')
     elemManifest.writeUInt32LE(2, 36 + 8); // attrRawValueIdx: 2 ('org.forgestore.testapp')
 

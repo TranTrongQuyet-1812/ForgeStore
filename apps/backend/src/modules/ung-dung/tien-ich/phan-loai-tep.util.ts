@@ -214,7 +214,7 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
   ) {
     kienTruc = KienTrucChip.X86;
   }
-  // E. Universal / All / Noarch
+  // E. Kiến trúc dùng chung (Universal / All / Noarch)
   else if (
     /(?:^|[-_.])(universal|all|noarch)(?:[-_.]|$)/i.test(lowerName) ||
     lowerName.includes('universal')

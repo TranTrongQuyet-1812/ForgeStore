@@ -42,10 +42,10 @@ export function parseAxml(buffer: Buffer): KetQuaAxml {
     }
 
     if (chunkType === 0x0001) {
-      // STRING POOL CHUNK
+      // Khối danh sách chuỗi (STRING POOL CHUNK)
       docStringPool(buffer, offset, stringPool);
     } else if (chunkType === 0x0102) {
-      // START_TAG CHUNK (XML_ELEMENT)
+      // Khối thẻ mở START_TAG (XML_ELEMENT)
       docStartElement(buffer, offset, stringPool, result);
     }
 
@@ -75,7 +75,7 @@ function docStringPool(buffer: Buffer, offset: number, stringPool: string[]): vo
     }
 
     if (isUtf8) {
-      // UTF-8 string: 1 byte len, followed by bytes, followed by null byte
+      // Chuỗi UTF-8: 1 byte độ dài, theo sau là các byte dữ liệu và byte null
       let cur = strOffset;
       const b0 = buffer[cur] ?? 0;
       if (b0 & 0x80) cur += 2;
@@ -88,7 +88,7 @@ function docStringPool(buffer: Buffer, offset: number, stringPool: string[]): vo
       const strBytes = buffer.subarray(cur, cur + len);
       stringPool.push(strBytes.toString('utf8'));
     } else {
-      // UTF-16LE string: 2 bytes len, followed by 2-byte chars, terminated by 0x0000
+      // Chuỗi UTF-16LE: 2 byte độ dài, theo sau là các ký tự 2 byte, kết thúc bởi 0x0000
       let cur = strOffset;
       const charCount = buffer.readUInt16LE(cur);
       cur += 2;
@@ -129,7 +129,7 @@ function docStartElement(
       const dataType = buffer.readUInt8(attrOffset + 15);
       const data = buffer.readUInt32LE(attrOffset + 16);
       if (dataType === 0x03) {
-        // TYPE_STRING
+        // Kiểu dữ liệu chuỗi (TYPE_STRING)
         attrVal = stringPool[data] || '';
       }
     }

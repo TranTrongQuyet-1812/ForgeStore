@@ -25,9 +25,9 @@ export const NenTangHoTro = {
 export type NenTangHoTro = (typeof NenTangHoTro)[keyof typeof NenTangHoTro];
 
 export const MucDoUyTin = {
-  AN_TOAN_CAO: 'AN_TOAN_CAO', // Trust score 80 - 100
-  CAN_LUU_Y: 'CAN_LUU_Y', // Trust score 60 - 79
-  CANH_BAO_RUI_RO: 'CANH_BAO_RUI_RO', // Trust score < 60
+  AN_TOAN_CAO: 'AN_TOAN_CAO', // Điểm uy tín từ 80 đến 100
+  CAN_LUU_Y: 'CAN_LUU_Y', // Điểm uy tín từ 60 đến 79
+  CANH_BAO_RUI_RO: 'CANH_BAO_RUI_RO', // Điểm uy tín dưới 60
 } as const;
 export type MucDoUyTin = (typeof MucDoUyTin)[keyof typeof MucDoUyTin];
 
@@ -44,7 +44,7 @@ export const KienTrucChip = {
   ARM64_V8A: 'ARM64_V8A', // Android 64-bit hiện đại (Pixel, Galaxy, Xiaomi...)
   ARMEABI_V7A: 'ARMEABI_V7A', // Android 32-bit đời cũ
   X86_64: 'X86_64', // Windows PC 64-bit hoặc Android Emulator
-  X86: 'X86', // Windows PC 32-bit
+  X86: 'X86', // Máy tính Windows 32-bit
   DUNG_CHUNG: 'DUNG_CHUNG', // Universal APK chạy trên mọi kiến trúc
   KHONG_XAC_DINH: 'KHONG_XAC_DINH',
 } as const;
