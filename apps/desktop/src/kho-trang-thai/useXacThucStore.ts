@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // 2. Tự động đổi accessToken mới
-      const refreshRes = await apiClient.post<AuthRefreshResponseDto>('/xac-thuc/refresh', {
+      const refreshRes = await apiClient.post<AuthRefreshResponseDto>('/auth/refresh', {
         refreshToken,
       });
 

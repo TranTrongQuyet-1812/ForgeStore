@@ -36,7 +36,7 @@ describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchang
       expect(openMock).toHaveBeenCalledTimes(1);
       const calledUrl = openMock.mock.calls[0][0] as string;
 
-      expect(calledUrl).toContain('/xac-thuc/github');
+      expect(calledUrl).toContain('/auth/github');
       // Redirect URI chứa DEEP_LINK_SCHEME và tham số session ?a=
       expect(calledUrl).toContain(encodeURIComponent(`${DEEP_LINK_SCHEME}?a=`));
       expect(calledUrl).toContain('challenge=');
@@ -53,7 +53,7 @@ describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchang
     }
   });
 
-  it('loginWithGoogle sinh mã PKCE và mở trình duyệt với URL /xac-thuc/google kèm sessionId', async () => {
+  it('loginWithGoogle sinh mã PKCE và mở trình duyệt với URL /auth/google kèm sessionId', async () => {
     const openMock = vi.fn();
     const originalWindow = (global as unknown as { window?: unknown }).window;
     (global as unknown as { window: { open: typeof openMock } }).window = { open: openMock };
@@ -64,7 +64,7 @@ describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchang
       expect(openMock).toHaveBeenCalledTimes(1);
       const calledUrl = openMock.mock.calls[0][0] as string;
 
-      expect(calledUrl).toContain('/xac-thuc/google');
+      expect(calledUrl).toContain('/auth/google');
       expect(calledUrl).toContain(encodeURIComponent(`${DEEP_LINK_SCHEME}?a=`));
       expect(calledUrl).toContain('challenge=');
 
@@ -84,9 +84,9 @@ describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchang
     // 1. Giả lập đã có verifier được lưu từ bước login
     pkce.saveVerifier('mock-saved-pkce-verifier-123', sessionId);
 
-    // 2. Mock fetch cho endpoint /xac-thuc/exchange
+    // 2. Mock fetch cho endpoint /auth/exchange
     const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.includes('/xac-thuc/exchange')) {
+      if (url.includes('/auth/exchange')) {
         const body = JSON.parse(init?.body as string);
         expect(body.code).toBe('oauth-exchange-code-999');
         expect(body.verifier).toBe('mock-saved-pkce-verifier-123');
@@ -159,7 +159,7 @@ describe('AuthService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exchang
 
       // 4. Mock fetch cho exchange của Tab B
       const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-        if (url.includes('/xac-thuc/exchange')) {
+        if (url.includes('/auth/exchange')) {
           const body = JSON.parse(init?.body as string);
           expect(body.code).toBe('code-for-tab-b');
           return {

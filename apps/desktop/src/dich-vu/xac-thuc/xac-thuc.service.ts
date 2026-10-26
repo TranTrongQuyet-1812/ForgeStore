@@ -8,7 +8,7 @@
  * 3. Mở trình duyệt mặc định hệ thống qua plugin opener.
  * 4. Lắng nghe Deep Link URL `forgestore://auth?a=...&code=...` qua plugin deep-link.
  * 5. Bỏ qua các deep link hủy từ tab cũ (`sessionId !== currentSessionId`) để không gây gián đoạn phiên đang chờ.
- * 6. Đổi mã 1 lần lấy cặp JWT Tokens qua `POST /xac-thuc/exchange` kèm thông tin thiết bị (SHA-256 MachineGuid).
+ * 6. Đổi mã 1 lần lấy cặp JWT Tokens qua `POST /auth/exchange` kèm thông tin thiết bị (SHA-256 MachineGuid).
  * 7. Cập nhật state đăng nhập vào Zustand useAuthStore và Windows Credential Manager.
  */
 
@@ -107,14 +107,14 @@ export class AuthService {
    * Bắt đầu đăng nhập GitHub với PKCE
    */
   public async loginWithGithub(): Promise<void> {
-    await this.startOAuthFlow('/xac-thuc/github');
+    await this.startOAuthFlow('/auth/github');
   }
 
   /**
    * Bắt đầu đăng nhập Google với PKCE (P3B-15)
    */
   public async loginWithGoogle(): Promise<void> {
-    await this.startOAuthFlow('/xac-thuc/google');
+    await this.startOAuthFlow('/auth/google');
   }
 
   /**
@@ -213,7 +213,7 @@ export class AuthService {
       const thietBi = await deviceService.getDeviceInfo();
 
       // Gửi yêu cầu đổi mã 1 lần lấy cặp JWT tokens (Zero-Token-on-URL)
-      const authRes = await apiClient.post<AuthResponseDto>('/xac-thuc/exchange', {
+      const authRes = await apiClient.post<AuthResponseDto>('/auth/exchange', {
         code,
         verifier,
         thietBi,
@@ -237,7 +237,7 @@ export class AuthService {
   public async logout(): Promise<void> {
     try {
       if (useAuthStore.getState().isAuthenticated) {
-        await apiClient.post('/xac-thuc/logout').catch(() => {});
+        await apiClient.post('/auth/logout').catch(() => {});
       }
     } finally {
       this.currentSessionId = null;

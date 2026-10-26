@@ -34,7 +34,7 @@ describe('useAuthStore (P3-03.4)', () => {
     await tokenStorage.setRefreshToken('stored-refresh-token');
 
     const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('/xac-thuc/refresh')) {
+      if (url.includes('/auth/refresh')) {
         return {
           ok: true,
           status: 200,
