@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { kiemTraAppDaCaiHelper, layTrangThaiCaiDatHelper } from './useDeviceInstalledApps';
 import type { UngDungDaCaiDto } from '@forgestore/types';
-import type { ThongTinCaiDatApp } from '../stores/useInstallStore';
+import type { ThongTinCaiDatApp } from '../kho-trang-thai/useInstallStore';
 
 describe('useDeviceInstalledApps (L-02: Đồng bộ trạng thái đã cài đặt trên thiết bị)', () => {
   // Dữ liệu thật từ báo cáo test tay máy Windows 11 (TRANQUYET)

@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { UserSessionContext } from '../../modules/auth/interfaces/jwt-payload.interface';
+import { UserSessionContext } from '../../modules/xac-thuc/interfaces/jwt-payload.interface';
 
 /**
  * Trích xuất thông tin người dùng và phiên hiện tại từ req.user sau khi JwtAuthGuard xác thực thành công.

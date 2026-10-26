@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BO_DU_LIEU_QUYEN, BO_DU_LIEU_RELEASE, PermissionTestCase } from './jev-dataset.data';
-import { phanLoaiTep } from '../../apps/utils/file-classifier.util';
+import { phanLoaiTep } from '../../ung-dung/utils/file-classifier.util';
 import { KienTrucChip, DinhDangTep } from '@prisma/client';
 
 export interface KetQuaBenchmarkChonFile {

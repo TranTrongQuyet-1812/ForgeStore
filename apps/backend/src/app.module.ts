@@ -7,18 +7,18 @@ import { validateEnv } from './common/config/env.validation';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
-import { HealthModule } from './modules/health/health.module';
+import { HealthModule } from './modules/suc-khoe/suc-khoe.module';
 import { ScheduleModule } from '@nestjs/schedule';
-import { DevicesModule } from './modules/devices/devices.module';
-import { AuthModule } from './modules/auth/auth.module';
+import { DevicesModule } from './modules/thiet-bi/thiet-bi.module';
+import { AuthModule } from './modules/xac-thuc/xac-thuc.module';
 import { GithubModule } from './modules/github/github.module';
-import { AppsModule } from './modules/apps/apps.module';
+import { AppsModule } from './modules/ung-dung/ung-dung.module';
 import { AiModule } from './modules/ai/ai.module';
-import { FavoritesModule } from './modules/favorites/favorites.module';
-import { UpdaterModule } from './modules/updater/updater.module';
-import { ReviewsModule } from './modules/reviews/reviews.module';
-import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
-import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { FavoritesModule } from './modules/yeu-thich/yeu-thich.module';
+import { UpdaterModule } from './modules/cap-nhat/cap-nhat.module';
+import { ReviewsModule } from './modules/danh-gia/danh-gia.module';
+import { JwtAuthGuard } from './modules/xac-thuc/guards/jwt-auth.guard';
+import { RolesGuard } from './modules/xac-thuc/guards/roles.guard';
 import { AppController } from './app.controller';
 
 @Module({

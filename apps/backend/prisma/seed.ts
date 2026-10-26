@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { AppsService } from '../src/modules/apps/apps.service';
+import { AppsService } from '../src/modules/ung-dung/ung-dung.service';
 import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**

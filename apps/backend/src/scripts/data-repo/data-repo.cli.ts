@@ -310,7 +310,7 @@ async function lenhDay(): Promise<void> {
 
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
-    const { AppsService } = await import('../../modules/apps/apps.service');
+    const { AppsService } = await import('../../modules/ung-dung/ung-dung.service');
     const { CacheService } = await import('../../modules/redis/cache.service');
     const { tinhMaBamMoTa } = await import('./data-repo.core');
     const prisma = app.get(PrismaService);
@@ -539,8 +539,8 @@ async function lenhKhamPha(): Promise<void> {
   const token = process.env.GITHUB_TOKEN || '';
   if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
   const { locCucBo, danhGiaRelease, NGUONG_LOC_MAC_DINH, coLenhCaiTuReadme } =
-    await import('../../modules/apps/utils/ingestion-filters.util');
-  type RepoUV = import('../../modules/apps/utils/ingestion-filters.util').RepoUngVien;
+    await import('../../modules/ung-dung/utils/ingestion-filters.util');
+  type RepoUV = import('../../modules/ung-dung/utils/ingestion-filters.util').RepoUngVien;
 
   const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
   const fileDs = path.join(thuMucDs, `${lo}.txt`);
@@ -712,7 +712,7 @@ async function lenhQuetLaiCli(): Promise<void> {
   const token = process.env.GITHUB_TOKEN || '';
   if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
   const duTruCore = Number(layThamSo('du-tru') ?? '1000');
-  const { coLenhCaiTuReadme } = await import('../../modules/apps/utils/ingestion-filters.util');
+  const { coLenhCaiTuReadme } = await import('../../modules/ung-dung/utils/ingestion-filters.util');
   const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
   const ungVien = docJsonl<{ repo: string; sao?: number; lyDo: string }>(
     path.join(thuMucDs, `${nguon}.boqua.jsonl`),
@@ -832,7 +832,7 @@ async function lenhPhanTich(): Promise<void> {
   if (!repo) throw new Error('Thiếu --repo owner/repo');
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
-    const { AppsService } = await import('../../modules/apps/apps.service');
+    const { AppsService } = await import('../../modules/ung-dung/ung-dung.service');
     const prisma = app.get(PrismaService);
     const apps = app.get(AppsService);
     const ud = await prisma.ungDung.findFirst({
