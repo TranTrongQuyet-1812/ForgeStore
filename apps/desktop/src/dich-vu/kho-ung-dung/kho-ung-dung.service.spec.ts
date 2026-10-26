@@ -39,7 +39,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     });
 
     expect(apiClient.get).toHaveBeenCalledWith(
-      '/apps?platform=windows&category=Ti%E1%BB%87n+%C3%ADch+h%E1%BB%87+th%E1%BB%91ng&sort=trending&page=2&limit=15&featured=true',
+      '/ung-dung?platform=windows&category=Ti%E1%BB%87n+%C3%ADch+h%E1%BB%87+th%E1%BB%91ng&sort=trending&page=2&limit=15&featured=true',
     );
     expect(result).toEqual(mockResult);
   });
@@ -52,7 +52,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
       sort: 'stars',
     });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=stars');
+    expect(apiClient.get).toHaveBeenCalledWith('/ung-dung?platform=windows&sort=stars');
   });
 
   it('layDanhSachUngDung đính kèm window khi có tham số window', async () => {
@@ -63,7 +63,9 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
       window: 'week',
     });
 
-    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&sort=trending&window=week');
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/ung-dung?platform=windows&sort=trending&window=week',
+    );
   });
 
   it('layUngDungNoiBat gọi endpoint với featured=true và limit=10', async () => {
@@ -92,7 +94,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     });
 
     const items = await service.layUngDungNoiBat();
-    expect(apiClient.get).toHaveBeenCalledWith('/apps?platform=windows&limit=10&featured=true');
+    expect(apiClient.get).toHaveBeenCalledWith('/ung-dung?platform=windows&limit=10&featured=true');
     expect(items).toHaveLength(1);
     expect(items[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
   });
@@ -102,14 +104,14 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockDetail);
 
     const result = await service.layChiTietApp('uuid-123');
-    expect(apiClient.get).toHaveBeenCalledWith('/apps/uuid-123?platform=windows&arch=x86_64');
+    expect(apiClient.get).toHaveBeenCalledWith('/ung-dung/uuid-123?platform=windows&arch=x86_64');
     expect(result).toEqual(mockDetail);
 
     // Kiểm tra gọi qua slug owner/repo
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockDetail);
     await service.layChiTietApp('rustdesk/rustdesk');
     expect(apiClient.get).toHaveBeenCalledWith(
-      '/apps/rustdesk/rustdesk?platform=windows&arch=x86_64',
+      '/ung-dung/rustdesk/rustdesk?platform=windows&arch=x86_64',
     );
   });
 
@@ -363,7 +365,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(card.giayPhep).toBeUndefined();
   });
 
-  it('timKiem gọi đúng endpoint /search kèm tham số query và platform', async () => {
+  it('timKiem gọi đúng endpoint /tim-kiem kèm tham số query và platform', async () => {
     const mockSearchRes = {
       duLieu: [],
       tongSo: 0,
@@ -376,7 +378,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockSearchRes);
 
     const result = await service.timKiem('rustdesk', 'WINDOWS');
-    expect(apiClient.get).toHaveBeenCalledWith('/search?q=rustdesk&platform=WINDOWS');
+    expect(apiClient.get).toHaveBeenCalledWith('/tim-kiem?q=rustdesk&platform=WINDOWS');
     expect(result.loaiTruyVan).toBe('TEN_APP');
   });
 
@@ -403,7 +405,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(result.duongDanUrl?.daCoTrongStore).toBe(true);
   });
 
-  it('kiemDinhRepo gọi POST /repos/inspect với method POST và payload chuẩn', async () => {
+  it('kiemDinhRepo gọi POST /kho-chua/kiem-tra với method POST và payload chuẩn', async () => {
     const mockInspectRes = {
       trangThai: 'THANH_CONG',
       thongBao: 'Kiểm định thành công',
@@ -416,7 +418,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockInspectRes);
 
     const result = await service.kiemDinhRepo('https://github.com/owner/new-app');
-    expect(apiClient.post).toHaveBeenCalledWith('/repos/inspect', {
+    expect(apiClient.post).toHaveBeenCalledWith('/kho-chua/kiem-tra', {
       urlRepo: 'https://github.com/owner/new-app',
       nenTang: 'WINDOWS',
       abis: ['X86_64'],
@@ -424,7 +426,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(result.trangThai).toBe('THANH_CONG');
   });
 
-  it('layDanhSachDanhMuc gọi GET /categories?platform=windows mặc định', async () => {
+  it('layDanhSachDanhMuc gọi GET /danh-muc?platform=windows mặc định', async () => {
     const mockCategories = [
       { ten: 'Lập trình & Phát triển', soLuong: 5 },
       { ten: 'Tiện ích hệ thống', soLuong: 4 },
@@ -432,7 +434,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockCategories);
 
     const result = await service.layDanhSachDanhMuc();
-    expect(apiClient.get).toHaveBeenCalledWith('/categories?platform=windows');
+    expect(apiClient.get).toHaveBeenCalledWith('/danh-muc?platform=windows');
     expect(result).toEqual(mockCategories);
   });
 
@@ -447,24 +449,24 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     // Kiểm tra gọi qua UUID
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockReadmeRes);
     const resId = await service.layReadmeApp('uuid-123');
-    expect(apiClient.get).toHaveBeenCalledWith('/apps/uuid-123/readme');
+    expect(apiClient.get).toHaveBeenCalledWith('/ung-dung/uuid-123/readme');
     expect(resId.trangThai).toBe('HOAN_TAT');
 
     // Kiểm tra gọi qua Slug owner/repo
     vi.mocked(apiClient.get).mockResolvedValueOnce(mockReadmeRes);
     const resSlug = await service.layReadmeApp('rustdesk/rustdesk');
-    expect(apiClient.get).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme');
+    expect(apiClient.get).toHaveBeenCalledWith('/ung-dung/rustdesk/rustdesk/readme');
     expect(resSlug.banDich).toBe('# Tài liệu tiếng Việt');
 
-    // Kiểm tra dichLaiReadmeUngDung gọi POST /retry chuyên biệt (Fix Claude DELIV-77.7)
+    // Kiểm tra dichLaiReadmeUngDung gọi POST /readme/thu-lai chuyên biệt (Fix Claude DELIV-77.7)
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
     await service.dichLaiReadmeUngDung('rustdesk/rustdesk');
-    expect(apiClient.post).toHaveBeenCalledWith('/apps/rustdesk/rustdesk/readme/retry', {});
+    expect(apiClient.post).toHaveBeenCalledWith('/ung-dung/rustdesk/rustdesk/readme/thu-lai', {});
 
     // Kiểm tra layReadmeApp với force = true ủy quyền sang dichLaiReadmeUngDung
     vi.mocked(apiClient.post).mockResolvedValueOnce(mockReadmeRes);
     await service.layReadmeApp('uuid-123', true);
-    expect(apiClient.post).toHaveBeenCalledWith('/apps/uuid-123/readme/retry', {});
+    expect(apiClient.post).toHaveBeenCalledWith('/ung-dung/uuid-123/readme/thu-lai', {});
   });
 
   it('anhXaDtoSangTheUngDung ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {

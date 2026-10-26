@@ -18,7 +18,7 @@ import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 
 @ApiTags('Apps - Kho Ứng Dụng')
-@Controller('apps')
+@Controller('ung-dung')
 export class UngDungController {
   constructor(
     private readonly appsService: UngDungService,
@@ -26,7 +26,7 @@ export class UngDungController {
   ) {}
 
   @CongKhai()
-  @Get('categories')
+  @Get('danh-muc')
   @ApiOperation({
     summary: 'Lấy danh sách danh mục có app khả dụng theo nền tảng (K3)',
     description: 'Trả về danh mục và số lượng app thật trên nền tảng (windows/android).',
@@ -59,7 +59,7 @@ export class UngDungController {
 
   @CongKhai()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @Post('sync')
+  @Post('dong-bo')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Đồng bộ hoặc nạp một repository từ GitHub vào Store (P2-21)',
@@ -76,7 +76,7 @@ export class UngDungController {
   }
 
   @CongKhai()
-  @Post('resolve-asset')
+  @Post('giai-quyet-tai-san')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Phân giải tệp cài đặt phù hợp với kiến trúc thiết bị (P2-33)',
@@ -113,7 +113,7 @@ export class UngDungController {
 
   @CongKhai()
   @Throttle({ default: { limit: 3, ttl: 60000 } })
-  @Post(':owner/:repo/readme/retry')
+  @Post(':owner/:repo/readme/thu-lai')
   @ApiOperation({
     summary:
       'Yêu cầu dịch lại README theo slug khi bản dịch trước đó thất bại (P3B-05.7 / Fix Claude DELIV-77.7)',
@@ -151,7 +151,7 @@ export class UngDungController {
 
   @CongKhai()
   @Throttle({ default: { limit: 3, ttl: 60000 } })
-  @Post(':id/readme/retry')
+  @Post(':id/readme/thu-lai')
   @ApiOperation({
     summary:
       'Yêu cầu dịch lại README theo ID/Slug khi bản dịch trước đó thất bại (P3B-05.7 / Fix Claude DELIV-77.7)',
@@ -172,7 +172,7 @@ export class UngDungController {
   @ApiOperation({
     summary: 'Lấy chi tiết ứng dụng theo owner và repo slug (P2-24, K1)',
     description:
-      'Ví dụ: /api/v1/apps/rustdesk/rustdesk?platform=windows. Tự động lọc phiên bản theo platform và gắn cờ laYeuThich nếu đã đăng nhập.',
+      'Ví dụ: /api/v1/ung-dung/rustdesk/rustdesk?platform=windows. Tự động lọc phiên bản theo platform và gắn cờ laYeuThich nếu đã đăng nhập.',
   })
   @ApiParam({ name: 'owner', description: 'GitHub username hoặc tổ chức', example: 'rustdesk' })
   @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })

@@ -44,7 +44,7 @@ describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
         { maUngDung: 'app-rustdesk', phienBanHienTai: '1.3.1' },
       ]);
 
-      expect(postSpy).toHaveBeenCalledWith('/apps/check-updates', {
+      expect(postSpy).toHaveBeenCalledWith('/ung-dung/kiem-tra-cap-nhat', {
         maThietBi: mockDeviceId,
         danhSachCaiDat: [
           { maUngDung: 'app-obsidian', phienBanHienTai: '1.5.8' },

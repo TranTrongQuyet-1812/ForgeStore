@@ -39,7 +39,7 @@ describe('ThuVienService (P3-12.2)', () => {
 
     const res = await thuVienService.layDanhSachAppDaCai('device-123');
 
-    expect(getSpy).toHaveBeenCalledWith('/devices/device-123/installed');
+    expect(getSpy).toHaveBeenCalledWith('/thiet-bi/device-123/da-cai');
     expect(res).toHaveLength(1);
     expect(res[0].maUngDung).toBe('app-obsidian');
     expect(res[0].ungDung?.tenKhoChua).toBe('Obsidian');
@@ -74,7 +74,7 @@ describe('ThuVienService (P3-12.2)', () => {
 
     const res = await thuVienService.ghiNhanCaiDat('device-123', dto);
 
-    expect(postSpy).toHaveBeenCalledWith('/devices/device-123/installed', dto);
+    expect(postSpy).toHaveBeenCalledWith('/thiet-bi/device-123/da-cai', dto);
     expect(res).not.toBeNull();
     expect(res?.maUngDung).toBe('app-rustdesk');
   });
@@ -99,7 +99,7 @@ describe('ThuVienService (P3-12.2)', () => {
 
     const ok = await thuVienService.goCaiDat('device-123', 'app-obsidian');
 
-    expect(deleteSpy).toHaveBeenCalledWith('/devices/device-123/installed/app-obsidian');
+    expect(deleteSpy).toHaveBeenCalledWith('/thiet-bi/device-123/da-cai/app-obsidian');
     expect(ok).toBe(true);
   });
 
@@ -119,7 +119,7 @@ describe('ThuVienService (P3-12.2)', () => {
       tenHienThiRegistry: 'Notepad++ (64-bit x64)',
     });
 
-    expect(patchSpy).toHaveBeenCalledWith('/devices/device-123/installed/app-npp/registry', {
+    expect(patchSpy).toHaveBeenCalledWith('/thiet-bi/device-123/da-cai/app-npp/registry', {
       khoaRegistry: 'Notepad++',
       tenHienThiRegistry: 'Notepad++ (64-bit x64)',
     });
@@ -159,7 +159,7 @@ describe('ThuVienService (P3-12.2)', () => {
         phienBan: '2.30.0',
       });
 
-      expect(postSpy).toHaveBeenCalledWith('/devices/device-123/installed/cli', {
+      expect(postSpy).toHaveBeenCalledWith('/thiet-bi/device-123/da-cai/cli', {
         maUngDung: 'app-fastfetch',
         trinhQuanLy: 'winget',
         tenGoi: 'Fastfetch-cli.Fastfetch',
@@ -194,7 +194,7 @@ describe('ThuVienService (P3-12.2)', () => {
       const res = await thuVienService.xacNhanCaiDatCli('device-123', 'app-fastfetch');
 
       expect(patchSpy).toHaveBeenCalledWith(
-        '/devices/device-123/installed/app-fastfetch/confirm-cli',
+        '/thiet-bi/device-123/da-cai/app-fastfetch/xac-nhan-cli',
       );
       expect(res).toEqual(mockResult);
       expect(res?.trangThaiXacNhan).toBe('DA_XAC_NHAN');

@@ -40,7 +40,7 @@ export class IngestionRunDto {
 
 @ApiTags('Admin AI')
 @ApiBearerAuth()
-@Controller('admin/ai')
+@Controller('quan-tri/ai')
 export class AiQuanTriController {
   constructor(
     private readonly appsService: UngDungService,
@@ -49,7 +49,7 @@ export class AiQuanTriController {
   ) {}
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
-  @Post('prewarm')
+  @Post('lam-nong')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Chạy phân tích Dual-AI trước cho các app demo (P2-31.5, phục vụ P6-07)',
@@ -63,7 +63,7 @@ export class AiQuanTriController {
   }
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
-  @Post('translate-descriptions')
+  @Post('dich-mo-ta')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Dịch gom lô mô tả toàn bộ ứng dụng sang tiếng Việt (P3B-04)',
@@ -76,7 +76,7 @@ export class AiQuanTriController {
   }
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
-  @Post('ingestion/discover')
+  @Post('nap-repo/kham-pha')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Nạp danh sách repo ứng viên vào hàng đợi sàng lọc (P3B-06.1)',
@@ -86,7 +86,7 @@ export class AiQuanTriController {
   }
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
-  @Post('ingestion/run')
+  @Post('nap-repo/chay')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

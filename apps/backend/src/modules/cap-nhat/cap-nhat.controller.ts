@@ -7,11 +7,11 @@ import { CheckUpdatesDto } from './dto/kiem-tra-cap-nhat.dto';
 
 @ApiTags('Updater - Cập Nhật Ứng Dụng')
 @ApiBearerAuth()
-@Controller('apps')
+@Controller('ung-dung')
 export class CapNhatController {
   constructor(private readonly updaterService: CapNhatService) {}
 
-  @Post('check-updates')
+  @Post('kiem-tra-cap-nhat')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Kiểm tra bản cập nhật cho các ứng dụng đã cài trên thiết bị (P2-52)',

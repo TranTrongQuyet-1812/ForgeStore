@@ -25,7 +25,7 @@ export const capNhatService = {
         }));
       }
 
-      return await apiClient.post<CheckUpdatesResponseDto>('/apps/check-updates', payload);
+      return await apiClient.post<CheckUpdatesResponseDto>('/ung-dung/kiem-tra-cap-nhat', payload);
     } catch (err) {
       console.warn('[UpdaterService] Không thể kiểm tra cập nhật:', err);
       return { danhSachCapNhat: [] };

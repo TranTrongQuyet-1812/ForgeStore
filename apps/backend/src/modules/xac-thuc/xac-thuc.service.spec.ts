@@ -111,10 +111,10 @@ describe('XacThucService', () => {
           APP_DEEP_LINK_SCHEME: 'forgestore',
           GITHUB_CLIENT_ID: 'mock-client-id',
           GITHUB_CLIENT_SECRET: 'mock-client-secret',
-          GITHUB_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/callback',
+          GITHUB_CALLBACK_URL: 'http://localhost:3000/api/v1/xac-thuc/callback',
           GOOGLE_CLIENT_ID: 'mock-google-client-id',
           GOOGLE_CLIENT_SECRET: 'mock-google-client-secret',
-          GOOGLE_CALLBACK_URL: 'http://localhost:3000/api/v1/auth/google/callback',
+          GOOGLE_CALLBACK_URL: 'http://localhost:3000/api/v1/xac-thuc/google/callback',
           JWT_EXPIRES_IN: '15m',
           REFRESH_TOKEN_TTL_DAYS: 30,
           PORT: 3000,
@@ -838,7 +838,7 @@ describe('XacThucService', () => {
       expect(authUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
       expect(authUrl).toContain('client_id=mock-google-client-id');
       expect(authUrl).toContain(
-        'redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fv1%2Fauth%2Fgoogle%2Fcallback',
+        'redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fv1%2Fxac-thuc%2Fgoogle%2Fcallback',
       );
       expect(authUrl).toContain('response_type=code');
       expect(authUrl).toContain('scope=openid+email+profile');

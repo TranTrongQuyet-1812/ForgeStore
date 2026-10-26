@@ -42,7 +42,7 @@ export class KhoUngDungService {
     if (params.featured !== undefined) query.set('featured', String(params.featured));
 
     const qs = query.toString();
-    const endpoint = `/apps${qs ? `?${qs}` : ''}`;
+    const endpoint = `/ung-dung${qs ? `?${qs}` : ''}`;
     return apiClient.get<TrangKetQua<UngDungTomTatDto>>(endpoint);
   }
 
@@ -61,7 +61,7 @@ export class KhoUngDungService {
    * Lấy danh sách danh mục có app khả dụng theo nền tảng kèm số lượng app thật (K3)
    */
   async layDanhSachDanhMuc(platform: 'windows' | 'android' = 'windows'): Promise<DanhMucDto[]> {
-    return apiClient.get<DanhMucDto[]>(`/categories?platform=${platform}`);
+    return apiClient.get<DanhMucDto[]>(`/danh-muc?platform=${platform}`);
   }
 
   /**
@@ -73,8 +73,8 @@ export class KhoUngDungService {
     arch: string = 'x86_64',
   ): Promise<UngDungChiTietDto> {
     const basePath = maUngDung.includes('/')
-      ? `/apps/${maUngDung.split('/').map(encodeURIComponent).join('/')}`
-      : `/apps/${encodeURIComponent(maUngDung)}`;
+      ? `/ung-dung/${maUngDung.split('/').map(encodeURIComponent).join('/')}`
+      : `/ung-dung/${encodeURIComponent(maUngDung)}`;
     const endpoint = `${basePath}?platform=${platform}&arch=${encodeURIComponent(arch)}`;
     return apiClient.get<UngDungChiTietDto>(endpoint);
   }
@@ -90,14 +90,14 @@ export class KhoUngDungService {
       q: query.trim(),
       platform,
     });
-    return apiClient.get<TimKiemResponseDto>(`/search?${params.toString()}`);
+    return apiClient.get<TimKiemResponseDto>(`/tim-kiem?${params.toString()}`);
   }
 
   /**
    * Kiểm định và nạp Repository tùy chọn - Paste & Play (P2-41 / P3-07)
    */
   async kiemDinhRepo(urlRepo: string): Promise<InspectRepoResponseDto> {
-    return apiClient.post<InspectRepoResponseDto>('/repos/inspect', {
+    return apiClient.post<InspectRepoResponseDto>('/kho-chua/kiem-tra', {
       urlRepo: urlRepo.trim(),
       nenTang: 'WINDOWS',
       abis: ['X86_64'],
@@ -116,19 +116,19 @@ export class KhoUngDungService {
       return this.dichLaiReadmeUngDung(maUngDungHoacSlug);
     }
     const basePath = maUngDungHoacSlug.includes('/')
-      ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
-      : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme`;
+      ? `/ung-dung/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme`
+      : `/ung-dung/${encodeURIComponent(maUngDungHoacSlug)}/readme`;
     return apiClient.get<ChiTietReadmeResponseDto>(basePath);
   }
 
   /**
    * Yêu cầu dịch lại README khi gặp lỗi thất bại (P3B-05.7 / Fix Claude DELIV-77.7).
-   * Gọi tới endpoint POST /apps/.../readme/retry chuyên biệt với rate-limit riêng.
+   * Gọi tới endpoint POST /ung-dung/.../readme/thu-lai chuyên biệt với rate-limit riêng.
    */
   async dichLaiReadmeUngDung(maUngDungHoacSlug: string): Promise<ChiTietReadmeResponseDto> {
     const retryPath = maUngDungHoacSlug.includes('/')
-      ? `/apps/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme/retry`
-      : `/apps/${encodeURIComponent(maUngDungHoacSlug)}/readme/retry`;
+      ? `/ung-dung/${maUngDungHoacSlug.split('/').map(encodeURIComponent).join('/')}/readme/thu-lai`
+      : `/ung-dung/${encodeURIComponent(maUngDungHoacSlug)}/readme/thu-lai`;
     return apiClient.post<ChiTietReadmeResponseDto>(retryPath, {});
   }
 

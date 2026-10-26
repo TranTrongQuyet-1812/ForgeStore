@@ -34,7 +34,7 @@ describe('useXacThucStore (P3-03.4)', () => {
     await tokenStorage.setRefreshToken('stored-refresh-token');
 
     const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('/auth/refresh')) {
+      if (url.includes('/xac-thuc/lam-moi')) {
         return {
           ok: true,
           status: 200,
@@ -44,7 +44,7 @@ describe('useXacThucStore (P3-03.4)', () => {
           }),
         };
       }
-      if (url.includes('/user/profile')) {
+      if (url.includes('/nguoi-dung/ho-so')) {
         return {
           ok: true,
           status: 200,

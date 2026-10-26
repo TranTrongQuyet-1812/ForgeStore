@@ -7,7 +7,7 @@ import { UngDungService } from '../ung-dung.service';
 import { SearchQueryDto } from '../dto/tim-kiem.dto';
 
 @ApiTags('Search - Tìm Kiếm Thông Minh (Module 1)')
-@Controller('search')
+@Controller('tim-kiem')
 export class TimKiemController {
   constructor(private readonly appsService: UngDungService) {}
 

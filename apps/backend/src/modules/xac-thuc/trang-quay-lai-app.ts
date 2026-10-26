@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto';
  */
 
 /** Đường dẫn sạch hiển thị trên thanh địa chỉ sau khi trang đã mở deep link. */
-export const DUONG_DAN_XONG = '/api/v1/auth/xong';
+export const DUONG_DAN_XONG = '/api/v1/xac-thuc/xong';
 
 export type TrangThaiQuayLai = 'thanh-cong' | 'da-huy' | 'that-bai' | 'xong';
 

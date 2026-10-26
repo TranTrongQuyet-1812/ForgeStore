@@ -6,11 +6,11 @@ import { UserSessionContext } from './interfaces/jwt-payload.interface';
 
 @ApiTags('Người dùng (User Profile)')
 @ApiBearerAuth()
-@Controller('user')
+@Controller('nguoi-dung')
 export class NguoiDungController {
   constructor(private readonly authService: XacThucService) {}
 
-  @Get('profile')
+  @Get('ho-so')
   @ApiOperation({
     summary: 'Lấy thông tin tài khoản cá nhân',
     description: 'Trả về thông tin chi tiết của người dùng đang đăng nhập dựa trên JWT token.',

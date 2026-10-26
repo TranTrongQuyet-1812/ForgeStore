@@ -12,7 +12,7 @@ export const yeuThichService = {
    */
   async layDanhSachYeuThich(page = 1, limit = 20): Promise<TrangKetQua<UngDungTomTatDto>> {
     return apiClient.get<TrangKetQua<UngDungTomTatDto>>(
-      `/user/favorites?page=${page}&limit=${limit}`,
+      `/nguoi-dung/yeu-thich?page=${page}&limit=${limit}`,
     );
   },
 
@@ -22,8 +22,8 @@ export const yeuThichService = {
   async chuyenDoiYeuThich(appId: string): Promise<ToggleFavoriteResult> {
     const cleanId = appId.trim();
     const targetEndpoint = cleanId.includes('/')
-      ? `/apps/${encodeURIComponent(cleanId)}/favorite`
-      : `/apps/${cleanId}/favorite`;
+      ? `/ung-dung/${encodeURIComponent(cleanId)}/yeu-thich`
+      : `/ung-dung/${cleanId}/yeu-thich`;
     // Không gửi header tự đặt (vd. x-device-type): header lạ làm preflight CORS của WebView2
     // chặn request trước khi tới backend. Loại thiết bị do backend tự xác định từ phiên đăng nhập.
     return apiClient.post<ToggleFavoriteResult>(targetEndpoint);

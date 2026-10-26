@@ -21,7 +21,7 @@ import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
 export class YeuThichController {
   constructor(private readonly favoritesService: YeuThichService) {}
 
-  @Get('user/favorites')
+  @Get('nguoi-dung/yeu-thich')
   @ApiOperation({
     summary: 'Lấy kho ứng dụng yêu thích của người dùng hiện tại',
     description:
@@ -38,7 +38,7 @@ export class YeuThichController {
     return this.favoritesService.layDanhSachYeuThich(maNguoiDung, query.page, query.limit);
   }
 
-  @Post('apps/:id/favorite')
+  @Post('ung-dung/:id/yeu-thich')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Bật / Tắt (Toggle) trạng thái yêu thích của ứng dụng',
@@ -70,7 +70,7 @@ export class YeuThichController {
     return this.favoritesService.chuyenDoiYeuThich(maNguoiDung, cleanId, thietBi);
   }
 
-  @Post('apps/:owner/:repo/favorite')
+  @Post('ung-dung/:owner/:repo/yeu-thich')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Bật / Tắt trạng thái yêu thích của ứng dụng theo GitHub slug (owner/repo)',

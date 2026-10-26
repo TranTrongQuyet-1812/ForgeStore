@@ -106,7 +106,7 @@ export class CapNhatService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Kiểm tra bản cập nhật cho thiết bị (POST /apps/check-updates - P2-52).
+   * Kiểm tra bản cập nhật cho thiết bị (POST /ung-dung/kiem-tra-cap-nhat - P2-52).
    */
   async kiemTraCapNhat(
     dto: CheckUpdatesDto,

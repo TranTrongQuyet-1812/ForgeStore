@@ -83,7 +83,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
       const authHeader = getHeader(init?.headers, 'Authorization');
 
       // 1. Điểm cuối làm mới mã xác thực (refresh token)
-      if (url.includes('/auth/refresh')) {
+      if (url.includes('/xac-thuc/lam-moi')) {
         refreshCount++;
         return {
           ok: true,
@@ -131,7 +131,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     expect(res2).toEqual({ id: '2' });
     expect(res3).toEqual({ id: '3' });
 
-    // KHẲNG ĐỊNH QUAN TRỌNG: Chỉ có duy nhất 1 request /auth/refresh được gọi (Single-Flight)
+    // KHẲNG ĐỊNH QUAN TRỌNG: Chỉ có duy nhất 1 request /xac-thuc/lam-moi được gọi (Single-Flight)
     expect(refreshCount).toBe(1);
 
     // Access token trong RAM đã được cập nhật
@@ -141,7 +141,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     expect(await tokenStorage.getRefreshToken()).toBe('rotated-refresh-token');
   });
 
-  it('khi refresh token hết hạn (401 tại /auth/refresh): kích hoạt logout và xóa sạch token', async () => {
+  it('khi refresh token hết hạn (401 tại /xac-thuc/lam-moi): kích hoạt logout và xóa sạch token', async () => {
     tokenStorage.setAccessToken('expired-access-token');
     await tokenStorage.setRefreshToken('revoked-refresh-token');
 
@@ -149,7 +149,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     client.onLogout(logoutMock);
 
     const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('/auth/refresh')) {
+      if (url.includes('/xac-thuc/lam-moi')) {
         return {
           ok: false,
           status: 401,
@@ -167,7 +167,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
 
     global.fetch = mockFetch;
 
-    await expect(client.get('/user/profile')).rejects.toThrow();
+    await expect(client.get('/nguoi-dung/ho-so')).rejects.toThrow();
 
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(tokenStorage.getAccessToken()).toBeNull();
@@ -182,7 +182,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
     client.onLogout(logoutMock);
 
     const mockFetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('/auth/refresh')) {
+      if (url.includes('/xac-thuc/lam-moi')) {
         throw new TypeError('Failed to fetch'); // Giả lập mất mạng
       }
       return {
@@ -195,7 +195,7 @@ describe('ApiClient & 401 Single-Flight Refresh Queue (P3-03.1 & P3-03.2)', () =
 
     global.fetch = mockFetch;
 
-    await expect(client.get('/user/profile')).rejects.toThrow('Failed to fetch');
+    await expect(client.get('/nguoi-dung/ho-so')).rejects.toThrow('Failed to fetch');
 
     // Khẳng định: Lỗi mạng không làm mất token và không kích hoạt logout
     expect(logoutMock).not.toHaveBeenCalled();

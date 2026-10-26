@@ -84,7 +84,7 @@ export class ThietBiService {
   }
 
   /**
-   * Đổi tên thiết bị (PATCH /devices/:id).
+   * Đổi tên thiết bị (PATCH /thiet-bi/:id).
    * Kiểm tra quyền sở hữu thiết bị: nếu không phải của mình thì từ chối.
    */
   async doiTenThietBi(maNguoiDung: string, maThietBi: string, tenMoi: string) {

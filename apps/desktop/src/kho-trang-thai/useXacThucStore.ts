@@ -56,7 +56,7 @@ export const useXacThucStore = create<AuthState>((set, get) => ({
       }
 
       // 2. Tự động đổi accessToken mới
-      const refreshRes = await apiClient.post<AuthRefreshResponseDto>('/auth/refresh', {
+      const refreshRes = await apiClient.post<AuthRefreshResponseDto>('/xac-thuc/lam-moi', {
         refreshToken,
       });
 
@@ -132,13 +132,13 @@ export const useXacThucStore = create<AuthState>((set, get) => ({
 
   fetchProfile: async () => {
     try {
-      const profile = await apiClient.get<NguoiDungDto>('/user/profile');
+      const profile = await apiClient.get<NguoiDungDto>('/nguoi-dung/ho-so');
       set({ user: profile });
 
       // Nạp danh sách thiết bị của tài khoản để đồng bộ đúng ThietBiDto
       const did = get().maThietBi;
       try {
-        const devices = await apiClient.get<ThietBiDto[]>('/devices');
+        const devices = await apiClient.get<ThietBiDto[]>('/thiet-bi');
         if (devices && devices.length > 0) {
           const currentDev = did ? devices.find((d) => d.maThietBi === did) : devices[0];
           if (currentDev) {

@@ -12,13 +12,13 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('Repos - Nạp & Kiểm Định Kho Nguồn (Module 6)')
-@Controller('repos')
+@Controller('kho-chua')
 export class KhoChuaController {
   constructor(private readonly appsService: UngDungService) {}
 
   @CongKhai()
   @Throttle({ default: { limit: 30, ttl: 3600000 } })
-  @Post('inspect')
+  @Post('kiem-tra')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Kiểm định và nạp Repository tùy chọn - Paste & Play (P2-41)',

@@ -6,7 +6,7 @@ import { UngDungService } from '../ung-dung.service';
 import { PlatformFilter } from '../dto/truy-van-ung-dung.dto';
 
 @ApiTags('Categories - Danh Mục Ứng Dụng')
-@Controller('categories')
+@Controller('danh-muc')
 export class DanhMucController {
   constructor(private readonly appsService: UngDungService) {}
 

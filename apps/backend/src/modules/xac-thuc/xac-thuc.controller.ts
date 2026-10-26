@@ -12,7 +12,7 @@ import { UserSessionContext } from './interfaces/jwt-payload.interface';
 import { dungTrangQuayLaiApp, TrangThaiQuayLai } from './trang-quay-lai-app';
 
 @ApiTags('Xác thực (Auth)')
-@Controller('auth')
+@Controller('xac-thuc')
 export class XacThucController {
   constructor(private readonly authService: XacThucService) {}
 
@@ -207,7 +207,7 @@ export class XacThucController {
   }
 
   @CongKhai()
-  @Post('exchange')
+  @Post('doi-ma')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Đổi mã xác thực 1 lần lấy cặp JWT Tokens (Zero-Token-on-URL, D-09)',
@@ -221,7 +221,7 @@ export class XacThucController {
   }
 
   @CongKhai()
-  @Post('refresh')
+  @Post('lam-moi')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Làm mới Access Token và xoay vòng Refresh Token (Token Rotation, P2-12)',
@@ -238,7 +238,7 @@ export class XacThucController {
     return await this.authService.lamMoiToken(dto);
   }
 
-  @Post('logout')
+  @Post('dang-xuat')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -253,7 +253,7 @@ export class XacThucController {
     return { thongBao: 'Đăng xuất phiên hiện tại thành công' };
   }
 
-  @Post('logout-all')
+  @Post('dang-xuat-tat-ca')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

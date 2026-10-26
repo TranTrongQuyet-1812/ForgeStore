@@ -13,7 +13,7 @@ export const thuVienService = {
    */
   async layDanhSachAppDaCai(deviceId: string): Promise<UngDungDaCaiDto[]> {
     try {
-      return await apiClient.get<UngDungDaCaiDto[]>(`/devices/${deviceId}/installed`);
+      return await apiClient.get<UngDungDaCaiDto[]>(`/thiet-bi/${deviceId}/da-cai`);
     } catch (err) {
       console.warn('[LibraryService] Không thể lấy danh sách app đã cài từ backend:', err);
       return [];
@@ -28,7 +28,7 @@ export const thuVienService = {
     dto: GhiNhanCaiDatRequest,
   ): Promise<UngDungDaCaiDto | null> {
     try {
-      return await apiClient.post<UngDungDaCaiDto>(`/devices/${deviceId}/installed`, dto);
+      return await apiClient.post<UngDungDaCaiDto>(`/thiet-bi/${deviceId}/da-cai`, dto);
     } catch (err) {
       console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt lên backend:', err);
       return null;
@@ -44,7 +44,7 @@ export const thuVienService = {
     dto: GhiNhanCaiDatCliRequest,
   ): Promise<UngDungDaCaiDto | null> {
     try {
-      return await apiClient.post<UngDungDaCaiDto>(`/devices/${deviceId}/installed/cli`, dto);
+      return await apiClient.post<UngDungDaCaiDto>(`/thiet-bi/${deviceId}/da-cai/cli`, dto);
     } catch (err) {
       console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt CLI lên backend:', err);
       return null;
@@ -61,7 +61,7 @@ export const thuVienService = {
   ): Promise<XacNhanCaiDatCliResponse | null> {
     try {
       return await apiClient.patch<XacNhanCaiDatCliResponse>(
-        `/devices/${deviceId}/installed/${appId}/confirm-cli`,
+        `/thiet-bi/${deviceId}/da-cai/${appId}/xac-nhan-cli`,
       );
     } catch (err) {
       console.warn('[LibraryService] Lỗi khi xác nhận cài đặt CLI lên backend:', err);
@@ -79,7 +79,7 @@ export const thuVienService = {
     dto: CapNhatKhoaRegistryRequest,
   ): Promise<boolean> {
     try {
-      await apiClient.patch(`/devices/${deviceId}/installed/${appId}/registry`, dto);
+      await apiClient.patch(`/thiet-bi/${deviceId}/da-cai/${appId}/registry`, dto);
       return true;
     } catch (err) {
       console.warn('[LibraryService] Lỗi khi cập nhật khóa registry lên backend:', err);
@@ -92,7 +92,7 @@ export const thuVienService = {
    */
   async goCaiDat(deviceId: string, appId: string): Promise<boolean> {
     try {
-      await apiClient.delete(`/devices/${deviceId}/installed/${appId}`);
+      await apiClient.delete(`/thiet-bi/${deviceId}/da-cai/${appId}`);
       return true;
     } catch (err) {
       console.error('[LibraryService] Lỗi khi gỡ ứng dụng khỏi thiết bị:', err);

@@ -12,7 +12,7 @@ import { UserSessionContext } from '../xac-thuc/interfaces/jwt-payload.interface
 
 @ApiTags('Thiết bị (Devices)')
 @ApiBearerAuth()
-@Controller('devices')
+@Controller('thiet-bi')
 export class ThietBiController {
   constructor(private readonly devicesService: ThietBiService) {}
 
@@ -47,7 +47,7 @@ export class ThietBiController {
     return await this.devicesService.doiTenThietBi(user.maNguoiDung, id, dto.tenThietBi);
   }
 
-  @Get(':id/installed')
+  @Get(':id/da-cai')
   @ApiOperation({
     summary: 'Lấy danh sách ứng dụng đã cài đặt trên thiết bị (P2-51.1)',
     description:
@@ -64,7 +64,7 @@ export class ThietBiController {
     return await this.devicesService.layDanhSachAppDaCai(user.maNguoiDung, id);
   }
 
-  @Post(':id/installed')
+  @Post(':id/da-cai')
   @ApiOperation({
     summary: 'Ghi nhận hoặc nâng cấp ứng dụng đã cài trên thiết bị (P2-51.2)',
     description: 'Lưu hoặc cập nhật thông tin phiên bản app đang chạy trên thiết bị vật lý.',
@@ -81,7 +81,7 @@ export class ThietBiController {
     return await this.devicesService.ghiNhanCaiDat(user.maNguoiDung, id, dto);
   }
 
-  @Post(':id/installed/cli')
+  @Post(':id/da-cai/cli')
   @ApiOperation({
     summary: 'Ghi nhận người dùng cài đặt ứng dụng qua dòng lệnh CLI ("Tôi đã cài" - P3B-16.5)',
     description:
@@ -100,7 +100,7 @@ export class ThietBiController {
     return await this.devicesService.ghiNhanCaiDatCli(user.maNguoiDung, id, dto);
   }
 
-  @Patch(':id/installed/:appId/confirm-cli')
+  @Patch(':id/da-cai/:appId/xac-nhan-cli')
   @ApiOperation({
     summary: 'Xác nhận lại ứng dụng CLI đã cài đặt ("Xác nhận đã cài" - P3B-16.5)',
     description: 'Chuyển trạng thái ứng dụng CLI sang DA_XAC_NHAN và hủy đếm ngược hết hạn 24 giờ.',
@@ -118,7 +118,7 @@ export class ThietBiController {
     return await this.devicesService.xacNhanCaiDatCli(user.maNguoiDung, id, appId);
   }
 
-  @Delete(':id/installed/:appId')
+  @Delete(':id/da-cai/:appId')
   @ApiOperation({
     summary: 'Gỡ ứng dụng đã cài đặt khỏi thiết bị (P2-51.3 & P3B-16.6)',
     description:
@@ -137,7 +137,7 @@ export class ThietBiController {
     return await this.devicesService.goCaiDat(user.maNguoiDung, id, appId);
   }
 
-  @Patch(':id/installed/:appId/registry')
+  @Patch(':id/da-cai/:appId/registry')
   @ApiOperation({
     summary: 'Cập nhật riêng khóa Registry Windows cho ứng dụng đã cài đặt',
     description:

@@ -41,7 +41,7 @@ describe('GlobalExceptionFilter', () => {
   });
 
   it('chuẩn hóa mã lỗi 400 từ ValidationPipe thành DU_LIEU_KHONG_HOP_LE và chi tiết lỗi', () => {
-    const { host, mockStatus, mockJson } = createMockHost('/api/v1/apps');
+    const { host, mockStatus, mockJson } = createMockHost('/api/v1/ung-dung');
     const badRequestEx = new BadRequestException({
       message: ['tenRepoDayDu không được để trống'],
       error: 'Bad Request',
@@ -60,7 +60,7 @@ describe('GlobalExceptionFilter', () => {
   });
 
   it('giữ nguyên mã lỗi tùy chỉnh nếu exception chủ động định nghĩa maLoi', () => {
-    const { host, mockStatus, mockJson } = createMockHost('/api/v1/auth');
+    const { host, mockStatus, mockJson } = createMockHost('/api/v1/xac-thuc');
     const customEx = new BadRequestException({
       maLoi: 'MA_XAC_THUC_HET_HAN',
       thongBao: 'Mã xác thực đã hết hạn, vui lòng đăng nhập lại',

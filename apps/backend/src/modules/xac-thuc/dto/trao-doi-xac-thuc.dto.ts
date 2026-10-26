@@ -39,7 +39,7 @@ export class AuthExchangeDto {
   code!: string;
 
   @ApiProperty({
-    description: 'PKCE code verifier (tương ứng với challenge đã gửi ở GET /auth/github)',
+    description: 'PKCE code verifier (tương ứng với challenge đã gửi ở GET /xac-thuc/github)',
     example: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
   })
   @IsString({ message: 'verifier phải là chuỗi' })

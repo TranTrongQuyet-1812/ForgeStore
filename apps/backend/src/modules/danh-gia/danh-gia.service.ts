@@ -25,7 +25,7 @@ export class DanhGiaService {
   ) {}
 
   /**
-   * Lấy danh sách nhận xét, đánh giá của một ứng dụng (GET /apps/:id/reviews - P2-53.1).
+   * Lấy danh sách nhận xét, đánh giá của một ứng dụng (GET /ung-dung/:id/danh-gia - P2-53.1).
    */
   async layDanhSachDanhGia(
     idOrSlug: string,
@@ -123,7 +123,7 @@ export class DanhGiaService {
   }
 
   /**
-   * Tạo bài đánh giá mới cho ứng dụng (POST /apps/:id/reviews - P2-53.1 & P2-53.2).
+   * Tạo bài đánh giá mới cho ứng dụng (POST /ung-dung/:id/danh-gia - P2-53.1 & P2-53.2).
    */
   async taoDanhGia(
     maNguoiDung: string,
@@ -223,7 +223,7 @@ export class DanhGiaService {
   }
 
   /**
-   * Cập nhật đánh giá của chính mình (PATCH /reviews/:id - P2-53.1).
+   * Cập nhật đánh giá của chính mình (PATCH /danh-gia/:id - P2-53.1).
    */
   async suaDanhGia(
     maNguoiDung: string,
@@ -290,7 +290,7 @@ export class DanhGiaService {
   }
 
   /**
-   * Xóa đánh giá (DELETE /reviews/:id - P2-53.1).
+   * Xóa đánh giá (DELETE /danh-gia/:id - P2-53.1).
    */
   async xoaDanhGia(
     maNguoiDung: string,
@@ -327,7 +327,7 @@ export class DanhGiaService {
   }
 
   /**
-   * Bình chọn nhận xét hữu ích (POST /reviews/:id/helpful - P2-53.3).
+   * Bình chọn nhận xét hữu ích (POST /danh-gia/:id/huu-ich - P2-53.3).
    * Mỗi người chỉ được bấm 1 lần, kiểm soát bằng Redis Key.
    */
   async binhChonHuuIch(

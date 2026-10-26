@@ -34,7 +34,7 @@ describe('YeuThichService (P3-12.1)', () => {
 
     const res = await yeuThichService.layDanhSachYeuThich(1, 20);
 
-    expect(getSpy).toHaveBeenCalledWith('/user/favorites?page=1&limit=20');
+    expect(getSpy).toHaveBeenCalledWith('/nguoi-dung/yeu-thich?page=1&limit=20');
     expect(res.duLieu).toHaveLength(1);
     expect(res.duLieu[0].tenKhoChua).toBe('Obsidian');
   });
@@ -51,7 +51,7 @@ describe('YeuThichService (P3-12.1)', () => {
 
     // Header lạ như x-device-type không nằm trong allowedHeaders của backend,
     // WebView2 sẽ chặn request ở bước preflight nên backend không bao giờ nhận được.
-    expect(postSpy).toHaveBeenCalledWith('/apps/app-uuid-1/favorite');
+    expect(postSpy).toHaveBeenCalledWith('/ung-dung/app-uuid-1/yeu-thich');
     expect(res.daYeuThich).toBe(true);
     expect(res.tongSoYeuThich).toBe(42);
   });
@@ -63,6 +63,6 @@ describe('YeuThichService (P3-12.1)', () => {
 
     await yeuThichService.chuyenDoiYeuThich('microsoft/PowerToys');
 
-    expect(postSpy).toHaveBeenCalledWith('/apps/microsoft%2FPowerToys/favorite');
+    expect(postSpy).toHaveBeenCalledWith('/ung-dung/microsoft%2FPowerToys/yeu-thich');
   });
 });

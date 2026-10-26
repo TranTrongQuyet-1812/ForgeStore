@@ -79,7 +79,7 @@ export class XacThucService {
     const clientId = this.config.get<string>('GITHUB_CLIENT_ID')!;
     const callbackUrl =
       this.config.get<string>('GITHUB_CALLBACK_URL') ||
-      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/auth/callback`;
+      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/xac-thuc/callback`;
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -126,7 +126,7 @@ export class XacThucService {
 
     const callbackUrl =
       this.config.get<string>('GOOGLE_CALLBACK_URL') ||
-      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/auth/google/callback`;
+      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/xac-thuc/google/callback`;
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -384,7 +384,7 @@ export class XacThucService {
 
     const callbackUrl =
       this.config.get<string>('GOOGLE_CALLBACK_URL') ||
-      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/auth/google/callback`;
+      `http://localhost:${this.config.get<number>('PORT', 3000)}/api/v1/xac-thuc/google/callback`;
 
     // 1. Đổi code lấy Google tokens
     let tokenRes: Response;

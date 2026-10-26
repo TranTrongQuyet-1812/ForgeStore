@@ -28,7 +28,7 @@ import { VaiTro } from '@prisma/client';
 export class DanhGiaController {
   constructor(private readonly reviewsService: DanhGiaService) {}
 
-  @Get('apps/:id/reviews')
+  @Get('ung-dung/:id/danh-gia')
   @CongKhai()
   @ApiOperation({
     summary: 'Lấy danh sách đánh giá & nhận xét của ứng dụng',
@@ -53,7 +53,7 @@ export class DanhGiaController {
     return this.reviewsService.layDanhSachDanhGia(id, query);
   }
 
-  @Post('apps/:id/reviews')
+  @Post('ung-dung/:id/danh-gia')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -90,7 +90,7 @@ export class DanhGiaController {
     return this.reviewsService.taoDanhGia(maNguoiDung, id, dto);
   }
 
-  @Patch('reviews/:id')
+  @Patch('danh-gia/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -123,7 +123,7 @@ export class DanhGiaController {
     return this.reviewsService.suaDanhGia(user.maNguoiDung, id, dto, laQuanTri);
   }
 
-  @Delete('reviews/:id')
+  @Delete('danh-gia/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -155,7 +155,7 @@ export class DanhGiaController {
     return this.reviewsService.xoaDanhGia(user.maNguoiDung, id, laQuanTri);
   }
 
-  @Post('reviews/:id/helpful')
+  @Post('danh-gia/:id/huu-ich')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')

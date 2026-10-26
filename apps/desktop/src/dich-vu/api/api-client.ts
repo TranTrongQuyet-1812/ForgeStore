@@ -4,7 +4,7 @@
  * Tính năng chính (P3-03.1 & P3-03.2):
  * 1. Tự động đính kèm `Authorization: Bearer <accessToken>` từ bộ nhớ RAM.
  * 2. Cơ chế Single-Flight 401 Interceptor:
- *    - Khi gặp lỗi 401, tự động gọi `/auth/refresh` ĐÚNG MỘT LẦN.
+ *    - Khi gặp lỗi 401, tự động gọi `/xac-thuc/lam-moi` ĐÚNG MỘT LẦN.
  *    - Các request khác đến trong lúc đang refresh sẽ được xếp hàng (Promise Queue), không bắn bão request lên server.
  *    - Sau khi refresh thành công: Cập nhật accessToken trong RAM, xoay vòng refreshToken (nếu có) vào Windows Credential Manager, và tự động gửi lại toàn bộ request trong hàng đợi.
  *    - Nếu refresh thất bại: Hủy phiên, dọn sạch token và gọi logout callback.
@@ -81,7 +81,7 @@ export class ApiClient {
           throw new Error('Không tìm thấy Refresh Token trong Windows Credential Manager');
         }
 
-        const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        const response = await fetch(`${this.baseUrl}/xac-thuc/lam-moi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -165,8 +165,8 @@ export class ApiClient {
         `API [${endpoint}] trả về 401 Unauthorized, bắt đầu quy trình làm mới token`,
         'ApiClient',
       );
-      // Nếu chính endpoint /auth/refresh bị 401 hoặc request này đã là retry một lần rồi thì không retry nữa
-      if (endpoint.includes('/auth/refresh') || isRetry) {
+      // Nếu chính endpoint /xac-thuc/lam-moi bị 401 hoặc request này đã là retry một lần rồi thì không retry nữa
+      if (endpoint.includes('/xac-thuc/lam-moi') || isRetry) {
         await tokenStorage.clearAllTokens();
         this.notifyLogout();
         const errData = await response.json().catch(() => ({}));

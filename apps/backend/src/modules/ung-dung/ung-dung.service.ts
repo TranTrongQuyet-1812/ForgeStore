@@ -680,7 +680,7 @@ export class UngDungService {
   }
 
   /**
-   * API Duyệt Store (GET /apps) với bộ lọc, phân trang, sắp xếp và Cache (P2-23).
+   * API Duyệt Store (GET /ung-dung) với bộ lọc, phân trang, sắp xếp và Cache (P2-23).
    * Hỗ trợ bổ sung cờ daYeuThich nếu người dùng đã đăng nhập (P2-50.4).
    */
   async layDanhSachApps(
@@ -937,7 +937,7 @@ export class UngDungService {
   }
 
   /**
-   * API Chi tiết Ứng dụng (GET /apps/:id) theo UUID hoặc owner/repo slug (P2-24).
+   * API Chi tiết Ứng dụng (GET /ung-dung/:id) theo UUID hoặc owner/repo slug (P2-24).
    * Hỗ trợ bổ sung cờ laYeuThich nếu người dùng đã đăng nhập (P2-50.4).
    */
   async layChiTietApp(
@@ -1764,7 +1764,7 @@ export class UngDungService {
   }
 
   /**
-   * P2-40: Tìm kiếm thông minh (Smart Input Dispatcher - GET /search).
+   * P2-40: Tìm kiếm thông minh (Smart Input Dispatcher - GET /tim-kiem).
    * Phân luồng câu nhập:
    * 1. URL GitHub: Phát hiện link GitHub -> trả trạng thái nhận diện để Paste & Play.
    * 2. TEN_APP: Tìm kiếm trực tiếp trong CSDL Store qua ILIKE (tên, mô tả, slogan) -> fallback GitHub Search.
@@ -2101,7 +2101,7 @@ export class UngDungService {
   }
 
   /**
-   * P2-41: Thẩm định và nạp Repository (Paste & Play - POST /repos/inspect).
+   * P2-41: Thẩm định và nạp Repository (Paste & Play - POST /kho-chua/kiem-tra).
    * Kiểm tra điều kiện:
    * 1. URL hợp lệ.
    * 2. Repo tồn tại trên GitHub.
