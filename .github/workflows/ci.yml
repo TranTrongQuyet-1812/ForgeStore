@@ -53,15 +53,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Không cho docs/ và .env nằm trong Git
+      - name: Không cho docs/, .env và file quy tắc nội bộ nằm trong Git
         run: |
-          bad=$(git ls-files | grep -E '^docs/|(^|/)\.env($|\.)' | grep -vE '\.env\.example$' || true)
+          bad=$(git ls-files | grep -E '^docs/|(^|/)\.env($|\.)|^(AGENTS|CLAUDE|GEMINI)\.md$|^\.agents/|^\.antigravity/|^scratchpad/' | grep -vE '\.env\.example$' || true)
           if [ -n "$bad" ]; then
             echo "::error::Phát hiện file nội bộ hoặc file môi trường bị commit:"
             echo "$bad"
             exit 1
           fi
-          echo "✅ Không có docs/ hay .env trong Git."
+          echo "✅ Không có docs/, .env hay file quy tắc nội bộ trong Git."
 
       - name: Quét chuỗi giống khóa bí mật
         run: |
