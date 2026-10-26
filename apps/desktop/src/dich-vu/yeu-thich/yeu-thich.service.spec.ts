@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { yeuThichService } from './yeu-thich.service';
 import { apiClient } from '../api/api-client';
 
-describe('FavoritesService (P3-12.1)', () => {
+describe('YeuThichService (P3-12.1)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });

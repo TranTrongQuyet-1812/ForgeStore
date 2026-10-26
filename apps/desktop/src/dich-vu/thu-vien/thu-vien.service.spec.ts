@@ -4,7 +4,7 @@ import { apiClient } from '../api/api-client';
 import type { GhiNhanCaiDatRequest, UngDungDaCaiDto } from '@forgestore/types';
 import { NenTangHoTro } from '@forgestore/types';
 
-describe('LibraryService (P3-12.2)', () => {
+describe('ThuVienService (P3-12.2)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });

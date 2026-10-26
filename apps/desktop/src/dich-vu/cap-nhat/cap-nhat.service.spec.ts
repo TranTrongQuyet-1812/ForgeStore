@@ -6,7 +6,7 @@ import type { CheckUpdatesResponseDto } from '@forgestore/types';
 
 const mockDeviceId = 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d';
 
-describe('UpdaterService & useCapNhatStore (P3-12.3)', () => {
+describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useCapNhatStore.setState({
