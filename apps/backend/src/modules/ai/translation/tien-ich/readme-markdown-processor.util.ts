@@ -247,6 +247,16 @@ function layTieuDeTieuChuan(text: string): string {
     .toLocaleLowerCase('en-US');
 }
 
+function layTieuDeCoDinh(text: string): string | undefined {
+  const banDich = TU_KHOA_TIEU_DE_CO_DINH[layTieuDeTieuChuan(text)];
+  if (!banDich) return undefined;
+  const tienTo =
+    text.match(
+      /^(?:\s*(?:\d+(?:\.\d+)*[.)]?(?=\s|$)|[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D]+))+\s*/u,
+    )?.[0] ?? '';
+  return `${tienTo}${banDich}`;
+}
+
 function layMocTieuDe(text: string): { cap: number; start: number; end: number } | null {
   const atx = text.match(/^\s{0,3}(#{1,6})\s+/);
   if (atx) {
@@ -608,7 +618,7 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       const raw = boDauDong(sourceLine.text);
       const header = layMocTieuDe(raw);
       const headingText = header ? raw.slice(header.start, header.end).trim() : '';
-      fixedHeading = header ? TU_KHOA_TIEU_DE_CO_DINH[layTieuDeTieuChuan(headingText)] : undefined;
+      fixedHeading = header ? layTieuDeCoDinh(headingText) : undefined;
       const spans = tachNoiDungDong(markdown, sourceLine, vungGiuNguyen);
       for (const span of spans) {
         if (markdown.slice(span.batDau, span.ketThuc).trim())

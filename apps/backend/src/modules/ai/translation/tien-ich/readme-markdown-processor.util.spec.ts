@@ -159,6 +159,14 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
+  it('giữ emoji và số thứ tự đầu tiêu đề khi áp dụng bản dịch cố định', () => {
+    const source = '## 🚀 Features\n\n### 2. Installation\n\n#### 2.1 🚀 Quick Start';
+    const structure = phanTichReadme(source);
+    const result = rapLaiReadme(source, structure, new Map());
+
+    expect(result).toBe('## 🚀 Tính năng\n\n### 2. Cài đặt\n\n#### 2.1 🚀 Bắt đầu nhanh');
+  });
+
   it('giữ mã inline nhiều dòng và nội dung thẻ code HTML nguyên vẹn', () => {
     const source = 'Use `npm\n install` and <code>pnpm install</code> now.';
     const structure = phanTichReadme(source);
