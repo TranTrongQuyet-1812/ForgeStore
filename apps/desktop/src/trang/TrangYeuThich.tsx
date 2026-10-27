@@ -37,10 +37,10 @@ export const TrangYeuThich: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold font-display text-primary flex items-center gap-2">
             <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-            <span>Kho Yêu Thích Đồng Bộ Đám Mây</span>
+            <span>Kho Yêu Thích</span>
           </h1>
           <p className="text-xs text-muted mt-1">
-            Ứng dụng bạn đã lưu trữ sẽ tự động đồng bộ xuyên suốt sang ForgeStore Mobile (Module 4)
+            Ứng dụng bạn yêu thích được lưu vào tài khoản để dễ dàng tìm lại.
           </p>
         </div>
 
@@ -66,11 +66,10 @@ export const TrangYeuThich: React.FC = () => {
             </div>
             <div>
               <h3 className="text-xs font-bold text-primary font-display">
-                Đăng nhập để đồng bộ kho yêu thích
+                Đăng nhập để lưu kho yêu thích
               </h3>
               <p className="text-[11px] text-secondary mt-0.5">
-                Lưu ứng dụng yêu thích an toàn trên tài khoản đám mây và mở ngay trên máy tính hoặc
-                điện thoại.
+                Lưu ứng dụng yêu thích vào tài khoản để xem lại khi đăng nhập trên thiết bị khác.
               </p>
             </div>
           </div>
