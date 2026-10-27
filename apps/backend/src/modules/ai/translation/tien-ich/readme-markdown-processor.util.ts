@@ -431,19 +431,20 @@ function tachNoiDungDong(
   markdown: string,
   dong: DongNguon,
   vungGiuNguyen: Array<{ batDau: number; ketThuc: number }>,
-): Array<{ batDau: number; ketThuc: number }> {
+): { spans: Array<{ batDau: number; ketThuc: number }>; batDau: number; ketThuc: number } {
   const raw = boDauDong(dong.text);
   const heading = layMocTieuDe(raw);
   const list = raw.match(/^\s{0,3}(?:[-+*]|\d+[.)])\s+/);
   const quote = raw.match(/^\s{0,3}>\s?/);
-  const table = raw.match(/^\s*\|?/);
   const prefix = heading?.start ?? list?.[0].length ?? quote?.[0].length ?? 0;
   const content = raw.slice(prefix);
   const trimStart = content.length - content.trimStart().length;
-  const start = dong.batDau + prefix + trimStart;
+  let start = prefix + trimStart;
   const headingEnd = heading?.end;
   // Dòng phân cách của bảng là cấu trúc, không phải văn bản cần dịch.
-  if (table && /^\s*\|?\s*:?-{3,}/.test(content)) return [];
+  if (/^\s*\|?\s*:?-{3,}/.test(content)) {
+    return { spans: [], batDau: dong.batDau + start, ketThuc: dong.batDau + start };
+  }
   // Văn bản trên huy hiệu là nhãn máy sinh, cần giữ nguyên; alt ảnh nội dung vẫn được dịch.
   const phanDong = markdown.slice(dong.batDau, dong.batDau + raw.length);
   const anh = phanDong.match(/!\[([^\]]*)\]\(([^)]+)\)/);
@@ -453,11 +454,30 @@ function tachNoiDungDong(
     phanDong.trim() === anh[0] &&
     /(?:shields\.io|badge|badgen|img\.shields)/i.test(anh[2])
   ) {
-    return [];
+    return { spans: [], batDau: dong.batDau + start, ketThuc: dong.batDau + start };
   }
-  const text = raw.slice(prefix + trimStart, headingEnd === undefined ? raw.length : headingEnd);
-  const spans = layVungChu(text, start, vungGiuNguyen);
-  return spans;
+  if (anh?.[1] && phanDong.trim() === anh[0]) {
+    const viTriAlt = dong.batDau + phanDong.indexOf(anh[1]);
+    const span = { batDau: viTriAlt, ketThuc: viTriAlt + anh[1].length };
+    return { spans: [span], batDau: span.batDau, ketThuc: span.ketThuc };
+  }
+  const anhHtml = raw.match(/^\s*<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1[^>]*>\s*$/i);
+  if (anhHtml?.[2]) {
+    const altOffset = raw.indexOf(anhHtml[2]);
+    const span = {
+      batDau: dong.batDau + altOffset,
+      ketThuc: dong.batDau + altOffset + anhHtml[2].length,
+    };
+    return { spans: [span], batDau: span.batDau, ketThuc: span.ketThuc };
+  }
+  let end = headingEnd === undefined ? raw.length : headingEnd;
+  if (!heading && /^\s*\|/.test(raw.slice(start))) start = raw.indexOf('|', start) + 1;
+  if (!heading && /\|\s*$/.test(raw.slice(start, end))) end = raw.lastIndexOf('|', end - 1);
+  while (start < end && /\s/.test(raw[start]!)) start++;
+  while (end > start && /\s/.test(raw[end - 1]!)) end--;
+  const text = raw.slice(start, end);
+  const spans = layVungChu(text, dong.batDau + start, vungGiuNguyen);
+  return { spans, batDau: dong.batDau + start, ketThuc: dong.batDau + end };
 }
 
 /**
@@ -612,6 +632,7 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
     const endLine = lines[node.dongKetThuc - 1];
     if (!startLine || !endLine) continue;
     const nodeSpans: Array<{ batDau: number; ketThuc: number; dong: number }> = [];
+    const nodeRanges: Array<{ batDau: number; ketThuc: number; dong: number }> = [];
     let fixedHeading: string | undefined;
     for (let lineNo = node.dongBatDau; lineNo <= node.dongKetThuc; lineNo++) {
       const sourceLine = lines[lineNo - 1]!;
@@ -619,16 +640,19 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       const header = layMocTieuDe(raw);
       const headingText = header ? raw.slice(header.start, header.end).trim() : '';
       fixedHeading = header ? layTieuDeCoDinh(headingText) : undefined;
-      const spans = tachNoiDungDong(markdown, sourceLine, vungGiuNguyen);
-      for (const span of spans) {
+      const content = tachNoiDungDong(markdown, sourceLine, vungGiuNguyen);
+      if (content.spans.some((span) => markdown.slice(span.batDau, span.ketThuc).trim())) {
+        nodeRanges.push({ ...content, dong: lineNo });
+      }
+      for (const span of content.spans) {
         if (markdown.slice(span.batDau, span.ketThuc).trim())
           nodeSpans.push({ ...span, dong: lineNo });
       }
     }
     if (nodeSpans.length === 0) continue;
 
-    const start = nodeSpans[0]!.batDau;
-    const end = nodeSpans.at(-1)!.ketThuc;
+    const start = nodeRanges[0]!.batDau;
+    const end = nodeRanges.at(-1)!.ketThuc;
     const vanBanGoc = markdown.slice(start, end);
     const khungGiuNguyen: Record<string, string> = {};
     let cursor = start;
@@ -649,11 +673,23 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       vanBanDaChe += markdown.slice(span.batDau, span.ketThuc);
       cursor = span.ketThuc;
     }
+    const trailingGap = markdown.slice(cursor, end);
+    const trailingWhitespace = trailingGap.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    if (trailingWhitespace) {
+      const [, leading, immutable, trailing] = trailingWhitespace;
+      vanBanDaChe += leading;
+      if (immutable) {
+        const token = `⟦C${Object.keys(khungGiuNguyen).length + 1}⟧`;
+        khungGiuNguyen[token] = immutable;
+        vanBanDaChe += token;
+      }
+      vanBanDaChe += trailing;
+    }
     vung.push({
       batDau: start,
       ketThuc: end,
       loai: node.loai,
-      dong: nodeSpans[0]!.dong,
+      dong: nodeRanges[0]!.dong,
       tieuDeMuc: node.duongDanTieuDe,
       vanBanGoc,
       vanBanDaChe,

@@ -70,6 +70,37 @@ describe('ReadmeMarkdownProcessor', () => {
     ).toBe('<p class="notice">Đọc [hướng dẫn](https://example.com/a) ngay.</p>');
   });
 
+  it('đưa cú pháp link ở đầu hoặc cuối đoạn vào khung bảo vệ thay vì cắt khỏi câu dịch', () => {
+    const source = [
+      '### On Ubuntu (using [bat](https://example.com/bat))',
+      '',
+      '[Getting started](https://example.com/start) is simple; run `bat`.',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const ubuntu = structure.doan[0]!;
+    const linkedSentence = structure.doan[1]!;
+
+    expect(ubuntu.vanBanGoc).toBe('On Ubuntu (using [bat](https://example.com/bat))');
+    expect(ubuntu.vanBanDaChe).toContain('On Ubuntu (using ');
+    expect(ubuntu.vanBanDaChe).toContain('bat');
+    expect(ubuntu.vanBanDaChe).not.toContain('https://');
+    expect(linkedSentence.vanBanGoc).toBe(
+      '[Getting started](https://example.com/start) is simple; run `bat`.',
+    );
+    expect(linkedSentence.vanBanDaChe).toContain('Getting started');
+    expect(linkedSentence.vanBanDaChe).toContain('is simple; run');
+    expect(linkedSentence.vanBanDaChe).not.toContain('https://');
+
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map([[ubuntu.stt, ubuntu.vanBanDaChe.replace('On Ubuntu', 'Trên Ubuntu')]]),
+    );
+    expect(result).toBe(
+      '### Trên Ubuntu (using [bat](https://example.com/bat))\n\n[Getting started](https://example.com/start) is simple; run `bat`.',
+    );
+  });
+
   it('giữ alt của huy hiệu và phát hành alt ảnh nội dung để dịch', () => {
     const source =
       '![Build passing](https://img.shields.io/badge/build-passing-green)\n![Architecture](./architecture.png)\n<img alt="System diagram" src="./system.png">';
