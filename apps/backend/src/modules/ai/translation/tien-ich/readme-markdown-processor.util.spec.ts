@@ -127,6 +127,16 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(kiemBatBienReadme(source, result).canhBao).not.toContain('url_thay_doi');
   });
 
+  it('giữ nguyên cụm nhãn chuyển ngôn ngữ thay vì phát hành để dịch', () => {
+    const source =
+      '[English](README.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)';
+    const structure = phanTichReadme(source);
+
+    expect(structure.doan).toHaveLength(1);
+    expect(structure.doan[0]?.canDich).toBe(false);
+    expect(rapLaiReadme(source, structure, new Map())).toBe(source);
+  });
+
   it('báo các bất biến lỗi và không tự đặt ngưỡng độ dài', () => {
     const source = '# Guide\n- one\n- two\n\n`run` https://example.com';
     const result = kiemBatBienReadme(source, '# Hướng dẫn\n- một\n`changed` https://example.org');
@@ -384,5 +394,20 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(layLoiBatBienReadme(['url_thay_doi', 'nguong_do_dai_cho_benchmark'])).toEqual([
       'url_thay_doi',
     ]);
+  });
+
+  it('chỉ báo chữ Hán mới không có trong nguồn của chính đoạn được dịch', () => {
+    const retainedHan = kiemBatBienReadme('README có 中文 và tên Bat', 'Bat', {
+      doan: [
+        { goc: 'Bat', dich: 'Bat' },
+        { goc: '中文', dich: '中文' },
+      ],
+    });
+    const introducedHan = kiemBatBienReadme('Run Bat', '运行 Bat', {
+      doan: [{ goc: 'Run Bat', dich: '运行 Bat' }],
+    });
+
+    expect(retainedHan.canhBao).not.toContain('con_chu_han');
+    expect(introducedHan.canhBao).toContain('con_chu_han');
   });
 });

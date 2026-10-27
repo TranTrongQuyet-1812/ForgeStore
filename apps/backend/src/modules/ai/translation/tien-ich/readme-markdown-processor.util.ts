@@ -257,6 +257,31 @@ function layTieuDeCoDinh(text: string): string | undefined {
   return `${tienTo}${banDich}`;
 }
 
+const NHAN_NGON_NGU_README = new Set([
+  'english',
+  '中文',
+  '简体中文',
+  '繁體中文',
+  '繁体中文',
+  '日本語',
+  '한국어',
+]);
+
+function laCumChuyenNgonNgu(text: string): boolean {
+  const nhan = text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .split(/[|/·•]/)
+    .map((item) =>
+      item
+        .replace(/[`*_~]/g, '')
+        .trim()
+        .toLocaleLowerCase('en-US'),
+    )
+    .filter(Boolean);
+  return nhan.length >= 2 && nhan.every((item) => NHAN_NGON_NGU_README.has(item));
+}
+
 function layMocTieuDe(text: string): { cap: number; start: number; end: number } | null {
   const atx = text.match(/^\s{0,3}(#{1,6})\s+/);
   if (atx) {
@@ -744,7 +769,7 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       dong: span.dong,
       tieuDeMuc: span.tieuDeMuc,
       vanBanGoc: source,
-      canDich: !fixed && /[\p{L}]/u.test(source),
+      canDich: !fixed && !laCumChuyenNgonNgu(source) && /[\p{L}]/u.test(source),
       vanBanDaChe: fixed ?? span.vanBanDaChe,
       khungGiuNguyen: span.khungGiuNguyen,
     };
@@ -954,7 +979,12 @@ export function kiemBatBienReadme(
   if (/⟦C\d+⟧|\[C\d+\]/.test(dich)) warnings.push('con_ma_che');
   const vanGoc = (tuyChon.doan ?? [{ goc, dich }]).map((segment) => segment.goc).join('\n');
   const vanDich = (tuyChon.doan ?? [{ goc, dich }]).map((segment) => segment.dich).join('\n');
-  if (/\p{Script=Han}/u.test(vanDich)) warnings.push('con_chu_han');
+  const cacDoanSoSanhChuHan = tuyChon.doan ?? [{ goc, dich }];
+  const coChuHanMoi = cacDoanSoSanhChuHan.some((segment) => {
+    const chuHanNguon = new Set(segment.goc.match(/\p{Script=Han}/gu) ?? []);
+    return (segment.dich.match(/\p{Script=Han}/gu) ?? []).some((kyTu) => !chuHanNguon.has(kyTu));
+  });
+  if (coChuHanMoi) warnings.push('con_chu_han');
   if (/(.+)(?:\r?\n\1){2,}/u.test(vanDich)) warnings.push('dong_lap_lien_tiep');
   for (const term of BANG_THUAT_NGU_KIEM) {
     if (term.goc.test(vanGoc) && !term.dich.test(vanDich))
