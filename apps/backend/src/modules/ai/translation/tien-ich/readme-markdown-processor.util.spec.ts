@@ -190,6 +190,65 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(bySource.get('This section defaults to the careful level.')?.mucQuanTrong).toBe(1);
   });
 
+  it('nhận tiêu đề tiếng Trung thông dụng ở bảng cố định và bảng phân mức', () => {
+    const source = [
+      '## 说明',
+      '介绍项目。',
+      '## 安装',
+      '安装应用。',
+      '## 使用',
+      '使用应用。',
+      '## 功能',
+      '描述功能。',
+      '## 赞助',
+      '感谢赞助。',
+      '## 致谢贡献者',
+      '感谢贡献者。',
+      '## 相关项目',
+      '列出相关项目。',
+      '## 使用示例',
+      '运行示例。',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const bySource = new Map(structure.doan.map((segment) => [segment.vanBanGoc, segment]));
+
+    expect(bySource.get('说明')?.vanBanDaChe).toBe('Giới thiệu');
+    expect(bySource.get('介绍项目。')?.mucQuanTrong).toBe(2);
+    expect(bySource.get('安装')?.vanBanDaChe).toBe('Cài đặt');
+    expect(bySource.get('安装应用。')?.mucQuanTrong).toBe(1);
+    expect(bySource.get('使用')?.vanBanDaChe).toBe('Cách dùng');
+    expect(bySource.get('使用应用。')?.mucQuanTrong).toBe(1);
+    expect(bySource.get('功能')?.vanBanDaChe).toBe('Tính năng');
+    expect(bySource.get('描述功能。')?.mucQuanTrong).toBe(2);
+    expect(bySource.get('赞助')?.vanBanDaChe).toBe('Nhà tài trợ');
+    expect(bySource.get('感谢赞助。')?.mucQuanTrong).toBe(3);
+    expect(bySource.get('致谢贡献者')?.vanBanDaChe).toBe('Lời cảm ơn người đóng góp');
+    expect(bySource.get('感谢贡献者。')?.mucQuanTrong).toBe(3);
+    expect(bySource.get('相关项目')?.vanBanDaChe).toBe('Dự án liên quan');
+    expect(bySource.get('列出相关项目。')?.mucQuanTrong).toBe(2);
+    expect(bySource.get('使用示例')?.vanBanDaChe).toBe('Ví dụ sử dụng');
+    expect(bySource.get('运行示例。')?.mucQuanTrong).toBe(1);
+  });
+
+  it('chấp nhận cả hai cách dịch client và bỏ qua client chỉ nằm trong đường dẫn', () => {
+    const translatedAsApplication = kiemBatBienReadme(
+      'A BitTorrent client connects here.',
+      'Ứng dụng khách BitTorrent kết nối tại đây.',
+    );
+    const translatedAsMachine = kiemBatBienReadme(
+      'The client connects to the server.',
+      'Máy khách kết nối với máy chủ.',
+    );
+    const filePathOnly = kiemBatBienReadme(
+      'Open client/README.md and read client-config.json.',
+      'Mở client/README.md và đọc client-config.json.',
+    );
+
+    expect(translatedAsApplication.canhBao).not.toContain('sai_thuat_ngu_client');
+    expect(translatedAsMachine.canhBao).not.toContain('sai_thuat_ngu_client');
+    expect(filePathOnly.canhBao).not.toContain('sai_thuat_ngu_client');
+  });
+
   it('mã inline thường không nâng mức, còn tiêu đề mức 3 vẫn dùng bản Việt cố định', () => {
     const source = [
       '## Features',
@@ -233,23 +292,42 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
-  it('từ chối khi mô hình đổi thứ tự ký hiệu của phần phải giữ nguyên', () => {
-    const structure = phanTichReadme('Read `code` and https://example.com now.');
+  it('cho phép đổi thứ tự token nhưng giữ nguyên mã inline, URL và dấu câu sát token', () => {
+    const source =
+      "The single `skill` runs `skill`'s optional https://example.com command.\n\n```sh\nprintf 'unchanged'\n```";
+    const structure = phanTichReadme(source);
     const segment = structure.doan[0]!;
     const tokens = Object.keys(segment.khungGiuNguyen);
-    expect(tokens).toHaveLength(2);
-    const swapped = segment.vanBanDaChe
-      .replace(tokens[0]!, 'TEMP')
-      .replace(tokens[1]!, tokens[0]!)
-      .replace('TEMP', tokens[1]!);
+    expect(tokens).toHaveLength(3);
+    const translated = `Kỹ năng duy nhất là ${tokens[0]}: chạy tùy chọn ${tokens[2]} của ${tokens[1]}.`;
+    const result = rapLaiReadme(source, structure, new Map([[segment.stt, translated]]));
+
+    expect(result).toBe(
+      "Kỹ năng duy nhất là `skill`: chạy tùy chọn https://example.com của `skill`.\n\n```sh\nprintf 'unchanged'\n```",
+    );
+    expect(result.match(/`skill`/g)).toHaveLength(2);
+    expect(result).toContain('https://example.com');
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('khung_van_ban_thay_doi');
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('ma_inline_thay_doi');
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('url_thay_doi');
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('khoi_code_thay_doi');
+  });
+
+  it('từ chối token bị thiếu, lặp hoặc không thuộc đoạn nguồn', () => {
+    const source = 'Run `one` and `two` now.';
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const [first, second] = Object.keys(segment.khungGiuNguyen);
 
     expect(() =>
-      rapLaiReadme(
-        'Read `code` and https://example.com now.',
-        structure,
-        new Map([[segment.stt, swapped]]),
-      ),
-    ).toThrow('Thứ tự ký hiệu giữ nguyên bị đổi');
+      rapLaiReadme(source, structure, new Map([[segment.stt, `Chạy ${first}`]])),
+    ).toThrow('Số lượng ký hiệu giữ nguyên bị đổi');
+    expect(() =>
+      rapLaiReadme(source, structure, new Map([[segment.stt, `Chạy ${first} ${first} ${second}`]])),
+    ).toThrow('Số lượng ký hiệu giữ nguyên bị đổi');
+    expect(() =>
+      rapLaiReadme(source, structure, new Map([[segment.stt, `Chạy ${first} ${second} ⟦C3⟧`]])),
+    ).toThrow('Ký hiệu giữ nguyên không thuộc đoạn');
   });
 
   it('khôi phục nguyên văn URL có ký hiệu dollar và bắt thay đổi khung sau khi ráp', () => {

@@ -54,6 +54,20 @@ export interface CauTrucReadme {
 const TU_KHOA_TIEU_DE_CO_DINH: Record<string, string> = {
   license: 'Giấy phép',
   许可证: 'Giấy phép',
+  安装: 'Cài đặt',
+  使用: 'Cách dùng',
+  使用方法: 'Cách dùng',
+  使用示例: 'Ví dụ sử dụng',
+  使用步骤: 'Các bước sử dụng',
+  功能: 'Tính năng',
+  特性: 'Tính năng',
+  核心特性: 'Tính năng cốt lõi',
+  功能特点: 'Tính năng',
+  说明: 'Giới thiệu',
+  简介: 'Giới thiệu',
+  关于项目: 'Giới thiệu dự án',
+  项目介绍: 'Giới thiệu dự án',
+  项目简介: 'Giới thiệu dự án',
   installation: 'Cài đặt',
   install: 'Cài đặt',
   installing: 'Cài đặt',
@@ -75,7 +89,27 @@ const TU_KHOA_TIEU_DE_CO_DINH: Record<string, string> = {
   'getting started': 'Bắt đầu',
   'get started': 'Bắt đầu',
   contributors: 'Người đóng góp',
+  贡献者: 'Người đóng góp',
+  贡献者名单: 'Người đóng góp',
+  贡献: 'Đóng góp',
+  贡献代码: 'Đóng góp mã',
+  参与贡献: 'Đóng góp',
+  致谢贡献者: 'Lời cảm ơn người đóng góp',
+  感谢以下贡献者们: 'Lời cảm ơn người đóng góp',
   sponsors: 'Nhà tài trợ',
+  赞助: 'Nhà tài trợ',
+  赞助商: 'Nhà tài trợ',
+  项目赞助: 'Tài trợ dự án',
+  更新日志: 'Nhật ký thay đổi',
+  相关项目: 'Dự án liên quan',
+  免责声明: 'Tuyên bố miễn trừ trách nhiệm',
+  注意事项: 'Lưu ý',
+  从源码安装: 'Cài đặt từ mã nguồn',
+  安装依赖: 'Cài đặt thành phần phụ thuộc',
+  环境变量: 'Biến môi trường',
+  开发: 'Phát triển',
+  下载: 'Tải về',
+  开源许可: 'Giấy phép mã nguồn mở',
   sponsor: 'Nhà tài trợ',
   backers: 'Người ủng hộ',
   donate: 'Ủng hộ',
@@ -111,6 +145,10 @@ const TU_KHOA_TIEU_DE_CO_DINH: Record<string, string> = {
   credits: 'Ghi công',
   acknowledgements: 'Lời cảm ơn',
   acknowledgments: 'Lời cảm ơn',
+  致谢: 'Lời cảm ơn',
+  鸣谢: 'Lời cảm ơn',
+  特别感谢: 'Lời cảm ơn đặc biệt',
+  感谢赞助者: 'Lời cảm ơn nhà tài trợ',
   thanks: 'Lời cảm ơn',
   'special thanks': 'Lời cảm ơn đặc biệt',
   build: 'Build',
@@ -189,7 +227,7 @@ const BANG_THUAT_NGU_KIEM = [
   { goc: /\bdirectories\b|\bdirectory\b|\bfolders?\b/i, dich: /thư mục/i, ma: 'directory' },
   { goc: /\bsecurity\b/i, dich: /bảo mật/i, ma: 'security' },
   { goc: /\bbugs?\b/i, dich: /lỗi/i, ma: 'bug' },
-  { goc: /\bclients?\b/i, dich: /máy khách/i, ma: 'client' },
+  { goc: /\bclients?\b/i, dich: /máy khách|ứng dụng khách/i, ma: 'client' },
   { goc: /\bbinaries\b|\bbinary\b/i, dich: /tệp thực thi/i, ma: 'binary' },
   { goc: /\bopen-source\b/i, dich: /mã nguồn mở/i, ma: 'open_source' },
   { goc: /\bcloud\b/i, dich: /đám mây/i, ma: 'cloud' },
@@ -318,6 +356,28 @@ const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
   security: 1,
   license: 1,
   licence: 1,
+  安装: 1,
+  使用: 1,
+  使用方法: 1,
+  使用示例: 1,
+  使用步骤: 1,
+  下载: 1,
+  安装依赖: 1,
+  从源码安装: 1,
+  配置: 1,
+  环境变量: 1,
+  要求: 1,
+  常见问题: 1,
+  常见问题排查: 1,
+  从源码: 1,
+  兼容性: 1,
+  支持平台: 1,
+  权限: 1,
+  安全: 1,
+  许可证: 1,
+  开源许可: 1,
+  免责声明: 1,
+  注意事项: 1,
   features: 2,
   about: 2,
   overview: 2,
@@ -344,6 +404,26 @@ const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
   tools: 2,
   'table of contents': 2,
   contents: 2,
+  说明: 2,
+  简介: 2,
+  关于项目: 2,
+  项目介绍: 2,
+  项目简介: 2,
+  功能: 2,
+  特性: 2,
+  核心特性: 2,
+  功能特点: 2,
+  技术亮点: 2,
+  路线图: 2,
+  对比: 2,
+  更新日志: 2,
+  相关项目: 2,
+  发布说明: 2,
+  贡献: 2,
+  贡献代码: 2,
+  参与贡献: 2,
+  开发: 2,
+  文档: 1,
   sponsors: 3,
   sponsor: 3,
   supporters: 3,
@@ -356,6 +436,19 @@ const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
   acknowledgments: 3,
   'star history': 3,
   donate: 3,
+  赞助: 3,
+  赞助商: 3,
+  项目赞助: 3,
+  致谢贡献者: 3,
+  贡献者: 3,
+  贡献者名单: 3,
+  感谢以下贡献者们: 3,
+  鸣谢: 3,
+  致谢: 3,
+  特别感谢: 3,
+  星标历史: 3,
+  捐赠: 3,
+  感谢赞助者: 3,
 };
 
 function layMucQuanTrong(tieuDeMuc: string[], vanBanGoc: string): MucQuanTrongReadme {
@@ -375,9 +468,12 @@ function layMucQuanTrong(tieuDeMuc: string[], vanBanGoc: string): MucQuanTrongRe
       .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    const rule = Object.entries(TU_KHOA_MUC_QUAN_TRONG).find(([keyword]) =>
-      ` ${normalized} `.includes(` ${keyword} `),
-    );
+    const rule = Object.entries(TU_KHOA_MUC_QUAN_TRONG)
+      .sort(([left], [right]) => right.length - left.length)
+      .find(([keyword]) => {
+        if (/[\p{Script=Han}]/u.test(keyword)) return normalized.includes(keyword);
+        return ` ${normalized} `.includes(` ${keyword} `);
+      });
     if (rule) return rule[1];
   }
   return 1;
@@ -910,23 +1006,30 @@ export function rapLaiReadme(
 
 /** Khôi phục đúng phần cú pháp đã thay bằng ký hiệu C trước khi ghép Markdown. */
 export function goKhungGiuNguyen(segment: DoanDichReadme, text: string): string {
-  let result = text;
-  const moc = Object.keys(segment.khungGiuNguyen).map((token) => {
-    const thayThe = token.replace('⟦', '[').replace('⟧', ']');
-    const viTriGoc = result.indexOf(token);
-    const viTriThayThe = result.indexOf(thayThe);
-    const viTri = viTriGoc >= 0 ? viTriGoc : viTriThayThe;
-    if (viTri < 0) throw new Error(`Thiếu ký hiệu giữ nguyên ${token} ở đoạn ${segment.stt}`);
-    return { token, thayThe, viTri, dungNgoacGoc: viTriGoc >= 0 };
+  const expected = new Map(
+    Object.entries(segment.khungGiuNguyen).map(([token, original]) => [
+      token.replace('⟦', '[').replace('⟧', ']'),
+      original,
+    ]),
+  );
+  const found = text.match(/(?:⟦C\d+⟧|\[C\d+\])/g) ?? [];
+  const counts = new Map<string, number>();
+  for (const token of found) {
+    const canonical = token.startsWith('⟦') ? token.replace('⟦', '[').replace('⟧', ']') : token;
+    if (!expected.has(canonical))
+      throw new Error(`Ký hiệu giữ nguyên không thuộc đoạn ${segment.stt}: ${token}`);
+    counts.set(canonical, (counts.get(canonical) ?? 0) + 1);
+  }
+  if (
+    counts.size !== expected.size ||
+    [...expected.keys()].some((token) => counts.get(token) !== 1)
+  ) {
+    throw new Error(`Số lượng ký hiệu giữ nguyên bị đổi ở đoạn ${segment.stt}`);
+  }
+  return text.replace(/(?:⟦C\d+⟧|\[C\d+\])/g, (token) => {
+    const canonical = token.startsWith('⟦') ? token.replace('⟦', '[').replace('⟧', ']') : token;
+    return expected.get(canonical)!;
   });
-  if (moc.some((item, index) => index > 0 && item.viTri <= moc[index - 1]!.viTri)) {
-    throw new Error(`Thứ tự ký hiệu giữ nguyên bị đổi ở đoạn ${segment.stt}`);
-  }
-  for (const item of moc) {
-    const original = segment.khungGiuNguyen[item.token]!;
-    result = result.replace(item.dungNgoacGoc ? item.token : item.thayThe, () => original);
-  }
-  return result;
 }
 
 export interface KetQuaBatBienReadme {
@@ -1025,16 +1128,31 @@ function layKhungReadme(markdown: string): string {
   let result = markdown;
   for (const segment of [...segments].reverse()) {
     const parts = segment.vanBanDaChe.split(/(⟦C\d+⟧)/g);
-    const khungDoan = parts
+    const protectedValues = parts
       .map((part) => {
-        if (/^⟦C\d+⟧$/.test(part))
-          return `${part}:${JSON.stringify(segment.khungGiuNguyen[part] ?? '')}`;
-        return '';
+        if (/^⟦C\d+⟧$/.test(part)) {
+          const protectedValue = segment.khungGiuNguyen[part] ?? '';
+          const codeWithNearbyPunctuation = protectedValue.match(
+            /^[\p{P}]*(`+[^`\n]+`+)[\p{P}]*$/u,
+          );
+          return codeWithNearbyPunctuation?.[1] ?? protectedValue;
+        }
+        return undefined;
       })
-      .join('');
-    result = `${result.slice(0, segment.viTriBatDau)}${khungDoan}${result.slice(segment.viTriKetThuc)}`;
+      .filter((part): part is string => part !== undefined)
+      .sort();
+    result = `${result.slice(0, segment.viTriBatDau)}${JSON.stringify(protectedValues)}${result.slice(segment.viTriKetThuc)}`;
   }
   return result;
+}
+
+/** Bỏ tên đường dẫn khỏi kiểm thuật ngữ; chúng là định danh cần giữ nguyên. */
+function boTenTepVaThuMuc(text: string): string {
+  return text
+    .replace(/`+[^`\n]*`+/g, ' ')
+    .replace(/(?:https?:\/\/|mailto:)[^\s<>)\]]+/gi, ' ')
+    .replace(/(?<![\w])(?:[\w.@+-]+[\\/])+[\w.@+-]+(?:\.[\w-]+)?/g, ' ')
+    .replace(/(?<![\p{L}\p{N}])[\w.@+-]*client[\w.@+-]*\.[\w-]+\b/giu, ' ');
 }
 
 /** So bất biến cấu trúc và nội dung. Ngưỡng độ dài chưa được đo nên chỉ báo chờ, không tự đặt số. */
@@ -1086,7 +1204,8 @@ export function kiemBatBienReadme(
   if (coChuHanMoi) warnings.push('con_chu_han');
   if (/(.+)(?:\r?\n\1){2,}/u.test(vanDich)) warnings.push('dong_lap_lien_tiep');
   for (const term of BANG_THUAT_NGU_KIEM) {
-    if (term.goc.test(vanGoc) && !term.dich.test(vanDich))
+    const vanGocKiem = term.ma === 'client' ? boTenTepVaThuMuc(vanGoc) : vanGoc;
+    if (term.goc.test(vanGocKiem) && !term.dich.test(vanDich))
       warnings.push(`sai_thuat_ngu_${term.ma}`);
   }
   if (tuyChon.nguongDoDaiDaDo !== true) warnings.push('nguong_do_dai_cho_benchmark');
