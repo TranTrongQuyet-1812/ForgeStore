@@ -30,6 +30,13 @@ import type { ThongTinUngDungRegistry } from '../dich-vu/cai-dat-ung-dung/kieu-c
 import { xacThucService } from '../dich-vu/xac-thuc/xac-thuc.service';
 import { confirmDialog } from '../kho-trang-thai/useHopThoaiStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
+import {
+  THONG_BAO_CHUA_DANG_NHAP,
+  THONG_BAO_KIEM_TRA_LOI,
+  THONG_BAO_THU_VIEN_TRONG,
+  thongBaoTheoSoLuong,
+  type ThongBaoKiemTra,
+} from '../dich-vu/cap-nhat/thong-bao-kiem-tra';
 import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
 
 export const TrangThuVien: React.FC = () => {
@@ -52,6 +59,7 @@ export const TrangThuVien: React.FC = () => {
   const [registryMap, setRegistryMap] = useState<Record<string, ThongTinUngDungRegistry | null>>(
     {},
   );
+  const [dangKiemTraThuCong, setDangKiemTraThuCong] = useState(false);
   const [isCheckingRegistry, setIsCheckingRegistry] = useState(false);
   const [isUninstallingId, setIsUninstallingId] = useState<string | null>(null);
   const [isConfirmingCliId, setIsConfirmingCliId] = useState<string | null>(null);
@@ -238,28 +246,33 @@ export const TrangThuVien: React.FC = () => {
 
   const allInstalledApps = Array.from(mergedAppsMap.values());
 
-  // Chỉ thông báo từ thao tác chủ động; lượt tự kiểm tra khi mở trang không gọi hàm này.
-  const kiemTraCapNhatThuCong = async () => {
+  // Tải lại danh sách rồi kiểm tra với máy chủ, trả về thông báo phù hợp để hiện cho người dùng.
+  const chayKiemTraThuCong = async (): Promise<ThongBaoKiemTra> => {
     if (!isAuthenticated || !maThietBi) {
       void refetch();
-      toast.info('Hãy đăng nhập để kiểm tra cập nhật.');
-      return;
+      return THONG_BAO_CHUA_DANG_NHAP;
     }
     const ketQuaTaiThuVien = await refetch();
-    if (ketQuaTaiThuVien.isError) {
-      toast.error('Không kiểm tra được cập nhật. Vui lòng thử lại.');
-      return;
-    }
-    if ((ketQuaTaiThuVien.data ?? []).length === 0) {
-      toast.info('Chưa có ứng dụng nào để kiểm tra.');
-      return;
-    }
+    if (ketQuaTaiThuVien.isError) return THONG_BAO_KIEM_TRA_LOI;
+    if ((ketQuaTaiThuVien.data ?? []).length === 0) return THONG_BAO_THU_VIEN_TRONG;
 
-    const soLuong = await kiemTraCapNhat(maThietBi);
-    if (soLuong === null) toast.error('Không kiểm tra được cập nhật. Vui lòng thử lại.');
-    else if (soLuong === 0) toast.success('Tất cả ứng dụng đã là bản mới nhất.');
-    else toast.info(`Có ${soLuong} ứng dụng có bản cập nhật mới.`);
+    return thongBaoTheoSoLuong(await kiemTraCapNhat(maThietBi));
   };
+
+  // Chỉ thông báo từ thao tác chủ động; lượt tự kiểm tra khi mở trang không gọi hàm này.
+  // Cờ dangKiemTraThuCong chặn bấm liên tiếp vì cờ dangKiemTra của store chỉ bật lúc gọi máy chủ,
+  // còn bước tải lại danh sách phía trước thì chưa có cờ, bấm nhanh sẽ hiện trùng thông báo.
+  const kiemTraCapNhatThuCong = async () => {
+    if (dangKiemTraThuCong) return;
+    setDangKiemTraThuCong(true);
+    try {
+      const thongBao = await chayKiemTraThuCong();
+      toast[thongBao.loai](thongBao.noiDung);
+    } finally {
+      setDangKiemTraThuCong(false);
+    }
+  };
+  const dangQuet = dangKiemTra || dangKiemTraThuCong;
 
   // Lọc theo ô tìm kiếm
   const filteredApps = allInstalledApps.filter((app) =>
@@ -784,13 +797,13 @@ export const TrangThuVien: React.FC = () => {
             onClick={() => {
               void kiemTraCapNhatThuCong();
             }}
-            disabled={dangKiemTra}
+            disabled={dangQuet}
             className="btn-tactile h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-2 transition-all shadow-xs focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 text-accent-forge ${dangKiemTra ? 'animate-spin' : ''}`}
+              className={`w-3.5 h-3.5 text-accent-forge ${dangQuet ? 'animate-spin' : ''}`}
             />
-            <span>{dangKiemTra ? 'Đang quét...' : 'Kiểm Tra Cập Nhật'}</span>
+            <span>{dangQuet ? 'Đang quét...' : 'Kiểm Tra Cập Nhật'}</span>
             {soLuongBanCapNhat > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-accent-forge text-white font-mono text-[10px] font-bold">
                 {soLuongBanCapNhat}
