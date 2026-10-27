@@ -713,7 +713,7 @@ export const TrangThuVien: React.FC = () => {
       // Nếu không tìm thấy UninstallString trong registry: hỏi dọn bản ghi
       const xacNhanXoa = await confirmDialog({
         title: 'Xóa khỏi danh sách quản lý',
-        description: `Không tìm thấy lệnh gỡ cài đặt trong Registry Windows cho "${app.tenApp}".\n\nBạn có muốn xóa phần mềm này khỏi danh sách quản lý?`,
+        description: `Không tìm thấy thông tin gỡ cài đặt của "${app.tenApp}" trên Windows.\n\nBạn có muốn xóa ứng dụng này khỏi danh sách quản lý?`,
         confirmLabel: 'Xóa bỏ',
         cancelLabel: 'Hủy',
         variant: 'warning',

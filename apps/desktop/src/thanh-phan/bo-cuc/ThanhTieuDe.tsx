@@ -155,9 +155,7 @@ export const ThanhTieuDe: React.FC = () => {
       <div className="flex items-center gap-2">
         <button
           onClick={toggleTheme}
-          title={
-            theme === 'dark' ? 'Chuyển sang Trắng ngà sữa (Light)' : 'Chuyển sang Dark than chì'
-          }
+          title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
           className="w-8 h-8 rounded-xl flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors"
         >
           {theme === 'dark' ? (

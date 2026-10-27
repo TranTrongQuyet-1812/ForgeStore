@@ -535,7 +535,7 @@ export const TrangKhamPha: React.FC = () => {
             </div>
             <h3 className="text-sm font-bold text-primary">Không thể kết nối máy chủ Store</h3>
             <p className="text-xs text-muted max-w-md">
-              Vui lòng kiểm tra lại dịch vụ Backend hoặc bấm thử lại.
+              Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.
             </p>
             <button
               onClick={() => refetchApps()}

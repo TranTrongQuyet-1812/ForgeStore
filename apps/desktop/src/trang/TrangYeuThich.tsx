@@ -40,7 +40,7 @@ export const TrangYeuThich: React.FC = () => {
             <span>Kho Yêu Thích</span>
           </h1>
           <p className="text-xs text-muted mt-1">
-            Ứng dụng bạn yêu thích được lưu vào tài khoản để dễ dàng tìm lại.
+            Ứng dụng yêu thích được lưu theo tài khoản của bạn, đăng nhập ở đâu cũng thấy.
           </p>
         </div>
 

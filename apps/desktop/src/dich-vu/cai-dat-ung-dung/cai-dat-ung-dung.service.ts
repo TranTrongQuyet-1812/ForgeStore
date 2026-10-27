@@ -251,7 +251,7 @@ export class CaiDatUngDungService {
       phanTram: 100,
       tocDoBps: 0,
       trangThai: 'XAC_MINH',
-      thongDiep: 'Đang xác minh mã băm SHA-256...',
+      thongDiep: 'Đang kiểm tra tệp tải về...',
     });
     await new Promise((resolve) => setTimeout(resolve, 200));
 

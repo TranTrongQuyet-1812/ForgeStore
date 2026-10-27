@@ -136,15 +136,15 @@ export const TrangCaiDat: React.FC = () => {
           <Settings className="w-5 h-5 text-muted" />
           <span>Cài Đặt Ứng Dụng</span>
         </h1>
-        <p className="text-xs text-muted mt-1">Tùy chỉnh giao diện và xem thông tin thiết bị</p>
+        <p className="text-xs text-muted mt-1">
+          Chọn giao diện, thư mục lưu và xem thông tin máy của bạn.
+        </p>
       </div>
 
       {/* Chọn giao diện */}
       <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
-        <h3 className="text-sm font-semibold font-display text-primary">Chế độ hiển thị</h3>
-        <p className="text-xs text-secondary">
-          Chọn giao diện sáng hoặc tối theo sở thích của bạn.
-        </p>
+        <h3 className="text-sm font-semibold font-display text-primary">Giao diện</h3>
+        <p className="text-xs text-secondary">Chọn giao diện tối hoặc sáng cho dễ nhìn.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div
@@ -159,10 +159,8 @@ export const TrangCaiDat: React.FC = () => {
               <Moon className="w-5 h-5 text-accent-ai" />
             </div>
             <div>
-              <div className="text-xs font-semibold text-primary">Tối (than chì dịu mắt)</div>
-              <div className="text-[11px] text-muted">
-                Tông than chì dịu mắt, không dùng nền đen tuyệt đối
-              </div>
+              <div className="text-xs font-semibold text-primary">Giao diện tối</div>
+              <div className="text-[11px] text-muted">Nền tối, dịu mắt</div>
             </div>
           </div>
 
@@ -178,8 +176,8 @@ export const TrangCaiDat: React.FC = () => {
               <Sun className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <div className="text-xs font-semibold text-primary">Sáng (ngà sữa)</div>
-              <div className="text-[11px] text-muted">Tông ngà sữa dịu mắt</div>
+              <div className="text-xs font-semibold text-primary">Giao diện sáng</div>
+              <div className="text-[11px] text-muted">Nền sáng ấm, đỡ chói mắt</div>
             </div>
           </div>
         </div>
@@ -409,8 +407,8 @@ export const TrangCaiDat: React.FC = () => {
               <span>Nhật ký hoạt động</span>
             </h3>
             <p className="text-xs text-secondary mt-1">
-              Ghi lại quá trình tải, kiểm tra tệp, cài đặt, gỡ ứng dụng và lỗi. Thông tin đăng nhập
-              cùng dữ liệu nhạy cảm được tự động che giấu.
+              Ghi lại việc tải về, kiểm tra tệp, cài đặt, gỡ ứng dụng và lỗi kết nối để dễ tìm
+              nguyên nhân khi có sự cố. Thông tin đăng nhập và dữ liệu nhạy cảm được tự động che đi.
             </p>
           </div>
         </div>
@@ -461,10 +459,10 @@ export const TrangCaiDat: React.FC = () => {
           </div>
           <div className="flex justify-between py-1.5 border-b border-border/50 text-secondary">
             <span>Nền tảng hệ điều hành:</span>
-            <span className="font-mono text-primary font-medium">Windows</span>
+            <span className="font-mono text-primary font-medium">Windows 64-bit</span>
           </div>
           <div className="flex justify-between py-1.5 text-secondary">
-            <span>Mã nhận diện thiết bị:</span>
+            <span>Mã định danh máy:</span>
             <span className="font-mono text-muted text-[11px]">
               {deviceInfo?.dinhDanhPhanCung
                 ? `${deviceInfo.dinhDanhPhanCung.slice(0, 8)}...${deviceInfo.dinhDanhPhanCung.slice(-4)}`
