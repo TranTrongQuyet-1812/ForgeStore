@@ -921,16 +921,10 @@ function layKhungReadme(markdown: string): string {
   for (const segment of [...segments].reverse()) {
     const parts = segment.vanBanDaChe.split(/(⟦C\d+⟧)/g);
     const khungDoan = parts
-      .map((part, index) => {
+      .map((part) => {
         if (/^⟦C\d+⟧$/.test(part))
           return `${part}:${JSON.stringify(segment.khungGiuNguyen[part] ?? '')}`;
-        const truocLaKhung = index > 0 && /^⟦C\d+⟧$/.test(parts[index - 1] ?? '');
-        const sauLaKhung = index + 1 < parts.length && /^⟦C\d+⟧$/.test(parts[index + 1] ?? '');
-        if (!truocLaKhung && !sauLaKhung) return '';
-        if (/^\s*$/.test(part)) return part;
-        const dau = truocLaKhung ? (part.match(/^\s*/) ?? [''])[0] : '';
-        const cuoi = sauLaKhung ? (part.match(/\s*$/) ?? [''])[0] : '';
-        return dau + cuoi;
+        return '';
       })
       .join('');
     result = `${result.slice(0, segment.viTriBatDau)}${khungDoan}${result.slice(segment.viTriKetThuc)}`;

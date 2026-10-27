@@ -410,4 +410,15 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(retainedHan.canhBao).not.toContain('con_chu_han');
     expect(introducedHan.canhBao).toContain('con_chu_han');
   });
+
+  it('bỏ qua khoảng trắng quanh khung giữ nguyên nhưng vẫn bắt nội dung khung bị đổi', () => {
+    const source = 'Run `--help` now.';
+    const translatedWithExtraWords = kiemBatBienReadme(source, 'Lệnh hỗ trợ `--help` có sẵn.');
+    const translatedWithoutAdjacentSpaces = kiemBatBienReadme(source, 'Dùng`--help`để xem.');
+    const changedFrame = kiemBatBienReadme(source, 'Dùng`--version`để xem.');
+
+    expect(translatedWithExtraWords.canhBao).not.toContain('khung_van_ban_thay_doi');
+    expect(translatedWithoutAdjacentSpaces.canhBao).not.toContain('khung_van_ban_thay_doi');
+    expect(changedFrame.canhBao).toContain('khung_van_ban_thay_doi');
+  });
 });
