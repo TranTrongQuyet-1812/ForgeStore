@@ -292,18 +292,18 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
-  it('cho phép đổi thứ tự token nhưng giữ nguyên mã inline, URL và dấu câu sát token', () => {
+  it('cho phép đảo mã inline độc lập nhưng giữ nguyên URL và dấu câu sát token', () => {
     const source =
       "The single `skill` runs `skill`'s optional https://example.com command.\n\n```sh\nprintf 'unchanged'\n```";
     const structure = phanTichReadme(source);
     const segment = structure.doan[0]!;
     const tokens = Object.keys(segment.khungGiuNguyen);
     expect(tokens).toHaveLength(3);
-    const translated = `Kỹ năng duy nhất là ${tokens[0]}: chạy tùy chọn ${tokens[2]} của ${tokens[1]}.`;
+    const translated = `Kỹ năng duy nhất là ${tokens[1]}: chạy tới ${tokens[2]} bằng ${tokens[0]} ngay.`;
     const result = rapLaiReadme(source, structure, new Map([[segment.stt, translated]]));
 
     expect(result).toBe(
-      "Kỹ năng duy nhất là `skill`: chạy tùy chọn https://example.com của `skill`.\n\n```sh\nprintf 'unchanged'\n```",
+      "Kỹ năng duy nhất là `skill`: chạy tới https://example.com bằng `skill` ngay.\n\n```sh\nprintf 'unchanged'\n```",
     );
     expect(result.match(/`skill`/g)).toHaveLength(2);
     expect(result).toContain('https://example.com');
@@ -311,6 +311,44 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(kiemBatBienReadme(source, result).canhBao).not.toContain('ma_inline_thay_doi');
     expect(kiemBatBienReadme(source, result).canhBao).not.toContain('url_thay_doi');
     expect(kiemBatBienReadme(source, result).canhBao).not.toContain('khoi_code_thay_doi');
+  });
+
+  it('từ chối đảo token mở và đóng của liên kết Markdown', () => {
+    const source = 'Read [the guide](https://example.com) now.';
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const entries = Object.entries(segment.khungGiuNguyen);
+    const openToken = entries.find(([, value]) => value === '[')?.[0];
+    const closeToken = entries.find(([, value]) => value.startsWith(']('))?.[0];
+    expect(openToken).toBeDefined();
+    expect(closeToken).toBeDefined();
+    const swapped = segment.vanBanDaChe
+      .replace(openToken!, '⟦SWAP⟧')
+      .replace(closeToken!, openToken!)
+      .replace('⟦SWAP⟧', closeToken!);
+
+    expect(() => rapLaiReadme(source, structure, new Map([[segment.stt, swapped]]))).toThrow(
+      'Thứ tự ký hiệu không phải mã inline bị đổi',
+    );
+  });
+
+  it('từ chối đảo thẻ HTML mở và đóng', () => {
+    const source = '<a>the guide</a>';
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const entries = Object.entries(segment.khungGiuNguyen);
+    const openToken = entries.find(([, value]) => value === '<a>')?.[0];
+    const closeToken = entries.find(([, value]) => value === '</a>')?.[0];
+    expect(openToken).toBeDefined();
+    expect(closeToken).toBeDefined();
+    const swapped = segment.vanBanDaChe
+      .replace(openToken!, '⟦SWAP⟧')
+      .replace(closeToken!, openToken!)
+      .replace('⟦SWAP⟧', closeToken!);
+
+    expect(() => rapLaiReadme(source, structure, new Map([[segment.stt, swapped]]))).toThrow(
+      'Thứ tự ký hiệu không phải mã inline bị đổi',
+    );
   });
 
   it('từ chối token bị thiếu, lặp hoặc không thuộc đoạn nguồn', () => {

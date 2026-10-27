@@ -1026,6 +1026,16 @@ export function goKhungGiuNguyen(segment: DoanDichReadme, text: string): string 
   ) {
     throw new Error(`Số lượng ký hiệu giữ nguyên bị đổi ở đoạn ${segment.stt}`);
   }
+  const isStandaloneInlineCode = (value: string) => /^`+[^`\n]+`+$/.test(value);
+  const originalFixedOrder = [...expected.entries()]
+    .filter(([, value]) => !isStandaloneInlineCode(value))
+    .map(([token]) => token);
+  const translatedFixedOrder = found
+    .map((token) => (token.startsWith('⟦') ? token.replace('⟦', '[').replace('⟧', ']') : token))
+    .filter((token) => !isStandaloneInlineCode(expected.get(token)!));
+  if (JSON.stringify(translatedFixedOrder) !== JSON.stringify(originalFixedOrder)) {
+    throw new Error(`Thứ tự ký hiệu không phải mã inline bị đổi ở đoạn ${segment.stt}`);
+  }
   return text.replace(/(?:⟦C\d+⟧|\[C\d+\])/g, (token) => {
     const canonical = token.startsWith('⟦') ? token.replace('⟦', '[').replace('⟧', ']') : token;
     return expected.get(canonical)!;
