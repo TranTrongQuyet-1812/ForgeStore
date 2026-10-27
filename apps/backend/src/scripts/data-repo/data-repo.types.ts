@@ -26,6 +26,8 @@ export interface DoanChoDich {
   stt: number;
   /** SHA-256 của đoạn gốc (khóa bo_nho_dich_chung). */
   maBam: string;
+  /** Mức chính xác cần thiết khi dịch: 3 là giữ nguyên nguồn, không gửi dịch. */
+  mucQuanTrong: 1 | 2 | 3;
   /** Chỉ chứa chữ cần dịch và ký hiệu che nếu nguồn có thành phần kỹ thuật xen giữa. */
   vanBanDaChe: string;
   /** false với tiêu đề đã dịch theo bảng cố định hoặc mẩu chữ không cần dịch. */

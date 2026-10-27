@@ -43,9 +43,11 @@ export function phanDoan(readme: string | null | undefined): string[] {
   return phanTichReadme(readme ?? '').doan.map((doan) => doan.vanBanGoc);
 }
 
-/** Đoạn còn chữ cần dịch sau khi bỏ ký hiệu che và ký tự không phải chữ. */
+/** Chữ CJK chỉ cần một ký tự; văn bản dùng chữ Latin vẫn giữ ngưỡng hiện tại. */
 function conChuCanDich(daChe: string): boolean {
   const chu = daChe.replace(/⟦C\d+⟧/g, ' ').replace(/[^\p{L}]/gu, '');
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(chu))
+    return true;
   return chu.length >= 3;
 }
 
@@ -53,14 +55,16 @@ function conChuCanDich(daChe: string): boolean {
 export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
   const doan: DoanChoDich[] = phanTichReadme(cao.readmeEn ?? '').doan.map((nut, i) => {
     const goc = nut.vanBanGoc;
-    const { maskedText } = MarkdownMasker.mask(nut.vanBanDaChe);
-    const canDich = nut.canDich && conChuCanDich(maskedText);
+    const { maskedText: vanBanDaChe } = MarkdownMasker.mask(nut.vanBanDaChe);
+    const canDich = nut.canDich && conChuCanDich(vanBanDaChe);
+    const maskedText = canDich ? vanBanDaChe : nut.vanBanDaChe;
     return {
       stt: i + 1,
       maBam: tinhMaBam(goc),
+      mucQuanTrong: nut.mucQuanTrong,
       vanBanDaChe: maskedText,
-      canDich,
-      vi: canDich ? null : maskedText,
+      canDich: canDich && nut.mucQuanTrong !== 3,
+      vi: canDich && nut.mucQuanTrong !== 3 ? null : maskedText,
       tieuDeMuc: nut.tieuDeMuc,
       khungGiuNguyen: nut.khungGiuNguyen,
     };
@@ -112,12 +116,13 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    if (!t.vi || !t.vi.trim()) {
+    const banDauVao = c.canDich ? t.vi : c.vanBanDaChe;
+    if (!banDauVao || !banDauVao.trim()) {
       ketQua.loi = 'thieu_ban_dich' satisfies LyDoLoiDong;
       soDoanLoi++;
       return ketQua;
     }
-    const viSach = StructureValidator.cleanOutput(t.vi, c.vanBanDaChe);
+    const viSach = StructureValidator.cleanOutput(banDauVao, c.vanBanDaChe);
     const vanDe = StructureValidator.findStructureProblem(c.vanBanDaChe, viSach);
     if (vanDe) {
       ketQua.loi = vanDe;
@@ -144,7 +149,7 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    ketQua.vi = t.vi;
+    ketQua.vi = c.canDich ? t.vi : c.vanBanDaChe;
     doanDat.push({ maBam: c.maBam, goc: (goc[i] ?? '').trim(), dich: viDay });
     banDichTheoDoan.set(c.stt, viDayChe);
     return ketQua;

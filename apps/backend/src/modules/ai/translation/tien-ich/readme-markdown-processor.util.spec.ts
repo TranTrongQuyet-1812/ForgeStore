@@ -137,6 +137,59 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(rapLaiReadme(source, structure, new Map())).toBe(source);
   });
 
+  it('nhận diện thanh chuyển ngôn ngữ có nhãn châu Âu và giữ nguyên toàn đoạn', () => {
+    const source =
+      '[English](README.md) | [Español](README.es.md) | [Français](README.fr.md) | [Português](README.pt.md) | [Deutsch](README.de.md) | [Русский](README.ru.md)';
+    const structure = phanTichReadme(source);
+
+    expect(structure.doan[0]?.canDich).toBe(false);
+    expect(structure.doan[0]?.vanBanDaChe).toContain('Español');
+  });
+
+  it('phân mức đoạn theo tiêu đề, ghi đè cảnh báo và mã lệnh', () => {
+    const source = [
+      'Short introduction.',
+      '',
+      '## Features',
+      'This explains the main features.',
+      '> [!WARNING] Keep the configuration file safe.',
+      '',
+      'Run `npm install demo` to continue.',
+      '',
+      '## Installation',
+      'Install the application.',
+      '',
+      '## Sponsors',
+      'Our sponsors support this project.',
+      '',
+      '## Changelog',
+      'Version history and release notes.',
+      '',
+      '## Unlisted Section',
+      'This section defaults to the careful level.',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const bySource = new Map(structure.doan.map((segment) => [segment.vanBanGoc, segment]));
+    const featuresText = structure.doan.find((segment) =>
+      segment.vanBanGoc.includes('This explains the main features.'),
+    );
+    const warningText = structure.doan.find((segment) =>
+      segment.vanBanGoc.includes('Keep the configuration file safe.'),
+    );
+
+    expect(bySource.get('Short introduction.')?.mucQuanTrong).toBe(2);
+    expect(featuresText?.mucQuanTrong).toBe(2);
+    expect(
+      structure.doan.find((segment) => segment.vanBanGoc.includes('npm install demo'))
+        ?.mucQuanTrong,
+    ).toBe(1);
+    expect(bySource.get('Install the application.')?.mucQuanTrong).toBe(1);
+    expect(warningText?.mucQuanTrong).toBe(1);
+    expect(bySource.get('Our sponsors support this project.')?.mucQuanTrong).toBe(3);
+    expect(bySource.get('Version history and release notes.')?.mucQuanTrong).toBe(2);
+    expect(bySource.get('This section defaults to the careful level.')?.mucQuanTrong).toBe(1);
+  });
+
   it('báo các bất biến lỗi và không tự đặt ngưỡng độ dài', () => {
     const source = '# Guide\n- one\n- two\n\n`run` https://example.com';
     const result = kiemBatBienReadme(source, '# Hướng dẫn\n- một\n`changed` https://example.org');

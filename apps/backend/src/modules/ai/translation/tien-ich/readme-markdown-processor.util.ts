@@ -17,6 +17,8 @@ export type LoaiNutReadme =
   | 'definition'
   | 'unknown';
 
+export type MucQuanTrongReadme = 1 | 2 | 3;
+
 export interface NutReadme {
   loai: LoaiNutReadme;
   batDau: number;
@@ -32,6 +34,7 @@ export interface DoanDichReadme {
   stt: number;
   maBam: string;
   loai: LoaiNutReadme;
+  mucQuanTrong: MucQuanTrongReadme;
   viTriBatDau: number;
   viTriKetThuc: number;
   dong: number;
@@ -259,6 +262,23 @@ function layTieuDeCoDinh(text: string): string | undefined {
 
 const NHAN_NGON_NGU_README = new Set([
   'english',
+  'spanish',
+  'español',
+  'french',
+  'français',
+  'portuguese',
+  'português',
+  'german',
+  'deutsch',
+  'russian',
+  'русский',
+  'italian',
+  'italiano',
+  'polish',
+  'polski',
+  'dutch',
+  'nederlands',
+  'العربية',
   '中文',
   '简体中文',
   '繁體中文',
@@ -280,6 +300,70 @@ function laCumChuyenNgonNgu(text: string): boolean {
     )
     .filter(Boolean);
   return nhan.length >= 2 && nhan.every((item) => NHAN_NGON_NGU_README.has(item));
+}
+
+const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
+  installation: 1,
+  install: 1,
+  usage: 1,
+  configuration: 1,
+  requirements: 1,
+  troubleshooting: 1,
+  faq: 1,
+  build: 1,
+  'from source': 1,
+  compatibility: 1,
+  'supported platforms': 1,
+  permissions: 1,
+  security: 1,
+  license: 1,
+  licence: 1,
+  features: 2,
+  about: 2,
+  overview: 2,
+  introduction: 2,
+  why: 2,
+  highlights: 2,
+  'how it works': 2,
+  roadmap: 2,
+  comparison: 2,
+  changelog: 2,
+  'release notes': 2,
+  contributing: 2,
+  development: 2,
+  sponsors: 3,
+  backers: 3,
+  contributors: 3,
+  credits: 3,
+  acknowledgements: 3,
+  acknowledgments: 3,
+  'star history': 3,
+  donate: 3,
+};
+
+function layMucQuanTrong(tieuDeMuc: string[], vanBanGoc: string): MucQuanTrongReadme {
+  if (
+    /\[!(?:NOTE|WARNING|CAUTION|IMPORTANT)\]/i.test(vanBanGoc) ||
+    /`+[^`\n]+`+/.test(vanBanGoc) ||
+    /(?:^|\n)\s*(?:\$\s|PS>\s|❯\s)(?:[\w./-]+\s+)+[\w./-]+/m.test(vanBanGoc) ||
+    /\b(?:npm|pnpm|yarn|bun|pip3?|uv|cargo|go|git|docker|podman|winget|choco|apt|brew|make|cmake|kubectl|helm|curl|wget)\s+(?:install|add|run|build|start|test|update|upgrade|clone|pull|push|exec|serve|launch|configure|uninstall)\b/i.test(
+      vanBanGoc,
+    )
+  )
+    return 1;
+  if (tieuDeMuc.length === 0) return 2;
+
+  for (const title of [...tieuDeMuc].reverse()) {
+    const normalized = layTieuDeTieuChuan(title)
+      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const rule = Object.entries(TU_KHOA_MUC_QUAN_TRONG).find(([keyword]) =>
+      ` ${normalized} `.includes(` ${keyword} `),
+    );
+    if (rule) return rule[1];
+  }
+  return 1;
 }
 
 function layMocTieuDe(text: string): { cap: number; start: number; end: number } | null {
@@ -760,17 +844,20 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
   const doan = vung.map((span, index) => {
     const source = span.vanBanGoc;
     const fixed = span.coDichCoDinh;
+    const mucQuanTrong = layMucQuanTrong(span.tieuDeMuc, source);
     return {
       stt: index + 1,
       maBam: tinhMaBamDoanReadme(source),
       loai: span.loai,
+      mucQuanTrong,
       viTriBatDau: span.batDau,
       viTriKetThuc: span.ketThuc,
       dong: span.dong,
       tieuDeMuc: span.tieuDeMuc,
       vanBanGoc: source,
-      canDich: !fixed && !laCumChuyenNgonNgu(source) && /[\p{L}]/u.test(source),
-      vanBanDaChe: fixed ?? span.vanBanDaChe,
+      canDich:
+        mucQuanTrong !== 3 && !fixed && !laCumChuyenNgonNgu(source) && /[\p{L}]/u.test(source),
+      vanBanDaChe: mucQuanTrong === 3 ? span.vanBanDaChe : (fixed ?? span.vanBanDaChe),
       khungGiuNguyen: span.khungGiuNguyen,
     };
   });

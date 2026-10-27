@@ -85,6 +85,60 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(kq.dat?.readmeVi).toBe('```bash\nnpm i\n```');
   });
 
+  it('đưa chữ Hán, Nhật và Hàn ngắn từ một ký tự vào hàng cần dịch', () => {
+    const readme = '文\n\nあ\n\nア\n\n한\n\n说明\n\n运行';
+    const dong = taoDongChoDich(banCao(readme));
+
+    expect(dong.doan.map((doan) => doan.vanBanDaChe)).toEqual([
+      '文',
+      'あ',
+      'ア',
+      '한',
+      '说明',
+      '运行',
+    ]);
+    expect(dong.doan.map((doan) => doan.canDich)).toEqual([true, true, true, true, true, true]);
+    expect(dong.doan.map((doan) => doan.vi)).toEqual([null, null, null, null, null, null]);
+  });
+
+  it('giữ nguyên nhãn ngôn ngữ trong dữ liệu xuất và bản README nhập', () => {
+    const readme =
+      '[English](README.md) | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md)';
+    const cao = banCao(readme);
+    const dong = taoDongChoDich(cao);
+    const altered = {
+      ...dong,
+      moTaVi: 'Mô tả',
+      doan: dong.doan.map((doan) => ({ ...doan, vi: 'Nội dung không được dùng' })),
+    };
+    const result = kiemTraDongDaDich(cao, altered, 'x');
+
+    expect(dong.doan).toHaveLength(1);
+    expect(dong.doan[0]?.canDich).toBe(false);
+    expect(dong.doan[0]?.vi).toBe(dong.doan[0]?.vanBanDaChe);
+    expect(result.dat?.readmeVi).toBe(readme);
+  });
+
+  it('đánh dấu mức quan trọng và luôn giữ nguyên bản gốc ở mức 3 khi nhập', () => {
+    const cao = banCao('## Star History\n\nThe chart shows the star history.');
+    const choDich = taoDongChoDich(cao);
+
+    expect(choDich.doan.map((doan) => doan.mucQuanTrong)).toEqual([3, 3]);
+    expect(choDich.doan.every((doan) => !doan.canDich)).toBe(true);
+    expect(choDich.doan.every((doan) => doan.vi === doan.vanBanDaChe)).toBe(true);
+    expect(choDich.doan[0]?.vanBanDaChe).toBe('Star History');
+
+    const biSua = {
+      ...choDich,
+      moTaVi: 'Nhà tài trợ',
+      doan: choDich.doan.map((doan) => ({ ...doan, vi: 'Bản dịch không được dùng' })),
+    };
+    const ketQua = kiemTraDongDaDich(cao, biSua, 'x');
+
+    expect(ketQua.dat?.readmeVi).toBe(cao.readmeEn);
+    expect(ketQua.dat?.doan.every((doan) => doan.dich === doan.goc)).toBe(true);
+  });
+
   it('bản dịch đạt: lắp chữ vào khung gốc, giữ nguyên mã và link', () => {
     const cao = banCao();
     const kq = kiemTraDongDaDich(cao, dichGia(taoDongChoDich(cao)), 'antigravity/test:thu');
