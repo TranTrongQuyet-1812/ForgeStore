@@ -45,12 +45,10 @@ describe('ThuVienService (P3-12.2)', () => {
     expect(res[0].ungDung?.tenKhoChua).toBe('Obsidian');
   });
 
-  it('trả về mảng rỗng khi lấy danh sách ứng dụng thất bại do mạng', async () => {
+  it('ném lỗi khi lấy danh sách ứng dụng thất bại do mạng', async () => {
     vi.spyOn(apiClient, 'get').mockRejectedValueOnce(new Error('Network error'));
 
-    const res = await thuVienService.layDanhSachAppDaCai('device-123');
-
-    expect(res).toEqual([]);
+    await expect(thuVienService.layDanhSachAppDaCai('device-123')).rejects.toThrow('Network error');
   });
 
   it('ghi nhận cài đặt ứng dụng mới lên backend API', async () => {

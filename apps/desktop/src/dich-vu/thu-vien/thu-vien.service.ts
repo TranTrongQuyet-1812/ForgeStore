@@ -16,7 +16,7 @@ export const thuVienService = {
       return await apiClient.get<UngDungDaCaiDto[]>(`/thiet-bi/${deviceId}/da-cai`);
     } catch (err) {
       console.warn('[LibraryService] Không thể lấy danh sách app đã cài từ backend:', err);
-      return [];
+      throw err;
     }
   },
 
