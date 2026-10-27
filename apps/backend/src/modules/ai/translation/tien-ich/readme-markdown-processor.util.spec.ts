@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { kiemBatBienReadme, phanTichReadme, rapLaiReadme } from './readme-markdown-processor.util';
+import {
+  kiemBatBienReadme,
+  layLoiBatBienReadme,
+  phanTichReadme,
+  rapLaiReadme,
+} from './readme-markdown-processor.util';
 
 describe('ReadmeMarkdownProcessor', () => {
   it('tách chữ có vị trí và giữ nguyên code, URL, mã inline, khung bảng khi ráp lại', () => {
@@ -17,20 +22,17 @@ describe('ReadmeMarkdownProcessor', () => {
       '```',
     ].join('\n');
     const structure = phanTichReadme(source);
-    expect(structure.doan.map((segment) => segment.vanBanGoc)).toEqual([
-      'Installation',
-      'Use',
-      'from',
-      'Name',
-      'Description',
-      'Forge',
-      'Open source app',
-    ]);
+    expect(structure.doan).toHaveLength(3);
     const translations = new Map(
       structure.doan
         .filter((segment) => segment.canDich)
-        .map((segment) => [segment.stt, `VI ${segment.vanBanDaChe}`]),
+        .map((segment) => [segment.stt, segment.vanBanDaChe]),
     );
+    const sentToModel = structure.doan.map((segment) => segment.vanBanDaChe).join('\n');
+
+    expect(sentToModel).not.toContain('npm install');
+    expect(sentToModel).not.toContain('https://example.com');
+    expect(sentToModel).not.toContain('| --- |');
 
     const result = rapLaiReadme(source, structure, translations);
 
@@ -46,15 +48,26 @@ describe('ReadmeMarkdownProcessor', () => {
     const source = '<p class="notice">Read [the guide](https://example.com/a) now.</p>';
     const structure = phanTichReadme(source);
 
-    expect(structure.doan.map((segment) => segment.vanBanGoc)).toEqual([
-      'Read',
-      'the guide',
-      'now.',
-    ]);
-    expect(structure.doan.every((segment) => !segment.vanBanDaChe.includes('https://'))).toBe(true);
+    expect(structure.doan).toHaveLength(1);
+    expect(structure.doan[0]?.vanBanDaChe).toContain('Read');
+    expect(structure.doan[0]?.vanBanDaChe).toContain('the guide');
+    expect(structure.doan[0]?.vanBanDaChe).toContain('now.');
+    expect(structure.doan[0]?.vanBanDaChe).not.toContain('https://');
     expect(
-      rapLaiReadme(source, structure, new Map(structure.doan.map((item) => [item.stt, 'Đã dịch']))),
-    ).toBe('<p class="notice">Đã dịch [Đã dịch](https://example.com/a) Đã dịch</p>');
+      rapLaiReadme(
+        source,
+        structure,
+        new Map(
+          structure.doan.map((item) => [
+            item.stt,
+            item.vanBanDaChe
+              .replace('Read', 'Đọc')
+              .replace('the guide', 'hướng dẫn')
+              .replace('now', 'ngay'),
+          ]),
+        ),
+      ),
+    ).toBe('<p class="notice">Đọc [hướng dẫn](https://example.com/a) ngay.</p>');
   });
 
   it('giữ alt của huy hiệu và phát hành alt ảnh nội dung để dịch', () => {
@@ -85,5 +98,82 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(() => rapLaiReadme('Changed paragraph.', structure, new Map([[1, 'Đã dịch']]))).toThrow(
       'Vị trí đoạn README đã thay đổi tại dòng 1',
     );
+  });
+
+  it('từ chối khi mô hình đổi thứ tự ký hiệu của phần phải giữ nguyên', () => {
+    const structure = phanTichReadme('Read `code` and https://example.com now.');
+    const segment = structure.doan[0]!;
+    const tokens = Object.keys(segment.khungGiuNguyen);
+    expect(tokens).toHaveLength(2);
+    const swapped = segment.vanBanDaChe
+      .replace(tokens[0]!, 'TEMP')
+      .replace(tokens[1]!, tokens[0]!)
+      .replace('TEMP', tokens[1]!);
+
+    expect(() =>
+      rapLaiReadme(
+        'Read `code` and https://example.com now.',
+        structure,
+        new Map([[segment.stt, swapped]]),
+      ),
+    ).toThrow('Thứ tự ký hiệu giữ nguyên bị đổi');
+  });
+
+  it('không bỏ sót câu văn bắt đầu bằng Import/Export nhưng vẫn giữ câu lệnh MDX', () => {
+    const source = [
+      'import the library before starting.',
+      'Export your settings when finished.',
+      "import { Button } from 'ui-kit';",
+    ].join('\n\n');
+    const structure = phanTichReadme(source);
+
+    expect(structure.doan.map((segment) => segment.vanBanGoc)).toContain(
+      'import the library before starting.',
+    );
+    expect(structure.doan.map((segment) => segment.vanBanGoc)).toContain(
+      'Export your settings when finished.',
+    );
+    expect(structure.doan.map((segment) => segment.vanBanGoc)).not.toContain(
+      "import { Button } from 'ui-kit';",
+    );
+    expect(structure.canhBao.some((warning) => warning.lyDo === 'khong_phan_loai_duoc_khoi')).toBe(
+      true,
+    );
+  });
+
+  it('giữ mã inline nhiều dòng và nội dung thẻ code HTML nguyên vẹn', () => {
+    const source = 'Use `npm\n install` and <code>pnpm install</code> now.';
+    const structure = phanTichReadme(source);
+    const exposed = structure.doan.map((segment) => segment.vanBanDaChe).join(' ');
+
+    expect(exposed).not.toContain('npm');
+    expect(exposed).not.toContain('install');
+    expect(exposed).toContain('Use');
+    expect(exposed).toContain('now.');
+  });
+
+  it('không phát hành biểu thức JSX nằm trong văn xuôi MDX', () => {
+    const structure = phanTichReadme('Display {user.profile.name} in the panel.');
+    const sentToModel = structure.doan.map((segment) => segment.vanBanDaChe).join(' ');
+
+    expect(sentToModel).not.toContain('user.profile.name');
+    expect(sentToModel).toContain('Display');
+    expect(sentToModel).toContain('the panel.');
+  });
+
+  it('tính tỷ lệ riêng cho nguồn Anh/Trung và phân biệt lỗi bất biến với cảnh báo benchmark', () => {
+    const result = kiemBatBienReadme('Install app 安装', 'Cài ứng dụng Dùng', {
+      doan: [
+        { goc: 'Install app', dich: 'Cài ứng dụng' },
+        { goc: '安装', dich: 'Dùng' },
+      ],
+    });
+
+    expect(result.tiLeDoDaiEn).not.toBeNull();
+    expect(result.tiLeDoDaiZh).toBe(2);
+    expect(layLoiBatBienReadme(result.canhBao)).toEqual([]);
+    expect(layLoiBatBienReadme(['url_thay_doi', 'nguong_do_dai_cho_benchmark'])).toEqual([
+      'url_thay_doi',
+    ]);
   });
 });

@@ -63,7 +63,9 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     const dong = taoDongChoDich(cao);
     const goc = phanDoan(README);
     expect(dong.doan).toHaveLength(goc.length);
-    expect(dong.doan.find((doan) => doan.vanBanDaChe === 'Flag')?.tieuDeMuc).toContain('Options');
+    expect(dong.doan.find((doan) => doan.vanBanDaChe.includes('Flag'))?.tieuDeMuc).toContain(
+      'Options',
+    );
     dong.doan.forEach((d, i) => expect(d.maBam).toBe(tinhMaBam(goc[i])));
   });
 
@@ -101,6 +103,18 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(kq.dat!.tiLeDoDaiDoan).toHaveLength(phanDoan(README).length);
     // khoá lưu bộ nhớ dịch là mã băm của đoạn gốc đã trim
     kq.dat!.doan.forEach((d) => expect(d.maBam).toBe(tinhMaBam(d.goc)));
+  });
+
+  it('từ chối README nếu bản dịch làm thay đổi tập URL', () => {
+    const cao = banCao();
+    const dich = dichGia(taoDongChoDich(cao));
+    const muc = dich.doan.find((doan) => doan.canDich)!;
+    muc.vi = `${muc.vi} https://evil.example`;
+
+    const result = kiemTraDongDaDich(cao, dich, 'x');
+
+    expect(result.dat).toBeNull();
+    expect(result.loi?.loiReadme).toContain('url_thay_doi');
   });
 
   it('mất một ký hiệu che thì đoạn đó lỗi placeholders_changed, đoạn khác vẫn giữ', () => {

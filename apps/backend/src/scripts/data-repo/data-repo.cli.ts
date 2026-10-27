@@ -176,6 +176,7 @@ function lenhNhap(): void {
       loi.push(kq.loi);
       for (const x of kq.loi.doan) if (x.loi) demLoi[x.loi] = (demLoi[x.loi] ?? 0) + 1;
       if (kq.loi.loiMoTa) demLoi[kq.loi.loiMoTa] = (demLoi[kq.loi.loiMoTa] ?? 0) + 1;
+      if (kq.loi.loiReadme) demLoi[kq.loi.loiReadme] = (demLoi[kq.loi.loiReadme] ?? 0) + 1;
     }
   }
   ghiJsonl(fileKiem, [...daKiem.values()]);

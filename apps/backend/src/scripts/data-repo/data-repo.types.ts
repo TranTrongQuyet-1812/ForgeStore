@@ -34,6 +34,8 @@ export interface DoanChoDich {
   vi: string | null;
   /** Tiêu đề mục gốc làm ngữ cảnh; không đưa vào nội dung được ráp lại. */
   tieuDeMuc?: string[];
+  /** Cú pháp Markdown bị thay bằng ký hiệu giữ chỗ; cần giữ nguyên trong bản Anti trả về. */
+  khungGiuNguyen?: Record<string, string>;
   /** Đặt bởi bước nhập khi đoạn này lỗi (mã cố định). */
   loi?: string;
 }
@@ -47,6 +49,8 @@ export interface DongDich {
   moTaVi: string | null;
   doan: DoanChoDich[];
   loiMoTa?: string;
+  /** Lỗi bất biến của README hoàn chỉnh; giữ riêng với lỗi của mô tả ngắn. */
+  loiReadme?: string;
 }
 
 /** 04_da_kiem: đạt kiểm, sẵn sàng đẩy DB. */
@@ -69,6 +73,8 @@ export interface DongDaKiem {
   tiLeDoDaiTong?: number | null;
   tiLeDoDaiDoan?: number[];
   tiLeDoDaiMoTa?: number | null;
+  tiLeDoDaiEn?: number | null;
+  tiLeDoDaiZh?: number | null;
   ngonNguNguon?: 'vi' | 'zh' | 'en' | 'khac';
   nguon: string;
 }

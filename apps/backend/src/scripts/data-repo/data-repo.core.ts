@@ -2,7 +2,9 @@ import { ReadmeTranslationService } from '../../modules/ai/translation/services/
 import { MarkdownMasker } from '../../modules/ai/translation/tien-ich/markdown-masker.util';
 import { StructureValidator } from '../../modules/ai/translation/tien-ich/structure-validator.util';
 import {
+  goKhungGiuNguyen,
   kiemBatBienReadme,
+  layLoiBatBienReadme,
   phanTichReadme,
   rapLaiReadme,
 } from '../../modules/ai/translation/tien-ich/readme-markdown-processor.util';
@@ -60,6 +62,7 @@ export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
       canDich,
       vi: canDich ? null : maskedText,
       tieuDeMuc: nut.tieuDeMuc,
+      khungGiuNguyen: nut.khungGiuNguyen,
     };
   });
   return {
@@ -126,8 +129,16 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    const { placeholderMap } = MarkdownMasker.mask(goc[i] ?? '');
-    const viDay = MarkdownMasker.unmask(viSach, placeholderMap);
+    const { placeholderMap } = MarkdownMasker.mask(c.vanBanDaChe);
+    const viDayChe = MarkdownMasker.unmask(viSach, placeholderMap);
+    let viDay: string;
+    try {
+      viDay = goKhungGiuNguyen(cauTruc.doan[i]!, viDayChe);
+    } catch {
+      ketQua.loi = 'placeholders_changed' satisfies LyDoLoiDong;
+      soDoanLoi++;
+      return ketQua;
+    }
     if (KY_HIEU_CHE.test(viDay)) {
       ketQua.loi = 'con_ky_hieu_che' satisfies LyDoLoiDong;
       soDoanLoi++;
@@ -135,7 +146,7 @@ export function kiemTraDongDaDich(
     }
     ketQua.vi = t.vi;
     doanDat.push({ maBam: c.maBam, goc: (goc[i] ?? '').trim(), dich: viDay });
-    banDichTheoDoan.set(c.stt, viDay);
+    banDichTheoDoan.set(c.stt, viDayChe);
     return ketQua;
   });
 
@@ -168,16 +179,32 @@ export function kiemTraDongDaDich(
   const chatLuong = kiemBatBienReadme(cao.readmeEn ?? '', readmeVi ?? '', {
     ...(chuan.moTaEn && moTaVi ? { moTaNgan: { goc: chuan.moTaEn, dich: moTaVi } } : {}),
     doan: cauTruc.doan.map((doan) => ({
-      goc: doan.vanBanGoc,
-      dich:
+      goc: doan.vanBanDaChe.replace(/⟦C\d+⟧/g, ''),
+      dich: (
         banDichTheoDoan.get(doan.stt) ??
-        (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc),
+        (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc)
+      ).replace(/⟦C\d+⟧/g, ''),
     })),
   });
   const canhBaoChatLuong = [
     ...chatLuong.canhBao,
     ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
   ];
+  const loiBatBien = layLoiBatBienReadme(chatLuong.canhBao);
+  if (loiBatBien.length > 0) {
+    return {
+      dat: null,
+      loi: {
+        repo: cao.repo,
+        lo: cao.lo,
+        moTaEn: chuan.moTaEn,
+        moTaVi: dich.moTaVi,
+        doan: doanKiem.map((doan) => ({ ...doan, vi: banDichTheoDoan.get(doan.stt) ?? doan.vi })),
+        loiReadme: `readme_bat_bien:${loiBatBien.join(',')}`,
+      },
+      soDoanLoi: 1,
+    };
+  }
 
   return {
     dat: {
@@ -196,6 +223,8 @@ export function kiemTraDongDaDich(
       tiLeDoDaiTong: chatLuong.tiLeDoDaiTong,
       tiLeDoDaiDoan: chatLuong.tiLeDoDaiDoan,
       tiLeDoDaiMoTa: chatLuong.tiLeDoDaiMoTa,
+      tiLeDoDaiEn: chatLuong.tiLeDoDaiEn,
+      tiLeDoDaiZh: chatLuong.tiLeDoDaiZh,
       ngonNguNguon: chatLuong.ngonNguNguon,
       nguon,
     },

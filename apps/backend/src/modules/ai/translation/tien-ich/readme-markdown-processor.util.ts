@@ -38,6 +38,7 @@ export interface DoanDichReadme {
   tieuDeMuc: string[];
   vanBanGoc: string;
   vanBanDaChe: string;
+  khungGiuNguyen: Record<string, string>;
   canDich: boolean;
 }
 
@@ -212,6 +213,9 @@ interface VungChu {
   loai: LoaiNutReadme;
   dong: number;
   tieuDeMuc: string[];
+  vanBanGoc: string;
+  vanBanDaChe: string;
+  khungGiuNguyen: Record<string, string>;
   coDichCoDinh?: string;
 }
 
@@ -262,7 +266,16 @@ function boQuaDong(text: string): boolean {
 function phanLoaiDong(text: string): LoaiNutReadme {
   if (/^\s{0,3}(?:`{3,}|~{3,})/.test(text)) return 'code';
   if (/^ {4}\S|^\t/.test(text)) return 'code';
-  if (/^\s*(?:import|export)\s+(?:\{|\*|[\w])/i.test(text) || /^\s*:::\w/.test(text))
+  // Chỉ coi cú pháp import/export có dạng mã là MDX; câu văn "Import the library..." vẫn dịch được.
+  if (
+    /^\s*import\s+(?:(?:type\s+)?(?:[\w$]+|\*\s+as\s+[\w$]+|\{[^}]+\})\s+from\s*['"]|['"][^'"]+['"])/.test(
+      text,
+    ) ||
+    /^\s*export\s+(?:\{[^}]+\}(?:\s+from\s*['"])?|\*\s+from\s*['"]|(?:default|const|let|var|function|class)\b)/.test(
+      text,
+    ) ||
+    /^\s*:::\w/.test(text)
+  )
     return 'unknown';
   if (/^\s{0,3}#{1,6}\s/.test(text)) return 'heading';
   if (/^\s{0,3}>/.test(text)) return 'blockquote';
@@ -278,6 +291,7 @@ function phanLoaiDong(text: string): LoaiNutReadme {
 function layVungChu(
   text: string,
   absoluteStart: number,
+  vungGiuNguyen: Array<{ batDau: number; ketThuc: number }>,
 ): Array<{ batDau: number; ketThuc: number }> {
   const spans: Array<{ batDau: number; ketThuc: number }> = [];
   let runStart = -1;
@@ -295,8 +309,29 @@ function layVungChu(
     }
     runStart = -1;
   };
+  let protectedIndex = 0;
+  let low = 0;
+  let high = vungGiuNguyen.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (vungGiuNguyen[middle]!.ketThuc <= absoluteStart) low = middle + 1;
+    else high = middle;
+  }
+  protectedIndex = low;
   let i = 0;
   while (i < text.length) {
+    const absoluteIndex = absoluteStart + i;
+    while (
+      protectedIndex < vungGiuNguyen.length &&
+      vungGiuNguyen[protectedIndex]!.ketThuc <= absoluteIndex
+    )
+      protectedIndex++;
+    const protectedRegion = vungGiuNguyen[protectedIndex];
+    if (protectedRegion && absoluteIndex >= protectedRegion.batDau) {
+      flush(i);
+      i = Math.min(text.length, protectedRegion.ketThuc - absoluteStart);
+      continue;
+    }
     const rest = text.slice(i);
     const code = rest.match(/^(`+)[\s\S]*?\1/);
     const comment = rest.match(/^<!--[\s\S]*?-->/);
@@ -356,9 +391,36 @@ function layVungChu(
   return spans;
 }
 
+/** Tìm các vùng phải giữ nguyên trên toàn văn bản để nhận ra mã inline qua xuống dòng. */
+function layVungGiuNguyen(markdown: string): Array<{ batDau: number; ketThuc: number }> {
+  const regions: Array<{ batDau: number; ketThuc: number }> = [];
+  const addMatches = (regex: RegExp) => {
+    for (const match of markdown.matchAll(regex)) {
+      if (match.index !== undefined)
+        regions.push({ batDau: match.index, ketThuc: match.index + match[0].length });
+    }
+  };
+
+  addMatches(/<!--(?:[\s\S]*?-->|[\s\S]*$)/g);
+  addMatches(/<code\b[^>]*>[\s\S]*?<\/code\s*>/gi);
+  addMatches(/<pre\b[^>]*>[\s\S]*?<\/pre\s*>/gi);
+  addMatches(/\{[^{}\n]*(?:=>|===|==|=|[()[\].<>;])[^{}\n]*\}/g);
+  addMatches(/(?<![\\`])(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g);
+  const sorted = regions.sort((a, b) => a.batDau - b.batDau);
+  const merged: Array<{ batDau: number; ketThuc: number }> = [];
+  for (const region of sorted) {
+    const last = merged.at(-1);
+    if (last && region.batDau <= last.ketThuc)
+      last.ketThuc = Math.max(last.ketThuc, region.ketThuc);
+    else merged.push({ ...region });
+  }
+  return merged;
+}
+
 function tachNoiDungDong(
   markdown: string,
   dong: DongNguon,
+  vungGiuNguyen: Array<{ batDau: number; ketThuc: number }>,
 ): Array<{ batDau: number; ketThuc: number }> {
   const raw = boDauDong(dong.text);
   const heading = layMocTieuDe(raw);
@@ -384,7 +446,7 @@ function tachNoiDungDong(
     return [];
   }
   const text = raw.slice(prefix + trimStart, headingEnd === undefined ? raw.length : headingEnd);
-  const spans = layVungChu(text, start);
+  const spans = layVungChu(text, start, vungGiuNguyen);
   return spans;
 }
 
@@ -394,6 +456,7 @@ function tachNoiDungDong(
 export function phanTichReadme(markdown: string): CauTrucReadme {
   if (!markdown) return { nut: [], doan: [], canhBao: [] };
   const lines = tachDong(markdown);
+  const vungGiuNguyen = layVungGiuNguyen(markdown);
   const nut: NutReadme[] = [];
   const canhBao: CauTrucReadme['canhBao'] = [];
   const tieuDe = new Map<number, string>();
@@ -538,32 +601,59 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
     const startLine = lines[node.dongBatDau - 1];
     const endLine = lines[node.dongKetThuc - 1];
     if (!startLine || !endLine) continue;
+    const nodeSpans: Array<{ batDau: number; ketThuc: number; dong: number }> = [];
+    let fixedHeading: string | undefined;
     for (let lineNo = node.dongBatDau; lineNo <= node.dongKetThuc; lineNo++) {
       const sourceLine = lines[lineNo - 1]!;
       const raw = boDauDong(sourceLine.text);
       const header = layMocTieuDe(raw);
       const headingText = header ? raw.slice(header.start, header.end).trim() : '';
-      const fixedHeading = header
-        ? TU_KHOA_TIEU_DE_CO_DINH[layTieuDeTieuChuan(headingText)]
-        : undefined;
-      const spans = tachNoiDungDong(markdown, sourceLine);
+      fixedHeading = header ? TU_KHOA_TIEU_DE_CO_DINH[layTieuDeTieuChuan(headingText)] : undefined;
+      const spans = tachNoiDungDong(markdown, sourceLine, vungGiuNguyen);
       for (const span of spans) {
-        // Huy hiệu thường là ảnh do scanner bỏ qua URL; chỉ text node được phát hành làm đoạn dịch.
-        const source = markdown.slice(span.batDau, span.ketThuc);
-        if (source.trim())
-          vung.push({
-            ...span,
-            loai: node.loai,
-            dong: lineNo,
-            tieuDeMuc: node.duongDanTieuDe,
-            ...(fixedHeading ? { coDichCoDinh: fixedHeading } : {}),
-          });
+        if (markdown.slice(span.batDau, span.ketThuc).trim())
+          nodeSpans.push({ ...span, dong: lineNo });
       }
     }
+    if (nodeSpans.length === 0) continue;
+
+    const start = nodeSpans[0]!.batDau;
+    const end = nodeSpans.at(-1)!.ketThuc;
+    const vanBanGoc = markdown.slice(start, end);
+    const khungGiuNguyen: Record<string, string> = {};
+    let cursor = start;
+    let vanBanDaChe = '';
+    for (const span of nodeSpans) {
+      const gap = markdown.slice(cursor, span.batDau);
+      const whitespace = gap.match(/^(\s*)([\s\S]*?)(\s*)$/);
+      if (whitespace) {
+        const [, leading, immutable, trailing] = whitespace;
+        vanBanDaChe += leading;
+        if (immutable) {
+          const token = `⟦C${Object.keys(khungGiuNguyen).length + 1}⟧`;
+          khungGiuNguyen[token] = immutable;
+          vanBanDaChe += token;
+        }
+        vanBanDaChe += trailing;
+      }
+      vanBanDaChe += markdown.slice(span.batDau, span.ketThuc);
+      cursor = span.ketThuc;
+    }
+    vung.push({
+      batDau: start,
+      ketThuc: end,
+      loai: node.loai,
+      dong: nodeSpans[0]!.dong,
+      tieuDeMuc: node.duongDanTieuDe,
+      vanBanGoc,
+      vanBanDaChe,
+      khungGiuNguyen,
+      ...(fixedHeading ? { coDichCoDinh: fixedHeading } : {}),
+    });
   }
 
   const doan = vung.map((span, index) => {
-    const source = markdown.slice(span.batDau, span.ketThuc);
+    const source = span.vanBanGoc;
     const fixed = span.coDichCoDinh;
     return {
       stt: index + 1,
@@ -574,9 +664,9 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       dong: span.dong,
       tieuDeMuc: span.tieuDeMuc,
       vanBanGoc: source,
-      vanBanDaChe: source,
       canDich: !fixed && /[\p{L}]/u.test(source),
-      ...(fixed ? { vanBanDaChe: fixed } : {}),
+      vanBanDaChe: fixed ?? span.vanBanDaChe,
+      khungGiuNguyen: span.khungGiuNguyen,
     };
   });
   return { nut, doan, canhBao };
@@ -602,7 +692,29 @@ export function rapLaiReadme(
     if (markdown.slice(segment.viTriBatDau, segment.viTriKetThuc) !== segment.vanBanGoc) {
       throw new Error(`Vị trí đoạn README đã thay đổi tại dòng ${segment.dong}`);
     }
-    result = `${result.slice(0, segment.viTriBatDau)}${text}${result.slice(segment.viTriKetThuc)}`;
+    const restored = goKhungGiuNguyen(segment, text);
+    result = `${result.slice(0, segment.viTriBatDau)}${restored}${result.slice(segment.viTriKetThuc)}`;
+  }
+  return result;
+}
+
+/** Khôi phục đúng phần cú pháp đã thay bằng ký hiệu C trước khi ghép Markdown. */
+export function goKhungGiuNguyen(segment: DoanDichReadme, text: string): string {
+  let result = text;
+  const moc = Object.keys(segment.khungGiuNguyen).map((token) => {
+    const thayThe = token.replace('⟦', '[').replace('⟧', ']');
+    const viTriGoc = result.indexOf(token);
+    const viTriThayThe = result.indexOf(thayThe);
+    const viTri = viTriGoc >= 0 ? viTriGoc : viTriThayThe;
+    if (viTri < 0) throw new Error(`Thiếu ký hiệu giữ nguyên ${token} ở đoạn ${segment.stt}`);
+    return { token, thayThe, viTri, dungNgoacGoc: viTriGoc >= 0 };
+  });
+  if (moc.some((item, index) => index > 0 && item.viTri <= moc[index - 1]!.viTri)) {
+    throw new Error(`Thứ tự ký hiệu giữ nguyên bị đổi ở đoạn ${segment.stt}`);
+  }
+  for (const item of moc) {
+    const original = segment.khungGiuNguyen[item.token]!;
+    result = result.replace(item.dungNgoacGoc ? item.token : item.thayThe, original);
   }
   return result;
 }
@@ -614,6 +726,30 @@ export interface KetQuaBatBienReadme {
   tiLeDoDaiDoan: number[];
   ngonNguNguon: 'vi' | 'zh' | 'en' | 'khac';
   tiLeDoDaiMoTa: number | null;
+  tiLeDoDaiEn: number | null;
+  tiLeDoDaiZh: number | null;
+}
+
+const CANH_BAO_BAT_BIEN_NGHIEM_TRONG = new Set([
+  'khoi_code_thay_doi',
+  'ma_inline_thay_doi',
+  'url_thay_doi',
+  'tieu_de_h1_thay_doi',
+  'tieu_de_h2_thay_doi',
+  'tieu_de_h3_thay_doi',
+  'tieu_de_h4_thay_doi',
+  'tieu_de_h5_thay_doi',
+  'tieu_de_h6_thay_doi',
+  'so_muc_danh_sach_thay_doi',
+  'so_hang_bang_thay_doi',
+  'so_cot_bang_thay_doi',
+  'con_ma_che',
+  'con_chu_han',
+]);
+
+/** Lỗi bất biến phải chặn lưu; cảnh báo benchmark và thuật ngữ vẫn được giữ để người duyệt xem. */
+export function layLoiBatBienReadme(canhBao: string[]): string[] {
+  return canhBao.filter((warning) => CANH_BAO_BAT_BIEN_NGHIEM_TRONG.has(warning));
 }
 
 function layKhoiCode(markdown: string): string[] {
@@ -736,9 +872,42 @@ export function kiemBatBienReadme(
     const originalLength = segment.goc.replace(/\s/g, '').length;
     return originalLength ? segment.dich.replace(/\s/g, '').length / originalLength : 1;
   });
-  const sourceHan = /\p{Script=Han}/u.test(goc);
-  const sourceLatin = /\p{Script=Latin}/u.test(goc);
-  const ngonNguNguon = sourceHan ? 'zh' : sourceLatin ? 'en' : goc ? 'khac' : 'vi';
+  const tongTheoNguon = {
+    en: { goc: 0, dich: 0 },
+    zh: { goc: 0, dich: 0 },
+  };
+  for (const segment of tuyChon.doan ?? []) {
+    const sourceLength = segment.goc.replace(/\s/g, '').length;
+    const translatedLength = segment.dich.replace(/\s/g, '').length;
+    if (/\p{Script=Han}/u.test(segment.goc)) {
+      tongTheoNguon.zh.goc += sourceLength;
+      tongTheoNguon.zh.dich += translatedLength;
+    } else if (
+      /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(segment.goc)
+    ) {
+      continue;
+    } else if (/\p{Script=Latin}/u.test(segment.goc)) {
+      tongTheoNguon.en.goc += sourceLength;
+      tongTheoNguon.en.dich += translatedLength;
+    }
+  }
+  const tiLeDoDaiEn = tongTheoNguon.en.goc ? tongTheoNguon.en.dich / tongTheoNguon.en.goc : null;
+  const tiLeDoDaiZh = tongTheoNguon.zh.goc ? tongTheoNguon.zh.dich / tongTheoNguon.zh.goc : null;
+  const sourceHan = (vanGoc.match(/\p{Script=Han}/gu) ?? []).length;
+  const sourceLatin = (vanGoc.match(/\p{Script=Latin}/gu) ?? []).length;
+  const sourceVietnamese = (
+    vanGoc.match(/[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/gi) ?? []
+  ).length;
+  const ngonNguNguon =
+    sourceHan > sourceLatin
+      ? 'zh'
+      : sourceVietnamese
+        ? 'vi'
+        : sourceLatin
+          ? 'en'
+          : goc
+            ? 'khac'
+            : 'vi';
   return {
     canhBao: [...new Set(warnings)],
     hang: warnings.length === 0 ? 'A' : tuyChon.repoPhoBien ? 'C' : 'B',
@@ -746,5 +915,7 @@ export function kiemBatBienReadme(
     tiLeDoDaiDoan: tiLeDoan,
     ngonNguNguon,
     tiLeDoDaiMoTa,
+    tiLeDoDaiEn,
+    tiLeDoDaiZh,
   };
 }

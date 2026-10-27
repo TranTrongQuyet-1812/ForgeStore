@@ -7,7 +7,9 @@ import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import {
+  goKhungGiuNguyen,
   kiemBatBienReadme,
+  layLoiBatBienReadme,
   phanTichReadme,
   rapLaiReadme,
 } from '../tien-ich/readme-markdown-processor.util';
@@ -525,6 +527,12 @@ export class ReadmeTranslationService {
       const cauTruc = phanTichReadme(banGoc);
       const banDichTheoDoan = new Map<number, string>();
       const cacModelDung = new Set<string>();
+      const cacDoanChoLuu: Array<{
+        maBam: string;
+        doanGoc: string;
+        doanDich: string;
+        moHinhDich: string;
+      }> = [];
       let lastModelUsed = 'gemini-3.1-flash-lite';
 
       for (const doan of cauTruc.doan) {
@@ -537,9 +545,25 @@ export class ReadmeTranslationService {
         });
 
         if (cacheDoan && cacheDoan.doanDich) {
-          banDichTheoDoan.set(doan.stt, cacheDoan.doanDich);
-          if (cacheDoan.moHinhDich) cacModelDung.add(cacheDoan.moHinhDich);
-          continue;
+          try {
+            const banCacheDaGhep = goKhungGiuNguyen(doan, cacheDoan.doanDich);
+            const kiemTraCache = kiemBatBienReadme(doan.vanBanGoc, banCacheDaGhep, {
+              doan: [
+                {
+                  goc: doan.vanBanDaChe.replace(/⟦C\d+⟧/g, ''),
+                  dich: cacheDoan.doanDich.replace(/⟦C\d+⟧/g, ''),
+                },
+              ],
+            });
+            if (layLoiBatBienReadme(kiemTraCache.canhBao).length === 0) {
+              banDichTheoDoan.set(doan.stt, cacheDoan.doanDich);
+              if (cacheDoan.moHinhDich) cacModelDung.add(cacheDoan.moHinhDich);
+              continue;
+            }
+          } catch {
+            // Cache cũ thiếu hoặc đảo ký hiệu sẽ được bỏ qua và dịch lại; không xóa mục dùng chung.
+          }
+          this.logger.warn(`Bỏ qua cache README không đạt bất biến cho repo [${owner}/${repo}]`);
         }
 
         // Nhà dịch chỉ nhận một mẩu chữ; code giữ nguyên Markdown và lắp bản dịch theo vị trí nguồn.
@@ -561,20 +585,12 @@ export class ReadmeTranslationService {
         lastModelUsed = modelUsed;
         banDichTheoDoan.set(doan.stt, ketQua.banDich);
 
-        // 3. Lưu đoạn vừa dịch vào bo_nho_dich_chung (Bảng 13)
-        await this.prisma.boNhoDichChung.upsert({
-          where: { maBam_ngonNgu: { maBam: maBamDoan, ngonNgu: 'vi' } },
-          create: {
-            maBam: maBamDoan,
-            ngonNgu: 'vi',
-            doanGoc: doan.vanBanGoc.trim(),
-            doanDich: ketQua.banDich,
-            moHinhDich: modelUsed,
-          },
-          update: {
-            doanDich: ketQua.banDich,
-            moHinhDich: modelUsed,
-          },
+        // Chỉ ghi bộ nhớ dịch sau khi README hoàn chỉnh vượt qua bộ kiểm bất biến.
+        cacDoanChoLuu.push({
+          maBam: maBamDoan,
+          doanGoc: doan.vanBanGoc.trim(),
+          doanDich: ketQua.banDich,
+          moHinhDich: modelUsed,
         });
       }
 
@@ -582,10 +598,11 @@ export class ReadmeTranslationService {
       const noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichTheoDoan);
       const kiemTraChatLuong = kiemBatBienReadme(banGoc, noiDungDich, {
         doan: cauTruc.doan.map((doan) => ({
-          goc: doan.vanBanGoc,
-          dich:
+          goc: doan.vanBanDaChe.replace(/⟦C\d+⟧/g, ''),
+          dich: (
             banDichTheoDoan.get(doan.stt) ??
-            (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc),
+            (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc)
+          ).replace(/⟦C\d+⟧/g, ''),
         })),
       });
       const canhBaoReadme = [
@@ -594,6 +611,30 @@ export class ReadmeTranslationService {
       ];
       if (canhBaoReadme.length > 0) {
         this.logger.warn(`README [${owner}/${repo}] được xếp hạng B: ${canhBaoReadme.join(', ')}`);
+      }
+      const loiBatBien = layLoiBatBienReadme(kiemTraChatLuong.canhBao);
+      if (loiBatBien.length > 0) {
+        this.logger.error(
+          `README [${owner}/${repo}] không vượt qua bộ kiểm bất biến: ${loiBatBien.join(', ')}`,
+        );
+        await this.prisma.banDichReadme.update({
+          where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
+          data: { trangThai: TrangThaiDichReadme.THAT_BAI, thoiGianDich: new Date() },
+        });
+        return false;
+      }
+      for (const doan of cacDoanChoLuu) {
+        await this.prisma.boNhoDichChung.upsert({
+          where: { maBam_ngonNgu: { maBam: doan.maBam, ngonNgu: 'vi' } },
+          create: {
+            maBam: doan.maBam,
+            ngonNgu: 'vi',
+            doanGoc: doan.doanGoc,
+            doanDich: doan.doanDich,
+            moHinhDich: doan.moHinhDich,
+          },
+          update: { doanDich: doan.doanDich, moHinhDich: doan.moHinhDich },
+        });
       }
       const moHinhDichTongHop = Array.from(cacModelDung).join(', ') || lastModelUsed;
 
