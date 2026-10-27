@@ -330,8 +330,25 @@ const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
   changelog: 2,
   'release notes': 2,
   contributing: 2,
+  contribute: 2,
+  contribution: 2,
+  contributions: 2,
   development: 2,
+  models: 2,
+  news: 2,
+  'supported applications': 2,
+  'supported sites': 2,
+  'related projects': 2,
+  publications: 2,
+  'real-world uses': 2,
+  tools: 2,
+  'table of contents': 2,
+  contents: 2,
   sponsors: 3,
+  sponsor: 3,
+  supporters: 3,
+  thanks: 3,
+  'special thanks': 3,
   backers: 3,
   contributors: 3,
   credits: 3,
@@ -343,8 +360,8 @@ const TU_KHOA_MUC_QUAN_TRONG: Record<string, MucQuanTrongReadme> = {
 
 function layMucQuanTrong(tieuDeMuc: string[], vanBanGoc: string): MucQuanTrongReadme {
   if (
+    // Mã inline thường đã được che và giữ nguyên, nên không tự nâng mức; chỉ cảnh báo và lệnh thật mới nâng.
     /\[!(?:NOTE|WARNING|CAUTION|IMPORTANT)\]/i.test(vanBanGoc) ||
-    /`+[^`\n]+`+/.test(vanBanGoc) ||
     /(?:^|\n)\s*(?:\$\s|PS>\s|❯\s)(?:[\w./-]+\s+)+[\w./-]+/m.test(vanBanGoc) ||
     /\b(?:npm|pnpm|yarn|bun|pip3?|uv|cargo|go|git|docker|podman|winget|choco|apt|brew|make|cmake|kubectl|helm|curl|wget)\s+(?:install|add|run|build|start|test|update|upgrade|clone|pull|push|exec|serve|launch|configure|uninstall)\b/i.test(
       vanBanGoc,
@@ -857,7 +874,8 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       vanBanGoc: source,
       canDich:
         mucQuanTrong !== 3 && !fixed && !laCumChuyenNgonNgu(source) && /[\p{L}]/u.test(source),
-      vanBanDaChe: mucQuanTrong === 3 ? span.vanBanDaChe : (fixed ?? span.vanBanDaChe),
+      // Tiêu đề thông dụng vẫn dùng bản Việt cố định kể cả ở mức 3 vì không tốn lượt dịch.
+      vanBanDaChe: fixed ?? span.vanBanDaChe,
       khungGiuNguyen: span.khungGiuNguyen,
     };
   });

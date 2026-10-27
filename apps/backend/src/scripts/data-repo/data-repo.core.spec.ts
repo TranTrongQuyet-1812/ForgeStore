@@ -119,14 +119,14 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(result.dat?.readmeVi).toBe(readme);
   });
 
-  it('đánh dấu mức quan trọng và luôn giữ nguyên bản gốc ở mức 3 khi nhập', () => {
+  it('đánh dấu mức quan trọng, mức 3 giữ bản gốc (tiêu đề thông dụng vẫn dùng bản Việt cố định)', () => {
     const cao = banCao('## Star History\n\nThe chart shows the star history.');
     const choDich = taoDongChoDich(cao);
 
     expect(choDich.doan.map((doan) => doan.mucQuanTrong)).toEqual([3, 3]);
     expect(choDich.doan.every((doan) => !doan.canDich)).toBe(true);
     expect(choDich.doan.every((doan) => doan.vi === doan.vanBanDaChe)).toBe(true);
-    expect(choDich.doan[0]?.vanBanDaChe).toBe('Star History');
+    expect(choDich.doan[0]?.vanBanDaChe).toBe('Lịch sử sao');
 
     const biSua = {
       ...choDich,
@@ -135,8 +135,8 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     };
     const ketQua = kiemTraDongDaDich(cao, biSua, 'x');
 
-    expect(ketQua.dat?.readmeVi).toBe(cao.readmeEn);
-    expect(ketQua.dat?.doan.every((doan) => doan.dich === doan.goc)).toBe(true);
+    expect(ketQua.dat?.readmeVi).toBe('## Lịch sử sao\n\nThe chart shows the star history.');
+    expect(ketQua.dat?.doan[1]?.dich).toBe(ketQua.dat?.doan[1]?.goc);
   });
 
   it('bản dịch đạt: lắp chữ vào khung gốc, giữ nguyên mã và link', () => {

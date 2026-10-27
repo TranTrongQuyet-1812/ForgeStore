@@ -190,6 +190,30 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(bySource.get('This section defaults to the careful level.')?.mucQuanTrong).toBe(1);
   });
 
+  it('mã inline thường không nâng mức, còn tiêu đề mức 3 vẫn dùng bản Việt cố định', () => {
+    const source = [
+      '## Features',
+      'Supports `.zip` files and `tar` archives.',
+      '',
+      '## Sponsors',
+      'Thanks to our sponsors.',
+      '',
+      '## Related Projects',
+      'Other tools built by us.',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const bySource = new Map(structure.doan.map((segment) => [segment.vanBanGoc, segment]));
+    const sponsorsHeading = structure.doan.find((segment) => segment.vanBanGoc === 'Sponsors');
+
+    expect(structure.doan.find((segment) => segment.vanBanGoc.includes('.zip'))?.mucQuanTrong).toBe(
+      2,
+    );
+    expect(bySource.get('Other tools built by us.')?.mucQuanTrong).toBe(2);
+    expect(sponsorsHeading?.mucQuanTrong).toBe(3);
+    expect(sponsorsHeading?.canDich).toBe(false);
+    expect(sponsorsHeading?.vanBanDaChe).toBe('Nhà tài trợ');
+  });
+
   it('báo các bất biến lỗi và không tự đặt ngưỡng độ dài', () => {
     const source = '# Guide\n- one\n- two\n\n`run` https://example.com';
     const result = kiemBatBienReadme(source, '# Hướng dẫn\n- một\n`changed` https://example.org');
