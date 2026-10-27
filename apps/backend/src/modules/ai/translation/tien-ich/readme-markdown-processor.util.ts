@@ -463,12 +463,14 @@ function tachNoiDungDong(
     const span = { batDau: viTriAlt, ketThuc: viTriAlt + anh[1].length };
     return { spans: [span], batDau: span.batDau, ketThuc: span.ketThuc };
   }
-  const anhHtml = raw.match(/^\s*<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1[^>]*>\s*$/i);
-  if (anhHtml?.[2]) {
-    const altOffset = raw.indexOf(anhHtml[2]);
+  const anhHtml = raw.match(/^\s*(<img\b[^>]*>)\s*$/i);
+  const altHtml = anhHtml?.[1]?.match(/\balt\s*=\s*(["'])(.*?)\1/i);
+  if (anhHtml?.[1] && altHtml?.[2]) {
+    const imgOffset = raw.search(/<img\b/i);
+    const altOffset = imgOffset + altHtml.index! + altHtml[0]!.indexOf(altHtml[2]);
     const span = {
       batDau: dong.batDau + altOffset,
-      ketThuc: dong.batDau + altOffset + anhHtml[2].length,
+      ketThuc: dong.batDau + altOffset + altHtml[2].length,
     };
     return { spans: [span], batDau: span.batDau, ketThuc: span.ketThuc };
   }

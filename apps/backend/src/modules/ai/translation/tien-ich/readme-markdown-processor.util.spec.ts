@@ -112,6 +112,21 @@ describe('ReadmeMarkdownProcessor', () => {
     ]);
   });
 
+  it('lấy đúng vị trí alt HTML khi chính chữ alt cũng xuất hiện trong URL ảnh', () => {
+    const source = '<img src="https://example.com/Downloads/banner.png" alt="Downloads">';
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map([[segment.stt, segment.vanBanDaChe.replace('Downloads', 'Tải xuống')]]),
+    );
+
+    expect(segment.vanBanGoc).toBe('Downloads');
+    expect(result).toBe('<img src="https://example.com/Downloads/banner.png" alt="Tải xuống">');
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('url_thay_doi');
+  });
+
   it('báo các bất biến lỗi và không tự đặt ngưỡng độ dài', () => {
     const source = '# Guide\n- one\n- two\n\n`run` https://example.com';
     const result = kiemBatBienReadme(source, '# Hướng dẫn\n- một\n`changed` https://example.org');
