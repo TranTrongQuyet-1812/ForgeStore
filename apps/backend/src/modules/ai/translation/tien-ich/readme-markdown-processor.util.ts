@@ -714,7 +714,7 @@ export function goKhungGiuNguyen(segment: DoanDichReadme, text: string): string 
   }
   for (const item of moc) {
     const original = segment.khungGiuNguyen[item.token]!;
-    result = result.replace(item.dungNgoacGoc ? item.token : item.thayThe, original);
+    result = result.replace(item.dungNgoacGoc ? item.token : item.thayThe, () => original);
   }
   return result;
 }
@@ -743,6 +743,7 @@ const CANH_BAO_BAT_BIEN_NGHIEM_TRONG = new Set([
   'so_muc_danh_sach_thay_doi',
   'so_hang_bang_thay_doi',
   'so_cot_bang_thay_doi',
+  'khung_van_ban_thay_doi',
   'con_ma_che',
   'con_chu_han',
 ]);
@@ -808,6 +809,30 @@ function demCau(text: string): number {
   return (text.match(/[.!?。！？](?:\s|$)/g) ?? []).length;
 }
 
+/** Bỏ phần chữ dịch khỏi các khối, giữ lại nguyên byte cấu trúc và nội dung kỹ thuật. */
+function layKhungReadme(markdown: string): string {
+  const segments = phanTichReadme(markdown).doan;
+  let result = markdown;
+  for (const segment of [...segments].reverse()) {
+    const parts = segment.vanBanDaChe.split(/(⟦C\d+⟧)/g);
+    const khungDoan = parts
+      .map((part, index) => {
+        if (/^⟦C\d+⟧$/.test(part))
+          return `${part}:${JSON.stringify(segment.khungGiuNguyen[part] ?? '')}`;
+        const truocLaKhung = index > 0 && /^⟦C\d+⟧$/.test(parts[index - 1] ?? '');
+        const sauLaKhung = index + 1 < parts.length && /^⟦C\d+⟧$/.test(parts[index + 1] ?? '');
+        if (!truocLaKhung && !sauLaKhung) return '';
+        if (/^\s*$/.test(part)) return part;
+        const dau = truocLaKhung ? (part.match(/^\s*/) ?? [''])[0] : '';
+        const cuoi = sauLaKhung ? (part.match(/\s*$/) ?? [''])[0] : '';
+        return dau + cuoi;
+      })
+      .join('');
+    result = `${result.slice(0, segment.viTriBatDau)}${khungDoan}${result.slice(segment.viTriKetThuc)}`;
+  }
+  return result;
+}
+
 /** So bất biến cấu trúc và nội dung. Ngưỡng độ dài chưa được đo nên chỉ báo chờ, không tự đặt số. */
 export function kiemBatBienReadme(
   goc: string,
@@ -820,6 +845,7 @@ export function kiemBatBienReadme(
   } = {},
 ): KetQuaBatBienReadme {
   const warnings: string[] = [];
+  if (layKhungReadme(goc) !== layKhungReadme(dich)) warnings.push('khung_van_ban_thay_doi');
   if (JSON.stringify(layKhoiCode(goc)) !== JSON.stringify(layKhoiCode(dich)))
     warnings.push('khoi_code_thay_doi');
   for (const [name, regex] of [['ma_inline', /`+[^`\n]+`+/g]] as const) {

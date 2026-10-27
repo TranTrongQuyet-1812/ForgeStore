@@ -119,6 +119,24 @@ describe('ReadmeMarkdownProcessor', () => {
     ).toThrow('Thứ tự ký hiệu giữ nguyên bị đổi');
   });
 
+  it('khôi phục nguyên văn URL có ký hiệu dollar và bắt thay đổi khung sau khi ráp', () => {
+    const source = "Run ``$& $' $` `` and [ref](https://example.com) now.";
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map([[segment.stt, segment.vanBanDaChe.replace('Run', 'Chạy')]]),
+    );
+
+    expect(result).toBe("Chạy ``$& $' $` `` and [ref](https://example.com) now.");
+    expect(kiemBatBienReadme(source, result).canhBao).not.toContain('khung_van_ban_thay_doi');
+    expect(
+      kiemBatBienReadme(source, result.replace('https://example.com', 'https://other.example'))
+        .canhBao,
+    ).toContain('khung_van_ban_thay_doi');
+  });
+
   it('không bỏ sót câu văn bắt đầu bằng Import/Export nhưng vẫn giữ câu lệnh MDX', () => {
     const source = [
       'import the library before starting.',
