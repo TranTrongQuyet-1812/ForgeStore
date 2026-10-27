@@ -273,8 +273,9 @@ function boQuaDong(text: string): boolean {
   return tagDungRieng && !/^\s*<img\b/i.test(text);
 }
 
-function phanLoaiDong(text: string): LoaiNutReadme {
+function phanLoaiDong(text: string, dongTiepTheo = '', namTrongDanhSach = false): LoaiNutReadme {
   if (/^\s{0,3}(?:`{3,}|~{3,})/.test(text)) return 'code';
+  if (namTrongDanhSach && /^ {4,}(?:[-+*]|\d+[.)])\s+/.test(text)) return 'list_item';
   if (/^ {4}\S|^\t/.test(text)) return 'code';
   // Chỉ coi cú pháp import/export có dạng mã là MDX; câu văn "Import the library..." vẫn dịch được.
   if (
@@ -291,7 +292,8 @@ function phanLoaiDong(text: string): LoaiNutReadme {
   if (/^\s{0,3}>/.test(text)) return 'blockquote';
   if (/^\s{0,3}(?:[-*_]\s*){3,}$/.test(text)) return 'thematic_break';
   if (/^\s{0,3}(?:[*+-]|\d+[.)])\s+/.test(text)) return 'list_item';
-  if (/^\s{0,3}\|?.+\|.+\|?\s*$/.test(text)) return 'table_cell';
+  if (/^\s{0,3}\|?.+\|.+\|?\s*$/.test(text) && /^\s*\|?\s*:?-{3,}/.test(dongTiepTheo))
+    return 'table_cell';
   if (/^\s{0,3}\[[^\]]+\]:/.test(text)) return 'definition';
   if (/^\s{0,3}</.test(text)) return 'html';
   return 'paragraph';
@@ -434,7 +436,7 @@ function tachNoiDungDong(
 ): { spans: Array<{ batDau: number; ketThuc: number }>; batDau: number; ketThuc: number } {
   const raw = boDauDong(dong.text);
   const heading = layMocTieuDe(raw);
-  const list = raw.match(/^\s{0,3}(?:[-+*]|\d+[.)])\s+/);
+  const list = raw.match(/^\s{0,12}(?:[-+*]|\d+[.)])\s+/);
   const quote = raw.match(/^\s{0,3}>\s?/);
   const prefix = heading?.start ?? list?.[0].length ?? quote?.[0].length ?? 0;
   const content = raw.slice(prefix);
@@ -576,9 +578,30 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       continue;
     }
 
-    const kind = phanLoaiDong(raw);
-    const header = layMocTieuDe(raw);
+    const setext =
+      i + 1 < lines.length &&
+      /^(?: {0,3}=+| {0,3}-+)\s*$/.test(boDauDong(lines[i + 1]!.text)) &&
+      !boQuaDong(raw) &&
+      phanLoaiDong(raw) === 'paragraph';
+    const setextMarker = setext ? boDauDong(lines[i + 1]!.text).trim()[0] : undefined;
+    const kind = setext
+      ? 'heading'
+      : phanLoaiDong(
+          raw,
+          i + 1 < lines.length ? boDauDong(lines[i + 1]!.text) : '',
+          nut.at(-1)?.loai === 'list_item',
+        );
+    const header =
+      layMocTieuDe(raw) ??
+      (setext
+        ? {
+            cap: setextMarker === '=' ? 1 : 2,
+            start: raw.length - raw.trimStart().length,
+            end: raw.trimEnd().length,
+          }
+        : null);
     let endIndex = i;
+    if (setext) endIndex = i + 1;
     if (kind === 'paragraph' || kind === 'blockquote' || kind === 'html') {
       while (endIndex + 1 < lines.length && !boQuaDong(boDauDong(lines[endIndex + 1]!.text))) {
         const next = boDauDong(lines[endIndex + 1]!.text);
@@ -638,8 +661,17 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       const sourceLine = lines[lineNo - 1]!;
       const raw = boDauDong(sourceLine.text);
       const header = layMocTieuDe(raw);
-      const headingText = header ? raw.slice(header.start, header.end).trim() : '';
-      fixedHeading = header ? layTieuDeCoDinh(headingText) : undefined;
+      const isSetextHeading =
+        node.loai === 'heading' &&
+        node.capTieuDe !== undefined &&
+        lineNo === node.dongBatDau &&
+        !header;
+      const headingText = header
+        ? raw.slice(header.start, header.end).trim()
+        : isSetextHeading
+          ? raw.trim()
+          : '';
+      if (header || isSetextHeading) fixedHeading = layTieuDeCoDinh(headingText);
       const content = tachNoiDungDong(markdown, sourceLine, vungGiuNguyen);
       if (content.spans.some((span) => markdown.slice(span.batDau, span.ketThuc).trim())) {
         nodeRanges.push({ ...content, dong: lineNo });

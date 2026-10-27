@@ -218,6 +218,143 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(sentToModel).toContain('the panel.');
   });
 
+  it('nhận diện tiêu đề Setext và không nhầm dấu | trong mã inline thành bảng', () => {
+    const source = [
+      'Installation',
+      '============',
+      '',
+      'Use `left | right` as the sample input.',
+      '',
+      'Heading-like text',
+      '---',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map(
+        structure.doan.map((item) => [
+          item.stt,
+          item.vanBanDaChe
+            .replace('Use', 'Dùng')
+            .replace('as the sample input.', 'làm dữ liệu mẫu.'),
+        ]),
+      ),
+    );
+
+    expect(structure.nut[0]).toMatchObject({ loai: 'heading', capTieuDe: 1 });
+    expect(structure.doan[0]?.vanBanDaChe).toBe('Cài đặt');
+    expect(structure.doan[1]?.loai).toBe('paragraph');
+    expect(structure.doan[1]?.vanBanDaChe).toContain('Use');
+    expect(structure.doan[1]?.vanBanDaChe).not.toContain('left | right');
+    expect(structure.nut[structure.nut.length - 1]).toMatchObject({
+      loai: 'heading',
+      capTieuDe: 2,
+    });
+    expect(result).toContain('Cài đặt\n============');
+    expect(result).toContain('Dùng `left | right` làm dữ liệu mẫu.');
+    expect(result).toContain('Heading-like text\n---');
+  });
+
+  it('giữ dấu | bên trong mã inline của ô bảng khi dịch hàng', () => {
+    const source = '| Command | Meaning |\n| --- | --- |\n| `left | right` | Pair values |';
+    const structure = phanTichReadme(source);
+    const segment = structure.doan[0]!;
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map([
+        [
+          segment.stt,
+          segment.vanBanDaChe.replace('Meaning', 'Ý nghĩa').replace('Pair values', 'Ghép giá trị'),
+        ],
+      ]),
+    );
+
+    expect(segment.loai).toBe('table_cell');
+    expect(segment.vanBanDaChe).not.toContain('left | right');
+    expect(segment.vanBanDaChe).toContain('Meaning');
+    expect(result).toBe('| Command | Ý nghĩa |\n| --- | --- |\n| `left | right` | Ghép giá trị |');
+  });
+
+  it('dịch được danh sách lồng nhau mà vẫn giữ cấu trúc dấu đầu dòng', () => {
+    const source = '- Parent item\n  - Nested item\n    - Deeper item';
+    const structure = phanTichReadme(source);
+
+    expect(structure.doan.map((item) => item.vanBanGoc)).toEqual([
+      'Parent item',
+      'Nested item',
+      'Deeper item',
+    ]);
+    expect(structure.doan.map((item) => item.loai)).toEqual([
+      'list_item',
+      'list_item',
+      'list_item',
+    ]);
+    expect(
+      rapLaiReadme(
+        source,
+        structure,
+        new Map(structure.doan.map((item) => [item.stt, `Dịch ${item.vanBanGoc}`])),
+      ),
+    ).toBe('- Dịch Parent item\n  - Dịch Nested item\n    - Dịch Deeper item');
+  });
+
+  it('giữ nguyên HTML details và trộn được Markdown trong phần nội dung', () => {
+    const source = [
+      '<details>',
+      '<summary>More information</summary>',
+      '',
+      'Read **the guide** at [this link](https://example.com/guide).',
+      '</details>',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const exposed = structure.doan.map((item) => item.vanBanDaChe).join('\n');
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map(
+        structure.doan.map((item) => [
+          item.stt,
+          item.vanBanDaChe.replace('More information', 'Thêm thông tin').replace('Read', 'Đọc'),
+        ]),
+      ),
+    );
+
+    expect(exposed).toContain('More information');
+    expect(exposed).toContain('the guide');
+    expect(exposed).toContain('this link');
+    expect(exposed).not.toContain('https://');
+    expect(result).toContain('<details>\n<summary>Thêm thông tin</summary>');
+    expect(result).toContain('Đọc **the guide** at [this link](https://example.com/guide).');
+    expect(result.endsWith('</details>')).toBe(true);
+  });
+
+  it('giữ nguyên front matter, CRLF, khối code chưa đóng và README rỗng', () => {
+    const crlf = [
+      '---',
+      'title: Example',
+      '---',
+      'Install the app.',
+      '```sh',
+      'echo "keep this"',
+    ].join('\r\n');
+    const structure = phanTichReadme(crlf);
+    const result = rapLaiReadme(
+      crlf,
+      structure,
+      new Map(structure.doan.map((item) => [item.stt, 'Cài ứng dụng.'])),
+    );
+    const empty = phanTichReadme('');
+
+    expect(structure.canhBao).toContainEqual({ dong: 6, lyDo: 'khoi_code_chua_dong' });
+    expect(result).toBe(
+      '---\r\ntitle: Example\r\n---\r\nCài ứng dụng.\r\n```sh\r\necho "keep this"',
+    );
+    expect(empty).toEqual({ nut: [], doan: [], canhBao: [] });
+    expect(rapLaiReadme('', empty, new Map())).toBe('');
+  });
+
   it('tính tỷ lệ riêng cho nguồn Anh/Trung và phân biệt lỗi bất biến với cảnh báo benchmark', () => {
     const result = kiemBatBienReadme('Install app 安装', 'Cài ứng dụng Dùng', {
       doan: [
