@@ -141,7 +141,7 @@ export const TrangCaiDat: React.FC = () => {
         </p>
       </div>
 
-      {/* Chọn giao diện */}
+      {/* Cấu hình Giao diện / Theme */}
       <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
         <h3 className="text-sm font-semibold font-display text-primary">Giao diện</h3>
         <p className="text-xs text-secondary">Chọn giao diện tối hoặc sáng cho dễ nhìn.</p>
