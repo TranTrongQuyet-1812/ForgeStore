@@ -12,6 +12,7 @@ describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
     useCapNhatStore.setState({
       soLuongBanCapNhat: 0,
       danhSachCapNhat: [],
+      danhSachBoQuaVersion: {},
       dangKiemTra: false,
       thoiGianKiemTraCuoi: null,
     });
@@ -59,17 +60,17 @@ describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
       expect(res.danhSachCapNhat[0].coBanCapNhat).toBe(true);
     });
 
-    it('trả về object danh sách rỗng khi kiểm tra cập nhật gặp lỗi', async () => {
+    it('truyền lỗi lên store khi kiểm tra cập nhật thất bại', async () => {
       vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('Network offline'));
 
-      const res = await capNhatService.kiemTraCapNhat(mockDeviceId, []);
-
-      expect(res).toEqual({ danhSachCapNhat: [] });
+      await expect(capNhatService.kiemTraCapNhat(mockDeviceId, [])).rejects.toThrow(
+        'Network offline',
+      );
     });
   });
 
   describe('useCapNhatStore', () => {
-    it('lọc các bản cập nhật có coBanCapNhat === true và cập nhật số lượng badge', async () => {
+    it('đếm bản cập nhật đủ điều kiện và cập nhật số lượng badge', async () => {
       const mockResponse: CheckUpdatesResponseDto = {
         danhSachCapNhat: [
           {
@@ -104,8 +105,8 @@ describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
       expect(useCapNhatStore.getState().thoiGianKiemTraCuoi).not.toBeNull();
     });
 
-    it('xử lý an toàn khi capNhatService gặp exception', async () => {
-      vi.spyOn(capNhatService, 'kiemTraCapNhat').mockRejectedValueOnce(new Error('Crash'));
+    it('phân biệt kiểm tra thành công nhưng không có bản cập nhật', async () => {
+      vi.spyOn(capNhatService, 'kiemTraCapNhat').mockResolvedValueOnce({ danhSachCapNhat: [] });
 
       const count = await useCapNhatStore.getState().kiemTraCapNhat(mockDeviceId, []);
 
@@ -114,12 +115,50 @@ describe('CapNhatService & useCapNhatStore (P3-12.3)', () => {
       expect(useCapNhatStore.getState().dangKiemTra).toBe(false);
     });
 
-    it('bỏ qua kiểm tra và trả về 0 nếu deviceId không phải UUID hợp lệ', async () => {
+    it('xử lý an toàn khi capNhatService gặp exception', async () => {
+      vi.spyOn(capNhatService, 'kiemTraCapNhat').mockRejectedValueOnce(new Error('Crash'));
+
+      const count = await useCapNhatStore.getState().kiemTraCapNhat(mockDeviceId, []);
+
+      expect(count).toBeNull();
+      expect(useCapNhatStore.getState().soLuongBanCapNhat).toBe(0);
+      expect(useCapNhatStore.getState().dangKiemTra).toBe(false);
+    });
+
+    it('loại bản cập nhật có phiên bản đã được chọn bỏ qua', async () => {
+      const response: CheckUpdatesResponseDto = {
+        danhSachCapNhat: [
+          {
+            maUngDung: 'app-ignored',
+            phienBanHienTai: '1.0.0',
+            phienBanMoiNhat: '1.1.0',
+            coBanCapNhat: true,
+          },
+          {
+            maUngDung: 'app-update',
+            phienBanHienTai: '2.0.0',
+            phienBanMoiNhat: '2.1.0',
+            coBanCapNhat: true,
+          },
+        ],
+      };
+      useCapNhatStore.setState({ danhSachBoQuaVersion: { 'app-ignored': '1.1.0' } });
+      vi.spyOn(capNhatService, 'kiemTraCapNhat').mockResolvedValueOnce(response);
+
+      const count = await useCapNhatStore.getState().kiemTraCapNhat(mockDeviceId, []);
+
+      expect(count).toBe(1);
+      expect(useCapNhatStore.getState().danhSachCapNhat.map((item) => item.maUngDung)).toEqual([
+        'app-update',
+      ]);
+    });
+
+    it('trả về null nếu deviceId không phải UUID hợp lệ', async () => {
       const spy = vi.spyOn(capNhatService, 'kiemTraCapNhat');
 
       const count = await useCapNhatStore.getState().kiemTraCapNhat('invalid-device-id', []);
 
-      expect(count).toBe(0);
+      expect(count).toBeNull();
       expect(spy).not.toHaveBeenCalled();
       expect(useCapNhatStore.getState().dangKiemTra).toBe(false);
     });

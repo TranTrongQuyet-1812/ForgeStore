@@ -238,6 +238,29 @@ export const TrangThuVien: React.FC = () => {
 
   const allInstalledApps = Array.from(mergedAppsMap.values());
 
+  // Chỉ thông báo từ thao tác chủ động; lượt tự kiểm tra khi mở trang không gọi hàm này.
+  const kiemTraCapNhatThuCong = async () => {
+    if (!isAuthenticated || !maThietBi) {
+      void refetch();
+      toast.info('Hãy đăng nhập để kiểm tra cập nhật.');
+      return;
+    }
+    const ketQuaTaiThuVien = await refetch();
+    if (ketQuaTaiThuVien.isError) {
+      toast.error('Không kiểm tra được cập nhật. Vui lòng thử lại.');
+      return;
+    }
+    if ((ketQuaTaiThuVien.data ?? []).length === 0) {
+      toast.info('Chưa có ứng dụng nào để kiểm tra.');
+      return;
+    }
+
+    const soLuong = await kiemTraCapNhat(maThietBi);
+    if (soLuong === null) toast.error('Không kiểm tra được cập nhật. Vui lòng thử lại.');
+    else if (soLuong === 0) toast.success('Tất cả ứng dụng đã là bản mới nhất.');
+    else toast.info(`Có ${soLuong} ứng dụng có bản cập nhật mới.`);
+  };
+
   // Lọc theo ô tìm kiếm
   const filteredApps = allInstalledApps.filter((app) =>
     app.tenApp.toLowerCase().includes(searchFilter.trim().toLowerCase()),
@@ -759,8 +782,7 @@ export const TrangThuVien: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (maThietBi) kiemTraCapNhat(maThietBi);
-              refetch();
+              void kiemTraCapNhatThuCong();
             }}
             disabled={dangKiemTra}
             className="btn-tactile h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-2 transition-all shadow-xs focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
@@ -1318,8 +1340,7 @@ export const TrangThuVien: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setCliUpdateModalApp(null);
-                  if (maThietBi) kiemTraCapNhat(maThietBi);
-                  refetch();
+                  void kiemTraCapNhatThuCong();
                 }}
                 className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
               >

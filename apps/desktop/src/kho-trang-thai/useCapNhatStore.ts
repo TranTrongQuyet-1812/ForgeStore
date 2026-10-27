@@ -13,7 +13,7 @@ interface UpdaterState {
   kiemTraCapNhat: (
     deviceId: string,
     danhSach?: Array<{ maUngDung: string; phienBanHienTai: string }>,
-  ) => Promise<number>;
+  ) => Promise<number | null>;
   boQuaPhienBan: (maUngDung: string, phienBan: string) => void;
   khoiPhucPhienBan: (maUngDung: string) => void;
   kiemTraDaBoQua: (maUngDung: string, phienBanMoi?: string) => boolean;
@@ -107,7 +107,7 @@ export const useCapNhatStore = create<UpdaterState>()(
             `[useCapNhatStore] Bỏ qua kiểm tra cập nhật: deviceId không phải UUID hợp lệ (${deviceId})`,
           );
           set({ dangKiemTra: false });
-          return 0;
+          return null;
         }
 
         set({ dangKiemTra: true });
@@ -131,7 +131,7 @@ export const useCapNhatStore = create<UpdaterState>()(
         } catch (err) {
           console.warn('[useCapNhatStore] Lỗi kiểm tra cập nhật:', err);
           set({ dangKiemTra: false });
-          return 0;
+          return null;
         }
       },
     }),
