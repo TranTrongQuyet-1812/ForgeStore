@@ -1,6 +1,11 @@
 import { ReadmeTranslationService } from '../../modules/ai/translation/services/readme-translation.service';
 import { MarkdownMasker } from '../../modules/ai/translation/tien-ich/markdown-masker.util';
 import { StructureValidator } from '../../modules/ai/translation/tien-ich/structure-validator.util';
+import {
+  kiemBatBienReadme,
+  phanTichReadme,
+  rapLaiReadme,
+} from '../../modules/ai/translation/tien-ich/readme-markdown-processor.util';
 import type {
   BanGhiDaCao,
   DoanChoDich,
@@ -10,9 +15,8 @@ import type {
 } from './data-repo.types';
 
 /**
- * Lõi thuần của Data_Repo: dùng ĐÚNG hàm của BE (chia đoạn, mã băm, che/gỡ che, kiểm cấu trúc)
- * để bản dịch chuẩn bị trước khớp từng chữ với thứ BE tự tạo ra khi chạy thật.
- * Hai hàm phanDoanReadme/tinhMaBam không dùng trạng thái nên khởi tạo không cần phụ thuộc.
+ * Lõi thuần của Data_Repo dùng chung bộ phân tích, mã băm, che/gỡ che và bộ kiểm với luồng BE.
+ * Chỉ các mẩu chữ được xuất cho người dịch; README hoàn chỉnh được lắp lại theo offset nguồn.
  */
 const dichVuReadme = new ReadmeTranslationService(
   undefined as never,
@@ -22,8 +26,6 @@ const dichVuReadme = new ReadmeTranslationService(
 );
 
 export const MO_TA_TOI_DA = 400;
-/** Bản dịch ngắn hơn 60% bản gốc (theo ký tự hoặc số dòng) là dấu hiệu bị cắt. Bản dịch tiếng Việt thường dài tương đương hoặc hơn. */
-export const TI_LE_DO_DAI_TOI_THIEU = 0.6;
 const KY_HIEU_CHE = /⟦C\d+⟧/;
 
 export function tinhMaBam(text: string): string {
@@ -36,7 +38,7 @@ export function tinhMaBamMoTa(moTa: string): string {
 }
 
 export function phanDoan(readme: string | null | undefined): string[] {
-  return dichVuReadme.phanDoanReadme(readme ?? '');
+  return phanTichReadme(readme ?? '').doan.map((doan) => doan.vanBanGoc);
 }
 
 /** Đoạn còn chữ cần dịch sau khi bỏ ký hiệu che và ký tự không phải chữ. */
@@ -47,15 +49,17 @@ function conChuCanDich(daChe: string): boolean {
 
 /** Bước XUẤT: README → các đoạn đã che, sẵn cho Anti dịch. */
 export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
-  const doan: DoanChoDich[] = phanDoan(cao.readmeEn).map((goc, i) => {
-    const { maskedText } = MarkdownMasker.mask(goc);
-    const canDich = conChuCanDich(maskedText);
+  const doan: DoanChoDich[] = phanTichReadme(cao.readmeEn ?? '').doan.map((nut, i) => {
+    const goc = nut.vanBanGoc;
+    const { maskedText } = MarkdownMasker.mask(nut.vanBanDaChe);
+    const canDich = nut.canDich && conChuCanDich(maskedText);
     return {
       stt: i + 1,
       maBam: tinhMaBam(goc),
       vanBanDaChe: maskedText,
       canDich,
       vi: canDich ? null : maskedText,
+      tieuDeMuc: nut.tieuDeMuc,
     };
   });
   return {
@@ -91,8 +95,10 @@ export function kiemTraDongDaDich(
   // Cấu trúc đoạn do BE quyết định, Anti không được đổi: tính lại từ bản cào rồi đối chiếu.
   const chuan = taoDongChoDich(cao);
   const traVe = new Map(dich.doan.map((d) => [d.stt, d]));
-  const goc = phanDoan(cao.readmeEn);
+  const cauTruc = phanTichReadme(cao.readmeEn ?? '');
+  const goc = cauTruc.doan.map((doan) => doan.vanBanGoc);
   const doanDat: Array<{ maBam: string; goc: string; dich: string }> = [];
+  const banDichTheoDoan = new Map<number, string>();
   let soDoanLoi = 0;
 
   const doanKiem: DoanChoDich[] = chuan.doan.map((c, i) => {
@@ -127,21 +133,9 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    // Bản dịch bị cắt hoặc rút gọn (validator cũ không bắt được): so độ dài và số dòng với bản gốc
-    if (goc[i] && goc[i].length > 300) {
-      const dongGoc = goc[i].split('\n').filter((l) => l.trim()).length;
-      const dongDich = viDay.split('\n').filter((l) => l.trim()).length;
-      if (
-        viDay.length / goc[i].length < TI_LE_DO_DAI_TOI_THIEU ||
-        dongDich / dongGoc < TI_LE_DO_DAI_TOI_THIEU
-      ) {
-        ketQua.loi = 'mat_noi_dung' satisfies LyDoLoiDong;
-        soDoanLoi++;
-        return ketQua;
-      }
-    }
     ketQua.vi = t.vi;
     doanDat.push({ maBam: c.maBam, goc: (goc[i] ?? '').trim(), dich: viDay });
+    banDichTheoDoan.set(c.stt, viDay);
     return ketQua;
   });
 
@@ -170,6 +164,21 @@ export function kiemTraDongDaDich(
     };
   }
 
+  const readmeVi = cao.readmeEn ? rapLaiReadme(cao.readmeEn, cauTruc, banDichTheoDoan) : null;
+  const chatLuong = kiemBatBienReadme(cao.readmeEn ?? '', readmeVi ?? '', {
+    ...(chuan.moTaEn && moTaVi ? { moTaNgan: { goc: chuan.moTaEn, dich: moTaVi } } : {}),
+    doan: cauTruc.doan.map((doan) => ({
+      goc: doan.vanBanGoc,
+      dich:
+        banDichTheoDoan.get(doan.stt) ??
+        (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc),
+    })),
+  });
+  const canhBaoChatLuong = [
+    ...chatLuong.canhBao,
+    ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
+  ];
+
   return {
     dat: {
       repo: cao.repo,
@@ -181,7 +190,13 @@ export function kiemTraDongDaDich(
       etagReleases: cao.etagReleases,
       etagReadme: cao.etagReadme,
       doan: doanDat,
-      readmeVi: doanDat.length ? doanDat.map((d) => d.dich).join('\n\n') : null,
+      readmeVi,
+      hangChatLuong: canhBaoChatLuong.length === 0 ? 'A' : chatLuong.hang === 'C' ? 'C' : 'B',
+      canhBaoChatLuong,
+      tiLeDoDaiTong: chatLuong.tiLeDoDaiTong,
+      tiLeDoDaiDoan: chatLuong.tiLeDoDaiDoan,
+      tiLeDoDaiMoTa: chatLuong.tiLeDoDaiMoTa,
+      ngonNguNguon: chatLuong.ngonNguNguon,
       nguon,
     },
     loi: null,

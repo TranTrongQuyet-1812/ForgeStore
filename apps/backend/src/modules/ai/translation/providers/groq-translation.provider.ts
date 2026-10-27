@@ -4,6 +4,7 @@ import {
   ITranslationProvider,
   KetQuaDichDoan,
   NhaCungCapDich,
+  TranslationProviderOptions,
 } from '../interfaces/translation-provider.interface';
 import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.prompt';
 import { StructureValidator } from '../tien-ich/structure-validator.util';
@@ -41,7 +42,10 @@ export class GroqTranslationProvider implements ITranslationProvider {
     return this.isAvailable();
   }
 
-  public async translate(text: string, options?: { timeoutMs?: number }): Promise<KetQuaDichDoan> {
+  public async translate(
+    text: string,
+    options?: TranslationProviderOptions,
+  ): Promise<KetQuaDichDoan> {
     const startTime = Date.now();
     if (!this.isAvailable() || !this.apiKey) {
       return {
@@ -78,7 +82,7 @@ export class GroqTranslationProvider implements ITranslationProvider {
           model: this.modelName,
           messages: [
             { role: 'system', content: BAN_DICH_SYSTEM_PROMPT },
-            { role: 'user', content: taoPromptDich(text) },
+            { role: 'user', content: taoPromptDich(text, options?.context) },
           ],
           temperature: 0.1,
           max_tokens: 4096,

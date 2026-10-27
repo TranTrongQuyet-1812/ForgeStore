@@ -6,6 +6,7 @@ const README = [
   '# Demo Tool',
   '',
   'A fast screenshot tool. See [docs](https://example.com/docs) for details.',
+  'This sentence has enough words that leaving the whole source unchanged should trigger the legacy untranslated guard.',
   '',
   '## Install',
   '',
@@ -35,7 +36,7 @@ function banCao(readme: string | null = README): BanGhiDaCao {
   };
 }
 
-/** Dịch giả: đổi vài từ, giữ nguyên ký hiệu che và cấu trúc. */
+/** Dịch giả: đổi vài từ trong các mẩu chữ thuần. */
 function dichGia(dong: DongDich): DongDich {
   return {
     ...dong,
@@ -47,7 +48,11 @@ function dichGia(dong: DongDich): DongDich {
         d.vanBanDaChe
           .replace(/Install/g, 'Cài đặt')
           .replace(/Options/g, 'Tùy chọn')
-          .replace(/A fast/g, 'Một'),
+          .replace(/A fast/g, 'Một')
+          .replace(
+            /This sentence has enough words that leaving the whole source unchanged should trigger the legacy untranslated guard\./g,
+            'Câu này đã được dịch sang tiếng Việt.',
+          ),
     })),
   };
 }
@@ -58,25 +63,27 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     const dong = taoDongChoDich(cao);
     const goc = phanDoan(README);
     expect(dong.doan).toHaveLength(goc.length);
+    expect(dong.doan.find((doan) => doan.vanBanDaChe === 'Flag')?.tieuDeMuc).toContain('Options');
     dong.doan.forEach((d, i) => expect(d.maBam).toBe(tinhMaBam(goc[i])));
   });
 
-  it('khối code và link được che, Anti chỉ thấy ký hiệu', () => {
+  it('khối code và URL được giữ ngoài các mẩu chữ Anti cần dịch', () => {
     const dong = taoDongChoDich(banCao());
     const tatCa = dong.doan.map((d) => d.vanBanDaChe).join('\n');
     expect(tatCa).not.toContain('winget install');
     expect(tatCa).not.toContain('https://example.com');
-    expect(tatCa).toMatch(/⟦C\d+⟧/);
+    expect(tatCa).not.toContain('```');
+    expect(tatCa).not.toContain('|');
   });
 
-  it('đoạn chỉ có mã thì đã điền sẵn, không bắt Anti dịch', () => {
+  it('README chỉ có mã không tạo đoạn cần dịch', () => {
     const dong = taoDongChoDich(banCao('```bash\nnpm i\n```'));
-    expect(dong.doan).toHaveLength(1);
-    expect(dong.doan[0].canDich).toBe(false);
-    expect(dong.doan[0].vi).toBe(dong.doan[0].vanBanDaChe);
+    expect(dong.doan).toHaveLength(0);
+    const kq = kiemTraDongDaDich(banCao('```bash\nnpm i\n```'), dichGia(dong), 'x');
+    expect(kq.dat?.readmeVi).toBe('```bash\nnpm i\n```');
   });
 
-  it('bản dịch đạt: gỡ che đúng, ghép bằng hai dấu xuống dòng, giữ nguyên mã và link', () => {
+  it('bản dịch đạt: lắp chữ vào khung gốc, giữ nguyên mã và link', () => {
     const cao = banCao();
     const kq = kiemTraDongDaDich(cao, dichGia(taoDongChoDich(cao)), 'antigravity/test:thu');
     expect(kq.loi).toBeNull();
@@ -89,6 +96,9 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(kq.dat!.moTaVi).toBe('Công cụ chụp màn hình nhanh');
     expect(kq.dat!.readmeSha).toBe(tinhMaBam(README));
     expect(kq.dat!.etagReadme).toBe('W/"c"');
+    expect(kq.dat!.hangChatLuong).toBe('B');
+    expect(kq.dat!.tiLeDoDaiTong).toBeTypeOf('number');
+    expect(kq.dat!.tiLeDoDaiDoan).toHaveLength(phanDoan(README).length);
     // khoá lưu bộ nhớ dịch là mã băm của đoạn gốc đã trim
     kq.dat!.doan.forEach((d) => expect(d.maBam).toBe(tinhMaBam(d.goc)));
   });
@@ -96,8 +106,8 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
   it('mất một ký hiệu che thì đoạn đó lỗi placeholders_changed, đoạn khác vẫn giữ', () => {
     const cao = banCao();
     const dich = dichGia(taoDongChoDich(cao));
-    const i = dich.doan.findIndex((d) => /⟦C\d+⟧/.test(d.vanBanDaChe) && d.canDich);
-    dich.doan[i].vi = dich.doan[i].vi!.replace(/⟦C\d+⟧/, '');
+    const i = dich.doan.findIndex((d) => d.canDich);
+    dich.doan[i]!.vi = `${dich.doan[i]!.vi} ⟦C999⟧`;
     const kq = kiemTraDongDaDich(cao, dich, 'x');
     expect(kq.dat).toBeNull();
     expect(kq.soDoanLoi).toBe(1);
@@ -108,7 +118,7 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
   it('thiếu bản dịch, chưa dịch, hoặc đổi cấu trúc đoạn đều bị bắt', () => {
     const cao = banCao();
     const thieu = dichGia(taoDongChoDich(cao));
-    const j = thieu.doan.findIndex((d) => d.canDich);
+    const j = thieu.doan.findIndex((d) => d.vanBanDaChe.includes('legacy untranslated guard'));
     thieu.doan[j].vi = '';
     expect(kiemTraDongDaDich(cao, thieu, 'x').loi!.doan[j].loi).toBe('thieu_ban_dich');
 

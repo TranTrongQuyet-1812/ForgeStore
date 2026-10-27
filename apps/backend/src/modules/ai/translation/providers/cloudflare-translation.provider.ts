@@ -5,6 +5,7 @@ import {
   KetQuaDichDoan,
   LyDoLoiDich,
   NhaCungCapDich,
+  TranslationProviderOptions,
 } from '../interfaces/translation-provider.interface';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 
@@ -55,7 +56,10 @@ export class CloudflareTranslationProvider implements ITranslationProvider {
     return this.isAvailable();
   }
 
-  public async translate(text: string, options?: { timeoutMs?: number }): Promise<KetQuaDichDoan> {
+  public async translate(
+    text: string,
+    options?: TranslationProviderOptions,
+  ): Promise<KetQuaDichDoan> {
     const startTime = Date.now();
     if (!this.isAvailable() || !this.workerUrl || !this.secret) {
       return {
@@ -92,6 +96,7 @@ export class CloudflareTranslationProvider implements ITranslationProvider {
         body: JSON.stringify({
           text,
           model: this.modelName,
+          context: options?.context?.join(' > '),
         }),
         signal: controller.signal,
       });

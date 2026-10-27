@@ -43,6 +43,13 @@ export function canhBaoDong(dong: DongDaKiem): CanhBao[] {
   const kq: CanhBao[] = [];
   const them = (loai: string, chiTiet: string) => kq.push({ repo: dong.repo, loai, chiTiet });
 
+  if (dong.hangChatLuong) {
+    them(`hang_chat_luong_${dong.hangChatLuong}`, 'Xếp hạng bộ kiểm cấu trúc README');
+  }
+  for (const canhBao of dong.canhBaoChatLuong ?? []) {
+    them(`readme_${canhBao}`, 'Cần xem lại README hoặc chờ benchmark chốt ngưỡng');
+  }
+
   const moTa = dong.moTaVi ?? '';
   if (moTa) {
     const khen = TINH_TU_KHEN.filter((t) => moTa.toLowerCase().includes(t));

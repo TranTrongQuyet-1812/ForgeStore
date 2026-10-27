@@ -21,17 +21,19 @@ export interface BanGhiDaCao {
   etagReadme: string | null;
 }
 
-/** Một đoạn README do phanDoanReadme chia, đã che mã. */
+/** Một mẩu chữ README; khung Markdown, URL và code được giữ ngoài dữ liệu cần dịch. */
 export interface DoanChoDich {
   stt: number;
   /** SHA-256 của đoạn gốc (khóa bo_nho_dich_chung). */
   maBam: string;
-  /** Đoạn đã che ⟦Cn⟧: phần Anti dịch. */
+  /** Chỉ chứa chữ cần dịch và ký hiệu che nếu nguồn có thành phần kỹ thuật xen giữa. */
   vanBanDaChe: string;
-  /** false khi đoạn không có chữ cần dịch (chỉ mã/ký hiệu): đã điền sẵn vi = vanBanDaChe. */
+  /** false với tiêu đề đã dịch theo bảng cố định hoặc mẩu chữ không cần dịch. */
   canDich: boolean;
   /** Anti điền bản dịch của vanBanDaChe, giữ nguyên mọi ⟦Cn⟧. */
   vi: string | null;
+  /** Tiêu đề mục gốc làm ngữ cảnh; không đưa vào nội dung được ráp lại. */
+  tieuDeMuc?: string[];
   /** Đặt bởi bước nhập khi đoạn này lỗi (mã cố định). */
   loi?: string;
 }
@@ -57,10 +59,17 @@ export interface DongDaKiem {
   etagRepo: string | null;
   etagReleases: string | null;
   etagReadme: string | null;
-  /** Đoạn gốc (trim) + bản dịch đã gỡ che, đúng cách BE lưu bo_nho_dich_chung. */
+  /** Mẩu chữ gốc (trim) + bản dịch đã gỡ che, cùng cách BE lưu bo_nho_dich_chung. */
   doan: Array<{ maBam: string; goc: string; dich: string }>;
-  /** Ghép bằng hai dấu xuống dòng đúng cách BE ghép ban_dich_readme.noi_dung_dich. */
+  /** README hoàn chỉnh đã được ráp vào đúng vị trí nguồn, giữ nguyên phần không dịch. */
   readmeVi: string | null;
+  /** Xếp hạng tự động sau khi kiểm README đã ráp; ngưỡng chưa benchmark được thì luôn cảnh báo B. */
+  hangChatLuong?: 'A' | 'B' | 'C';
+  canhBaoChatLuong?: string[];
+  tiLeDoDaiTong?: number | null;
+  tiLeDoDaiDoan?: number[];
+  tiLeDoDaiMoTa?: number | null;
+  ngonNguNguon?: 'vi' | 'zh' | 'en' | 'khac';
   nguon: string;
 }
 

@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { kiemTraDongDaDich, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDich } from './data-repo.types';
 
-const DAI = Array.from(
-  { length: 30 },
-  (_, i) => `    -opt${i}, --option-${i}   Mô tả tùy chọn số ${i} dài để đủ ngưỡng kiểm.`,
-).join('\n');
+const DAI =
+  'This README paragraph contains enough source text to measure a translation ratio. '.repeat(12);
 const README = ['# Tool', '', DAI].join('\n');
 
 function banCao(): BanGhiDaCao {
@@ -23,17 +21,21 @@ function banCao(): BanGhiDaCao {
   };
 }
 
-describe('Kiểm bản dịch bị cắt (mat_noi_dung)', () => {
-  it('bản dịch rút gọn còn dưới 60% bị bắt dù cấu trúc đúng', () => {
+describe('Đo tỷ lệ độ dài bản dịch để chờ benchmark chốt ngưỡng', () => {
+  it('ghi nhận tỷ lệ ngắn mà không tự đặt ngưỡng loại', () => {
     const cao = banCao();
     const dong: DongDich = taoDongChoDich(cao);
     dong.moTaVi = 'Một công cụ';
     const doanDai = dong.doan.find((d) => d.canDich && d.vanBanDaChe.length > 300)!;
-    // Giữ đúng số tiêu đề (1) để chỉ còn lỗi cắt cụt
-    doanDai.vi = '# Công cụ\n\nTùy chọn chung: xem trợ giúp.';
+    for (const doan of dong.doan) {
+      if (doan.canDich) doan.vi = doan === doanDai ? 'Bản dịch ngắn.' : 'Công cụ';
+    }
     const kq = kiemTraDongDaDich(cao, dong, 'x');
-    expect(kq.dat).toBeNull();
-    expect(kq.loi!.doan.find((d) => d.stt === doanDai.stt)!.loi).toBe('mat_noi_dung');
+    const tiLeDuKien =
+      'Bản dịch ngắn.'.replace(/\s/g, '').length / doanDai.vanBanDaChe.replace(/\s/g, '').length;
+    expect(kq.dat).not.toBeNull();
+    expect(kq.dat!.tiLeDoDaiDoan[doanDai.stt - 1]).toBeCloseTo(tiLeDuKien);
+    expect(kq.dat!.canhBaoChatLuong).toContain('nguong_do_dai_cho_benchmark');
   });
 
   it('bản dịch đủ dài và đúng cấu trúc đạt', () => {
@@ -41,7 +43,11 @@ describe('Kiểm bản dịch bị cắt (mat_noi_dung)', () => {
     const dong = taoDongChoDich(cao);
     dong.moTaVi = 'Một công cụ';
     for (const d of dong.doan) {
-      if (d.canDich) d.vi = d.vanBanDaChe.replace(/Mô tả/g, 'Mô tả (đã dịch)');
+      if (!d.canDich) continue;
+      d.vi =
+        d.vanBanDaChe.length > 300
+          ? 'Bản dịch đầy đủ theo từng dòng. '.repeat(30)
+          : d.vanBanDaChe.replace(/Tool/g, 'Công cụ');
     }
     expect(kiemTraDongDaDich(cao, dong, 'x').dat).not.toBeNull();
   });

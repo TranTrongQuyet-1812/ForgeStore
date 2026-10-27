@@ -175,7 +175,7 @@ export class TranslationRotationService {
    */
   public async dichVanBan(
     rawMarkdown: string,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; context?: string[] },
   ): Promise<KetQuaDichVanBan> {
     const tongStartTime = Date.now();
 

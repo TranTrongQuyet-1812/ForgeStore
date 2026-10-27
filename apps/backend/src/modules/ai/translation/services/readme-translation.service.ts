@@ -6,6 +6,11 @@ import { CacheService } from '../../../redis/cache.service';
 import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
+import {
+  kiemBatBienReadme,
+  phanTichReadme,
+  rapLaiReadme,
+} from '../tien-ich/readme-markdown-processor.util';
 import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types';
 
 @Injectable()
@@ -517,13 +522,14 @@ export class ReadmeTranslationService {
     });
 
     try {
-      const cacDoan = this.phanDoanReadme(banGoc);
-      const cacDoanDich: string[] = [];
+      const cauTruc = phanTichReadme(banGoc);
+      const banDichTheoDoan = new Map<number, string>();
       const cacModelDung = new Set<string>();
       let lastModelUsed = 'gemini-3.1-flash-lite';
 
-      for (const doan of cacDoan) {
-        const maBamDoan = this.tinhMaBam(doan);
+      for (const doan of cauTruc.doan) {
+        if (!doan.canDich) continue;
+        const maBamDoan = doan.maBam;
 
         // 1. Kiểm tra Bảng 13: bo_nho_dich_chung (P3B-05.3)
         const cacheDoan = await this.prisma.boNhoDichChung.findUnique({
@@ -531,13 +537,15 @@ export class ReadmeTranslationService {
         });
 
         if (cacheDoan && cacheDoan.doanDich) {
-          cacDoanDich.push(cacheDoan.doanDich);
+          banDichTheoDoan.set(doan.stt, cacheDoan.doanDich);
           if (cacheDoan.moHinhDich) cacModelDung.add(cacheDoan.moHinhDich);
           continue;
         }
 
-        // 2. Chưa có trong cache -> Dịch qua chuỗi xoay tua 4 nhà
-        const ketQua = await this.translationRotationService.dichVanBan(doan);
+        // Nhà dịch chỉ nhận một mẩu chữ; code giữ nguyên Markdown và lắp bản dịch theo vị trí nguồn.
+        const ketQua = await this.translationRotationService.dichVanBan(doan.vanBanDaChe, {
+          context: doan.tieuDeMuc,
+        });
 
         if (!ketQua.thanhCong || ketQua.banDich === null) {
           this.logger.warn(`Dịch đoạn README thất bại cho repo [${owner}/${repo}]`);
@@ -551,7 +559,7 @@ export class ReadmeTranslationService {
         const modelUsed = ketQua.model || ketQua.provider || lastModelUsed;
         cacModelDung.add(modelUsed);
         lastModelUsed = modelUsed;
-        cacDoanDich.push(ketQua.banDich);
+        banDichTheoDoan.set(doan.stt, ketQua.banDich);
 
         // 3. Lưu đoạn vừa dịch vào bo_nho_dich_chung (Bảng 13)
         await this.prisma.boNhoDichChung.upsert({
@@ -559,7 +567,7 @@ export class ReadmeTranslationService {
           create: {
             maBam: maBamDoan,
             ngonNgu: 'vi',
-            doanGoc: doan.trim(),
+            doanGoc: doan.vanBanGoc.trim(),
             doanDich: ketQua.banDich,
             moHinhDich: modelUsed,
           },
@@ -570,8 +578,23 @@ export class ReadmeTranslationService {
         });
       }
 
-      // 4. Ghép toàn bộ các đoạn và lưu vào Bảng 12: ban_dich_readme
-      const noiDungDich = cacDoanDich.join('\n\n');
+      // Ghép bằng offset nguồn để mọi khối không dịch được giữ nguyên byte.
+      const noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichTheoDoan);
+      const kiemTraChatLuong = kiemBatBienReadme(banGoc, noiDungDich, {
+        doan: cauTruc.doan.map((doan) => ({
+          goc: doan.vanBanGoc,
+          dich:
+            banDichTheoDoan.get(doan.stt) ??
+            (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc),
+        })),
+      });
+      const canhBaoReadme = [
+        ...kiemTraChatLuong.canhBao,
+        ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
+      ];
+      if (canhBaoReadme.length > 0) {
+        this.logger.warn(`README [${owner}/${repo}] được xếp hạng B: ${canhBaoReadme.join(', ')}`);
+      }
       const moHinhDichTongHop = Array.from(cacModelDung).join(', ') || lastModelUsed;
 
       await this.prisma.banDichReadme.upsert({

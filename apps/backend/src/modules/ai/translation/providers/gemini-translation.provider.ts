@@ -5,6 +5,7 @@ import {
   ITranslationProvider,
   KetQuaDichDoan,
   NhaCungCapDich,
+  TranslationProviderOptions,
 } from '../interfaces/translation-provider.interface';
 import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.prompt';
 import { StructureValidator } from '../tien-ich/structure-validator.util';
@@ -53,7 +54,10 @@ export class GeminiTranslationProvider implements ITranslationProvider {
     return this.isAvailable();
   }
 
-  public async translate(text: string, options?: { timeoutMs?: number }): Promise<KetQuaDichDoan> {
+  public async translate(
+    text: string,
+    options?: TranslationProviderOptions,
+  ): Promise<KetQuaDichDoan> {
     const startTime = Date.now();
     if (!this.isAvailable() || !this.client) {
       return {
@@ -98,7 +102,7 @@ export class GeminiTranslationProvider implements ITranslationProvider {
       // P3B-05.14 / Mục 9: Tắt chế độ suy nghĩ (thinkingBudget: 0) để dịch phản hồi nhanh tức thì
       const callPromise = this.client.models.generateContent({
         model: this.modelName,
-        contents: taoPromptDich(text),
+        contents: taoPromptDich(text, options?.context),
         config: {
           systemInstruction: BAN_DICH_SYSTEM_PROMPT,
           temperature: 0.1,
