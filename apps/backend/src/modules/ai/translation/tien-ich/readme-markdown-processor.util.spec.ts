@@ -7,6 +7,52 @@ import {
 } from './readme-markdown-processor.util';
 
 describe('ReadmeMarkdownProcessor', () => {
+  it('không báo đổi khối code 4 dấu khi có hàng rào 3 dấu lồng bên trong', () => {
+    const source = [
+      'Example:',
+      '',
+      '````just',
+      'stuff := ```',
+      '    echo foo',
+      '    echo bar',
+      '  ```',
+      '````',
+      '',
+      '## Installation',
+      'Install the tool.',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const sameText = new Map(structure.doan.map((item) => [item.stt, item.vanBanDaChe]));
+    const rebuilt = rapLaiReadme(source, structure, sameText);
+
+    expect(layLoiBatBienReadme(kiemBatBienReadme(source, rebuilt).canhBao)).not.toContain(
+      'khoi_code_thay_doi',
+    );
+  });
+
+  it('không coi fence mở bằng cú pháp inline là fence đóng (case ageitgey/face_recognition)', () => {
+    const source = [
+      '```brew install cmake```',
+      '```bash',
+      'brew install cmake',
+      '```',
+      '',
+      '## Installation',
+      'Install the library.',
+      '',
+      '```bash',
+      'pip install face-recognition',
+      '```',
+    ].join('\n');
+    const structure = phanTichReadme(source);
+    const sameText = new Map(structure.doan.map((item) => [item.stt, item.vanBanDaChe]));
+    const rebuilt = rapLaiReadme(source, structure, sameText);
+
+    expect(layLoiBatBienReadme(kiemBatBienReadme(source, rebuilt).canhBao)).not.toContain(
+      'khoi_code_thay_doi',
+    );
+  });
+
   it('tách chữ có vị trí và giữ nguyên code, URL, mã inline, khung bảng khi ráp lại', () => {
     const source = [
       '# Installation',

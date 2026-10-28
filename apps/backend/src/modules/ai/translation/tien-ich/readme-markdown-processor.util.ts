@@ -1081,13 +1081,21 @@ function layKhoiCode(markdown: string): string[] {
   const lines = tachDong(markdown);
   let open = -1;
   let delimiter = '';
+  let delimiterLength = 0;
   for (let i = 0; i < lines.length; i++) {
     const text = boDauDong(lines[i]!.text);
     const fence = text.match(/^\s{0,3}(`{3,}|~{3,})/);
     if (fence && open < 0) {
       open = i;
       delimiter = fence[1]![0]!;
-    } else if (fence && open >= 0 && fence[1]![0] === delimiter) {
+      delimiterLength = fence[1]!.length;
+    } else if (
+      fence &&
+      open >= 0 &&
+      fence[1]![0] === delimiter &&
+      fence[1]!.length >= delimiterLength &&
+      /^\s*$/.test(text.slice(fence[1]!.length))
+    ) {
       blocks.push(
         lines
           .slice(open, i + 1)
