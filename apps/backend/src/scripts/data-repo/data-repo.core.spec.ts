@@ -78,6 +78,30 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(tatCa).not.toContain('|');
   });
 
+  it('gỡ URL do MarkdownMasker che từ văn bản nguồn, không dùng lại bản đã che', () => {
+    const sentence =
+      'The IDE calls one local endpoint (http://localhost:20128/v1); then routes the request.';
+    const cao = banCao(`<img alt="${sentence}">`);
+    const daXuat = taoDongChoDich(cao);
+    const doan = daXuat.doan.find((mau) => mau.vanBanDaChe.includes('⟦C1⟧'))!;
+    expect(doan.vanBanDaChe).toContain('⟦C1⟧');
+    expect(doan.khungGiuNguyen).toEqual({});
+
+    const dich = {
+      ...daXuat,
+      moTaVi: 'Mô tả đã dịch',
+      doan: daXuat.doan.map((mau) => ({
+        ...mau,
+        vi: mau.vanBanDaChe.replace('calls one local endpoint', 'gọi một điểm cuối cục bộ'),
+      })),
+    };
+    const ketQua = kiemTraDongDaDich(cao, dich, 'x');
+
+    expect(ketQua.loi).toBeNull();
+    expect(ketQua.dat?.readmeVi).toContain('http://localhost:20128/v1');
+    expect(ketQua.dat?.readmeVi).not.toContain('⟦C1⟧');
+  });
+
   it('README chỉ có mã không tạo đoạn cần dịch', () => {
     const dong = taoDongChoDich(banCao('```bash\nnpm i\n```'));
     expect(dong.doan).toHaveLength(0);

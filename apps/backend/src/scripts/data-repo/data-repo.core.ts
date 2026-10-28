@@ -134,7 +134,10 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    const { placeholderMap } = MarkdownMasker.mask(c.vanBanDaChe);
+    const doanNguon = cauTruc.doan[i]!;
+    const { placeholderMap } = MarkdownMasker.mask(
+      Object.keys(doanNguon.khungGiuNguyen).length === 0 ? doanNguon.vanBanDaChe : c.vanBanDaChe,
+    );
     const viDayChe = MarkdownMasker.unmask(viSach, placeholderMap);
     let viDay: string;
     try {

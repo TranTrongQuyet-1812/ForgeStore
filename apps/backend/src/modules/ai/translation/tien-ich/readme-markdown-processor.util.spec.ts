@@ -386,6 +386,16 @@ describe('ReadmeMarkdownProcessor', () => {
     ).toContain('khung_van_ban_thay_doi');
   });
 
+  it('không gộp chữ Trung sau dấu ngoặc fullwidth vào URL, vẫn giữ chữ Trung trong đường dẫn', () => {
+    const urlUnicode =
+      'https://github.com/binary-husky/gpt_academic/wiki/GPT‐Academic项目自译解报告';
+    const source = `运行 http://localhost/subpath）与 ${urlUnicode})与文心一言。`;
+    const translated = `Chạy dưới đường dẫn phụ, chẳng hạn như http://localhost/subpath）và ${urlUnicode}) và đọc thêm.`;
+    const result = kiemBatBienReadme(source, translated);
+
+    expect(result.canhBao).not.toContain('url_thay_doi');
+  });
+
   it('không bỏ sót câu văn bắt đầu bằng Import/Export nhưng vẫn giữ câu lệnh MDX', () => {
     const source = [
       'import the library before starting.',

@@ -1117,7 +1117,7 @@ function layTapUrl(markdown: string): string[] {
     /!?\[[^\]]*\]\(\s*<?([^\s)>]+)/g,
     /^\s*\[[^\]]+\]:\s*<?([^\s>]+)/gm,
     /\b(?:href|src)\s*=\s*["']([^"']+)["']/gi,
-    /(?:https?:\/\/|mailto:)[^\s<>)\]]+/gi,
+    /(?:https?:\/\/|mailto:)[^\s<>)\]`，。！？；：、（）【】「」『』《》〈〉]+/giu,
   ];
   for (const pattern of patterns) {
     for (const match of markdown.matchAll(pattern)) {
