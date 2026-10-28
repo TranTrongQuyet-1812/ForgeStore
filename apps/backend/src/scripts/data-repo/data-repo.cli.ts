@@ -9,6 +9,8 @@
  *   pnpm data-repo cao  --lo pilot-01        # 00_danh_sach/pilot-01.txt → 01_da_cao (cào GitHub, chưa đụng DB)
  *   pnpm data-repo xuat --lo pilot-01        # 01_da_cao → 02_cho_dich (che mã, chia đoạn như BE)
  *   pnpm data-repo nhap --lo pilot-01        # 03_da_dich (Anti trả) → 04_da_kiem + 04_loi
+ *   pnpm data-repo kiem-chat-luong --lo pilot-01 # chỉ đọc 02/03 → 04_nghi_ngo
+ *   pnpm data-repo kiem-chat-luong --nhom 01 # kiểm mọi lô có mã nhóm 01
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
@@ -27,6 +29,7 @@ import {
 } from './data-repo.paths';
 import { canhBaoDong } from './data-repo.canh-bao';
 import { timTrungLap } from './data-repo.trung-lap';
+import { kiemChatLuongLo } from './chat-luong.core';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
@@ -194,6 +197,72 @@ function lenhNhap(): void {
     console.info(
       'Đưa 04_loi cho Anti dịch lại các đoạn có "loi", trả vào 03_da_dich rồi chạy "nhap" lại.',
     );
+  }
+}
+
+function layMaNhom(nhom: string): number {
+  const ma = nhom.match(/\d+/)?.[0];
+  if (!ma) throw new Error('Sai --nhom; dùng mã như 01 hoặc g01.');
+  return Number(ma);
+}
+
+function laySoNhomTuLo(lo: string): number | null {
+  const ma = lo.match(/(?:^|[-_])g?(\d+)-l\d{3}$/i)?.[1];
+  return ma ? Number(ma) : null;
+}
+
+function layCacLoTheoNhom(nhom: string): string[] {
+  const thuMuc = path.join(DATA_REPO_DIR, THU_MUC.choDich);
+  if (!fs.existsSync(thuMuc)) throw new Error(`Không có thư mục ${thuMuc}`);
+  const maNhom = layMaNhom(nhom);
+  return fs
+    .readdirSync(thuMuc)
+    .filter((ten) => ten.endsWith('.jsonl'))
+    .map((ten) => ten.slice(0, -'.jsonl'.length))
+    .filter((lo) => laySoNhomTuLo(lo) === maNhom)
+    .sort();
+}
+
+function demDoanDaDich(choDich: DongDich[], daDich: DongDich[]): number {
+  const theoRepo = new Map(daDich.map((dong) => [dong.repo, dong]));
+  return choDich.reduce((tong, nguon) => {
+    const dich = theoRepo.get(nguon.repo);
+    const sttDaDich = new Set(dich?.doan.filter((doan) => doan.vi?.trim()).map((doan) => doan.stt));
+    return tong + nguon.doan.filter((doan) => doan.canDich && sttDaDich.has(doan.stt)).length;
+  }, 0);
+}
+
+function inKetQuaChatLuong(
+  lo: string,
+  choDich: DongDich[],
+  daDich: DongDich[],
+  nghiNgo: ReturnType<typeof kiemChatLuongLo>,
+): void {
+  const dem: Record<string, number> = {};
+  for (const doan of nghiNgo) {
+    for (const lyDo of doan.lyDo) dem[lyDo] = (dem[lyDo] ?? 0) + 1;
+  }
+  const file = duongDan('nghiNgo', lo);
+  ghiJsonl(file, nghiNgo);
+  console.info(
+    `${lo}: đã xét ${demDoanDaDich(choDich, daDich)} đoạn dịch, nghi ngờ ${nghiNgo.length} đoạn → ${file} ${JSON.stringify(dem)}`,
+  );
+}
+
+/** Chỉ đọc 02/03; báo cáo riêng để không làm thay đổi bản dịch hay kết quả kiểm trước đó. */
+function lenhKiemChatLuong(): void {
+  const lo = layThamSo('lo');
+  const nhom = layThamSo('nhom');
+  if (Boolean(lo) === Boolean(nhom))
+    throw new Error('Dùng đúng một trong hai: --lo <lô> hoặc --nhom <mã>.');
+  const cacLo = lo ? [batBuocLo()] : layCacLoTheoNhom(nhom!);
+  if (!cacLo.length) throw new Error(`Không tìm thấy lô nào cho nhóm ${nhom}.`);
+  for (const tenLo of cacLo) {
+    const choDich = docJsonl<DongDich>(duongDan('choDich', tenLo));
+    const daDich = docJsonl<DongDich>(duongDan('daDich', tenLo));
+    if (!choDich.length) throw new Error(`Chưa có ${duongDan('choDich', tenLo)}.`);
+    if (!daDich.length) throw new Error(`Chưa có ${duongDan('daDich', tenLo)}.`);
+    inKetQuaChatLuong(tenLo, choDich, daDich, kiemChatLuongLo(choDich, daDich));
   }
 }
 
@@ -889,6 +958,8 @@ async function main(): Promise<void> {
       return lenhXuat();
     case 'nhap':
       return lenhNhap();
+    case 'kiem-chat-luong':
+      return lenhKiemChatLuong();
     case 'xem':
       return lenhXem();
     case 'phan-tich':
@@ -901,7 +972,7 @@ async function main(): Promise<void> {
       return lenhHoanTac();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
       );
   }
 }
