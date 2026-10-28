@@ -16,6 +16,7 @@ export interface DoanNghiNgo {
   stt: number;
   mucQuanTrong: DoanChoDich['mucQuanTrong'];
   lyDo: LyDoChatLuong[];
+  uuTien: 'cao' | 'thap';
   tiLe: number;
   goc: string;
   vi: string;
@@ -182,6 +183,7 @@ function taoDoanNghiNgo(
     stt: doan.stt,
     mucQuanTrong: doan.mucQuanTrong,
     lyDo,
+    uuTien: lyDo.length === 1 && lyDo[0] === 'nghi_dich_lech_doan' ? 'thap' : 'cao',
     tiLe: tiLeDoDai(goc, vi),
     goc: catNgan(goc),
     vi: catNgan(vi),

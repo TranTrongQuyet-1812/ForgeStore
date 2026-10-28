@@ -242,10 +242,12 @@ function inKetQuaChatLuong(
   for (const doan of nghiNgo) {
     for (const lyDo of doan.lyDo) dem[lyDo] = (dem[lyDo] ?? 0) + 1;
   }
+  const demUuTien = { cao: 0, thap: 0 };
+  for (const doan of nghiNgo) demUuTien[doan.uuTien]++;
   const file = duongDan('nghiNgo', lo);
   ghiJsonl(file, nghiNgo);
   console.info(
-    `${lo}: đã xét ${demDoanDaDich(choDich, daDich)} đoạn dịch, nghi ngờ ${nghiNgo.length} đoạn → ${file} ${JSON.stringify(dem)}`,
+    `${lo}: đã xét ${demDoanDaDich(choDich, daDich)} đoạn dịch, nghi ngờ ${nghiNgo.length} đoạn (cao ${demUuTien.cao}, thấp ${demUuTien.thap}) → ${file} ${JSON.stringify(dem)}`,
   );
 }
 

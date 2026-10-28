@@ -93,4 +93,28 @@ describe('kiemChatLuongLo', () => {
     expect(lyDo('Why Archon', 'Tại sao nên chọn Archon')).not.toContain('dich_qua_dai');
     expect(lyDo('One line only.', 'Repeated line\nRepeated line')).toContain('dong_lap_bat_thuong');
   });
+
+  it('xếp thấp khi chỉ nghi dịch lệch đoạn, còn lý do khác thì xếp cao', () => {
+    const nguon = taoDong('owner/repo', [
+      taoDoan(
+        1,
+        'AlphaService supports ControlPanel integration for multiple provider configurations across teams.',
+        2,
+      ),
+      taoDoan(2, 'AlphaService and ControlPanel team setup'),
+    ]);
+    const banDich = taoDong('owner/repo', [
+      { ...nguon.doan[0]!, vi: 'Hỗ trợ tích hợp và cấu hình nhà cung cấp theo nhóm.' },
+      { ...nguon.doan[1]!, vi: 'Cài đặt nhóm cho AlphaService và ControlPanel.' },
+    ]);
+    const ketQua = kiemChatLuongLo([nguon], [banDich]);
+
+    expect(ketQua.find((doan) => doan.stt === 1)?.lyDo).toEqual(['nghi_dich_lech_doan']);
+    expect(ketQua.find((doan) => doan.stt === 1)?.uuTien).toBe('thap');
+    const doanUuTienCao = kiemChatLuongLo(
+      [taoDong('owner/repo', [taoDoan(3, 'A'.repeat(100))])],
+      [taoDong('owner/repo', [{ ...taoDoan(3, 'A'.repeat(100)), vi: 'B'.repeat(45) }])],
+    )[0];
+    expect(doanUuTienCao?.uuTien).toBe('cao');
+  });
 });
