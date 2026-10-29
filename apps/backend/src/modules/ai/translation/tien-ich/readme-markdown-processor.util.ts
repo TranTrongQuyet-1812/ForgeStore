@@ -1094,7 +1094,8 @@ function layKhoiCode(markdown: string): string[] {
       open >= 0 &&
       fence[1]![0] === delimiter &&
       fence[1]!.length >= delimiterLength &&
-      /^\s*$/.test(text.slice(fence[1]!.length))
+      // Cắt từ cuối toàn bộ phần khớp (gồm cả thụt lề) để dòng đóng thụt lề vẫn được nhận ra
+      /^\s*$/.test(text.slice(fence[0]!.length))
     ) {
       blocks.push(
         lines

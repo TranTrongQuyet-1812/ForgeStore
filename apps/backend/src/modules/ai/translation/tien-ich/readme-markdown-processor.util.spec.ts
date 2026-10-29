@@ -53,6 +53,29 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
+  it('đóng được khối code khi dòng đóng thụt lề và có khoảng trắng cuối dòng (case microsoft/qlib)', () => {
+    const source = [
+      '### Get with module',
+      '  ```bash',
+      '  # get 1d data',
+      '  python -m qlib.cli.data qlib_data --region cn',
+      '',
+      '  ``` ',
+      '',
+      '## Results',
+      'Score IC and Cumulative Return charts are shown below.',
+    ].join('\n');
+    // Chỉ đổi chữ nằm sau khối code, khối code phải giữ nguyên và không bị báo đổi
+    const dich = source.replace(
+      'Score IC and Cumulative Return charts are shown below.',
+      'Biểu đồ Score IC và lợi nhuận tích lũy.',
+    );
+
+    expect(layLoiBatBienReadme(kiemBatBienReadme(source, dich).canhBao)).not.toContain(
+      'khoi_code_thay_doi',
+    );
+  });
+
   it('tách chữ có vị trí và giữ nguyên code, URL, mã inline, khung bảng khi ráp lại', () => {
     const source = [
       '# Installation',
