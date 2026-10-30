@@ -76,6 +76,23 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
+  it('tách chữ sau fence đóng có hai khoảng trắng đầu dòng và khoảng trắng cuối thành đoạn dịch', () => {
+    const source = [
+      '  ```bash',
+      '  echo hello',
+      '  ``` ',
+      'This sentence after the code block should be translated.',
+    ].join('\n');
+
+    const structure = phanTichReadme(source);
+
+    expect(structure.doan).toHaveLength(1);
+    expect(structure.doan[0]?.vanBanGoc).toBe(
+      'This sentence after the code block should be translated.',
+    );
+    expect(structure.doan[0]?.canDich).toBe(true);
+  });
+
   it('tách chữ có vị trí và giữ nguyên code, URL, mã inline, khung bảng khi ráp lại', () => {
     const source = [
       '# Installation',

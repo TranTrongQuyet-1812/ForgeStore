@@ -770,7 +770,7 @@ export function phanTichReadme(markdown: string): CauTrucReadme {
       } else if (
         delimiter === codeDelimiter &&
         fence[1]!.length >= codeDelimiterLength &&
-        /^\s*$/.test(raw.slice(fence[1]!.length))
+        /^\s*$/.test(raw.slice(fence[0]!.length))
       ) {
         trongCode = false;
       }
