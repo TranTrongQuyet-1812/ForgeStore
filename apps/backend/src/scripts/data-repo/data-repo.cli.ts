@@ -13,8 +13,8 @@
  *   pnpm data-repo kiem-chat-luong --nhom 01 # kiểm mọi lô có mã nhóm 01
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> --thu # xem trước ghép bản dịch cũ
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> [--dich-lai <danh-sach.txt>]
- *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> --thu
- *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2>
+ *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --nguon-goc <Dich_Hang_Loat> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> --thu
+ *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --nguon-goc <Dich_Hang_Loat> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> [--ghep-tu <Dot_Va2_loi>]
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # xem trước thay repo đã vá
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> # tạo kho cuối sau khi duyệt số liệu
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> --thu # xem số request, không gọi GitHub
@@ -47,7 +47,7 @@ import {
   phanLoaiThayDoi,
 } from './va-tach-doan.core';
 import { hopNhatKhoCuoi, kiemTraKhoDaGhi } from './hop-nhat.core';
-import { taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
+import { ghepBanDichDaNhap, taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
 import {
   chayKiemTuoi,
   layChuaXuLy,
@@ -685,7 +685,25 @@ function docMapNguonKho<T extends { repo: string }>(thuMuc: string): Map<string,
   return map;
 }
 
-function docMucTaoVa2(thuMucNguon: string, thuMucReadme: string): MucTaoVa2[] {
+function docNguonDichCuVa2(thuMucNguonGoc: string): Map<string, DongDich> {
+  const thuMucVa = path.join(thuMucNguonGoc, 'Dot_Va', THU_MUC.daDich);
+  const tuDotVa = docMapNguonKho<DongDich>(thuMucVa);
+  const nguon = new Map(tuDotVa);
+  for (let soNhom = 1; soNhom <= 9; soNhom++) {
+    const nhom = `Nhom_${String(soNhom).padStart(2, '0')}`;
+    const thuMuc = path.join(thuMucNguonGoc, nhom, THU_MUC.daDich);
+    for (const [khoa, dong] of docMapNguonKho<DongDich>(thuMuc)) {
+      if (!nguon.has(khoa)) nguon.set(khoa, dong);
+    }
+  }
+  return nguon;
+}
+
+function docMucTaoVa2(
+  thuMucNguon: string,
+  thuMucReadme: string,
+  thuMucNguonGoc: string,
+): MucTaoVa2[] {
   const fileBaoCao = path.join(path.dirname(thuMucReadme), 'bao_cao.jsonl');
   const baoCao = docJsonl<BaoCaoKiemTuoi>(fileBaoCao);
   const canVa = new Map(
@@ -695,11 +713,14 @@ function docMucTaoVa2(thuMucNguon: string, thuMucReadme: string): MucTaoVa2[] {
   );
   const caoTheoRepo = docMapNguonKho<BanGhiDaCao>(path.join(thuMucNguon, THU_MUC.daCao));
   const kiemTheoRepo = docMapNguonKho<DongDaKiem>(path.join(thuMucNguon, THU_MUC.daKiem));
+  const dichCuTheoRepo = docNguonDichCuVa2(thuMucNguonGoc);
   const muc: MucTaoVa2[] = [];
   for (const [khoa, row] of canVa) {
     const caoCu = caoTheoRepo.get(khoa);
     const daKiemCu = kiemTheoRepo.get(khoa);
-    if (!caoCu || !daKiemCu) throw new Error(`Thiếu dữ liệu Kho_Cuoi cho ${row.repo}.`);
+    const dichCu = dichCuTheoRepo.get(khoa);
+    if (!caoCu || !daKiemCu || !dichCu)
+      throw new Error(`Thiếu dữ liệu Kho_Cuoi hoặc 03_da_dich cho ${row.repo}.`);
     const fileReadme = layTenTepReadmeMoi(thuMucReadme, row.repo);
     if (!fs.existsSync(fileReadme))
       throw new Error(`Thiếu README mới của ${row.repo}: ${fileReadme}`);
@@ -714,6 +735,7 @@ function docMucTaoVa2(thuMucNguon: string, thuMucReadme: string): MucTaoVa2[] {
       ketQua: taoRepoVa2({
         caoCu,
         daKiemCu,
+        doanCuDaChe: dichCu.doan,
         readmeMoi,
         shaMoi: tinhMaBam(readmeMoi),
         loMoi: '',
@@ -768,6 +790,50 @@ function inThongKeVa2(cacLo: Array<{ lo: string; muc: MucTaoVa2[] }>): void {
   }
 }
 
+function ghepTienDoVa2(muc: MucTaoVa2[], thuMucCu: string): number {
+  const cuTheoRepo = docMapNguonKho<DongDich>(path.join(thuMucCu, THU_MUC.daDich));
+  let soGhep = 0;
+  for (const item of muc) {
+    const dongCu = cuTheoRepo.get(item.repo.toLowerCase());
+    if (!dongCu) continue;
+    const ketQuaCho = ghepBanDichDaNhap(item.ketQua.choDich, dongCu);
+    const ketQuaDa = ghepBanDichDaNhap(item.ketQua.daDich, dongCu);
+    if (!ketQuaDa.soGhep) continue;
+    const dongThu = {
+      ...ketQuaDa.dong,
+      doan: ketQuaDa.dong.doan.map((doan) =>
+        doan.canDich && !doan.vi?.trim() ? { ...doan, vi: doan.vanBanDaChe } : doan,
+      ),
+    };
+    const kiemThu = kiemTraDongDaDich(item.ketQua.cao, dongThu, 'va2:kiem_thu');
+    if (kiemThu.loi?.loiReadme) {
+      const canHoanTac = new Set(ketQuaDa.sttGhep);
+      item.ketQua.choDich = {
+        ...ketQuaCho.dong,
+        doan: ketQuaCho.dong.doan.map((doan) =>
+          canHoanTac.has(doan.stt) ? { ...doan, vi: null } : doan,
+        ),
+      };
+      item.ketQua.daDich = {
+        ...ketQuaDa.dong,
+        doan: ketQuaDa.dong.doan.map((doan) =>
+          canHoanTac.has(doan.stt) ? { ...doan, vi: null } : doan,
+        ),
+      };
+      console.warn(
+        `Không khôi phục ${ketQuaDa.soGhep} đoạn ${item.repo}: bản dịch làm đổi cấu trúc README.`,
+      );
+      continue;
+    }
+    item.ketQua.choDich = ketQuaCho.dong;
+    item.ketQua.daDich = ketQuaDa.dong;
+    item.ketQua.soDoanDungLai += ketQuaDa.soGhep;
+    item.ketQua.soDoanCanDich -= ketQuaDa.soGhep;
+    soGhep += ketQuaDa.soGhep;
+  }
+  return soGhep;
+}
+
 function ghiCacLoVa2(thuMucRa: string, cacLo: Array<{ lo: string; muc: MucTaoVa2[] }>): void {
   for (const lo of cacLo) {
     ghiJsonl(
@@ -787,18 +853,23 @@ function ghiCacLoVa2(thuMucRa: string, cacLo: Array<{ lo: string; muc: MucTaoVa2
 
 function lenhVaTachDoan2(): void {
   const nguon = layThamSo('nguon');
+  const nguonGoc = layThamSo('nguon-goc');
   const readme = layThamSo('readme-moi');
+  const ghepTu = layThamSo('ghep-tu');
   const dauRa = layThamSo('ra');
-  if (!nguon || !readme || !dauRa)
+  if (!nguon || !nguonGoc || !readme || !dauRa)
     throw new Error(
-      'Dùng va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <readme_moi> --ra <Dot_Va2> [--thu].',
+      'Dùng va-tach-doan2 --nguon <Kho_Cuoi> --nguon-goc <Dich_Hang_Loat> --readme-moi <readme_moi> --ra <Dot_Va2> [--thu].',
     );
   const thuMucNguon = path.resolve(nguon);
+  const thuMucNguonGoc = path.resolve(nguonGoc);
   const thuMucReadme = path.resolve(readme);
   const thuMucRa = path.resolve(dauRa);
-  const muc = docMucTaoVa2(thuMucNguon, thuMucReadme);
+  const muc = docMucTaoVa2(thuMucNguon, thuMucReadme, thuMucNguonGoc);
   const cacLo = chiaLoVa2(muc);
+  const soGhepTam = ghepTu ? ghepTienDoVa2(muc, path.resolve(ghepTu)) : 0;
   inThongKeVa2(cacLo);
+  if (ghepTu) console.info(`Khôi phục ${soGhepTam} đoạn Anti đã dịch từ ${path.resolve(ghepTu)}.`);
   if (coCo('thu')) return console.info('Chạy thử: không ghi tệp nào.');
   if (thuMucRa === thuMucNguon || thuMucRa.startsWith(`${thuMucNguon}${path.sep}`))
     throw new Error('Dot_Va2 phải nằm ngoài Kho_Cuoi.');
