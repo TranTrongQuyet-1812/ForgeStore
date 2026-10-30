@@ -34,10 +34,11 @@ import { canhBaoDong } from './data-repo.canh-bao';
 import { timTrungLap } from './data-repo.trung-lap';
 import { kiemChatLuongLo } from './chat-luong.core';
 import {
-  coDanhSachMaBamKhac,
+  doiSttSangMaBam,
   docDanhSachDichLai,
   ghepBanDichCu,
   layChon,
+  phanLoaiThayDoi,
 } from './va-tach-doan.core';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
@@ -279,11 +280,17 @@ function lenhKiemChatLuong(): void {
 
 interface RepoCanVa {
   nhom: string;
+  loaiThayDoi: 'A' | 'B' | 'dich_lai';
   cao: BanGhiDaCao;
   choDich: DongDich;
   daDich: DongDich;
   soDoanDungLai: number;
   soDoanCanDich: number;
+  soDoanDichLai: number;
+  soCanDichMoi: number;
+  soKhongConCanDich: number;
+  soMucQuanTrongDoi: number;
+  boQuaDichLai: Array<{ stt: number; dong: number; lyDo: string }>;
 }
 
 function layNhomVa(): number[] {
@@ -311,11 +318,54 @@ function ghepDoanCu(choDichCu: DongDich, daDichCu: DongDich): DongDich['doan'] {
   }));
 }
 
+function demDoiMucQuanTrong(doanMoi: DongDich['doan'], doanCu: DongDich['doan']): number {
+  const cuTheoMa = new Map<string, DongDich['doan']>();
+  for (const cu of doanCu) {
+    const danhSach = cuTheoMa.get(cu.maBam) ?? [];
+    danhSach.push(cu);
+    cuTheoMa.set(cu.maBam, danhSach);
+  }
+  const demLan = new Map<string, number>();
+  let soDoi = 0;
+  for (const moi of doanMoi) {
+    const lan = demLan.get(moi.maBam) ?? 0;
+    demLan.set(moi.maBam, lan + 1);
+    const cu = cuTheoMa.get(moi.maBam)?.[lan];
+    if (cu && cu.mucQuanTrong !== moi.mucQuanTrong) soDoi++;
+  }
+  return soDoi;
+}
+
+function demDoiCanDich(
+  doanMoi: DongDich['doan'],
+  doanCu: DongDich['doan'],
+): { canDichMoi: number; khongConCanDich: number } {
+  const cuTheoMa = new Map<string, DongDich['doan']>();
+  for (const cu of doanCu) {
+    const danhSach = cuTheoMa.get(cu.maBam) ?? [];
+    danhSach.push(cu);
+    cuTheoMa.set(cu.maBam, danhSach);
+  }
+  const demLan = new Map<string, number>();
+  let canDichMoi = 0;
+  let khongConCanDich = 0;
+  for (const moi of doanMoi) {
+    const lan = demLan.get(moi.maBam) ?? 0;
+    demLan.set(moi.maBam, lan + 1);
+    const cu = cuTheoMa.get(moi.maBam)?.[lan];
+    if (!cu) continue;
+    if (!cu.canDich && moi.canDich) canDichMoi++;
+    if (cu.canDich && !moi.canDich) khongConCanDich++;
+  }
+  return { canDichMoi, khongConCanDich };
+}
+
 function docMotLoCanVa(
   thuMucNguon: string,
   nhom: string,
   tenLo: string,
   danhSachDichLai: ReturnType<typeof docDanhSachDichLai>,
+  reposDaGap: Set<string>,
 ): RepoCanVa[] {
   const docTheoThuMuc = (thuMuc: string) => {
     const file = path.join(thuMucNguon, nhom, thuMuc, `${tenLo}.jsonl`);
@@ -329,25 +379,37 @@ function docMotLoCanVa(
     throw new Error(`Số repo 01/02/03 không khớp trong ${tenLo}.`);
   const canVa: RepoCanVa[] = [];
   for (const [repo, banCao] of cao) {
+    reposDaGap.add(repo.toLowerCase());
     const banChoDichCu = choDich.get(repo);
     const banDichCu = daDich.get(repo);
     if (!banChoDichCu || !banDichCu)
       throw new Error(`Thiếu dữ liệu 02/03 cho ${repo} trong ${tenLo}.`);
     const loMoi = tenLo.replace(/^dich-/, 'va-');
     const banChoDichMoi = taoDongChoDich({ ...banCao, lo: loMoi });
-    if (!coDanhSachMaBamKhac(banChoDichMoi.doan, banChoDichCu.doan)) continue;
+    const loaiThayDoi = phanLoaiThayDoi(banChoDichMoi.doan, banChoDichCu.doan);
+    const chonCu = layChon(repo, danhSachDichLai);
+    const daDoiStt = doiSttSangMaBam(banChoDichCu.doan, banChoDichMoi.doan, chonCu);
+    const coYeuCauDichLai = daDoiStt.chon.maBam.size > 0 || daDoiStt.chon.lanTheoMaBam.size > 0;
+    if (!loaiThayDoi && !coYeuCauDichLai) continue;
     const ketQua = ghepBanDichCu(
       banChoDichMoi.doan,
       ghepDoanCu(banChoDichCu, banDichCu),
-      layChon(repo, danhSachDichLai),
+      daDoiStt.chon,
     );
+    const doiCanDich = demDoiCanDich(banChoDichMoi.doan, banChoDichCu.doan);
     canVa.push({
       nhom,
+      loaiThayDoi: loaiThayDoi ?? 'dich_lai',
       cao: { ...banCao, lo: loMoi },
       choDich: banChoDichMoi,
       daDich: { ...banChoDichMoi, moTaVi: banDichCu.moTaVi, doan: ketQua.doan },
       soDoanDungLai: ketQua.soDoanDungLai,
       soDoanCanDich: ketQua.soDoanCanDich,
+      soDoanDichLai: ketQua.soDoanDichLai,
+      soCanDichMoi: doiCanDich.canDichMoi,
+      soKhongConCanDich: doiCanDich.khongConCanDich,
+      soMucQuanTrongDoi: demDoiMucQuanTrong(banChoDichMoi.doan, banChoDichCu.doan),
+      boQuaDichLai: daDoiStt.boQua,
     });
   }
   return canVa;
@@ -357,6 +419,7 @@ function docCacRepoCanVa(
   thuMucNguon: string,
   cacNhom: number[],
   danhSachDichLai: ReturnType<typeof docDanhSachDichLai>,
+  reposDaGap: Set<string>,
 ): RepoCanVa[] {
   const canVa: RepoCanVa[] = [];
   for (const soNhom of cacNhom) {
@@ -371,21 +434,70 @@ function docCacRepoCanVa(
     if (!cacLo.length) throw new Error(`Không tìm thấy lô dịch trong ${thuMucChoDich}`);
     for (const file of cacLo) {
       const tenLo = file.slice(0, -'.jsonl'.length);
-      canVa.push(...docMotLoCanVa(thuMucNguon, nhom, tenLo, danhSachDichLai));
+      canVa.push(...docMotLoCanVa(thuMucNguon, nhom, tenLo, danhSachDichLai, reposDaGap));
     }
   }
   return canVa;
 }
 
-function inTongKetVaTachDoan(cacNhom: number[], canVa: RepoCanVa[]): void {
+function inTongKetVaTachDoan(
+  cacNhom: number[],
+  canVa: RepoCanVa[],
+  danhSachDichLai: ReturnType<typeof docDanhSachDichLai>,
+  reposDaGap: Set<string>,
+): void {
+  let soMucQuanTrongDoi = 0;
+  let soDichLai = 0;
+  let soBoQua = 0;
   for (const soNhom of cacNhom) {
     const nhom = String(soNhom).padStart(2, '0');
     const repos = canVa.filter((repo) => repo.nhom === `Nhom_${nhom}`);
-    const dungLai = repos.reduce((tong, repo) => tong + repo.soDoanDungLai, 0);
-    const canDich = repos.reduce((tong, repo) => tong + repo.soDoanCanDich, 0);
-    console.info(
-      `N${nhom}: ${repos.length} repo cần vá, dùng lại ${dungLai} đoạn, cần dịch ${canDich} đoạn.`,
-    );
+    const tong = (chon: (repo: RepoCanVa) => boolean, laySo: (repo: RepoCanVa) => number) =>
+      repos.filter(chon).reduce((dem, repo) => dem + laySo(repo), 0);
+    const dongNhom = [
+      `N${nhom}: A ${tong(
+        (r) => r.loaiThayDoi === 'A',
+        () => 1,
+      )} repo / ${tong(
+        (r) => r.loaiThayDoi === 'A',
+        (r) => r.soDoanCanDich,
+      )} đoạn cần dịch`,
+      `B ${tong(
+        (r) => r.loaiThayDoi === 'B',
+        () => 1,
+      )} repo / ${tong(
+        (r) => r.loaiThayDoi === 'B',
+        (r) => r.soDoanCanDich,
+      )} đoạn cần dịch`,
+      `dịch lại riêng ${tong(
+        (r) => r.loaiThayDoi === 'dich_lai',
+        () => 1,
+      )} repo / ${tong(
+        (r) => r.loaiThayDoi === 'dich_lai',
+        (r) => r.soDoanDichLai,
+      )} đoạn`,
+      `false→true ${repos.reduce((s, r) => s + r.soCanDichMoi, 0)}, true→false ${repos.reduce((s, r) => s + r.soKhongConCanDich, 0)}`,
+    ];
+    console.info(dongNhom.join('; '));
+    soMucQuanTrongDoi += repos.reduce((s, r) => s + r.soMucQuanTrongDoi, 0);
+    soDichLai += repos.reduce((s, r) => s + r.soDoanDichLai, 0);
+    soBoQua += repos.reduce((s, r) => s + r.boQuaDichLai.length, 0);
+  }
+  console.info(
+    `Tổng: ${canVa.filter((r) => r.loaiThayDoi === 'A').length} repo A, ${canVa.filter((r) => r.loaiThayDoi === 'B').length} repo B; yêu cầu dịch lại ${soDichLai} đoạn.`,
+  );
+  console.info(
+    `Đoạn đổi mức mucQuanTrong: ${soMucQuanTrongDoi}; dòng dịch lại bị bỏ qua: ${soBoQua}.`,
+  );
+  for (const repo of canVa)
+    for (const dong of repo.boQuaDichLai)
+      console.info(`Bỏ qua ${repo.cao.repo} stt ${dong.stt} (dòng ${dong.dong}): ${dong.lyDo}.`);
+  for (const [repo, chon] of danhSachDichLai) {
+    if (reposDaGap.has(repo)) continue;
+    for (const stt of chon.sttCu)
+      console.info(
+        `Bỏ qua ${repo} stt ${stt} (dòng ${chon.dongTheoStt.get(stt)?.[0] ?? 0}): không tìm thấy repo trong các nhóm đã đọc.`,
+      );
   }
 }
 
@@ -432,8 +544,9 @@ function lenhVaTachDoan(): void {
     ? docDanhSachDichLai(fs.readFileSync(path.resolve(fileDichLai), 'utf8'))
     : new Map();
   const cacNhom = layNhomVa();
-  const canVa = docCacRepoCanVa(thuMucNguon, cacNhom, danhSachDichLai);
-  inTongKetVaTachDoan(cacNhom, canVa);
+  const reposDaGap = new Set<string>();
+  const canVa = docCacRepoCanVa(thuMucNguon, cacNhom, danhSachDichLai, reposDaGap);
+  inTongKetVaTachDoan(cacNhom, canVa, danhSachDichLai, reposDaGap);
   if (coCo('thu')) return;
   const moiLo = Number(layThamSo('moi-lo') ?? '30');
   if (!Number.isInteger(moiLo) || moiLo < 1) throw new Error('--moi-lo phải là số nguyên dương.');
