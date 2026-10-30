@@ -13,6 +13,8 @@
  *   pnpm data-repo kiem-chat-luong --nhom 01 # kiểm mọi lô có mã nhóm 01
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> --thu # xem trước ghép bản dịch cũ
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> [--dich-lai <danh-sach.txt>]
+ *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> --thu
+ *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2>
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # xem trước thay repo đã vá
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> # tạo kho cuối sau khi duyệt số liệu
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> --thu # xem số request, không gọi GitHub
@@ -45,6 +47,7 @@ import {
   phanLoaiThayDoi,
 } from './va-tach-doan.core';
 import { hopNhatKhoCuoi, kiemTraKhoDaGhi } from './hop-nhat.core';
+import { taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
 import {
   chayKiemTuoi,
   layChuaXuLy,
@@ -654,6 +657,154 @@ function ghiKhoHopNhat(thuMucRa: string, ketQua: ReturnType<typeof hopNhatKhoCuo
     ghiJsonl(path.join(thuMucRa, THU_MUC.daKiem, `${lo.lo}.jsonl`), lo.daKiem);
   }
   fs.writeFileSync(path.join(thuMucRa, 'NGUON.md'), taoBaoCaoHopNhat(ketQua), 'utf8');
+}
+
+interface MucTaoVa2 {
+  nhom: string;
+  repo: string;
+  ketQua: KetQuaRepoVa2;
+}
+
+function layTenTepReadmeMoi(thuMuc: string, repo: string): string {
+  const phanTen = repo.replace(/[^a-zA-Z0-9._-]+/g, '__');
+  return path.join(thuMuc, `${phanTen}-${tinhMaBam(repo).slice(0, 12)}.md`);
+}
+
+function docMapNguonKho<T extends { repo: string }>(thuMuc: string): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const tep of fs
+    .readdirSync(thuMuc)
+    .filter((ten) => ten.endsWith('.jsonl'))
+    .sort()) {
+    for (const dong of docJsonl<T>(path.join(thuMuc, tep))) {
+      const khoa = dong.repo.toLowerCase();
+      if (map.has(khoa)) throw new Error(`Repo trùng trong ${thuMuc}: ${dong.repo}.`);
+      map.set(khoa, dong);
+    }
+  }
+  return map;
+}
+
+function docMucTaoVa2(thuMucNguon: string, thuMucReadme: string): MucTaoVa2[] {
+  const fileBaoCao = path.join(path.dirname(thuMucReadme), 'bao_cao.jsonl');
+  const baoCao = docJsonl<BaoCaoKiemTuoi>(fileBaoCao);
+  const canVa = new Map(
+    baoCao
+      .filter((row) => ['readme_doi_nhe', 'readme_doi_nhieu'].includes(row.loai))
+      .map((row) => [row.repo.toLowerCase(), row]),
+  );
+  const caoTheoRepo = docMapNguonKho<BanGhiDaCao>(path.join(thuMucNguon, THU_MUC.daCao));
+  const kiemTheoRepo = docMapNguonKho<DongDaKiem>(path.join(thuMucNguon, THU_MUC.daKiem));
+  const muc: MucTaoVa2[] = [];
+  for (const [khoa, row] of canVa) {
+    const caoCu = caoTheoRepo.get(khoa);
+    const daKiemCu = kiemTheoRepo.get(khoa);
+    if (!caoCu || !daKiemCu) throw new Error(`Thiếu dữ liệu Kho_Cuoi cho ${row.repo}.`);
+    const fileReadme = layTenTepReadmeMoi(thuMucReadme, row.repo);
+    if (!fs.existsSync(fileReadme))
+      throw new Error(`Thiếu README mới của ${row.repo}: ${fileReadme}`);
+    const readmeMoi = fs.readFileSync(fileReadme, 'utf8');
+    if (!row.readmeShaMoi || tinhMaBam(readmeMoi) !== row.readmeShaMoi)
+      throw new Error(`SHA README mới không khớp báo cáo cho ${row.repo}.`);
+    const nhom = caoCu.lo.match(/^dich-g(\d{2})-/)?.[1];
+    if (!nhom) throw new Error(`Không suy ra nhóm từ lô ${caoCu.lo} của ${row.repo}.`);
+    muc.push({
+      nhom,
+      repo: row.repo,
+      ketQua: taoRepoVa2({
+        caoCu,
+        daKiemCu,
+        readmeMoi,
+        shaMoi: tinhMaBam(readmeMoi),
+        loMoi: '',
+        saoMoi: row.saoHienTai,
+        idMoi: row.idGithub,
+        taoDoan: (cao) => taoDongChoDich(cao).doan,
+      }),
+    });
+  }
+  return muc.sort((a, b) => a.nhom.localeCompare(b.nhom));
+}
+
+function chiaLoVa2(muc: MucTaoVa2[], kichThuoc = 30): Array<{ lo: string; muc: MucTaoVa2[] }> {
+  const theoNhom = new Map<string, MucTaoVa2[]>();
+  for (const dong of muc) {
+    const ds = theoNhom.get(dong.nhom) ?? [];
+    ds.push(dong);
+    theoNhom.set(dong.nhom, ds);
+  }
+  return [...theoNhom.entries()].flatMap(([nhom, danhSach]) =>
+    Array.from({ length: Math.ceil(danhSach.length / kichThuoc) }, (_, index) => {
+      const lo = `va2-g${nhom}-l${String(index + 1).padStart(3, '0')}`;
+      const phan = danhSach.slice(index * kichThuoc, (index + 1) * kichThuoc);
+      return {
+        lo,
+        muc: phan.map((item) => {
+          item.ketQua.cao.lo = lo;
+          item.ketQua.choDich.lo = lo;
+          item.ketQua.daDich.lo = lo;
+          return item;
+        }),
+      };
+    }),
+  );
+}
+
+function inThongKeVa2(cacLo: Array<{ lo: string; muc: MucTaoVa2[] }>): void {
+  const tongRepo = cacLo.reduce((tong, lo) => tong + lo.muc.length, 0);
+  const dungLai = cacLo
+    .flatMap((lo) => lo.muc)
+    .reduce((tong, item) => tong + item.ketQua.soDoanDungLai, 0);
+  const canDich = cacLo
+    .flatMap((lo) => lo.muc)
+    .reduce((tong, item) => tong + item.ketQua.soDoanCanDich, 0);
+  console.info(
+    `Repo cần vá: ${tongRepo}; đoạn dùng lại: ${dungLai}; đoạn mới Anti phải dịch: ${canDich}.`,
+  );
+  for (const lo of cacLo) {
+    const dung = lo.muc.reduce((tong, item) => tong + item.ketQua.soDoanDungLai, 0);
+    const moi = lo.muc.reduce((tong, item) => tong + item.ketQua.soDoanCanDich, 0);
+    console.info(`${lo.lo}: ${lo.muc.length} repo, ${dung} đoạn dùng lại, ${moi} đoạn mới.`);
+  }
+}
+
+function ghiCacLoVa2(thuMucRa: string, cacLo: Array<{ lo: string; muc: MucTaoVa2[] }>): void {
+  for (const lo of cacLo) {
+    ghiJsonl(
+      path.join(thuMucRa, THU_MUC.daCao, `${lo.lo}.jsonl`),
+      lo.muc.map((item) => item.ketQua.cao),
+    );
+    ghiJsonl(
+      path.join(thuMucRa, THU_MUC.choDich, `${lo.lo}.jsonl`),
+      lo.muc.map((item) => item.ketQua.choDich),
+    );
+    ghiJsonl(
+      path.join(thuMucRa, THU_MUC.daDich, `${lo.lo}.jsonl`),
+      lo.muc.map((item) => item.ketQua.daDich),
+    );
+  }
+}
+
+function lenhVaTachDoan2(): void {
+  const nguon = layThamSo('nguon');
+  const readme = layThamSo('readme-moi');
+  const dauRa = layThamSo('ra');
+  if (!nguon || !readme || !dauRa)
+    throw new Error(
+      'Dùng va-tach-doan2 --nguon <Kho_Cuoi> --readme-moi <readme_moi> --ra <Dot_Va2> [--thu].',
+    );
+  const thuMucNguon = path.resolve(nguon);
+  const thuMucReadme = path.resolve(readme);
+  const thuMucRa = path.resolve(dauRa);
+  const muc = docMucTaoVa2(thuMucNguon, thuMucReadme);
+  const cacLo = chiaLoVa2(muc);
+  inThongKeVa2(cacLo);
+  if (coCo('thu')) return console.info('Chạy thử: không ghi tệp nào.');
+  if (thuMucRa === thuMucNguon || thuMucRa.startsWith(`${thuMucNguon}${path.sep}`))
+    throw new Error('Dot_Va2 phải nằm ngoài Kho_Cuoi.');
+  if (fs.existsSync(thuMucRa)) throw new Error(`Thư mục đầu ra đã tồn tại: ${thuMucRa}`);
+  ghiCacLoVa2(thuMucRa, cacLo);
+  console.info(`Đã tạo ${cacLo.length} lô trong ${thuMucRa}.`);
 }
 
 function docKhoHopNhatDaGhi(thuMucRa: string, cacLoGoc: ReturnType<typeof docCacLoGocHopNhat>) {
@@ -1609,6 +1760,8 @@ async function main(): Promise<void> {
       return lenhKiemChatLuong();
     case 'va-tach-doan':
       return lenhVaTachDoan();
+    case 'va-tach-doan2':
+      return lenhVaTachDoan2();
     case 'hop-nhat':
       return lenhHopNhat();
     case 'kiem-tuoi':
