@@ -15,6 +15,8 @@
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> [--dich-lai <danh-sach.txt>]
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # xem trước thay repo đã vá
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> # tạo kho cuối sau khi duyệt số liệu
+ *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> --thu # xem số request, không gọi GitHub
+ *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> [--tiep] # kiểm độ tươi qua GitHub API
  *   Danh sách dịch lại: mỗi dòng owner/repo stt_cũ (có thể là khoảng) hoặc owner/repo maBam.
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
@@ -43,6 +45,13 @@ import {
   phanLoaiThayDoi,
 } from './va-tach-doan.core';
 import { hopNhatKhoCuoi, kiemTraKhoDaGhi } from './hop-nhat.core';
+import {
+  chayKiemTuoi,
+  layChuaXuLy,
+  type BaoCaoKiemTuoi,
+  type KetQuaKiemMotRepo,
+  type TienDoKiemTuoi,
+} from './kiem-tuoi.core';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
@@ -692,6 +701,216 @@ function lenhHopNhat(): void {
   console.info(
     `Đã ghi và đối chiếu ${ketQua.tongRepo} repo trong ${ketQua.cacLo.length} lô tại ${thuMucRa}.`,
   );
+}
+
+function docDuLieuKiemTuoi(thuMucNguon: string): TienDoKiemTuoi[] {
+  const thuMucCao = path.join(thuMucNguon, THU_MUC.daCao);
+  const thuMucKiem = path.join(thuMucNguon, THU_MUC.daKiem);
+  if (!fs.existsSync(thuMucCao) || !fs.existsSync(thuMucKiem))
+    throw new Error('Nguồn cần có cả 01_da_cao và 04_da_kiem.');
+  const cao = fs
+    .readdirSync(thuMucCao)
+    .filter((tep) => tep.endsWith('.jsonl'))
+    .flatMap((tep) => docJsonl<BanGhiDaCao>(path.join(thuMucCao, tep)));
+  const daKiem = fs
+    .readdirSync(thuMucKiem)
+    .filter((tep) => tep.endsWith('.jsonl'))
+    .flatMap((tep) => docJsonl<DongDaKiem>(path.join(thuMucKiem, tep)));
+  const daKiemTheoRepo = new Map<string, DongDaKiem>();
+  for (const dong of daKiem) {
+    const khoa = dong.repo.toLowerCase();
+    if (daKiemTheoRepo.has(khoa)) throw new Error(`04_da_kiem có repo trùng: ${dong.repo}.`);
+    daKiemTheoRepo.set(khoa, dong);
+  }
+  if (!cao.length) throw new Error('Không tìm thấy bản cào README trong 01_da_cao.');
+  const repoDaGap = new Set<string>();
+  for (const banCao of cao) {
+    const khoa = banCao.repo.toLowerCase();
+    if (repoDaGap.has(khoa)) throw new Error(`01_da_cao có repo trùng: ${banCao.repo}.`);
+    if (!daKiemTheoRepo.has(khoa)) throw new Error(`Thiếu ${banCao.repo} trong 04_da_kiem.`);
+    repoDaGap.add(khoa);
+  }
+  if (daKiemTheoRepo.size !== cao.length)
+    throw new Error('Số repo 01_da_cao và 04_da_kiem không khớp.');
+  return cao.map((banCao) => ({
+    cao: banCao,
+    daKiem: daKiemTheoRepo.get(banCao.repo.toLowerCase()),
+  }));
+}
+
+function taoXemTruocKiemTuoi(danhSach: TienDoKiemTuoi[]): void {
+  const coId = danhSach.filter(({ cao }) => Boolean(cao.idGithub));
+  console.info(`Repo: ${danhSach.length}; request tối đa dự kiến: ${coId.length * 2}.`);
+  console.info('5 repo đầu:');
+  for (const { cao } of danhSach.slice(0, 5)) console.info(`- ${cao.repo}`);
+}
+
+function taoYeuCauKiemTuoi(token: string) {
+  return async (url: string, etag: string | null) => {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'ForgeStore-DataRepo',
+      Authorization: `Bearer ${token}`,
+    };
+    if (etag) headers['If-None-Match'] = etag;
+    for (let lan = 0; lan < 4; lan++) {
+      try {
+        const response = await fetch(url, {
+          headers,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(20000),
+        });
+        const remainingHeader = response.headers.get('x-ratelimit-remaining');
+        const resetHeader = response.headers.get('x-ratelimit-reset');
+        const dungLuongConLai = remainingHeader === null ? null : Number(remainingHeader);
+        const reset = resetHeader === null ? null : Number(resetHeader);
+        const ketQua = {
+          response,
+          dungLuongConLai:
+            dungLuongConLai !== null && Number.isFinite(dungLuongConLai) ? dungLuongConLai : null,
+          thoiDiemReset: reset !== null && Number.isFinite(reset) && reset > 0 ? reset : null,
+        };
+        const canThuLai = [403, 429].includes(response.status) || response.status >= 500;
+        if (
+          !canThuLai ||
+          lan === 3 ||
+          (ketQua.dungLuongConLai !== null && ketQua.dungLuongConLai < 200)
+        )
+          return ketQua;
+        await new Promise((resolve) => setTimeout(resolve, layThoiGianLui(response, lan)));
+      } catch (error) {
+        if (lan === 3)
+          throw new Error(error instanceof Error ? error.message : 'Lỗi kết nối GitHub.');
+        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** lan));
+      }
+    }
+    throw new Error('Không thể gọi GitHub sau các lần thử lại.');
+  };
+}
+
+function layThoiGianLui(response: Response, lan: number): number {
+  const sau = Number(response.headers.get('retry-after'));
+  return Number.isFinite(sau) && sau > 0 ? sau * 1000 : 1000 * 2 ** lan;
+}
+
+function docBaoCaoKiemTuoi(file: string): Map<string, BaoCaoKiemTuoi> {
+  return new Map(docJsonl<BaoCaoKiemTuoi>(file).map((dong) => [dong.repo.toLowerCase(), dong]));
+}
+
+function ghiTienDoKiemTuoi(thuMucRa: string, baoCao: Map<string, BaoCaoKiemTuoi>): void {
+  const file = path.join(thuMucRa, 'bao_cao.jsonl');
+  ghiTepThayThe(file, [...baoCao.values()].map((row) => JSON.stringify(row)).join('\n') + '\n');
+  ghiTepThayThe(
+    path.join(thuMucRa, 'tien-do.json'),
+    JSON.stringify({ daHoanTat: baoCao.size, capNhatLuc: new Date().toISOString() }, null, 2),
+  );
+}
+
+function ghiTepThayThe(file: string, noiDung: string): void {
+  const tepTam = `${file}.tam`;
+  fs.writeFileSync(tepTam, noiDung, 'utf8');
+  fs.renameSync(tepTam, file);
+}
+
+function ghiReadmeKiemTuoi(thuMucRa: string, repo: string, noiDung: string): void {
+  const tenTep = `${repo.replace(/[^a-zA-Z0-9._-]+/g, '__')}-${tinhMaBam(repo).slice(0, 12)}.md`;
+  const thuMucReadme = path.join(thuMucRa, 'readme_moi');
+  fs.mkdirSync(thuMucReadme, { recursive: true });
+  fs.writeFileSync(path.join(thuMucReadme, tenTep), noiDung, 'utf8');
+}
+
+function taoTomTatKiemTuoi(baoCao: BaoCaoKiemTuoi[]): string {
+  const loai = [
+    'khong_doi',
+    'da_xoa',
+    'doi_ten',
+    'luu_tru',
+    'rieng_tu_hoac_bi_chan',
+    'readme_doi_nhe',
+    'readme_doi_nhieu',
+    'loi_goi_api',
+  ] as const;
+  const dong = ['# Kết quả kiểm tra độ tươi', '', '| Phân loại | Số repo |', '|---|---:|'];
+  for (const muc of loai)
+    dong.push(`| ${muc} | ${baoCao.filter((row) => row.loai === muc).length} |`);
+  dong.push('', '## Repo cần quyết định', '');
+  const canXem = baoCao.filter((row) =>
+    ['da_xoa', 'doi_ten', 'luu_tru', 'readme_doi_nhieu'].includes(row.loai),
+  );
+  for (const row of canXem)
+    dong.push(`- ${row.repo}: ${row.loai}${row.tenMoi ? ` → ${row.tenMoi}` : ''}`);
+  dong.push('', `Đã kiểm ${baoCao.length} repo.`, '');
+  return dong.join('\n');
+}
+
+async function lenhKiemTuoi(): Promise<void> {
+  const nguon = layThamSo('nguon');
+  const dauRa = layThamSo('ra');
+  if (!nguon || !dauRa)
+    throw new Error('Dùng kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi_dir> [--thu] [--tiep].');
+  const thuMucNguon = path.resolve(nguon);
+  const thuMucRa = path.resolve(dauRa);
+  const namTrongNguon = path.relative(thuMucNguon, thuMucRa);
+  if (!namTrongNguon.startsWith('..') && !path.isAbsolute(namTrongNguon))
+    throw new Error('Thư mục kết quả phải nằm ngoài Kho_Cuoi.');
+  const danhSach = docDuLieuKiemTuoi(thuMucNguon);
+  if (coCo('thu')) return taoXemTruocKiemTuoi(danhSach);
+  const tiep = coCo('tiep');
+  if (tiep && !fs.existsSync(thuMucRa)) throw new Error('Không có thư mục tiến độ để tiếp tục.');
+  if (!tiep && fs.existsSync(thuMucRa))
+    throw new Error('Thư mục kết quả đã tồn tại; dùng --tiep để tiếp tục.');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* Có thể cấu hình token qua môi trường của shell. */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  fs.mkdirSync(thuMucRa, { recursive: true });
+  const baoCao = docBaoCaoKiemTuoi(path.join(thuMucRa, 'bao_cao.jsonl'));
+  const canXuLy = layChuaXuLy(
+    danhSach,
+    new Set(
+      [...baoCao.values()]
+        .filter((row) => row.loai !== 'loi_goi_api')
+        .map((row) => row.repo.toLowerCase()),
+    ),
+  );
+  console.info(`Bắt đầu kiểm ${canXuLy.length} repo còn lại, tối đa 5 request đồng thời.`);
+  const ketThuc = await chayKiemTuoi(
+    danhSach,
+    new Set(
+      [...danhSach]
+        .filter(({ cao }) => !canXuLy.some((muc) => muc.cao.repo === cao.repo))
+        .map(({ cao }) => cao.repo.toLowerCase()),
+    ),
+    {
+      yeuCau: taoYeuCauKiemTuoi(token),
+      taoDongMoi: (cao) => taoDongChoDich(cao).doan,
+      ngu: async () => undefined,
+    },
+    (ketQua: KetQuaKiemMotRepo, cao) => {
+      if (ketQua.baoCao) baoCao.set(cao.repo.toLowerCase(), ketQua.baoCao);
+      if (ketQua.readmeMoi && ketQua.baoCao?.readmeShaMoi)
+        ghiReadmeKiemTuoi(thuMucRa, cao.repo, ketQua.readmeMoi);
+      ghiTienDoKiemTuoi(thuMucRa, baoCao);
+    },
+  );
+  fs.writeFileSync(
+    path.join(thuMucRa, 'TOM_TAT.md'),
+    taoTomTatKiemTuoi([...baoCao.values()]),
+    'utf8',
+  );
+  if (ketThuc.dungViHanMuc) {
+    const reset = ketThuc.thoiDiemReset
+      ? new Date(ketThuc.thoiDiemReset * 1000).toLocaleString('vi-VN')
+      : 'chưa có thông tin';
+    console.info(
+      `Đã dừng vì hạn mức còn dưới 200. GitHub đặt lại lúc ${reset}; tiếp tục bằng --tiep.`,
+    );
+  }
+  console.info(`Đã ghi ${baoCao.size}/${danhSach.length} repo vào ${thuMucRa}.`);
 }
 
 // ---------------------------------------------------------------- XEM
@@ -1392,6 +1611,8 @@ async function main(): Promise<void> {
       return lenhVaTachDoan();
     case 'hop-nhat':
       return lenhHopNhat();
+    case 'kiem-tuoi':
+      return lenhKiemTuoi();
     case 'xem':
       return lenhXem();
     case 'phan-tich':
@@ -1404,7 +1625,7 @@ async function main(): Promise<void> {
       return lenhHoanTac();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
       );
   }
 }
