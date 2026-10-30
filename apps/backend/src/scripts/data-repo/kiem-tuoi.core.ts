@@ -14,6 +14,7 @@ export type LoaiKiemTuoi =
 export interface BaoCaoKiemTuoi {
   repo: string;
   loai: LoaiKiemTuoi;
+  idGithub?: number | null;
   lyDo?: string;
   statusRepo?: number;
   statusReadme?: number;
@@ -32,6 +33,7 @@ export interface BaoCaoKiemTuoi {
 }
 
 interface RepoGithub {
+  id?: number;
   full_name?: string;
   archived?: boolean;
   disabled?: boolean;
@@ -130,22 +132,16 @@ export async function kiemTraMotRepo(
   yeuCau: YeuCauHttp,
   taoDongMoi: TaoDoanTuReadme,
 ): Promise<KetQuaKiemMotRepo> {
-  if (!cao.idGithub)
-    return {
-      baoCao: taoBaoCaoLoi(cao.repo, 'Thiếu idGithub trong dữ liệu cào.'),
-      readmeMoi: null,
-      dungLuongConLai: null,
-      thoiDiemReset: null,
-    };
   let conLai: number | null = null;
   let reset: number | null = null;
   let statusRepo: number | undefined;
   let statusReadme: number | undefined;
+  let idGithub = cao.idGithub ?? null;
   try {
-    const repoHttp = await yeuCau(
-      `https://api.github.com/repositories/${cao.idGithub}`,
-      cao.etagRepo,
-    );
+    const urlRepo = cao.idGithub
+      ? `https://api.github.com/repositories/${cao.idGithub}`
+      : `https://api.github.com/repos/${cao.repo}`;
+    let repoHttp = await yeuCau(urlRepo, cao.etagRepo);
     statusRepo = repoHttp.response.status;
     conLai = repoHttp.dungLuongConLai;
     reset = repoHttp.thoiDiemReset;
@@ -158,12 +154,20 @@ export async function kiemTraMotRepo(
       };
     if (repoHttp.response.status === 404)
       return {
-        baoCao: { repo: cao.repo, loai: 'da_xoa', statusRepo },
+        baoCao: { repo: cao.repo, loai: 'da_xoa', idGithub, statusRepo },
         readmeMoi: null,
         dungLuongConLai: conLai,
         thoiDiemReset: reset,
       };
+    // Khi ETag cũ trả 304 nhưng thiếu id, đọc lại theo tên để lấy id GitHub cần lưu báo cáo.
+    if (!cao.idGithub && repoHttp.response.status === 304) {
+      repoHttp = await yeuCau(urlRepo, null);
+      statusRepo = repoHttp.response.status;
+      conLai = repoHttp.dungLuongConLai ?? conLai;
+      reset = repoHttp.thoiDiemReset ?? reset;
+    }
     const repoData = await layJson<RepoGithub>(repoHttp);
+    idGithub = repoData?.id ?? idGithub;
     const redirect = repoHttp.response.headers.get('location');
     const tenRedirect = redirect?.match(/\/repos\/([^/]+\/[^/?#]+)/)?.[1];
     const metadata = repoData
@@ -171,7 +175,7 @@ export async function kiemTraMotRepo(
       : tenRedirect
         ? phanLoaiRepo(cao.repo, { full_name: tenRedirect })
         : { repo: cao.repo, loai: 'khong_doi' as const };
-    const metadataCoStatus = { ...metadata, statusRepo };
+    const metadataCoStatus = { ...metadata, idGithub, statusRepo };
     const tenApi = repoData?.full_name ?? metadata.tenMoi ?? cao.repo;
     const readmeHttp = await yeuCau(
       `https://api.github.com/repos/${tenApi}/readme`,
@@ -227,6 +231,7 @@ export async function kiemTraMotRepo(
     return {
       baoCao: {
         ...baoCao,
+        idGithub,
         statusReadme,
         readmeShaMoi: tinhShaReadme(readmeMoi),
         soDoanGiuNguyen: dem.giu,
@@ -243,6 +248,7 @@ export async function kiemTraMotRepo(
     return {
       baoCao: {
         ...taoBaoCaoLoi(cao.repo, lyDo),
+        idGithub,
         ...(statusRepo ? { statusRepo } : {}),
         ...(statusReadme ? { statusReadme } : {}),
       },

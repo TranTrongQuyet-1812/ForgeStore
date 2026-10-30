@@ -84,6 +84,21 @@ describe('kiem-tuoi.core', () => {
     expect(yeuCau).toHaveBeenCalledTimes(1);
   });
 
+  it('tra theo tên khi idGithub bị thiếu và lưu id nhận được vào báo cáo', async () => {
+    const cao = { ...taoCao(), idGithub: null };
+    const yeuCau = vi
+      .fn()
+      .mockResolvedValueOnce(http(200, { id: 987, full_name: 'owner/repo', stargazers_count: 10 }))
+      .mockResolvedValueOnce(http(304));
+    const ketQua = await kiemTraMotRepo(cao, taoDaKiem(), yeuCau, taoDoan);
+    expect(yeuCau).toHaveBeenNthCalledWith(
+      1,
+      'https://api.github.com/repos/owner/repo',
+      'repo-etag',
+    );
+    expect(ketQua.baoCao?.idGithub).toBe(987);
+  });
+
   it('nhận diện tên mới từ phản hồi chuyển hướng', async () => {
     const yeuCau = vi
       .fn<(...args: [string, string | null]) => Promise<KetQuaHttp>>()
