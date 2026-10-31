@@ -9,6 +9,7 @@ interface KhungXuongCardProps {
 /**
  * Skeleton thẻ ứng dụng dạng ma trận ký tự ASCII (dựa trên quanhoangindex/ascii-reveal)
  * Giữ nguyên cấu trúc kích thước chuẩn của TheUngDung (CLS = 0)
+ * Không chạy sóng quét (animate={false}): mỗi skeleton động vẽ một canvas riêng, lưới nhiều thẻ sẽ có hàng trăm canvas.
  */
 export const KhungXuongCard: React.FC<KhungXuongCardProps> = ({
   index = 0,
@@ -27,26 +28,57 @@ export const KhungXuongCard: React.FC<KhungXuongCardProps> = ({
             width="100%"
             height="100%"
             variant={variant}
+            animate={false}
             seed={index * 13 + 1}
           />
         </div>
 
         {/* Tên ứng dụng + thông số repo */}
         <div className="flex-1 flex flex-col gap-2 pt-0.5 min-w-0">
-          <AsciiSkeleton lines={1} widths={['65%']} variant={variant} seed={index * 13 + 2} />
-          <AsciiSkeleton lines={1} widths={['90%']} variant={variant} seed={index * 13 + 3} />
+          <AsciiSkeleton
+            lines={1}
+            widths={['65%']}
+            variant={variant}
+            animate={false}
+            seed={index * 13 + 2}
+          />
+          <AsciiSkeleton
+            lines={1}
+            widths={['90%']}
+            variant={variant}
+            animate={false}
+            seed={index * 13 + 3}
+          />
         </div>
       </div>
 
       {/* Dòng khẩu hiệu / mô tả tóm tắt */}
       <div className="mt-4">
-        <AsciiSkeleton lines={1} widths={['100%']} variant={variant} seed={index * 13 + 4} />
+        <AsciiSkeleton
+          lines={1}
+          widths={['100%']}
+          variant={variant}
+          animate={false}
+          seed={index * 13 + 4}
+        />
       </div>
 
       {/* Thanh footer: Tags & Nút cài đặt giả lập */}
       <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
-        <AsciiSkeleton lines={1} widths={['55px']} variant={variant} seed={index * 13 + 5} />
-        <AsciiSkeleton lines={1} widths={['75px']} variant={variant} seed={index * 13 + 6} />
+        <AsciiSkeleton
+          lines={1}
+          widths={['55px']}
+          variant={variant}
+          animate={false}
+          seed={index * 13 + 5}
+        />
+        <AsciiSkeleton
+          lines={1}
+          widths={['75px']}
+          variant={variant}
+          animate={false}
+          seed={index * 13 + 6}
+        />
       </div>
     </div>
   );
