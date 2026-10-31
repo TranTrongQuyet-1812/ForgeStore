@@ -18,11 +18,108 @@ export interface LoCuoiHopNhat extends LoGocHopNhat {
   danhSachThayThe: string[];
 }
 
+export interface DoiTenRepo {
+  tenCu: string;
+  tenMoi: string;
+}
+
 export interface KetQuaHopNhat {
   cacLo: LoCuoiHopNhat[];
   tongRepo: number;
   tongThayThe: number;
   danhSachThayThe: Array<{ repo: string; loGoc: string; loVa: string }>;
+  danhSachDoiTen: DoiTenRepo[];
+  danhSachLuuTru: string[];
+}
+
+/** Đọc danh sách đổi tên theo từng dòng để chủ dự án dễ rà soát. */
+export function docDanhSachDoiTen(noiDung: string): DoiTenRepo[] {
+  const danhSach: DoiTenRepo[] = [];
+  const tenCuDaGap = new Set<string>();
+  const tenMoiDaGap = new Set<string>();
+  for (const [index, dong] of noiDung.split(/\r?\n/).entries()) {
+    const sach = dong.trim();
+    if (!sach || sach.startsWith('#')) continue;
+    const [tenCu, tenMoi, ...phanDu] = sach.split(/\s+/);
+    if (!tenCu || !tenMoi || phanDu.length || !laTenRepo(tenCu) || !laTenRepo(tenMoi))
+      throw new Error(
+        `Dòng ${index + 1} trong danh sách đổi tên phải có dạng owner/repo owner/repo.`,
+      );
+    const khoaCu = tenCu.toLowerCase();
+    const khoaMoi = tenMoi.toLowerCase();
+    if (khoaCu === khoaMoi) throw new Error(`Dòng ${index + 1} tự đổi tên cùng một repo.`);
+    if (tenCuDaGap.has(khoaCu)) throw new Error(`Repo đổi tên bị lặp: ${tenCu}.`);
+    if (tenMoiDaGap.has(khoaMoi)) throw new Error(`Tên repo mới bị lặp: ${tenMoi}.`);
+    tenCuDaGap.add(khoaCu);
+    tenMoiDaGap.add(khoaMoi);
+    danhSach.push({ tenCu, tenMoi });
+  }
+  return danhSach;
+}
+
+function laTenRepo(repo: string): boolean {
+  return /^[^/\s]+\/[^/\s]+$/.test(repo);
+}
+
+function kiemDanhSachDoiTen(cacLoGoc: LoGocHopNhat[], danhSach: DoiTenRepo[]): void {
+  const repoGoc = taoMapRepoGoc(cacLoGoc);
+  for (const { tenCu, tenMoi } of danhSach) {
+    const khoaCu = tenCu.toLowerCase();
+    const khoaMoi = tenMoi.toLowerCase();
+    if (!repoGoc.has(khoaCu)) throw new Error(`Không tìm thấy repo cần đổi tên ${tenCu}.`);
+    if (repoGoc.has(khoaMoi)) throw new Error(`Tên mới ${tenMoi} đã thuộc repo khác.`);
+  }
+}
+
+function doiTruongDinhDanh(
+  giaTri: unknown,
+  khoa: string,
+  doiTen: DoiTenRepo,
+  trongChuSoHuu = false,
+): unknown {
+  const [chuCu, tenKhoCu] = doiTen.tenCu.split('/');
+  const [chuMoi, tenKhoMoi] = doiTen.tenMoi.split('/');
+  if (typeof giaTri === 'string') {
+    const khoaDinhDanh = ['repo', 'full_name'].includes(khoa);
+    if (khoaDinhDanh && giaTri.toLowerCase() === doiTen.tenCu.toLowerCase()) return doiTen.tenMoi;
+    if (
+      (khoa === 'owner' || (trongChuSoHuu && khoa === 'login')) &&
+      giaTri.toLowerCase() === chuCu!.toLowerCase()
+    )
+      return chuMoi;
+    if (!trongChuSoHuu && khoa === 'name' && giaTri.toLowerCase() === tenKhoCu!.toLowerCase())
+      return tenKhoMoi;
+    if (khoa.endsWith('url')) {
+      const mauRepo = new RegExp(
+        `/${thoatRegex(chuCu!)}/${thoatRegex(tenKhoCu!)}(?=[/?#]|$)`,
+        'gi',
+      );
+      const urlDaDoiRepo = giaTri.replace(mauRepo, `/${chuMoi}/${tenKhoMoi}`);
+      if (!trongChuSoHuu) return urlDaDoiRepo;
+      const mauChuSoHuu = new RegExp(`/${thoatRegex(chuCu!)}(?=[/?#]|$)`, 'gi');
+      return urlDaDoiRepo.replace(mauChuSoHuu, `/${chuMoi}`);
+    }
+    return giaTri;
+  }
+  if (Array.isArray(giaTri))
+    return giaTri.map((item) => doiTruongDinhDanh(item, khoa, doiTen, trongChuSoHuu));
+  if (!giaTri || typeof giaTri !== 'object') return giaTri;
+  const laChuSoHuu = trongChuSoHuu || khoa === 'owner';
+  return Object.fromEntries(
+    Object.entries(giaTri).map(([khoaCon, giaTriCon]) => [
+      khoaCon,
+      doiTruongDinhDanh(giaTriCon, khoaCon, doiTen, laChuSoHuu),
+    ]),
+  );
+}
+
+function thoatRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function doiTenBanGhi<T extends { repo: string }>(dong: T, doiTen?: DoiTenRepo): T {
+  if (!doiTen) return dong;
+  return doiTruongDinhDanh(dong, '', doiTen) as T;
 }
 
 function taoMapRepo<T extends { repo: string }>(
@@ -84,8 +181,12 @@ export function hopNhatKhoCuoi(
   cacLoGoc: LoGocHopNhat[],
   cacLoVa: LoVaHopNhat[],
   soRepoMongDoi = 817,
+  danhSachDoiTen: DoiTenRepo[] = [],
+  danhSachLuuTru: string[] = [],
 ): KetQuaHopNhat {
   const loGocTheoRepo = taoMapRepoGoc(cacLoGoc);
+  kiemDanhSachDoiTen(cacLoGoc, danhSachDoiTen);
+  const doiTenTheoRepo = new Map(danhSachDoiTen.map((item) => [item.tenCu.toLowerCase(), item]));
   const banVaTheoRepo = taoMapBanVa(cacLoVa, loGocTheoRepo);
   const cacLo = cacLoGoc.map((loGoc) => {
     kiemThuTuRepo(loGoc.cao, loGoc.daKiem, loGoc.lo);
@@ -94,13 +195,17 @@ export function hopNhatKhoCuoi(
     const danhSachThayThe: string[] = [];
     const cao = loGoc.cao.map((row) => {
       const thay = banVaTheoRepo.get(row.repo.toLowerCase());
-      if (!thay) return row;
+      if (!thay) return doiTenBanGhi(row, doiTenTheoRepo.get(row.repo.toLowerCase()));
       danhSachThayThe.push(row.repo);
-      return { ...thay.cao, lo: loGoc.lo };
+      return doiTenBanGhi(
+        { ...thay.cao, lo: loGoc.lo },
+        doiTenTheoRepo.get(row.repo.toLowerCase()),
+      );
     });
     const daKiem = loGoc.daKiem.map((row) => {
       const thay = banVaTheoRepo.get(row.repo.toLowerCase());
-      return thay ? { ...thay.daKiem, lo: loGoc.lo } : row;
+      const daKiemMoi = thay ? { ...thay.daKiem, lo: loGoc.lo } : row;
+      return doiTenBanGhi(daKiemMoi, doiTenTheoRepo.get(row.repo.toLowerCase()));
     });
     if (cao.length !== caoCu.size || daKiem.length !== daKiemCu.size)
       throw new Error(`Số repo đầu ra khác lô gốc ${loGoc.lo}.`);
@@ -109,6 +214,14 @@ export function hopNhatKhoCuoi(
   const tongRepo = cacLo.reduce((tong, lo) => tong + lo.cao.length, 0);
   if (tongRepo !== soRepoMongDoi || loGocTheoRepo.size !== soRepoMongDoi)
     throw new Error(`Tổng repo phải là ${soRepoMongDoi}, hiện có ${tongRepo}.`);
+  const repoDaRa = new Set<string>();
+  for (const lo of cacLo) {
+    for (const row of lo.cao) {
+      const khoa = row.repo.toLowerCase();
+      if (repoDaRa.has(khoa)) throw new Error(`Repo đầu ra bị trùng sau đổi tên: ${row.repo}.`);
+      repoDaRa.add(khoa);
+    }
+  }
   const danhSachThayThe = cacLo.flatMap((lo) =>
     lo.danhSachThayThe.map((repo) => ({
       repo,
@@ -121,6 +234,8 @@ export function hopNhatKhoCuoi(
     tongRepo,
     tongThayThe: danhSachThayThe.length,
     danhSachThayThe,
+    danhSachDoiTen,
+    danhSachLuuTru,
   };
 }
 

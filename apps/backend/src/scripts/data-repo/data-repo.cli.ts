@@ -15,8 +15,8 @@
  *   pnpm data-repo va-tach-doan --nguon <Dich_Hang_Loat> --ra <Dot_Va> [--dich-lai <danh-sach.txt>]
  *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --nguon-goc <Dich_Hang_Loat> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> --thu
  *   pnpm data-repo va-tach-doan2 --nguon <Kho_Cuoi> --nguon-goc <Dich_Hang_Loat> --readme-moi <Kiem_Tuoi/readme_moi> --ra <Dot_Va2> [--ghep-tu <Dot_Va2_loi>]
- *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # xem trước thay repo đã vá
- *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> # tạo kho cuối sau khi duyệt số liệu
+ *   pnpm data-repo hop-nhat --nguon <Kho_Cuoi> --va <Dot_Va2> --ra <Kho_Cuoi_v2> [--doi-ten <file>] --thu
+ *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # cách ghép cũ
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> --thu # xem số request, không gọi GitHub
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> [--tiep] # kiểm độ tươi qua GitHub API
  *   Danh sách dịch lại: mỗi dòng owner/repo stt_cũ (có thể là khoảng) hoặc owner/repo maBam.
@@ -46,7 +46,12 @@ import {
   layChon,
   phanLoaiThayDoi,
 } from './va-tach-doan.core';
-import { hopNhatKhoCuoi, kiemTraKhoDaGhi } from './hop-nhat.core';
+import {
+  docDanhSachDoiTen,
+  hopNhatKhoCuoi,
+  kiemTraKhoDaGhi,
+  type DoiTenRepo,
+} from './hop-nhat.core';
 import { ghepBanDichDaNhap, taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
 import {
   chayKiemTuoi,
@@ -578,6 +583,8 @@ function layTepLo(thuMuc: string, mau: RegExp): string[] {
 }
 
 function docCacLoGocHopNhat(thuMucNguon: string) {
+  const thuMucCaoDon = path.join(thuMucNguon, THU_MUC.daCao);
+  if (fs.existsSync(thuMucCaoDon)) return docCacLoKhoHopNhat(thuMucNguon);
   const cacLo = [];
   for (let n = 1; n <= 9; n++) {
     const nhom = `Nhom_${String(n).padStart(2, '0')}`;
@@ -600,8 +607,26 @@ function docCacLoGocHopNhat(thuMucNguon: string) {
   return cacLo;
 }
 
+function docCacLoKhoHopNhat(thuMucNguon: string) {
+  const thuMucCao = path.join(thuMucNguon, THU_MUC.daCao);
+  const thuMucKiem = path.join(thuMucNguon, THU_MUC.daKiem);
+  const mau = /^dich-g\d{2}-l\d{3}\.jsonl$/;
+  const tepCao = layTepLo(thuMucCao, mau);
+  const tepKiem = layTepLo(thuMucKiem, mau);
+  if (!tepCao.length || JSON.stringify(tepCao) !== JSON.stringify(tepKiem))
+    throw new Error('Tên lô 01_da_cao/04_da_kiem không khớp trong Kho_Cuoi.');
+  return tepCao.map((tep) => {
+    const lo = tep.slice(0, -'.jsonl'.length);
+    return {
+      lo,
+      cao: docJsonl<BanGhiDaCao>(path.join(thuMucCao, tep)),
+      daKiem: docJsonl<DongDaKiem>(path.join(thuMucKiem, tep)),
+    };
+  });
+}
+
 function docCacLoVaHopNhat(thuMucVa: string) {
-  const mau = /^va-g\d{2}-l\d{3}\.jsonl$/;
+  const mau = /^va2?-g\d{2}-l\d{3}\.jsonl$/;
   const thuMucCao = path.join(thuMucVa, THU_MUC.daCao);
   const thuMucKiem = path.join(thuMucVa, THU_MUC.daKiem);
   const thuMucLoi = path.join(thuMucVa, THU_MUC.loi);
@@ -623,40 +648,127 @@ function docCacLoVaHopNhat(thuMucVa: string) {
   });
 }
 
-function taoBaoCaoHopNhat(ketQua: ReturnType<typeof hopNhatKhoCuoi>): string {
+function taoBaoCaoHopNhat(
+  ketQua: ReturnType<typeof hopNhatKhoCuoi>,
+  soDoan: { canDich: number; daDich: number },
+): string {
   const dong = [
     '# Nguồn dữ liệu Kho_Cuoi',
     '',
-    'Kho cuối giữ nguyên tên và thứ tự lô gốc. Repo đạt kiểm trong Dot_Va thay bản cũ cùng repo.',
+    'Kho cuối giữ nguyên tên và thứ tự lô gốc. Repo đạt kiểm trong đợt vá thay bản cũ cùng repo.',
     '',
-    '| Lô | Tổng repo | Lấy từ Dot_Va | Giữ bản gốc |',
+    '| Lô | Tổng repo | Lấy từ đợt vá | Giữ bản cũ |',
     '|---|---:|---:|---:|',
   ];
   for (const lo of ketQua.cacLo)
     dong.push(
       `| ${lo.lo} | ${lo.cao.length} | ${lo.soRepoThayThe} | ${lo.cao.length - lo.soRepoThayThe} |`,
     );
-  dong.push('', `Tổng: ${ketQua.tongRepo} repo, ${ketQua.tongThayThe} repo lấy từ Dot_Va.`, '');
+  dong.push(
+    '',
+    `Tổng: ${ketQua.tongRepo} repo, ${ketQua.tongThayThe} repo lấy từ đợt vá.`,
+    `Đoạn cần dịch: ${soDoan.daDich}/${soDoan.canDich} đã có bản dịch.`,
+    '',
+    '## Repo lấy từ Dot_Va2',
+    '',
+    ...(ketQua.danhSachThayThe.length
+      ? ketQua.danhSachThayThe.map((item) => `- ${item.repo}`)
+      : ['- Không có']),
+    '',
+    '## Repo đã đổi tên',
+    '',
+    ...(ketQua.danhSachDoiTen.length
+      ? ketQua.danhSachDoiTen.map((item) => `- ${item.tenCu} → ${item.tenMoi}`)
+      : ['- Không có']),
+    '',
+    '## Repo đã lưu trữ (theo Kiem_Tuoi)',
+    '',
+    ...(ketQua.danhSachLuuTru.length
+      ? ketQua.danhSachLuuTru.map((repo) => `- ${repo}`)
+      : ['- Không có']),
+    '',
+  );
   return dong.join('\n');
 }
 
-function inBaoCaoHopNhat(ketQua: ReturnType<typeof hopNhatKhoCuoi>): void {
-  console.info('Lô | Repo | Thay bằng Dot_Va | Giữ bản cũ');
+function inBaoCaoHopNhat(
+  ketQua: ReturnType<typeof hopNhatKhoCuoi>,
+  soDoan: { canDich: number; daDich: number },
+): void {
+  console.info(`Tổng repo đầu ra: ${ketQua.tongRepo}; số lô: ${ketQua.cacLo.length}.`);
+  console.info(
+    `Lấy từ Dot_Va2: ${ketQua.tongThayThe}; giữ từ Kho_Cuoi: ${ketQua.tongRepo - ketQua.tongThayThe}.`,
+  );
+  console.info(`Repo đổi tên: ${ketQua.danhSachDoiTen.length}.`);
+  console.info(`Repo archived trong Kiem_Tuoi: ${ketQua.danhSachLuuTru.length}.`);
+  console.info(
+    `Đoạn có bản dịch: ${soDoan.daDich}/${soDoan.canDich}; thiếu: ${soDoan.canDich - soDoan.daDich}.`,
+  );
   for (const lo of ketQua.cacLo)
-    console.info(
-      `${lo.lo} | ${lo.cao.length} | ${lo.soRepoThayThe} | ${lo.cao.length - lo.soRepoThayThe}`,
-    );
-  console.info(`Tổng: ${ketQua.tongRepo} repo; thay thế ${ketQua.tongThayThe} repo.`);
+    console.info(`${lo.lo} | ${lo.cao.length} repo | ${lo.soRepoThayThe} từ Dot_Va2.`);
   for (const thay of ketQua.danhSachThayThe)
     console.info(`${thay.repo}: ${thay.loGoc} ← ${thay.loVa}`);
+  for (const doiTen of ketQua.danhSachDoiTen)
+    console.info(`Đổi tên: ${doiTen.tenCu} → ${doiTen.tenMoi}.`);
+  if (ketQua.danhSachLuuTru.length)
+    console.info(`Đã lưu trữ: ${ketQua.danhSachLuuTru.join(', ')}.`);
 }
 
-function ghiKhoHopNhat(thuMucRa: string, ketQua: ReturnType<typeof hopNhatKhoCuoi>): void {
+function ghiKhoHopNhat(
+  thuMucRa: string,
+  ketQua: ReturnType<typeof hopNhatKhoCuoi>,
+  soDoan: { canDich: number; daDich: number },
+): void {
   for (const lo of ketQua.cacLo) {
     ghiJsonl(path.join(thuMucRa, THU_MUC.daCao, `${lo.lo}.jsonl`), lo.cao);
     ghiJsonl(path.join(thuMucRa, THU_MUC.daKiem, `${lo.lo}.jsonl`), lo.daKiem);
   }
-  fs.writeFileSync(path.join(thuMucRa, 'NGUON.md'), taoBaoCaoHopNhat(ketQua), 'utf8');
+  fs.writeFileSync(path.join(thuMucRa, 'NGUON.md'), taoBaoCaoHopNhat(ketQua, soDoan), 'utf8');
+}
+
+function docRepoLuuTru(thuMucNguon: string): string[] {
+  const thuMucBaoCao = fs.existsSync(path.join(thuMucNguon, '01_da_cao'))
+    ? path.join(path.dirname(thuMucNguon), 'Kiem_Tuoi')
+    : path.join(thuMucNguon, 'Kiem_Tuoi');
+  const file = path.join(thuMucBaoCao, 'bao_cao.jsonl');
+  if (!fs.existsSync(file)) return [];
+  return docJsonl<BaoCaoKiemTuoi>(file)
+    .filter((row) => row.loai === 'luu_tru' || row.archived === true)
+    .map((row) => row.repo);
+}
+
+function demDoanCoBanDichKho(ketQua: ReturnType<typeof hopNhatKhoCuoi>) {
+  let canDich = 0;
+  let daDich = 0;
+  for (const lo of ketQua.cacLo) {
+    const daKiemTheoRepo = new Map(lo.daKiem.map((row) => [row.repo.toLowerCase(), row]));
+    for (const cao of lo.cao) {
+      const doanNguon = taoDongChoDich(cao).doan;
+      const daKiem = daKiemTheoRepo.get(cao.repo.toLowerCase());
+      if (!daKiem || doanNguon.length !== daKiem.doan.length)
+        throw new Error(`Số đoạn 01/04 không khớp khi thống kê ${cao.repo}.`);
+      for (const [stt, doan] of doanNguon.entries()) {
+        if (!doan.canDich) continue;
+        canDich++;
+        if (daKiem.doan[stt]?.dich.trim()) daDich++;
+      }
+    }
+  }
+  return { canDich, daDich };
+}
+
+function docDanhSachDoiTenTep(file?: string): DoiTenRepo[] {
+  if (!file) return [];
+  const duongDanTep = path.resolve(file);
+  if (!fs.existsSync(duongDanTep))
+    throw new Error(`Không tìm thấy danh sách đổi tên ${duongDanTep}.`);
+  return docDanhSachDoiTen(fs.readFileSync(duongDanTep, 'utf8'));
+}
+
+function kiemThuMucDauRaHopNhat(thuMucRa: string): void {
+  if (!fs.existsSync(thuMucRa)) return;
+  if (fs.readdirSync(thuMucRa).length > 0)
+    throw new Error(`Thư mục đầu ra đã có nội dung, không ghi đè: ${thuMucRa}`);
 }
 
 interface MucTaoVa2 {
@@ -890,8 +1002,11 @@ function lenhHopNhat(): void {
   const nguon = layThamSo('nguon');
   const duLieuVa = layThamSo('va');
   const dauRa = layThamSo('ra');
+  const tepDoiTen = layThamSo('doi-ten');
   if (!nguon || !duLieuVa || !dauRa)
-    throw new Error('Dùng --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi>.');
+    throw new Error(
+      'Dùng --nguon <Kho_Cuoi|Dich_Hang_Loat> --va <Dot_Va|Dot_Va2> --ra <Kho_Cuoi_moi> [--doi-ten <file>] [--thu].',
+    );
   const thuMucNguon = path.resolve(nguon);
   const thuMucVa = path.resolve(duLieuVa);
   const thuMucRa = path.resolve(dauRa);
@@ -908,17 +1023,25 @@ function lenhHopNhat(): void {
       return tuongDoi === '' || (!tuongDoi.startsWith('..') && !path.isAbsolute(tuongDoi));
     });
   if (namTrongNguon) throw new Error('Kho_Cuoi phải nằm ngoài thư mục dữ liệu đầu vào.');
-  if (!coCo('thu') && fs.existsSync(thuMucRa))
-    throw new Error(`Thư mục đầu ra đã tồn tại, không ghi đè: ${thuMucRa}`);
+  if (!coCo('thu')) kiemThuMucDauRaHopNhat(thuMucRa);
   const cacLoGoc = docCacLoGocHopNhat(thuMucNguon);
   const cacLoVa = docCacLoVaHopNhat(thuMucVa);
-  const ketQua = hopNhatKhoCuoi(cacLoGoc, cacLoVa);
-  inBaoCaoHopNhat(ketQua);
+  const ketQua = hopNhatKhoCuoi(
+    cacLoGoc,
+    cacLoVa,
+    817,
+    docDanhSachDoiTenTep(tepDoiTen),
+    docRepoLuuTru(thuMucNguon),
+  );
+  if (ketQua.cacLo.some((lo) => /^va2?-g\d{2}-l\d{3}$/.test(lo.lo)))
+    throw new Error('Không được để tên lô đợt vá trong kho đầu ra.');
+  const soDoan = demDoanCoBanDichKho(ketQua);
+  inBaoCaoHopNhat(ketQua, soDoan);
   if (coCo('thu')) {
     console.info('Chạy thử: không ghi tệp nào.');
     return;
   }
-  ghiKhoHopNhat(thuMucRa, ketQua);
+  ghiKhoHopNhat(thuMucRa, ketQua, soDoan);
   kiemTraKhoDaGhi(ketQua, docKhoHopNhatDaGhi(thuMucRa, cacLoGoc));
   console.info(
     `Đã ghi và đối chiếu ${ketQua.tongRepo} repo trong ${ketQua.cacLo.length} lô tại ${thuMucRa}.`,
