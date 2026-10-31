@@ -121,15 +121,15 @@ export const TrangDanhMuc: React.FC = () => {
                     rows={3}
                     width="100%"
                     height="100%"
-                    variant="scan"
+                    variant="dither"
                     seed={i * 7 + 1}
                   />
                 </div>
-                <AsciiSkeleton lines={1} widths={['48px']} variant="scan" seed={i * 7 + 2} />
+                <AsciiSkeleton lines={1} widths={['48px']} variant="dither" seed={i * 7 + 2} />
               </div>
               <div className="mt-4 flex flex-col gap-2">
-                <AsciiSkeleton lines={1} widths={['75%']} variant="scan" seed={i * 7 + 3} />
-                <AsciiSkeleton lines={1} widths={['95%']} variant="scan" seed={i * 7 + 4} />
+                <AsciiSkeleton lines={1} widths={['75%']} variant="dither" seed={i * 7 + 3} />
+                <AsciiSkeleton lines={1} widths={['95%']} variant="dither" seed={i * 7 + 4} />
               </div>
             </div>
           ))}

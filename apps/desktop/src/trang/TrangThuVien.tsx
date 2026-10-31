@@ -868,16 +868,16 @@ export const TrangThuVien: React.FC = () => {
                     rows={3}
                     width="100%"
                     height="100%"
-                    variant="scan"
+                    variant="dither"
                     seed={idx * 5 + 1}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <AsciiSkeleton lines={1} widths={['140px']} variant="scan" seed={idx * 5 + 2} />
-                  <AsciiSkeleton lines={1} widths={['200px']} variant="scan" seed={idx * 5 + 3} />
+                  <AsciiSkeleton lines={1} widths={['140px']} variant="dither" seed={idx * 5 + 2} />
+                  <AsciiSkeleton lines={1} widths={['200px']} variant="dither" seed={idx * 5 + 3} />
                 </div>
               </div>
-              <AsciiSkeleton lines={1} widths={['90px']} variant="scan" seed={idx * 5 + 4} />
+              <AsciiSkeleton lines={1} widths={['90px']} variant="dither" seed={idx * 5 + 4} />
             </div>
           ))}
         </div>

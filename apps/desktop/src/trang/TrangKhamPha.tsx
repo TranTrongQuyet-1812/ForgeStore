@@ -213,7 +213,7 @@ export const TrangKhamPha: React.FC = () => {
     <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none animate-fade-in">
       {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Chỉ hiển thị khi có dữ liệu thật từ Backend) */}
       {isFeaturedLoading ? (
-        <KhungXuongSpotlight variant="scan" />
+        <KhungXuongSpotlight variant="dither" />
       ) : currentSpotlight && spotlightApp ? (
         <section className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border">
           <div className="relative z-10 flex flex-col gap-5">
@@ -532,7 +532,7 @@ export const TrangKhamPha: React.FC = () => {
           /* Trạng thái Skeleton ASCII giải mã độc đáo (ascii-reveal) */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <KhungXuongCard key={i} index={i} variant="scan" />
+              <KhungXuongCard key={i} index={i} variant="dither" />
             ))}
           </div>
         ) : isAppsError ? (

@@ -10,7 +10,10 @@ interface KhungXuongCardProps {
  * Skeleton thẻ ứng dụng dạng ma trận ký tự ASCII (dựa trên quanhoangindex/ascii-reveal)
  * Giữ nguyên cấu trúc kích thước chuẩn của TheUngDung (CLS = 0)
  */
-export const KhungXuongCard: React.FC<KhungXuongCardProps> = ({ index = 0, variant = 'scan' }) => {
+export const KhungXuongCard: React.FC<KhungXuongCardProps> = ({
+  index = 0,
+  variant = 'dither',
+}) => {
   return (
     <div
       className="tactile-card flex flex-col justify-between p-4 rounded-xl min-h-[170px] select-none text-muted font-mono"
@@ -54,7 +57,7 @@ export const KhungXuongCard: React.FC<KhungXuongCardProps> = ({ index = 0, varia
  */
 export const KhungXuongSpotlight: React.FC<{
   variant?: 'scan' | 'dither' | 'terminal' | 'braille';
-}> = ({ variant = 'scan' }) => {
+}> = ({ variant = 'dither' }) => {
   return (
     <section
       className="surface-card rounded-2xl p-6 md:p-8 border border-border min-h-[220px] flex flex-col justify-between select-none text-muted font-mono"

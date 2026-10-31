@@ -89,7 +89,7 @@ export const TrangYeuThich: React.FC = () => {
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, idx) => (
-            <KhungXuongCard key={idx} index={idx} variant="scan" />
+            <KhungXuongCard key={idx} index={idx} variant="dither" />
           ))}
         </div>
       )}
