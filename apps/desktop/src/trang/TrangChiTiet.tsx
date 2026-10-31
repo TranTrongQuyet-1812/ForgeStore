@@ -32,6 +32,7 @@ import {
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
+import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { useCaiDatUngDungStore } from '../kho-trang-thai/useCaiDatUngDungStore';
@@ -1032,36 +1033,66 @@ export const TrangChiTiet: React.FC = () => {
     return `.${fmt.toLowerCase()}`;
   };
 
-  // 1. TRẠNG THÁI LOADING: Skeleton Shimmer (CLS = 0)
+  // 1. TRẠNG THÁI LOADING: Skeleton ASCII (ascii-reveal)
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6 p-6 md:p-8 max-w-7xl mx-auto w-full select-none">
+      <div className="flex flex-col gap-6 p-6 md:p-8 max-w-7xl mx-auto w-full select-none text-muted font-mono">
         {/* Khung xương tải đường dẫn điều hướng (Breadcrumb Skeleton) */}
         <div className="flex items-center gap-2">
-          <div className="w-16 h-4 rounded skeleton-shimmer" />
-          <div className="w-3 h-4 rounded skeleton-shimmer" />
-          <div className="w-24 h-4 rounded skeleton-shimmer" />
-          <div className="w-3 h-4 rounded skeleton-shimmer" />
-          <div className="w-32 h-4 rounded skeleton-shimmer" />
+          <AsciiSkeleton lines={1} widths={['220px']} variant="scan" seed={201} />
         </div>
 
         {/* Khung xương tải giao diện chia đôi (Split-View Skeleton) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-8 flex flex-col gap-6">
             <div className="tactile-card p-6 rounded-2xl flex items-start gap-5">
-              <div className="w-20 h-20 rounded-2xl skeleton-shimmer shrink-0" />
+              <div className="w-20 h-20 rounded-2xl border border-border/50 bg-surface flex items-center justify-center overflow-hidden shrink-0">
+                <AsciiSkeleton rows={5} width="100%" height="100%" variant="scan" seed={202} />
+              </div>
               <div className="flex-1 flex flex-col gap-3">
-                <div className="w-48 h-7 rounded skeleton-shimmer" />
-                <div className="w-64 h-4 rounded skeleton-shimmer" />
-                <div className="w-full h-12 rounded skeleton-shimmer mt-1" />
+                <AsciiSkeleton lines={1} widths={['45%']} variant="scan" seed={203} />
+                <AsciiSkeleton lines={1} widths={['65%']} variant="scan" seed={204} />
+                <AsciiSkeleton lines={2} widths={['100%', '80%']} variant="scan" seed={205} />
               </div>
             </div>
-            <div className="tactile-card p-6 rounded-2xl h-48 skeleton-shimmer" />
-            <div className="tactile-card p-6 rounded-2xl h-64 skeleton-shimmer" />
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-3">
+              <AsciiSkeleton lines={1} widths={['30%']} variant="scan" seed={206} />
+              <AsciiSkeleton
+                lines={6}
+                widths={['100%', '95%', '90%', '85%', '92%', '70%']}
+                variant="scan"
+                seed={207}
+              />
+            </div>
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-3">
+              <AsciiSkeleton lines={1} widths={['40%']} variant="scan" seed={208} />
+              <AsciiSkeleton
+                lines={8}
+                widths={['100%', '98%', '95%', '90%', '94%', '88%', '75%', '50%']}
+                variant="scan"
+                seed={209}
+              />
+            </div>
           </div>
           <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="tactile-card p-6 rounded-2xl h-64 skeleton-shimmer" />
-            <div className="tactile-card p-6 rounded-2xl h-48 skeleton-shimmer" />
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-3">
+              <AsciiSkeleton lines={1} widths={['50%']} variant="scan" seed={210} />
+              <AsciiSkeleton
+                lines={6}
+                widths={['90%', '85%', '95%', '80%', '90%', '70%']}
+                variant="scan"
+                seed={211}
+              />
+            </div>
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-3">
+              <AsciiSkeleton lines={1} widths={['40%']} variant="scan" seed={212} />
+              <AsciiSkeleton
+                lines={5}
+                widths={['95%', '85%', '90%', '80%', '65%']}
+                variant="scan"
+                seed={213}
+              />
+            </div>
           </div>
         </div>
       </div>

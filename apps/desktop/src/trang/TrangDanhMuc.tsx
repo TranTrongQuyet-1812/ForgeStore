@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 
 const CATEGORY_META: Record<
   string,
@@ -112,15 +113,23 @@ export const TrangDanhMuc: React.FC = () => {
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="tactile-card p-5 rounded-2xl flex flex-col justify-between min-h-[160px]"
+              className="tactile-card p-5 rounded-2xl flex flex-col justify-between min-h-[160px] select-none text-muted font-mono"
             >
               <div className="flex items-start justify-between">
-                <div className="w-11 h-11 rounded-xl skeleton-shimmer" />
-                <div className="w-12 h-5 rounded-full skeleton-shimmer" />
+                <div className="w-11 h-11 rounded-xl border border-border/50 bg-surface flex items-center justify-center overflow-hidden">
+                  <AsciiSkeleton
+                    rows={3}
+                    width="100%"
+                    height="100%"
+                    variant="scan"
+                    seed={i * 7 + 1}
+                  />
+                </div>
+                <AsciiSkeleton lines={1} widths={['48px']} variant="scan" seed={i * 7 + 2} />
               </div>
               <div className="mt-4 flex flex-col gap-2">
-                <div className="w-3/4 h-4 rounded skeleton-shimmer" />
-                <div className="w-full h-3 rounded skeleton-shimmer" />
+                <AsciiSkeleton lines={1} widths={['75%']} variant="scan" seed={i * 7 + 3} />
+                <AsciiSkeleton lines={1} widths={['95%']} variant="scan" seed={i * 7 + 4} />
               </div>
             </div>
           ))}

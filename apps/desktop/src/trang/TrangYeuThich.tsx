@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Heart, Sparkles, LogIn, Compass, RefreshCw, AlertCircle } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
+import { KhungXuongCard } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
@@ -84,24 +85,11 @@ export const TrangYeuThich: React.FC = () => {
         </div>
       )}
 
-      {/* Trạng thái tải: Skeleton Shimmer (CLS = 0) */}
+      {/* Trạng thái tải: Skeleton ASCII giải mã (ascii-reveal) */}
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="tactile-card p-4 rounded-xl flex flex-col justify-between h-[210px] skeleton-shimmer"
-            >
-              <div className="flex items-start gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-surface-elevated/70" />
-                <div className="flex-1 flex flex-col gap-2">
-                  <div className="h-4 w-28 rounded bg-surface-elevated/70" />
-                  <div className="h-3 w-40 rounded bg-surface-elevated/50" />
-                </div>
-              </div>
-              <div className="h-8 w-full rounded bg-surface-elevated/40 mt-3" />
-              <div className="h-7 w-full rounded bg-surface-elevated/50 mt-3" />
-            </div>
+            <KhungXuongCard key={idx} index={idx} variant="scan" />
           ))}
         </div>
       )}

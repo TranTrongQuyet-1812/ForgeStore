@@ -37,6 +37,8 @@ html {
   --card-shadow: rgba(15, 23, 42, 0.04);
   --card-shadow-hover: rgba(15, 23, 42, 0.08);
   --ambient-glow: rgba(255, 158, 32, 0.03);
+  --ascii-font: 'JetBrains Mono', ui-monospace, monospace;
+  --ascii-accent: #ff9e20;
 }
 
 .dark {
@@ -54,6 +56,8 @@ html {
   --card-shadow: rgba(0, 0, 0, 0.35);
   --card-shadow-hover: rgba(0, 0, 0, 0.5);
   --ambient-glow: rgba(255, 158, 32, 0.04);
+  --ascii-font: 'JetBrains Mono', ui-monospace, monospace;
+  --ascii-accent: #ff9e20;
 }
 
 @layer utilities {

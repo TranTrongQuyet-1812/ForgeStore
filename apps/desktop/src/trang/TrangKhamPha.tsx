@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
+import { KhungXuongCard, KhungXuongSpotlight } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
@@ -212,7 +213,7 @@ export const TrangKhamPha: React.FC = () => {
     <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none animate-fade-in">
       {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Chỉ hiển thị khi có dữ liệu thật từ Backend) */}
       {isFeaturedLoading ? (
-        <section className="surface-card rounded-2xl p-6 md:p-8 border border-border h-[240px] skeleton-shimmer" />
+        <KhungXuongSpotlight variant="scan" />
       ) : currentSpotlight && spotlightApp ? (
         <section className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border">
           <div className="relative z-10 flex flex-col gap-5">
@@ -528,26 +529,10 @@ export const TrangKhamPha: React.FC = () => {
 
         {/* 3. LƯỚI THẺ ỨNG DỤNG 3 CỘT RỘNG RÃI (Trụ cột 2: Sibling Stagger Wave < 120ms) */}
         {isAppsLoading ? (
-          /* Trạng thái Skeleton Shimmer chống giật layout (CLS = 0) */
+          /* Trạng thái Skeleton ASCII giải mã độc đáo (ascii-reveal) */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="tactile-card flex flex-col justify-between p-4 rounded-xl min-h-[170px] select-none"
-              >
-                <div className="flex items-start gap-3.5">
-                  <div className="w-12 h-12 rounded-xl skeleton-shimmer shrink-0" />
-                  <div className="flex-1 flex flex-col gap-2">
-                    <div className="w-32 h-4 rounded skeleton-shimmer" />
-                    <div className="w-48 h-3 rounded skeleton-shimmer" />
-                  </div>
-                </div>
-                <div className="w-full h-8 mt-4 rounded skeleton-shimmer" />
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
-                  <div className="w-16 h-5 rounded-full skeleton-shimmer" />
-                  <div className="w-20 h-7 rounded-lg skeleton-shimmer" />
-                </div>
-              </div>
+              <KhungXuongCard key={i} index={i} variant="scan" />
             ))}
           </div>
         ) : isAppsError ? (

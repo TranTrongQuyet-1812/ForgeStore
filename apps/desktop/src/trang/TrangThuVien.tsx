@@ -38,6 +38,7 @@ import {
   type ThongBaoKiemTra,
 } from '../dich-vu/cap-nhat/thong-bao-kiem-tra';
 import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
+import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 
 export const TrangThuVien: React.FC = () => {
   const { navigateTo, openAppDetail } = useDieuHuongStore();
@@ -853,22 +854,30 @@ export const TrangThuVien: React.FC = () => {
         </div>
       )}
 
-      {/* Skeleton Shimmer khi đang tải (CLS = 0) */}
+      {/* Skeleton ASCII khi đang tải (ascii-reveal) */}
       {isLoading && (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 4 }).map((_, idx) => (
             <div
               key={idx}
-              className="tactile-card p-4 rounded-xl flex items-center justify-between gap-4 skeleton-shimmer h-[76px]"
+              className="tactile-card p-4 rounded-xl flex items-center justify-between gap-4 h-[76px] select-none text-muted font-mono"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-surface-elevated/70" />
+                <div className="w-11 h-11 rounded-xl border border-border/50 bg-surface flex items-center justify-center overflow-hidden shrink-0">
+                  <AsciiSkeleton
+                    rows={3}
+                    width="100%"
+                    height="100%"
+                    variant="scan"
+                    seed={idx * 5 + 1}
+                  />
+                </div>
                 <div className="flex flex-col gap-2">
-                  <div className="h-4 w-32 rounded bg-surface-elevated/70" />
-                  <div className="h-3 w-48 rounded bg-surface-elevated/50" />
+                  <AsciiSkeleton lines={1} widths={['140px']} variant="scan" seed={idx * 5 + 2} />
+                  <AsciiSkeleton lines={1} widths={['200px']} variant="scan" seed={idx * 5 + 3} />
                 </div>
               </div>
-              <div className="h-8 w-28 rounded bg-surface-elevated/60" />
+              <AsciiSkeleton lines={1} widths={['90px']} variant="scan" seed={idx * 5 + 4} />
             </div>
           ))}
         </div>
