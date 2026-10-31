@@ -264,7 +264,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
               if (!isOpen) setIsOpen(true);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Tìm theo tên app, ý định AI hoặc dán link repo..."
+            placeholder="Tìm app, ý định AI hoặc dán link repo..."
             className="flex-1 bg-transparent text-xs text-primary placeholder:text-muted outline-none min-w-0 font-body"
           />
         </div>

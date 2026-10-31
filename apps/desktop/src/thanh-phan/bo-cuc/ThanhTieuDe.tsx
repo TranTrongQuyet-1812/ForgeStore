@@ -135,9 +135,11 @@ export const ThanhTieuDe: React.FC = () => {
         );
       })()}
 
-      {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh */}
-      <div className="flex-1 max-w-xl mx-6">
-        <ThanhTimKiemDropdown />
+      {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh (căn giữa, bề rộng gọn gàng) */}
+      <div data-tauri-drag-region className="flex-1 flex justify-center mx-4 min-w-0">
+        <div className="w-full max-w-[420px]">
+          <ThanhTimKiemDropdown />
+        </div>
       </div>
 
       {/* Vùng bên phải: Nút theme, đăng nhập & 3 nút điều khiển frameless */}
