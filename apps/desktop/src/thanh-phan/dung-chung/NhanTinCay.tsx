@@ -36,17 +36,17 @@ export const NhanTinCay: React.FC<TrustPillProps> = ({
   const isMedium = score >= NGUONG_CAN_LUU_Y && score < NGUONG_AN_TOAN_CAO;
 
   const colorStyles = isHigh
-    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:border-emerald-500/50'
+    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:border-emerald-500/40'
     : isMedium
-      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:border-amber-500/50'
-      : 'bg-red-500/10 text-red-400 border-red-500/30 hover:border-red-500/50';
+      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:border-amber-500/40'
+      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25 hover:border-rose-500/40';
 
   const Icon = isHigh ? ShieldCheck : isMedium ? AlertTriangle : ShieldAlert;
 
   const label = isHigh ? 'An toàn' : isMedium ? 'Lưu ý' : 'Rủi ro';
 
   const sizeStyles = {
-    sm: 'px-1.5 py-0.5 text-[11px] gap-1',
+    sm: 'px-2 py-0.5 text-xs gap-1',
     md: 'px-2.5 py-1 text-xs gap-1.5',
     lg: 'px-3 py-1.5 text-sm gap-2',
   }[size];
@@ -55,7 +55,7 @@ export const NhanTinCay: React.FC<TrustPillProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center font-mono font-bold rounded-full border transition-all duration-150 ${colorStyles} ${sizeStyles}`}
+      className={`btn-tactile inline-flex items-center font-mono font-medium rounded-full border transition-all ${colorStyles} ${sizeStyles}`}
       title={
         score !== null && score !== undefined
           ? `Điểm uy tín: ${score}/100 (${label})`
@@ -63,8 +63,8 @@ export const NhanTinCay: React.FC<TrustPillProps> = ({
       }
     >
       <Icon className="w-3.5 h-3.5" />
-      <span className="font-tnum">{score}/100</span>
-      {showLabel && <span className="font-sans font-medium text-[11px] ml-0.5">• {label}</span>}
+      <span className="font-tnum font-bold">{score}/100</span>
+      {showLabel && <span className="font-sans text-xs ml-0.5">• {label}</span>}
     </button>
   );
 };

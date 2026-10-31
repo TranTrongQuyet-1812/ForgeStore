@@ -120,14 +120,14 @@ export const ThanhTieuDe: React.FC = () => {
         const Icon = config.icon;
         return (
           <div data-tauri-drag-region className="flex items-center gap-2.5 text-xs">
-            <div className="w-7 h-7 rounded-xl bg-surface-elevated border border-border flex items-center justify-center text-accent-forge shrink-0 shadow-2xs">
+            <div className="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center text-secondary shrink-0 shadow-xs">
               <Icon className="w-3.5 h-3.5" />
             </div>
-            <span className="text-primary font-bold font-display text-sm tracking-tight">
+            <span className="text-primary font-semibold font-display text-sm tracking-tight">
               {config.label}
             </span>
             {!isTauri() && (
-              <span className="ml-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 dark:text-amber-400 font-mono text-[10px] font-semibold tracking-wide">
+              <span className="ml-1.5 px-2 py-0.5 rounded-full bg-surface-elevated border border-border text-muted font-mono text-[10px] font-medium tracking-wide">
                 Web Preview
               </span>
             )}
@@ -139,10 +139,10 @@ export const ThanhTieuDe: React.FC = () => {
       <div data-tauri-drag-region className="flex-1 max-w-xl mx-6">
         <button
           onClick={() => setSearchModalOpen(true)}
-          className="w-full h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border hover:border-border-focus flex items-center justify-between text-secondary hover:text-primary transition-all duration-150 text-xs group shadow-inner"
+          className="btn-tactile w-full h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border hover:border-border-focus flex items-center justify-between text-secondary hover:text-primary transition-all text-xs group shadow-xs"
         >
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
-            <Search className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge transition-colors shrink-0" />
+            <Search className="w-3.5 h-3.5 text-muted group-hover:text-primary transition-colors shrink-0" />
             <span className="truncate">Tìm theo tên app, ý định AI hoặc dán link repo...</span>
           </div>
           <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-canvas border border-border rounded-md text-muted group-hover:text-primary shadow-xs shrink-0">
@@ -156,12 +156,12 @@ export const ThanhTieuDe: React.FC = () => {
         <button
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors"
+          className="btn-tactile w-8 h-8 rounded-xl flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors"
         >
           {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-amber-400" />
+            <Sun className="w-4 h-4 text-muted hover:text-primary" />
           ) : (
-            <Moon className="w-4 h-4 text-slate-700" />
+            <Moon className="w-4 h-4 text-muted hover:text-primary" />
           )}
         </button>
 

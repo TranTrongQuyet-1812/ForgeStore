@@ -195,56 +195,44 @@ export const TrangKhamPha: React.FC = () => {
               <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
                 <button
                   onClick={() => setSpotlightMode('trending')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'trending'
-                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
                       : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 ${
-                      spotlightMode === 'trending'
-                        ? 'shadow-[0_0_6px_rgba(249,115,22,0.6)]'
-                        : 'opacity-40'
-                    }`}
-                  />
-                  <span>🔥 Đang được quan tâm</span>
+                  {spotlightMode === 'trending' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                  )}
+                  <span>Đang được quan tâm</span>
                 </button>
 
                 <button
                   onClick={() => setSpotlightMode('curated')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'curated'
-                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
                       : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 ${
-                      spotlightMode === 'curated'
-                        ? 'shadow-[0_0_6px_rgba(251,191,36,0.6)]'
-                        : 'opacity-40'
-                    }`}
-                  />
-                  <span>⭐ Forge Đề Xuất</span>
+                  {spotlightMode === 'curated' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                  )}
+                  <span>Forge Đề Xuất</span>
                 </button>
 
                 <button
                   onClick={() => setSpotlightMode('security')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
                     spotlightMode === 'security'
-                      ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
+                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
                       : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                   }`}
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ${
-                      spotlightMode === 'security'
-                        ? 'shadow-[0_0_6px_rgba(52,211,153,0.6)]'
-                        : 'opacity-40'
-                    }`}
-                  />
-                  <span>🛡️ Điểm uy tín cao</span>
+                  {spotlightMode === 'security' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                  )}
+                  <span>Điểm uy tín cao</span>
                 </button>
               </div>
 
@@ -402,7 +390,9 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Flame className="w-3.5 h-3.5 text-accent-forge" />
+                <Flame
+                  className={`w-3.5 h-3.5 ${activeSort === 'trending' ? 'text-accent-forge' : 'text-muted'}`}
+                />
                 <span>Thịnh Hành</span>
               </button>
 
@@ -414,7 +404,9 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Star className="w-3.5 h-3.5 text-amber-400" />
+                <Star
+                  className={`w-3.5 h-3.5 ${activeSort === 'stars' ? 'text-accent-forge' : 'text-muted'}`}
+                />
                 <span>Nhiều Sao Nhất</span>
               </button>
 
@@ -426,7 +418,9 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5 text-accent-ai" />
+                <Clock
+                  className={`w-3.5 h-3.5 ${activeSort === 'recent' ? 'text-accent-forge' : 'text-muted'}`}
+                />
                 <span>Mới Cập Nhật</span>
               </button>
             </div>

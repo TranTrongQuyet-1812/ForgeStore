@@ -88,8 +88,8 @@ export function dungTrangQuayLaiApp(
 <title>${escapeHtml(tieuDe)} · ForgeStore</title>
 <style>
   :root {
-    --bg: #FCF0DA; --card: #FFFFFF; --border: rgba(76,69,65,.12);
-    --text: #4C4541; --muted: #756E69; --hint: #9E9690; --accent: #FF9E20; --accent-hover: #E68A13;
+    --bg: #F8FAFC; --card: #FFFFFF; --border: #E2E8F0;
+    --text: #0F172A; --muted: #475569; --hint: #94A3B8; --accent: #FF9E20; --accent-hover: #E68A13;
   }
   @media (prefers-color-scheme: dark) {
     :root {

@@ -85,27 +85,27 @@ export const ThanhBen: React.FC = () => {
                   <button
                     key={item.id}
                     onClick={() => navigateTo(item.id)}
-                    className={`group relative overflow-hidden w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 outline-none ${
+                    className={`btn-tactile group relative overflow-hidden w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all outline-none ${
                       isActive
-                        ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border'
+                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border'
                         : 'text-secondary hover:text-primary hover:bg-surface-hover'
                     }`}
                   >
-                    {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái kèm ánh glow */}
+                    {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái */}
                     {isActive && (
-                      <div className="absolute left-0 top-2 bottom-2 w-1 bg-accent-forge rounded-r shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
+                      <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-accent-forge rounded-r shadow-xs" />
                     )}
 
-                    <div className={`flex items-center gap-2.5 ${isActive ? 'pl-1.5' : ''}`}>
+                    <div className={`flex items-center gap-3 ${isActive ? 'pl-1.5' : ''}`}>
                       <Icon
-                        className={`w-4 h-4 ${isActive ? 'text-accent-forge' : 'text-muted'}`}
-                        strokeWidth={isActive ? 2.25 : 1.75}
+                        className={`w-4 h-4 transition-colors ${isActive ? 'text-accent-forge' : 'text-muted group-hover:text-primary'}`}
+                        strokeWidth={isActive ? 2 : 1.75}
                       />
                       <span>{item.label}</span>
                     </div>
 
                     {hasUpdateBadge && (
-                      <span className="px-2 py-0.5 text-[10px] rounded-full bg-accent-forge/20 text-accent-forge border border-accent-forge/30 font-mono font-bold shadow-xs animate-pulse">
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-accent-forge/15 text-accent-forge border border-accent-forge/30 font-mono font-bold shadow-xs">
                         {soLuongBanCapNhat}
                       </span>
                     )}

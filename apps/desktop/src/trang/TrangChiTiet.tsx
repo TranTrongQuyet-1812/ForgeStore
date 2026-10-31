@@ -1145,24 +1145,24 @@ export const TrangChiTiet: React.FC = () => {
                 </h1>
                 <NhanLuuTru daLuuTru={appDetail.daLuuTru} />
                 {appDetail.daXacMinh && (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-mono font-medium border border-emerald-500/30 flex items-center gap-1">
-                    <Check className="w-3 h-3 stroke-[3]" />
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-medium border border-emerald-500/25 flex items-center gap-1.5">
+                    <Check className="w-3 h-3 stroke-[2.5]" />
                     Mã nguồn mở · {appDetail.loaiGiayPhep || 'FOSS'}
                   </span>
                 )}
                 {appDetail.duocNoiBat && (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-mono font-medium border border-amber-500/30 flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-amber-400" />
+                  <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated text-secondary text-xs font-mono font-medium border border-border flex items-center gap-1.5">
+                    <Star className="w-3 h-3 text-muted" />
                     Forge Đề Xuất
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted font-mono flex-wrap">
+              <div className="flex items-center gap-2 mt-1.5 text-xs text-muted font-mono flex-wrap">
                 <span>{appDetail.tenRepoDayDu}</span>
                 <span>•</span>
-                <span className="text-amber-400 flex items-center gap-0.5 font-semibold">
-                  <Star className="w-3.5 h-3.5 fill-amber-400" />
+                <span className="text-secondary flex items-center gap-1 font-medium">
+                  <Star className="w-3.5 h-3.5 text-muted" />
                   {formatStars(appDetail.soSaoGithub)} sao
                 </span>
                 <span>•</span>
@@ -1175,7 +1175,7 @@ export const TrangChiTiet: React.FC = () => {
                 )}
               </div>
 
-              <p className="text-xs text-secondary mt-3 leading-relaxed">
+              <p className="text-sm text-secondary mt-3 leading-relaxed">
                 {appDetail.moTaVi ||
                   appDetail.moTaGocTiengAnh ||
                   'Ứng dụng mã nguồn mở minh bạch, được đồng bộ trực tiếp từ GitHub.'}
@@ -1185,8 +1185,8 @@ export const TrangChiTiet: React.FC = () => {
 
           {/* Khẩu hiệu: chỉ hiện khi khác dòng mô tả ở trên (tránh lặp một câu hai lần, P3B-10) */}
           {khauHieuRieng && (
-            <div className="tactile-card px-5 py-3.5 rounded-2xl border-l-4 border-l-accent-forge bg-surface-elevated/30">
-              <blockquote className="text-sm font-semibold text-primary italic">
+            <div className="surface-card px-5 py-3 rounded-xl bg-surface/50 border border-border">
+              <blockquote className="text-sm font-medium text-secondary italic">
                 "{khauHieuRieng}"
               </blockquote>
             </div>
@@ -2397,8 +2397,8 @@ export const TrangChiTiet: React.FC = () => {
           {/* Điểm Uy Tín Kho Mã & Thẩm Định Chi Tiết (L-09 / L-10) */}
           <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold font-display text-primary uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-semibold font-display text-muted uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-muted" />
                 <span>ĐIỂM UY TÍN KHO MÃ</span>
               </span>
               <NhanTinCay score={trustScore} size="sm" />
@@ -2428,16 +2428,16 @@ export const TrangChiTiet: React.FC = () => {
             <div className="flex flex-col gap-2 pt-2 border-t border-border text-xs">
               {appDetail.soLuotFork ? (
                 <div className="flex items-center gap-2 text-secondary">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-muted shrink-0" />
                   <span>Kho chứa có hơn {appDetail.soLuotFork} lượt forks</span>
                 </div>
               ) : null}
               <div className="flex items-center gap-2 text-secondary">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <Check className="w-3.5 h-3.5 text-muted shrink-0" />
                 <span>{getJevStatusText(appDetail.phanTichAi?.trangThaiThamDinhJev)}</span>
               </div>
               <div className="flex items-center gap-2 text-secondary">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <Check className="w-3.5 h-3.5 text-muted shrink-0" />
                 <span>Bản phát hành cập nhật liên tục từ GitHub</span>
               </div>
 
@@ -2470,11 +2470,11 @@ export const TrangChiTiet: React.FC = () => {
 
           {/* Thẻ Thông Tin Kho Lưu Trữ GitHub */}
           <div className="tactile-card p-5 rounded-2xl flex flex-col gap-3 text-xs">
-            <h4 className="font-bold font-display text-primary flex items-center gap-2">
-              <Github className="w-4 h-4" />
+            <h4 className="font-semibold font-display text-muted flex items-center gap-2 uppercase tracking-wider">
+              <Github className="w-4 h-4 text-muted" />
               <span>DỮ LIỆU KHO CHỨA GITHUB</span>
             </h4>
-            <div className="flex flex-col gap-2 font-mono text-[11px] text-secondary">
+            <div className="flex flex-col gap-2 font-mono text-xs text-secondary">
               <div className="flex justify-between py-1 border-b border-border">
                 <span>Ngôn ngữ chính:</span>
                 <span className="text-primary font-bold">
@@ -2493,7 +2493,7 @@ export const TrangChiTiet: React.FC = () => {
               </div>
               <div className="flex justify-between py-1">
                 <span>Đồng bộ lần cuối:</span>
-                <span className="text-emerald-400">
+                <span className="text-secondary font-medium">
                   {new Date(appDetail.dongBoLanCuoi).toLocaleDateString('vi-VN')}
                 </span>
               </div>
