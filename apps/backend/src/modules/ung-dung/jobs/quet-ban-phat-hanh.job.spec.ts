@@ -231,4 +231,24 @@ describe('QuetBanPhatHanhJob (P2-25)', () => {
       ],
     });
   });
+
+  it('không tiến con trỏ qua repo bị cắt ngang vì GitHub Rate Limit', async () => {
+    const taoApp = (ma: string, ten: string) => ({
+      maUngDung: ma,
+      tenRepoDayDu: ten,
+      daLuuTru: false,
+      danhSachPhatHanh: [{ tenPhienBan: '1.0.0' }],
+    });
+    const xong = taoApp('0001', 'owner/xong');
+    const biCat = taoApp('0002', 'owner/bi-cat');
+    mockPrisma.ungDung.findMany.mockResolvedValueOnce([xong, biCat]).mockResolvedValueOnce([]);
+    mockGithubService.layReleaseMoiNhat
+      .mockResolvedValueOnce({ tag_name: '1.0.0' })
+      .mockRejectedValueOnce(new Error('GitHub API 403 rate limit'));
+
+    await job.scanReleases(4);
+
+    const conTro = cacheGiaLap.get('fs:jobs:release-scan:priority-cursor');
+    expect(conTro).toBe('0001');
+  });
 });

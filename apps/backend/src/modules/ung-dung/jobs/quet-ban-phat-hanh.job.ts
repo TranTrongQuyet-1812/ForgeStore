@@ -92,6 +92,8 @@ export class QuetBanPhatHanhJob {
         const khoaConTro = appIdsDaChon.includes(app.maUngDung)
           ? this.khoaConTroUuTien
           : this.khoaConTroThuong;
+        // Repo bị cắt ngang vì Rate Limit chưa quét xong nên không được tiến con trỏ qua nó.
+        let giuConTro = false;
         try {
           const [owner, repo] = app.tenRepoDayDu.split('/');
           if (!owner || !repo) continue;
@@ -143,11 +145,12 @@ export class QuetBanPhatHanhJob {
             this.logger.error(
               '🚨 GitHub Rate Limit Exceeded (403/429)! Dừng quét ngay để bảo vệ IP và Token.',
             );
+            giuConTro = true;
             break;
           }
         } finally {
-          // Chỉ tiến con trỏ tới repo vừa xử lý để lần chạy sau tiếp tục luân phiên ổn định.
-          await this.cacheService.luu(khoaConTro, app.maUngDung, 31536000);
+          // Chỉ tiến con trỏ tới repo đã xử lý xong để lần chạy sau tiếp tục luân phiên ổn định.
+          if (!giuConTro) await this.cacheService.luu(khoaConTro, app.maUngDung, 31536000);
         }
       }
 
