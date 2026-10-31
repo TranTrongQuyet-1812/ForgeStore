@@ -30,6 +30,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
+import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
@@ -508,6 +509,7 @@ export const TrangChiTiet: React.FC = () => {
               mucDoAnToan: appDetail?.phanTichAi?.mucDoAnToan ?? null,
               daXacMinh: appDetail?.daXacMinh ?? false,
               duocNoiBat: appDetail?.duocNoiBat ?? false,
+              daLuuTru: appDetail?.daLuuTru ?? false,
               tenGoiAndroid: appDetail?.tenGoiAndroid ?? null,
               dinhDangCoSan: appDetail?.dinhDangCoSan,
               kienTrucCoSan: appDetail?.kienTrucCoSan,
@@ -1141,6 +1143,7 @@ export const TrangChiTiet: React.FC = () => {
                 <h1 className="text-2xl font-bold font-display text-primary">
                   {appDetail.tenKhoChua}
                 </h1>
+                <NhanLuuTru daLuuTru={appDetail.daLuuTru} />
                 {appDetail.daXacMinh && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-mono font-medium border border-emerald-500/30 flex items-center gap-1">
                     <Check className="w-3 h-3 stroke-[3]" />

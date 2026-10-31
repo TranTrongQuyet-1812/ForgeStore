@@ -44,7 +44,7 @@ export class UngDungController {
   @ApiOperation({
     summary: 'Duyệt danh sách ứng dụng trong Store (P2-23)',
     description:
-      'Lấy danh sách ứng dụng theo nền tảng (android/windows), danh mục, sắp xếp (stars/recent/trending) và phân trang (tối đa 50 app/trang). Có bộ đệm Redis. Tự động gắn cờ daYeuThich nếu đã đăng nhập.',
+      'Lấy danh sách ứng dụng theo nền tảng (android/windows), danh mục, sắp xếp (stars/recent/trending) và phân trang (tối đa 50 app/trang). Repo đã lưu trữ vẫn được hiển thị và có cờ daLuuTru. Có bộ đệm Redis; tự động gắn cờ daYeuThich nếu đã đăng nhập.',
   })
   @ApiResponse({
     status: 200,
@@ -178,7 +178,7 @@ export class UngDungController {
   @ApiParam({ name: 'repo', description: 'Tên repository', example: 'rustdesk' })
   @ApiResponse({
     status: 200,
-    description: 'Thông tin chi tiết toàn diện của ứng dụng',
+    description: 'Thông tin chi tiết toàn diện của ứng dụng, có cờ daLuuTru.',
   })
   async layChiTietAppTheoSlug(
     @Param('owner') owner: string,
@@ -204,7 +204,7 @@ export class UngDungController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Thông tin chi tiết toàn diện của ứng dụng',
+    description: 'Thông tin chi tiết toàn diện của ứng dụng, có cờ daLuuTru.',
   })
   async layChiTietApp(
     @Param('id') id: string,

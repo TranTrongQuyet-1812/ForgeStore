@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
+import { tinhDiemThinhHanh } from '../tien-ich/thinh-hanh.util';
 
 @Injectable()
 export class SuyGiamThinhHanhJob {
@@ -41,6 +42,7 @@ export class SuyGiamThinhHanhJob {
         select: {
           maUngDung: true,
           soSaoGithub: true,
+          daLuuTru: true,
           dongBoLanCuoi: true,
           danhSachPhatHanh: {
             orderBy: { ngayPhatHanh: 'desc' },
@@ -71,7 +73,7 @@ export class SuyGiamThinhHanhJob {
           heSoThuongBanMoi = 1.0 + 0.3 * (1 - soNgay / 7);
         }
 
-        const diemThinhHanh = (Math.log10(sao + 1) / Math.pow(soNgay + 2, 1.5)) * heSoThuongBanMoi;
+        const diemThinhHanh = tinhDiemThinhHanh(sao, soNgay, heSoThuongBanMoi, app.daLuuTru);
 
         await this.prisma.ungDung.update({
           where: { maUngDung: app.maUngDung },

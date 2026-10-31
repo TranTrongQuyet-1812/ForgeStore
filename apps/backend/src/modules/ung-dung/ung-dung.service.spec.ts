@@ -507,6 +507,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
           duocNoiBat: true,
           daXacMinh: true,
+          daLuuTru: true,
           tenGoiAndroid: 'com.carriez.rustdesk',
           dongBoLanCuoi: new Date('2026-09-24T00:00:00Z'),
           phanTichAI: {
@@ -535,6 +536,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.duLieu[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
       expect(res.duLieu[0].diemUyTin).toBe(95);
       expect(res.duLieu[0].phienBanMoiNhat).toBe('1.2.3');
+      expect(res.duLieu[0].daLuuTru).toBe(true);
 
       // Kiểm tra lưu vào cache
       expect(mockCacheService.luu).toHaveBeenCalledWith(
@@ -660,6 +662,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
         duocNoiBat: true,
         daXacMinh: true,
+        daLuuTru: true,
         tenGoiAndroid: 'com.carriez.rustdesk',
         trangThai: 'HOAT_DONG',
         dongBoLanCuoi: new Date(),
@@ -674,6 +677,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       const res = await service.layChiTietApp('11111111-1111-1111-1111-111111111111');
       expect(res.maUngDung).toBe('11111111-1111-1111-1111-111111111111');
       expect(res.tenRepoDayDu).toBe('rustdesk/rustdesk');
+      expect(res.daLuuTru).toBe(true);
     });
 
     it('Lấy theo slug "owner/repo" thành công', async () => {

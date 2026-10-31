@@ -66,6 +66,7 @@ import {
 import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
 import { SearchQueryDto } from './dto/tim-kiem.dto';
 import { InspectRepoDto } from './dto/kiem-tra-repo.dto';
+import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
 
 /**
  * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)
@@ -377,6 +378,7 @@ export class UngDungService {
             danhMucChinh,
             nenTangHoTro,
             trangThai,
+            daLuuTru: Boolean(repoData.archived),
             tenGoiAndroid: tenGoiAndroid || undefined,
             dongBoLanCuoi: new Date(),
           },
@@ -395,6 +397,7 @@ export class UngDungService {
             danhMucChinh,
             nenTangHoTro,
             trangThai,
+            daLuuTru: Boolean(repoData.archived),
             tenGoiAndroid: tenGoiAndroid || null,
             dongBoLanCuoi: new Date(),
           },
@@ -548,7 +551,12 @@ export class UngDungService {
         if (soNgay <= 7) {
           heSoThuongBanMoi = 1.0 + 0.3 * (1 - soNgay / 7);
         }
-        const diemThinhHanh = (Math.log10(sao + 1) / Math.pow(soNgay + 2, 1.5)) * heSoThuongBanMoi;
+        const diemThinhHanh = tinhDiemThinhHanh(
+          sao,
+          soNgay,
+          heSoThuongBanMoi,
+          Boolean(repoData.archived),
+        );
 
         const appUpdated = await tx.ungDung.update({
           where: { maUngDung: app.maUngDung },
@@ -874,6 +882,7 @@ export class UngDungService {
         nenTangHoTro: app.nenTangHoTro,
         duocNoiBat: app.duocNoiBat,
         daXacMinh: app.daXacMinh,
+        daLuuTru: Boolean(app.daLuuTru),
         tenGoiAndroid: app.tenGoiAndroid,
         khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
         diemUyTin: app.phanTichAI?.diemUyTin ?? null,
@@ -1041,6 +1050,7 @@ export class UngDungService {
       nenTangHoTro: app.nenTangHoTro,
       duocNoiBat: app.duocNoiBat,
       daXacMinh: app.daXacMinh,
+      daLuuTru: Boolean(app.daLuuTru),
       tenGoiAndroid: app.tenGoiAndroid,
       trangThai: app.trangThai,
       dongBoLanCuoi: app.dongBoLanCuoi.toISOString(),
@@ -1832,6 +1842,7 @@ export class UngDungService {
           nenTangHoTro: app.nenTangHoTro,
           duocNoiBat: app.duocNoiBat,
           daXacMinh: app.daXacMinh,
+          daLuuTru: Boolean(app.daLuuTru),
           tenGoiAndroid: app.tenGoiAndroid,
           khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
           diemUyTin: app.phanTichAI?.diemUyTin ?? null,
@@ -1934,6 +1945,7 @@ export class UngDungService {
             nenTangHoTro: app.nenTangHoTro,
             duocNoiBat: app.duocNoiBat,
             daXacMinh: app.daXacMinh,
+            daLuuTru: Boolean(app.daLuuTru),
             tenGoiAndroid: app.tenGoiAndroid,
             khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
             diemUyTin: app.phanTichAI?.diemUyTin ?? null,
@@ -1982,6 +1994,7 @@ export class UngDungService {
           chuaThamDinh: true, // Kết quả trực tiếp từ GitHub, chưa thẩm định vào Store
           duocNoiBat: false,
           daXacMinh: false,
+          daLuuTru: Boolean(r.archived),
           khauHieuTiengViet: null,
           diemUyTin: null,
           mucDoAnToan: null,
@@ -2038,6 +2051,7 @@ export class UngDungService {
           nenTangHoTro: m.nenTangHoTro as NenTangHoTro,
           duocNoiBat: false,
           daXacMinh: m.daXacMinh, // Giá trị thật từ DB (AI2)
+          daLuuTru: Boolean(m.daLuuTru),
           khauHieuTiengViet: m.khauHieuTiengViet,
           diemUyTin: m.diemUyTin,
           mucDoAnToan: (m.mucDoAnToan as MucDoUyTin) || null,
@@ -2073,6 +2087,7 @@ export class UngDungService {
           nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
           duocNoiBat: false,
           daXacMinh: false,
+          daLuuTru: Boolean(r.archived),
           khauHieuTiengViet: null,
           diemUyTin: null,
           mucDoAnToan: null,

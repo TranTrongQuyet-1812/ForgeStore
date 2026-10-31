@@ -185,6 +185,7 @@ model UngDung {
   daXacMinh         Boolean           @default(false) @map("da_xac_minh")
   tenGoiAndroid     String?           @map("ten_goi_android") // Package name Android (VD: org.videolan.vlc - D-13)
   trangThai         String            @default("HOAT_DONG") @map("trang_thai")
+  daLuuTru          Boolean           @default(false) @map("da_luu_tru")
 
   // Bản dịch mô tả (D-17)
   moTaVi            String?           @map("mo_ta_vi") @db.Text

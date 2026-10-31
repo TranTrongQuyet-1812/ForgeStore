@@ -3,6 +3,7 @@ import { Star, Download, Check, Loader2 } from 'lucide-react';
 import { NhanTinCay } from './NhanTinCay';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
+import { NhanLuuTru } from './NhanLuuTru';
 
 export interface AppCardData {
   id: string;
@@ -21,6 +22,7 @@ export interface AppCardData {
   danhMucChinh: string;
   giayPhep?: string; // ví dụ: GPL-3.0, MIT
   isVerifiedFoss?: boolean;
+  daLuuTru?: boolean;
 }
 
 interface AppCardProps {
@@ -86,6 +88,9 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
             <p className="text-[11px] font-mono text-muted truncate">
               {app.repoHandle || app.tacGia}
             </p>
+            <div className="mt-1">
+              <NhanLuuTru daLuuTru={app.daLuuTru} />
+            </div>
 
             <div className="flex items-center gap-2 mt-1 text-[11px]">
               <span className="flex items-center gap-1 text-amber-400 font-mono font-semibold">

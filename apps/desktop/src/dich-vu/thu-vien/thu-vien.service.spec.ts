@@ -28,6 +28,7 @@ describe('ThuVienService (P3-12.2)', () => {
           duongDanGithub: 'https://github.com/obsidianmd/obsidian-releases',
           soSaoGithub: 112000,
           danhMucChinh: 'Năng suất & Văn phòng',
+          daLuuTru: false,
           nenTangHoTro: NenTangHoTro.WINDOWS,
           duocNoiBat: false,
           daXacMinh: true,

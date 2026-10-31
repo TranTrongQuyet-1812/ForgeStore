@@ -90,6 +90,8 @@ export interface UngDungTomTatDto {
   nenTangHoTro: NenTangHoTro | null;
   duocNoiBat: boolean;
   daXacMinh: boolean;
+  /** Repo đã lưu trữ trên GitHub; vẫn có thể xuất hiện trong Store. */
+  daLuuTru: boolean;
   tenGoiAndroid?: string | null; // Tên gói ứng dụng Android (Package Name - D-13)
   khauHieuTiengViet?: string | null; // Khẩu hiệu tiếng Việt do Gemini tóm tắt
   diemUyTin?: number | null; // 0 - 100

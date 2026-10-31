@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
+import { CacheService } from '../../redis/cache.service';
 import { UngDungService } from '../ung-dung.service';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class QuetBanPhatHanhJob {
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
     private readonly appsService: UngDungService,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -97,6 +99,23 @@ export class QuetBanPhatHanhJob {
           if (!owner || !repo) continue;
 
           soRepoDaQuet++;
+
+          try {
+            const repoInfo = await this.githubService.layRepo(owner, repo);
+            const daLuuTru = Boolean(repoInfo.archived);
+            if (Boolean(app.daLuuTru) !== daLuuTru) {
+              await this.prisma.ungDung.update({
+                where: { maUngDung: app.maUngDung },
+                data: { daLuuTru },
+              });
+              await this.cacheService.xoaTheoPrefix('fs:apps:list:');
+              await this.cacheService.xoaTheoPrefix('fs:apps:detail:');
+            }
+          } catch (err) {
+            this.logger.warn(
+              `Không cập nhật được cờ lưu trữ [${app.tenRepoDayDu}]: ${String(err)}`,
+            );
+          }
 
           // Lấy release mới nhất từ GitHub
           const latestRelease = await this.githubService.layReleaseMoiNhat(owner, repo);

@@ -15,6 +15,7 @@ export interface KetQuaTimKiemNguNghia {
   danhMucChinh: string;
   nenTangHoTro: string;
   daXacMinh: boolean;
+  daLuuTru: boolean;
   ngayCapNhat: Date | string;
   khauHieuTiengViet: string | null;
   diemUyTin: number | null;
@@ -32,6 +33,7 @@ interface RawSearchResult {
   danhMucChinh: string;
   nenTangHoTro: string;
   daXacMinh: boolean;
+  daLuuTru: boolean;
   ngayCapNhat: Date;
   khauHieuTiengViet: string | null;
   diemUyTin: number | null;
@@ -227,6 +229,7 @@ export class SemanticSearchService {
         u."danh_muc_chinh" AS "danhMucChinh",
         u."nen_tang_ho_tro" AS "nenTangHoTro",
         u."da_xac_minh" AS "daXacMinh",
+        u."da_luu_tru" AS "daLuuTru",
         u."dong_bo_lan_cuoi" AS "ngayCapNhat",
         pa."khau_hieu_tieng_viet" AS "khauHieuTiengViet",
         pa."diem_uy_tin" AS "diemUyTin",
@@ -251,6 +254,7 @@ export class SemanticSearchService {
       danhMucChinh: row.danhMucChinh,
       nenTangHoTro: row.nenTangHoTro,
       daXacMinh: row.daXacMinh,
+      daLuuTru: Boolean(row.daLuuTru),
       ngayCapNhat: row.ngayCapNhat,
       khauHieuTiengViet: row.khauHieuTiengViet,
       diemUyTin: row.diemUyTin,

@@ -71,6 +71,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('layUngDungNoiBat gọi endpoint với featured=true và limit=10', async () => {
     const mockApp: UngDungTomTatDto = {
       maUngDung: 'app-1',
+      daLuuTru: false,
       tenRepoDayDu: 'rustdesk/rustdesk',
       chuSoHuu: 'rustdesk',
       tenKhoChua: 'rustdesk',
@@ -118,6 +119,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('anhXaDtoSangTheUngDung chuyển đổi UngDungTomTatDto sang AppCardData chính xác với dữ liệu thật (L-03)', () => {
     const dto: UngDungTomTatDto = {
       maUngDung: 'app-powertoys',
+      daLuuTru: true,
       tenRepoDayDu: 'microsoft/PowerToys',
       chuSoHuu: 'microsoft',
       tenKhoChua: 'PowerToys',
@@ -151,11 +153,13 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(card.giayPhep).toBe('MIT');
     expect(card.diemUyTin).toBe(100);
     expect(card.isVerifiedFoss).toBe(true);
+    expect(card.daLuuTru).toBe(true);
   });
 
   it('anhXaChiTietSangTheUngDung ưu tiên slogan AI từ phanTichAi và giấy phép thật', () => {
     const detailDto: UngDungChiTietDto = {
       maUngDung: 'app-obsidian',
+      daLuuTru: false,
       tenRepoDayDu: 'obsidianmd/obsidian',
       chuSoHuu: 'obsidianmd',
       tenKhoChua: 'obsidian',
@@ -193,6 +197,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('layChiTietApp xử lý dữ liệu đầy đủ với Dual-AI và danh sách bản phát hành', async () => {
     const mockFullDetail: UngDungChiTietDto = {
       maUngDung: 'uuid-rustdesk',
+      daLuuTru: false,
       tenRepoDayDu: 'rustdesk/rustdesk',
       chuSoHuu: 'rustdesk',
       tenKhoChua: 'rustdesk',
@@ -267,6 +272,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('anhXaChiTietSangTheUngDung fallback mượt mà khi ứng dụng chưa có phanTichAi', () => {
     const detailWithoutAi: UngDungChiTietDto = {
       maUngDung: 'app-no-ai',
+      daLuuTru: false,
       tenRepoDayDu: 'sample/unprocessed-app',
       chuSoHuu: 'sample',
       tenKhoChua: 'unprocessed-app',
@@ -294,6 +300,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('L-03 Ca thực tế DBeaver: hiện .exe .zip, giấy phép GPL-3.0, không có MSI', () => {
     const dbeaverDto: UngDungTomTatDto = {
       maUngDung: 'dbeaver-id',
+      daLuuTru: false,
       tenRepoDayDu: 'dbeaver/dbeaver',
       chuSoHuu: 'dbeaver',
       tenKhoChua: 'dbeaver',
@@ -319,6 +326,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('L-03 Ca thực tế Cryptomator: hiện .exe .msi và chỉ x64 (không có ARM64)', () => {
     const cryptoDto: UngDungTomTatDto = {
       maUngDung: 'crypto-id',
+      daLuuTru: false,
       tenRepoDayDu: 'cryptomator/cryptomator',
       chuSoHuu: 'cryptomator',
       tenKhoChua: 'cryptomator',
@@ -343,6 +351,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('L-03 Thiếu phiên bản và điểm: để trống, không tự bịa v1.0.0 hay điểm 92', () => {
     const rawDto: UngDungTomTatDto = {
       maUngDung: 'raw-id',
+      daLuuTru: false,
       tenRepoDayDu: 'sample/raw',
       chuSoHuu: 'sample',
       tenKhoChua: 'raw',
@@ -472,6 +481,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('anhXaDtoSangTheUngDung ưu tiên moTaVi hơn khauHieuTiengViet (P3B-04)', () => {
     const dto: UngDungTomTatDto = {
       maUngDung: 'app-sample',
+      daLuuTru: false,
       tenRepoDayDu: 'sample/app',
       chuSoHuu: 'sample',
       tenKhoChua: 'app',
@@ -492,6 +502,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
   it('anhXaChiTietSangTheUngDung ưu tiên moTaVi hơn phanTichAi.khauHieuTiengViet và moTaGocTiengAnh (P3B-04)', () => {
     const detailDto: UngDungChiTietDto = {
       maUngDung: 'app-sample-detail',
+      daLuuTru: false,
       tenRepoDayDu: 'sample/app-detail',
       chuSoHuu: 'sample',
       tenKhoChua: 'app-detail',

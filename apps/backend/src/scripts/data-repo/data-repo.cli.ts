@@ -23,7 +23,7 @@
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich]  [--repo owner/repo]   # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -62,6 +62,7 @@ import {
 } from './kiem-tuoi.core';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
+import { layCapNhatLuuTru, taoMapTrangThaiLuuTru } from './day.core';
 
 const NHAN_MO_HINH = 'antigravity/gemini-3.8-flash';
 
@@ -1355,6 +1356,12 @@ async function lenhDay(): Promise<void> {
   const lo = batBuocLo();
   const ghi = coCo('ghi');
   const toiDa = Number(layThamSo('toi-da') ?? '20');
+  const fileLuuTru = layThamSo('luu-tru');
+  const trangThaiLuuTru = fileLuuTru
+    ? taoMapTrangThaiLuuTru(
+        docJsonl<{ repo: string; loai: string; archived?: boolean }>(path.resolve(fileLuuTru)),
+      )
+    : undefined;
   const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
   const fileLog = duongDan('daDay', lo);
   const daDay = new Set(
@@ -1369,6 +1376,16 @@ async function lenhDay(): Promise<void> {
   console.info(
     `${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
   );
+  if (!trangThaiLuuTru) {
+    console.warn('Không truyền --luu-tru <bao_cao.jsonl>; lệnh day sẽ không thay đổi cờ daLuuTru.');
+  } else {
+    const trongLo = cho.filter((row) => layCapNhatLuuTru(row.repo, trangThaiLuuTru).daLuuTru);
+    const tongLuuTru = [...trangThaiLuuTru.values()].filter(Boolean).length;
+    console.info(
+      `Repo archived trong lô này sẽ gắn daLuuTru=true: ${trongLo.length}; tổng trong báo cáo: ${tongLuuTru}.`,
+    );
+    for (const row of trongLo) console.info(`[lưu trữ] ${row.repo}`);
+  }
 
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
@@ -1409,6 +1426,7 @@ async function lenhDay(): Promise<void> {
           etagRepo: r.etagRepo,
           etagReleases: r.etagReleases,
           etagReadme: r.etagReadme,
+          ...layCapNhatLuuTru(r.repo, trangThaiLuuTru),
         };
         let moTa = 'bo_qua';
         if (

@@ -72,6 +72,7 @@ export class YeuThichService {
         mucDoAnToan: app.phanTichAI?.mucDoAnToan ?? null,
         daXacMinh: app.daXacMinh,
         duocNoiBat: app.duocNoiBat,
+        daLuuTru: app.daLuuTru,
         tenGoiAndroid: app.tenGoiAndroid ?? null,
         dinhDangCoSan,
         kienTrucCoSan,

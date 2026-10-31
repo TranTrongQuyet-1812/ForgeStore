@@ -156,6 +156,7 @@ export class KhoUngDungService {
         dto.dinhDangCoSan && dto.dinhDangCoSan.length > 0 ? dto.dinhDangCoSan : undefined,
       kienTruc: dto.kienTrucCoSan && dto.kienTrucCoSan.length > 0 ? dto.kienTrucCoSan : undefined,
       diemUyTin: dto.diemUyTin ?? null,
+      daLuuTru: dto.daLuuTru,
       danhMucChinh: dto.danhMucChinh || 'Tiện ích hệ thống',
       giayPhep: dto.loaiGiayPhep || undefined,
       isVerifiedFoss: dto.daXacMinh,
