@@ -26,7 +26,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://api-forgestore.tranquyet.id.vn http://localhost:3000 http://127.0.0.1:3000 http://localhost:1420 http://127.0.0.1:1420 https://api.github.com; img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline';",
+      "csp": "default-src 'self'; connect-src 'self' https://api-forgestore.tranquyet.id.vn http://localhost:3000 http://127.0.0.1:3000 http://localhost:1420 http://127.0.0.1:1420 https://api.github.com; img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;",
       "capabilities": ["default"]
     }
   },
