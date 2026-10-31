@@ -1,12 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { CacheService } from '../../redis/cache.service';
 import { UngDungService } from '../ung-dung.service';
 
+type AppCanQuet = {
+  maUngDung: string;
+  tenRepoDayDu: string;
+  daLuuTru: boolean;
+  danhSachPhatHanh: Array<{ tenPhienBan: string }>;
+};
+
 @Injectable()
 export class QuetBanPhatHanhJob {
+  private readonly khoaConTroUuTien = 'fs:jobs:release-scan:priority-cursor';
+  private readonly khoaConTroThuong = 'fs:jobs:release-scan:regular-cursor';
   private readonly logger = new Logger(QuetBanPhatHanhJob.name);
   private isRunning = false;
 
@@ -48,52 +58,40 @@ export class QuetBanPhatHanhJob {
     let soReleaseMoi = 0;
 
     try {
-      // 1. Tìm các ứng dụng được cài đặt hoặc yêu thích nhiều nhất
-      const uuTienApps = await this.prisma.ungDung.findMany({
-        where: {
+      // Chừa nửa batch cho ứng dụng được cài/yêu thích, để nhóm này không chặn nhóm còn lại.
+      const soUuTien = Math.floor(batchSize / 2);
+      const uuTienApps = await this.layRepoTheoConTro(
+        {
           trangThai: 'HOAT_DONG',
           OR: [{ danhSachDaCai: { some: {} } }, { danhSachYeuThich: { some: {} } }],
         },
-        orderBy: { dongBoLanCuoi: 'asc' }, // Quét những app lâu chưa đồng bộ trước
-        take: batchSize,
-        include: {
-          danhSachPhatHanh: {
-            orderBy: { ngayPhatHanh: 'desc' },
-            take: 1,
-            select: { tenPhienBan: true },
-          },
-        },
-      });
+        this.khoaConTroUuTien,
+        soUuTien,
+      );
 
-      // Nếu số lượng app ưu tiên chưa đủ batchSize, bổ sung thêm các app khác
-      let danhSachCanQuet = [...uuTienApps];
-      if (danhSachCanQuet.length < batchSize) {
-        const remainingSlots = batchSize - danhSachCanQuet.length;
-        const appIdsDaChon = danhSachCanQuet.map((a) => a.maUngDung);
-
-        const otherApps = await this.prisma.ungDung.findMany({
-          where: {
-            trangThai: 'HOAT_DONG',
-            maUngDung: { notIn: appIdsDaChon },
-          },
-          orderBy: { dongBoLanCuoi: 'asc' },
-          take: remainingSlots,
-          include: {
-            danhSachPhatHanh: {
-              orderBy: { ngayPhatHanh: 'desc' },
-              take: 1,
-              select: { tenPhienBan: true },
+      // Luân phiên cả nhóm thường và loại trừ repo ưu tiên đã lấy ở nửa batch đầu.
+      const appIdsDaChon = uuTienApps.map((app) => app.maUngDung);
+      const otherApps = await this.layRepoTheoConTro(
+        {
+          AND: [
+            {
+              trangThai: 'HOAT_DONG',
+              maUngDung: { notIn: appIdsDaChon },
             },
-          },
-        });
-
-        danhSachCanQuet = danhSachCanQuet.concat(otherApps);
-      }
+          ],
+        },
+        this.khoaConTroThuong,
+        batchSize - uuTienApps.length,
+      );
+      const danhSachCanQuet = [...uuTienApps, ...otherApps];
 
       this.logger.log(`Số lượng ứng dụng đưa vào hàng đợi kiểm tra: ${danhSachCanQuet.length}`);
 
       // 2. Lần lượt kiểm tra Release mới qua GitHub Facade (ETag bảo vệ)
       for (const app of danhSachCanQuet) {
+        const khoaConTro = appIdsDaChon.includes(app.maUngDung)
+          ? this.khoaConTroUuTien
+          : this.khoaConTroThuong;
         try {
           const [owner, repo] = app.tenRepoDayDu.split('/');
           if (!owner || !repo) continue;
@@ -147,6 +145,9 @@ export class QuetBanPhatHanhJob {
             );
             break;
           }
+        } finally {
+          // Chỉ tiến con trỏ tới repo vừa xử lý để lần chạy sau tiếp tục luân phiên ổn định.
+          await this.cacheService.luu(khoaConTro, app.maUngDung, 31536000);
         }
       }
 
@@ -166,5 +167,62 @@ export class QuetBanPhatHanhJob {
     } finally {
       this.isRunning = false;
     }
+  }
+
+  private async layRepoTheoConTro(
+    where: Prisma.UngDungWhereInput,
+    khoaConTro: string,
+    gioiHan: number,
+  ): Promise<AppCanQuet[]> {
+    if (gioiHan <= 0) return [];
+    const conTro = await this.cacheService.lay<string>(khoaConTro);
+    const apps = await this.timVongRepo(where, conTro, gioiHan);
+    return apps;
+  }
+
+  private async timVongRepo(
+    where: Prisma.UngDungWhereInput,
+    conTro: string | null,
+    gioiHan: number,
+  ): Promise<AppCanQuet[]> {
+    const dieuKien = conTro ? { AND: [where, { maUngDung: { gt: conTro } }] } : where;
+    const ketQua = await this.prisma.ungDung.findMany({
+      where: dieuKien,
+      orderBy: { maUngDung: 'asc' },
+      take: gioiHan,
+      include: {
+        danhSachPhatHanh: {
+          orderBy: { ngayPhatHanh: 'desc' },
+          take: 1,
+          select: { tenPhienBan: true },
+        },
+      },
+    });
+    if (ketQua.length === gioiHan || !conTro) return ketQua;
+    return this.timRepoDauVong(where, conTro, gioiHan, ketQua);
+  }
+
+  private async timRepoDauVong(
+    where: Prisma.UngDungWhereInput,
+    conTro: string,
+    gioiHan: number,
+    daLay: AppCanQuet[],
+  ): Promise<AppCanQuet[]> {
+    const maDaLay = daLay.map((app) => app.maUngDung);
+    const ketQua = await this.prisma.ungDung.findMany({
+      where: {
+        AND: [where, { maUngDung: { lte: conTro } }, { maUngDung: { notIn: maDaLay } }],
+      },
+      orderBy: { maUngDung: 'asc' },
+      take: gioiHan - daLay.length,
+      include: {
+        danhSachPhatHanh: {
+          orderBy: { ngayPhatHanh: 'desc' },
+          take: 1,
+          select: { tenPhienBan: true },
+        },
+      },
+    });
+    return [...daLay, ...ketQua];
   }
 }

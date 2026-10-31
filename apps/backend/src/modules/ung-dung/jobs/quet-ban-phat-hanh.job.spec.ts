@@ -23,6 +23,8 @@ interface MockAppsService {
 }
 
 interface MockCacheService {
+  lay: ReturnType<typeof vi.fn>;
+  luu: ReturnType<typeof vi.fn>;
   xoaTheoPrefix: ReturnType<typeof vi.fn>;
 }
 
@@ -32,6 +34,7 @@ describe('QuetBanPhatHanhJob (P2-25)', () => {
   let mockGithubService: MockGithubService;
   let mockAppsService: MockAppsService;
   let mockCacheService: MockCacheService;
+  let cacheGiaLap: Map<string, string>;
 
   beforeEach(() => {
     mockPrisma = {
@@ -52,7 +55,14 @@ describe('QuetBanPhatHanhJob (P2-25)', () => {
     mockAppsService = {
       dongBoRepo: vi.fn(),
     };
-    mockCacheService = { xoaTheoPrefix: vi.fn().mockResolvedValue(true) };
+    cacheGiaLap = new Map();
+    mockCacheService = {
+      lay: vi.fn(async (key: string) => cacheGiaLap.get(key) ?? null),
+      luu: vi.fn(async (key: string, value: string) => {
+        cacheGiaLap.set(key, value);
+      }),
+      xoaTheoPrefix: vi.fn().mockResolvedValue(true),
+    };
 
     job = new QuetBanPhatHanhJob(
       mockPrisma as unknown as PrismaService,
@@ -153,6 +163,72 @@ describe('QuetBanPhatHanhJob (P2-25)', () => {
     expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
       where: { maUngDung: 'uuid-unarchived' },
       data: { daLuuTru: false },
+    });
+  });
+
+  it('luân phiên qua các repo ở những lượt quét kế tiếp', async () => {
+    const uuTien1 = {
+      maUngDung: '0001',
+      tenRepoDayDu: 'owner/favorite-1',
+      daLuuTru: false,
+      danhSachPhatHanh: [{ tenPhienBan: '1.0.0' }],
+    };
+    const thuong1 = {
+      maUngDung: '1001',
+      tenRepoDayDu: 'owner/repo-1',
+      daLuuTru: false,
+      danhSachPhatHanh: [{ tenPhienBan: '1.0.0' }],
+    };
+    const uuTien2 = { ...uuTien1, maUngDung: '0002', tenRepoDayDu: 'owner/favorite-2' };
+    const thuong2 = { ...thuong1, maUngDung: '1002', tenRepoDayDu: 'owner/repo-2' };
+    mockPrisma.ungDung.findMany
+      .mockResolvedValueOnce([uuTien1])
+      .mockResolvedValueOnce([thuong1])
+      .mockResolvedValueOnce([uuTien2])
+      .mockResolvedValueOnce([thuong2])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([uuTien1])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([thuong1]);
+    mockGithubService.layReleaseMoiNhat.mockResolvedValue({ tag_name: '1.0.0' });
+
+    await job.scanReleases(2);
+    await job.scanReleases(2);
+    await job.scanReleases(2);
+
+    const truyVanUuTienLuotHai = mockPrisma.ungDung.findMany.mock.calls[2]![0];
+    const truyVanThuongLuotHai = mockPrisma.ungDung.findMany.mock.calls[3]![0];
+    expect(truyVanUuTienLuotHai.where).toEqual({
+      AND: [
+        {
+          trangThai: 'HOAT_DONG',
+          OR: [{ danhSachDaCai: { some: {} } }, { danhSachYeuThich: { some: {} } }],
+        },
+        { maUngDung: { gt: '0001' } },
+      ],
+    });
+    expect(truyVanThuongLuotHai.where).toEqual({
+      AND: [
+        { AND: [{ trangThai: 'HOAT_DONG', maUngDung: { notIn: ['0002'] } }] },
+        { maUngDung: { gt: '1001' } },
+      ],
+    });
+    expect(mockPrisma.ungDung.findMany.mock.calls[5]![0].where).toEqual({
+      AND: [
+        {
+          trangThai: 'HOAT_DONG',
+          OR: [{ danhSachDaCai: { some: {} } }, { danhSachYeuThich: { some: {} } }],
+        },
+        { maUngDung: { lte: '0002' } },
+        { maUngDung: { notIn: [] } },
+      ],
+    });
+    expect(mockPrisma.ungDung.findMany.mock.calls[7]![0].where).toEqual({
+      AND: [
+        { AND: [{ trangThai: 'HOAT_DONG', maUngDung: { notIn: ['0001'] } }] },
+        { maUngDung: { lte: '1002' } },
+        { maUngDung: { notIn: [] } },
+      ],
     });
   });
 });
