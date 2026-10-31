@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Star,
@@ -40,6 +40,32 @@ export const TrangKhamPha: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  // Cho phép dùng con lăn chuột (mouse wheel) cuộn ngang dải danh mục mượt mà
+  useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 2) return;
+
+      const isAtStart = el.scrollLeft <= 1 && e.deltaY < 0;
+      const isAtEnd = el.scrollLeft >= maxScroll - 2 && e.deltaY > 0;
+
+      // Khi còn có thể cuộn ngang thì chặn cuộn dọc trang và cuộn ngang dải chip
+      if (!isAtStart && !isAtEnd) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Đồng bộ danh mục khi được chọn từ TrangDanhMuc
   useEffect(() => {
@@ -380,57 +406,57 @@ export const TrangKhamPha: React.FC = () => {
       <section className="flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-border pb-3">
           {/* Cụm tab sắp xếp + Toggle khung thời gian GitHub */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-medium">
+          <div className="shrink-0 flex items-center gap-2 max-w-full overflow-x-auto no-scrollbar">
+            <div className="shrink-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-medium">
               <button
                 onClick={() => setActiveSort('trending')}
-                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'trending'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
                 }`}
               >
                 <Flame
-                  className={`w-3.5 h-3.5 ${activeSort === 'trending' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'trending' ? 'text-accent-forge' : 'text-muted'}`}
                 />
-                <span>Thịnh Hành</span>
+                <span className="whitespace-nowrap">Thịnh Hành</span>
               </button>
 
               <button
                 onClick={() => setActiveSort('stars')}
-                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'stars'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
                 }`}
               >
                 <Star
-                  className={`w-3.5 h-3.5 ${activeSort === 'stars' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'stars' ? 'text-accent-forge' : 'text-muted'}`}
                 />
-                <span>Nhiều Sao Nhất</span>
+                <span className="whitespace-nowrap">Nhiều Sao Nhất</span>
               </button>
 
               <button
                 onClick={() => setActiveSort('recent')}
-                className={`btn-tactile flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'recent'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
                     : 'text-muted hover:text-secondary'
                 }`}
               >
                 <Clock
-                  className={`w-3.5 h-3.5 ${activeSort === 'recent' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'recent' ? 'text-accent-forge' : 'text-muted'}`}
                 />
-                <span>Mới Cập Nhật</span>
+                <span className="whitespace-nowrap">Mới Cập Nhật</span>
               </button>
             </div>
 
             {/* Toggle khung thời gian (Hôm nay / Tuần này / Tháng này) khi ở tab Thịnh Hành */}
             {activeSort === 'trending' && (
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-mono">
+              <div className="shrink-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-mono animate-fade-in">
                 <button
                   onClick={() => setTimeWindow('today')}
-                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'today'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -440,7 +466,7 @@ export const TrangKhamPha: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setTimeWindow('week')}
-                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'week'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -450,7 +476,7 @@ export const TrangKhamPha: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setTimeWindow('month')}
-                  className={`btn-tactile px-2.5 py-1 rounded-lg transition-colors ${
+                  className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'month'
                       ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
@@ -462,27 +488,30 @@ export const TrangKhamPha: React.FC = () => {
             )}
           </div>
 
-          {/* Dải chip lọc danh mục chuẩn CSDL động (K3) */}
-          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 lg:pb-0">
+          {/* Dải chip lọc danh mục chuẩn CSDL động (K3) - Hỗ trợ cuộn ngang bằng con lăn chuột */}
+          <div
+            ref={categoryScrollRef}
+            className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+          >
             {displayCategories.map((category) => {
               const isActive = activeCategory === category.ten;
               return (
                 <button
                   key={category.ten}
                   onClick={() => setActiveCategory(category.ten)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all flex items-center gap-2 outline-none ${
+                  className={`btn-tactile px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-all flex items-center gap-2 outline-none ${
                     isActive
                       ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
                       : 'bg-surface hover:bg-surface-hover text-secondary hover:text-primary border border-border'
                   }`}
                 >
                   {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(249,115,22,0.6)]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(255,158,32,0.6)]" />
                   )}
-                  <span>{category.ten}</span>
+                  <span className="whitespace-nowrap">{category.ten}</span>
                   {category.soLuong > 0 && (
                     <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none ${
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none shrink-0 ${
                         isActive
                           ? 'bg-accent-forge/15 text-accent-forge border border-accent-forge/25 font-bold'
                           : 'bg-surface-hover text-muted border border-border'

@@ -126,6 +126,15 @@ html {
   background: rgba(148, 163, 184, 0.4);
 }
 
+/* Ẩn scrollbar cho các thanh cuộn ngang dạng ribbon/chips mà vẫn cuộn mượt */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Font số tabular chống rung giật giao diện */
 .font-tnum {
   font-feature-settings: 'tnum' on;
