@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Search,
   Minus,
   Square,
   X,
@@ -22,6 +21,7 @@ import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import { confirmDialog } from '../../kho-trang-thai/useHopThoaiStore';
 import { xacThucService } from '../../dich-vu/xac-thuc/xac-thuc.service';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
+import { ThanhTimKiemDropdown } from '../tim-kiem/ThanhTimKiemDropdown';
 
 const TAB_CONFIGS: Record<
   string,
@@ -135,20 +135,9 @@ export const ThanhTieuDe: React.FC = () => {
         );
       })()}
 
-      {/* Vùng ở giữa: Command Palette Search Bar (Raycast / Linear style) */}
-      <div data-tauri-drag-region className="flex-1 max-w-xl mx-6">
-        <button
-          onClick={() => setSearchModalOpen(true)}
-          className="btn-tactile w-full h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border hover:border-border-focus flex items-center justify-between text-secondary hover:text-primary transition-all text-xs group shadow-xs"
-        >
-          <div className="flex items-center gap-2.5 min-w-0 pr-2">
-            <Search className="w-3.5 h-3.5 text-muted group-hover:text-primary transition-colors shrink-0" />
-            <span className="truncate">Tìm theo tên app, ý định AI hoặc dán link repo...</span>
-          </div>
-          <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono bg-canvas border border-border rounded-md text-muted group-hover:text-primary shadow-xs shrink-0">
-            Ctrl K
-          </kbd>
-        </button>
+      {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh */}
+      <div className="flex-1 max-w-xl mx-6">
+        <ThanhTimKiemDropdown />
       </div>
 
       {/* Vùng bên phải: Nút theme, đăng nhập & 3 nút điều khiển frameless */}

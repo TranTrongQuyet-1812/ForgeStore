@@ -8,7 +8,6 @@ import { TrangThuVien } from '../../trang/TrangThuVien';
 import { TrangYeuThich } from '../../trang/TrangYeuThich';
 import { TrangDanhMuc } from '../../trang/TrangDanhMuc';
 import { TrangCaiDat } from '../../trang/TrangCaiDat';
-import { HopThoaiTimKiem } from '../tim-kiem/HopThoaiTimKiem';
 import { HopThoaiXacThuc } from '../xac-thuc/HopThoaiXacThuc';
 import { HopThoaiXacNhan } from '../dung-chung/HopThoaiXacNhan';
 import { KhungThongBao } from '../dung-chung/KhungThongBao';
@@ -54,10 +53,7 @@ export const BoCucUngDung: React.FC = () => {
         </main>
       </div>
 
-      {/* 3. Modal tìm kiếm nhanh Ctrl+K (Toàn cục) */}
-      <HopThoaiTimKiem />
-
-      {/* 4. Hộp thoại xác thực tài khoản trung tâm (Toàn cục) */}
+      {/* 3. Hộp thoại xác thực tài khoản trung tâm (Toàn cục) */}
       <HopThoaiXacThuc />
 
       {/* 5. Hộp thoại xác nhận hành động toàn cục (Thay thế triệt để window.confirm) */}
