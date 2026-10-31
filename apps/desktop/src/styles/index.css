@@ -1,41 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Bảng màu Trắng ngà sữa (Light Mode: Warm Oat & Linen Paper) - ui-ux-pro-max-skill */
-  --color-bg-canvas: #F7F5F0;
-  --color-bg-surface: #EFECE6;
-  --color-bg-surface-elevated: #FFFFFF;
-  --color-bg-surface-hover: #E7E3D9;
-  --color-border-subtle: rgba(28, 25, 23, 0.08);
-  --color-border-active: rgba(28, 25, 23, 0.18);
-  --color-text-primary: #1C1917;
-  --color-text-secondary: #57534E;
-  --color-text-muted: #8C857E;
-  --card-specular: rgba(255, 255, 255, 0.7);
-  --card-shadow: rgba(28, 25, 23, 0.04);
-  --card-shadow-hover: rgba(28, 25, 23, 0.08);
-  --ambient-glow: rgba(234, 88, 12, 0.025);
+  /* Bảng màu Giấy ngà ấm (Light Mode: Warm Linen & Espresso) */
+  --color-bg-canvas: #fcf0da;
+  --color-bg-surface: #f5e8d0;
+  --color-bg-surface-elevated: #ffffff;
+  --color-bg-surface-hover: #ece0c7;
+  --color-border-subtle: rgba(76, 69, 65, 0.12);
+  --color-border-active: rgba(76, 69, 65, 0.24);
+  --color-text-primary: #4c4541;
+  --color-text-secondary: #756e69;
+  --color-text-muted: #9e9690;
+  --card-specular: rgba(255, 255, 255, 0.8);
+  --card-shadow: rgba(76, 69, 65, 0.05);
+  --card-shadow-hover: rgba(76, 69, 65, 0.1);
+  --ambient-glow: rgba(242, 196, 106, 0.05);
 }
 
 .dark {
-  /* Bảng màu Dark Mode than chì dịu mắt - Nền #0B0F19, tuyệt đối không đen kịt #000000 chống lóa */
-  --color-bg-canvas: #0B0F19;
-  --color-bg-surface: #131B2B;
-  --color-bg-surface-elevated: #182234;
-  --color-bg-surface-hover: #1E2B42;
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-active: rgba(255, 255, 255, 0.14);
-  --color-text-primary: #F1F5F9;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --card-specular: rgba(255, 255, 255, 0.04);
+  /* Bảng màu Dark Mode than chì ấm - Nền #1D2128, chống lóa */
+  --color-bg-canvas: #1d2128;
+  --color-bg-surface: #242932;
+  --color-bg-surface-elevated: #2c323d;
+  --color-bg-surface-hover: #353b47;
+  --color-border-subtle: rgba(244, 242, 242, 0.08);
+  --color-border-active: rgba(244, 242, 242, 0.18);
+  --color-text-primary: #f4f2f2;
+  --color-text-secondary: #9ba3af;
+  --color-text-muted: #687282;
+  --card-specular: rgba(244, 242, 242, 0.05);
   --card-shadow: rgba(0, 0, 0, 0.35);
   --card-shadow-hover: rgba(0, 0, 0, 0.5);
-  --ambient-glow: rgba(249, 115, 22, 0.04);
+  --ambient-glow: rgba(255, 158, 32, 0.04);
 }
 
 @layer utilities {
@@ -43,33 +43,44 @@
   .tactile-card {
     background-color: var(--color-bg-surface-elevated);
     border: 1px solid var(--color-border-subtle);
-    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 2px 10px -2px var(--card-shadow);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    box-shadow:
+      inset 0 1px 0 0 var(--card-specular),
+      0 2px 10px -2px var(--card-shadow);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
   }
 
   .tactile-card:hover {
     border-color: var(--color-border-active);
-    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 6px 20px -3px var(--card-shadow-hover);
+    box-shadow:
+      inset 0 1px 0 0 var(--card-specular),
+      0 6px 20px -3px var(--card-shadow-hover);
   }
 
   /* Khối container tĩnh (Hero Spotlight, Panels...) - Tuyệt đối không lún thụt khi tương tác các nút bên trong */
   .surface-card {
     background-color: var(--color-bg-surface-elevated);
     border: 1px solid var(--color-border-subtle);
-    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 4px 16px -2px var(--card-shadow);
+    box-shadow:
+      inset 0 1px 0 0 var(--card-specular),
+      0 4px 16px -2px var(--card-shadow);
   }
 
   .tactile-elevated {
     background-color: var(--color-bg-surface-elevated);
     border: 1px solid var(--color-border-active);
-    box-shadow: inset 0 1px 0 0 var(--card-specular), 0 16px 36px -6px rgba(0, 0, 0, 0.6);
+    box-shadow:
+      inset 0 1px 0 0 var(--card-specular),
+      0 16px 36px -6px rgba(0, 0, 0, 0.6);
   }
 
   .ambient-canvas {
     background-color: var(--color-bg-canvas);
-    background-image: 
+    background-image:
       radial-gradient(ellipse 60% 40% at 50% -10%, var(--ambient-glow), transparent 70%),
-      radial-gradient(ellipse 40% 30% at 85% 15%, rgba(6, 182, 212, 0.04), transparent 60%);
+      radial-gradient(ellipse 40% 30% at 85% 15%, rgba(33, 94, 97, 0.04), transparent 60%);
   }
 }
 
@@ -103,7 +114,12 @@
   -webkit-app-region: drag;
 }
 
-button, a, input, select, textarea, [data-no-drag] {
+button,
+a,
+input,
+select,
+textarea,
+[data-no-drag] {
   app-region: no-drag;
   -webkit-app-region: no-drag;
 }
@@ -135,25 +151,46 @@ button, a, input, select, textarea, [data-no-drag] {
 .stagger-item {
   animation: fadeInElevation 130ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.stagger-1 { animation-delay: 0ms; }
-.stagger-2 { animation-delay: 20ms; }
-.stagger-3 { animation-delay: 40ms; }
-.stagger-4 { animation-delay: 60ms; }
-.stagger-5 { animation-delay: 80ms; }
-.stagger-6 { animation-delay: 100ms; }
+.stagger-1 {
+  animation-delay: 0ms;
+}
+.stagger-2 {
+  animation-delay: 20ms;
+}
+.stagger-3 {
+  animation-delay: 40ms;
+}
+.stagger-4 {
+  animation-delay: 60ms;
+}
+.stagger-5 {
+  animation-delay: 80ms;
+}
+.stagger-6 {
+  animation-delay: 100ms;
+}
 
 /* Trụ cột 3: Xúc giác nút bấm & Delight Checkmark Pop */
 .btn-tactile {
-  transition: transform 75ms cubic-bezier(0.16, 1, 0.3, 1), background-color 150ms ease, border-color 150ms ease;
+  transition:
+    transform 75ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 .btn-tactile:active {
   transform: scale(0.97);
 }
 
 @keyframes checkmarkPop {
-  0% { transform: scale(0.85); }
-  60% { transform: scale(1.18); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .animate-pop {
@@ -162,8 +199,12 @@ button, a, input, select, textarea, [data-no-drag] {
 
 /* Skeleton Shimmer Loading (CLS = 0) */
 @keyframes shimmerWave {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .skeleton-shimmer {
@@ -179,11 +220,12 @@ button, a, input, select, textarea, [data-no-drag] {
 
 /* Tuân thủ WCAG & Impeccable: Hỗ trợ giảm chuyển động nếu người dùng bật Reduce Motion trong Windows */
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  *,
+  ::before,
+  ::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
-

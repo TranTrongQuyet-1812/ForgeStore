@@ -88,13 +88,13 @@ export function dungTrangQuayLaiApp(
 <title>${escapeHtml(tieuDe)} · ForgeStore</title>
 <style>
   :root {
-    --bg: #F7F5F0; --card: #FFFFFF; --border: rgba(28,25,23,.08);
-    --text: #1C1917; --muted: #57534E; --hint: #8C857E; --accent: #F97316; --accent-hover: #EA580C;
+    --bg: #FCF0DA; --card: #FFFFFF; --border: rgba(76,69,65,.12);
+    --text: #4C4541; --muted: #756E69; --hint: #9E9690; --accent: #FF9E20; --accent-hover: #E68A13;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0B0F19; --card: #182234; --border: rgba(255,255,255,.06);
-      --text: #F1F5F9; --muted: #94A3B8; --hint: #64748B;
+      --bg: #1D2128; --card: #2C323D; --border: rgba(244,242,242,.08);
+      --text: #F4F2F2; --muted: #9BA3AF; --hint: #687282;
     }
   }
   * { box-sizing: border-box; }
