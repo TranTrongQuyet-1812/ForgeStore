@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Heart, Sparkles, LogIn, Compass, RefreshCw, AlertCircle } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
-import { KhungXuongCard } from '../thanh-phan/dung-chung/KhungXuongAscii';
+import { KhungXuongCard, AsciiReveal } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
@@ -112,13 +112,15 @@ export const TrangYeuThich: React.FC = () => {
         </div>
       )}
 
-      {/* Danh sách ứng dụng yêu thích */}
+      {/* Danh sách ứng dụng yêu thích kết hợp hiệu ứng AsciiReveal Decode */}
       {!isLoading && !isError && displayApps.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {displayApps.map((app, idx) => (
-            <TheUngDung key={app.id} app={app} staggerIndex={idx} />
-          ))}
-        </div>
+        <AsciiReveal preset="dither" duration="fast" origin="top-left">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {displayApps.map((app, idx) => (
+              <TheUngDung key={app.id} app={app} staggerIndex={idx} />
+            ))}
+          </div>
+        </AsciiReveal>
       )}
 
       {/* Trạng thái rỗng (Empty State) */}

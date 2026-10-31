@@ -15,7 +15,11 @@ import {
 } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
-import { KhungXuongCard, KhungXuongSpotlight } from '../thanh-phan/dung-chung/KhungXuongAscii';
+import {
+  KhungXuongCard,
+  KhungXuongSpotlight,
+  AsciiReveal,
+} from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
@@ -215,192 +219,199 @@ export const TrangKhamPha: React.FC = () => {
       {isFeaturedLoading ? (
         <KhungXuongSpotlight variant="dither" />
       ) : currentSpotlight && spotlightApp ? (
-        <section className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border">
-          <div className="relative z-10 flex flex-col gap-5">
-            {/* Hàng trên: Bộ chọn 3 chế độ Spotlight */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
-                <button
-                  onClick={() => setSpotlightMode('trending')}
-                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                    spotlightMode === 'trending'
-                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                  }`}
-                >
-                  {spotlightMode === 'trending' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                  )}
-                  <span>Đang được quan tâm</span>
-                </button>
+        <AsciiReveal key={spotlightMode} preset="dither" duration="fast" origin="center">
+          <section
+            data-ascii="surface"
+            className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border"
+          >
+            <div className="relative z-10 flex flex-col gap-5">
+              {/* Hàng trên: Bộ chọn 3 chế độ Spotlight */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
+                  <button
+                    onClick={() => setSpotlightMode('trending')}
+                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                      spotlightMode === 'trending'
+                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
+                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
+                    }`}
+                  >
+                    {spotlightMode === 'trending' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                    )}
+                    <span>Đang được quan tâm</span>
+                  </button>
 
-                <button
-                  onClick={() => setSpotlightMode('curated')}
-                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                    spotlightMode === 'curated'
-                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                  }`}
-                >
-                  {spotlightMode === 'curated' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                  )}
-                  <span>Forge Đề Xuất</span>
-                </button>
+                  <button
+                    onClick={() => setSpotlightMode('curated')}
+                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                      spotlightMode === 'curated'
+                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
+                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
+                    }`}
+                  >
+                    {spotlightMode === 'curated' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                    )}
+                    <span>Forge Đề Xuất</span>
+                  </button>
 
-                <button
-                  onClick={() => setSpotlightMode('security')}
-                  className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                    spotlightMode === 'security'
-                      ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                      : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                  }`}
-                >
-                  {spotlightMode === 'security' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                  )}
-                  <span>Điểm uy tín cao</span>
-                </button>
-              </div>
-
-              <span className="text-xs font-mono text-muted">
-                {spotlightMode === 'trending' && 'Ứng dụng được cộng đồng quan tâm nhiều nhất'}
-                {spotlightMode === 'curated' &&
-                  'Tuyển chọn chất lượng: mã nguồn mở, hoạt động ổn định'}
-                {spotlightMode === 'security' && 'Ứng dụng đạt điểm uy tín cao nhất từ kho mã'}
-              </span>
-            </div>
-
-            {/* Khung nội dung chính của Spotlight với Morphing Fade Animation */}
-            <div
-              key={spotlightMode}
-              className="animate-fade-in flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pt-1"
-            >
-              {/* Cột trái: Thông tin ứng dụng theo chế độ đang chọn */}
-              <div className="flex-1 max-w-2xl flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge border border-accent-forge/40 flex items-center gap-1">
-                    {currentSpotlight.badgeIcon}
-                    <span>{currentSpotlight.badge}</span>
-                  </span>
-                  <span className="text-xs font-mono text-muted">{currentSpotlight.subtitle}</span>
+                  <button
+                    onClick={() => setSpotlightMode('security')}
+                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
+                      spotlightMode === 'security'
+                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
+                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
+                    }`}
+                  >
+                    {spotlightMode === 'security' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
+                    )}
+                    <span>Điểm uy tín cao</span>
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-3 mt-1">
-                  <div
-                    className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentSpotlight.gradient} flex items-center justify-center font-bold text-2xl font-display text-white shadow-lg shrink-0 overflow-hidden`}
-                  >
-                    {spotlightApp.iconUrl ? (
-                      <img
-                        src={spotlightApp.iconUrl}
-                        alt={spotlightApp.tenApp}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      spotlightApp.tenApp.charAt(0)
-                    )}
+                <span className="text-xs font-mono text-muted">
+                  {spotlightMode === 'trending' && 'Ứng dụng được cộng đồng quan tâm nhiều nhất'}
+                  {spotlightMode === 'curated' &&
+                    'Tuyển chọn chất lượng: mã nguồn mở, hoạt động ổn định'}
+                  {spotlightMode === 'security' && 'Ứng dụng đạt điểm uy tín cao nhất từ kho mã'}
+                </span>
+              </div>
+
+              {/* Khung nội dung chính của Spotlight với Morphing Fade Animation */}
+              <div
+                key={spotlightMode}
+                className="animate-fade-in flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pt-1"
+              >
+                {/* Cột trái: Thông tin ứng dụng theo chế độ đang chọn */}
+                <div className="flex-1 max-w-2xl flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge border border-accent-forge/40 flex items-center gap-1">
+                      {currentSpotlight.badgeIcon}
+                      <span>{currentSpotlight.badge}</span>
+                    </span>
+                    <span className="text-xs font-mono text-muted">
+                      {currentSpotlight.subtitle}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-bold font-display text-primary tracking-tight">
-                        {spotlightApp.tenApp}
-                      </h2>
-                      {spotlightApp.isVerifiedFoss && (
-                        <span
-                          className="text-emerald-400"
-                          title="Mã nguồn mở đã xác minh minh bạch"
-                        >
-                          <Check className="w-4 h-4 stroke-[2.5]" />
-                        </span>
+
+                  <div className="flex items-center gap-3 mt-1">
+                    <div
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentSpotlight.gradient} flex items-center justify-center font-bold text-2xl font-display text-white shadow-lg shrink-0 overflow-hidden`}
+                    >
+                      {spotlightApp.iconUrl ? (
+                        <img
+                          src={spotlightApp.iconUrl}
+                          alt={spotlightApp.tenApp}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        spotlightApp.tenApp.charAt(0)
                       )}
                     </div>
-                    <p className="text-xs font-mono text-muted">
-                      {spotlightApp.repoHandle} • ⭐ {formatStars(spotlightApp.soSaoGithub)} sao
-                      GitHub
-                      {spotlightApp.starDelta && (
-                        <span className="text-emerald-400 font-semibold ml-1.5">
-                          ({spotlightApp.starDelta})
-                        </span>
-                      )}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-bold font-display text-primary tracking-tight">
+                          {spotlightApp.tenApp}
+                        </h2>
+                        {spotlightApp.isVerifiedFoss && (
+                          <span
+                            className="text-emerald-400"
+                            title="Mã nguồn mở đã xác minh minh bạch"
+                          >
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-mono text-muted">
+                        {spotlightApp.repoHandle} • ⭐ {formatStars(spotlightApp.soSaoGithub)} sao
+                        GitHub
+                        {spotlightApp.starDelta && (
+                          <span className="text-emerald-400 font-semibold ml-1.5">
+                            ({spotlightApp.starDelta})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-secondary leading-relaxed mt-1">
+                    {currentSpotlight.quote}
+                  </p>
+
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded bg-surface-elevated text-xs font-mono text-primary border border-border">
+                      {spotlightApp.phienBanMoiNhat} (Mới nhất)
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
+                      {spotlightApp.kienTruc?.join(' & ') || 'x64'}
+                    </span>
+                    {spotlightApp.kichThuocFile && (
+                      <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
+                        {spotlightApp.kichThuocFile}
+                      </span>
+                    )}
+                    <NhanTinCay score={spotlightApp.diemUyTin} size="sm" showLabel />
                   </div>
                 </div>
 
-                <p className="text-sm text-secondary leading-relaxed mt-1">
-                  {currentSpotlight.quote}
-                </p>
+                {/* Cột phải: CTA Cài đặt 1-Click / Đã cài & Phân tích (L-02) */}
+                <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
+                  {(() => {
+                    const spotlightTrangThai = layTrangThaiCaiDat(
+                      spotlightApp.id,
+                      spotlightApp.repoHandle,
+                    );
+                    const isInstalled = spotlightTrangThai.trangThai === 'DA_CAI_DAT';
+                    const isProcessing =
+                      spotlightTrangThai.trangThai === 'DANG_TAI' ||
+                      spotlightTrangThai.trangThai === 'XAC_MINH' ||
+                      spotlightTrangThai.trangThai === 'DANG_CAI_DAT';
 
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded bg-surface-elevated text-xs font-mono text-primary border border-border">
-                    {spotlightApp.phienBanMoiNhat} (Mới nhất)
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                    {spotlightApp.kienTruc?.join(' & ') || 'x64'}
-                  </span>
-                  {spotlightApp.kichThuocFile && (
-                    <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                      {spotlightApp.kichThuocFile}
-                    </span>
-                  )}
-                  <NhanTinCay score={spotlightApp.diemUyTin} size="sm" showLabel />
+                    return (
+                      <button
+                        onClick={() => openAppDetail(spotlightApp.id)}
+                        className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                          isInstalled
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+                            : isProcessing
+                              ? 'bg-accent-forge/80 text-white shadow-orange-950/30'
+                              : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/30'
+                        }`}
+                      >
+                        {isInstalled ? (
+                          <>
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                            <span>{spotlightTrangThai.label}</span>
+                          </>
+                        ) : isProcessing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>{spotlightTrangThai.label}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            <span>Cài Đặt 1-Click</span>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })()}
+
+                  <button
+                    onClick={() => openAppDetail(spotlightApp.id)}
+                    className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
+                  >
+                    <span>Xem chi tiết ứng dụng</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-muted" />
+                  </button>
                 </div>
               </div>
-
-              {/* Cột phải: CTA Cài đặt 1-Click / Đã cài & Phân tích (L-02) */}
-              <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
-                {(() => {
-                  const spotlightTrangThai = layTrangThaiCaiDat(
-                    spotlightApp.id,
-                    spotlightApp.repoHandle,
-                  );
-                  const isInstalled = spotlightTrangThai.trangThai === 'DA_CAI_DAT';
-                  const isProcessing =
-                    spotlightTrangThai.trangThai === 'DANG_TAI' ||
-                    spotlightTrangThai.trangThai === 'XAC_MINH' ||
-                    spotlightTrangThai.trangThai === 'DANG_CAI_DAT';
-
-                  return (
-                    <button
-                      onClick={() => openAppDetail(spotlightApp.id)}
-                      className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-                        isInstalled
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
-                          : isProcessing
-                            ? 'bg-accent-forge/80 text-white shadow-orange-950/30'
-                            : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/30'
-                      }`}
-                    >
-                      {isInstalled ? (
-                        <>
-                          <Check className="w-4 h-4 stroke-[2.5]" />
-                          <span>{spotlightTrangThai.label}</span>
-                        </>
-                      ) : isProcessing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>{spotlightTrangThai.label}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4" />
-                          <span>Cài Đặt 1-Click</span>
-                        </>
-                      )}
-                    </button>
-                  );
-                })()}
-
-                <button
-                  onClick={() => openAppDetail(spotlightApp.id)}
-                  className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
-                >
-                  <span>Xem chi tiết ứng dụng</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-muted" />
-                </button>
-              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </AsciiReveal>
       ) : null}
 
       {/* 2. THANH CÔNG CỤ LỌC & SẮP XẾP HỢP NHẤT (P3-05.2 & P3-05.3) */}
@@ -608,12 +619,19 @@ export const TrangKhamPha: React.FC = () => {
             ) : null}
           </div>
         ) : (
-          /* Lưới ứng dụng thật với hiệu ứng Sibling Stagger Wave */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {processedApps.map((app, index) => (
-              <TheUngDung key={app.id} app={app} staggerIndex={index} />
-            ))}
-          </div>
+          /* Lưới ứng dụng thật với hiệu ứng Sibling Stagger Wave kết hợp AsciiReveal Decode Wave */
+          <AsciiReveal
+            key={`${activeSort}-${activeCategory}-${timeWindow}`}
+            preset="dither"
+            duration="fast"
+            origin="top-left"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {processedApps.map((app, index) => (
+                <TheUngDung key={app.id} app={app} staggerIndex={index} />
+              ))}
+            </div>
+          </AsciiReveal>
         )}
       </section>
     </div>

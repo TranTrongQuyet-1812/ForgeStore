@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
-import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
+import { AsciiSkeleton, AsciiReveal } from '../thanh-phan/dung-chung/KhungXuongAscii';
 
 const CATEGORY_META: Record<
   string,
@@ -135,48 +135,51 @@ export const TrangDanhMuc: React.FC = () => {
           ))}
         </div>
       ) : displayedCategories.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {displayedCategories.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <div
-                key={cat.name}
-                onClick={() => openCategory(cat.name)}
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openCategory(cat.name);
-                  }
-                }}
-                className="tactile-card p-5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col justify-between min-h-[160px] group focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
-              >
-                <div className="flex items-start justify-between">
-                  <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center border ${cat.color} group-hover:scale-105 transition-transform duration-200 shadow-sm`}
-                  >
-                    <Icon className="w-5 h-5" />
+        <AsciiReveal preset="dither" duration="fast" origin="top-left">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {displayedCategories.map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <div
+                  key={cat.name}
+                  onClick={() => openCategory(cat.name)}
+                  tabIndex={0}
+                  data-ascii="surface"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openCategory(cat.name);
+                    }
+                  }}
+                  className="tactile-card p-5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col justify-between min-h-[160px] group focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
+                >
+                  <div className="flex items-start justify-between">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center border ${cat.color} group-hover:scale-105 transition-transform duration-200 shadow-sm`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-surface-elevated text-muted text-[11px] font-mono font-medium border border-border/50">
+                      {cat.count}
+                    </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-surface-elevated text-muted text-[11px] font-mono font-medium border border-border/50">
-                    {cat.count}
-                  </span>
-                </div>
 
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold font-display text-primary group-hover:text-accent-forge transition-colors line-clamp-1">
-                      {cat.name}
-                    </h3>
-                    <ArrowRight className="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold font-display text-primary group-hover:text-accent-forge transition-colors line-clamp-1">
+                        {cat.name}
+                      </h3>
+                      <ArrowRight className="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                    </div>
+                    <p className="text-[11px] text-secondary mt-1 line-clamp-2 leading-relaxed font-normal">
+                      {cat.desc}
+                    </p>
                   </div>
-                  <p className="text-[11px] text-secondary mt-1 line-clamp-2 leading-relaxed font-normal">
-                    {cat.desc}
-                  </p>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </AsciiReveal>
       ) : (
         <div className="tactile-card p-12 rounded-2xl flex flex-col items-center justify-center text-center gap-3">
           <PackageOpen className="w-10 h-10 text-muted" />

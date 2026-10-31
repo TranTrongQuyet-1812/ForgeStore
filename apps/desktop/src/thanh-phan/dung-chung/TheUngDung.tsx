@@ -49,6 +49,7 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
     <div
       role="article"
       tabIndex={0}
+      data-ascii="surface"
       aria-label={`Ứng dụng ${app.tenApp}`}
       onClick={() => openAppDetail(app.id)}
       onKeyDown={(e) => {

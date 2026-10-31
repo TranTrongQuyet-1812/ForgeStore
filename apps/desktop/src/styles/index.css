@@ -39,6 +39,8 @@ html {
   --ambient-glow: rgba(255, 158, 32, 0.03);
   --ascii-font: 'JetBrains Mono', ui-monospace, monospace;
   --ascii-accent: #ff9e20;
+  --ars-wave-color: #ff9e20;
+  --ars-speed: 1.6s;
 }
 
 .dark {
@@ -58,6 +60,8 @@ html {
   --ambient-glow: rgba(255, 158, 32, 0.04);
   --ascii-font: 'JetBrains Mono', ui-monospace, monospace;
   --ascii-accent: #ff9e20;
+  --ars-wave-color: #ff9e20;
+  --ars-speed: 1.6s;
 }
 
 @layer utilities {

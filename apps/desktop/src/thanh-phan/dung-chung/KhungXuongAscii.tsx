@@ -1,5 +1,5 @@
 import React from 'react';
-import { AsciiSkeleton } from 'ascii-reveal';
+import { AsciiSkeleton, AsciiReveal, type AsciiRevealProps } from 'ascii-reveal';
 
 interface KhungXuongCardProps {
   index?: number;
@@ -89,4 +89,4 @@ export const KhungXuongSpotlight: React.FC<{
   );
 };
 
-export { AsciiSkeleton };
+export { AsciiSkeleton, AsciiReveal, type AsciiRevealProps };
