@@ -622,16 +622,16 @@ export class UngDungService {
 
     try {
       const readme = await this.githubService.layReadme(owner, repo);
-      if (readme) {
-        const huongDan = trichXuatHuongDanCliBangQuyTac(readme);
-        return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
+      if (readme === null) {
+        this.logger.warn(`Repository [${owner}/${repo}] không có README.`);
+        return 'KHONG_CO_BAN_CAI';
       }
-      this.logger.warn(`Không lấy được README [${owner}/${repo}], giữ trạng thái hiện có nếu có.`);
+      const huongDan = trichXuatHuongDanCliBangQuyTac(readme);
+      return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
     } catch (error) {
       this.logger.warn(`Lỗi lấy README [${owner}/${repo}]: ${String(error)}`);
+      return ungDungHienTai?.trangThai || 'KHONG_CO_BAN_CAI';
     }
-
-    return ungDungHienTai?.trangThai || 'KHONG_CO_BAN_CAI';
   }
 
   /**

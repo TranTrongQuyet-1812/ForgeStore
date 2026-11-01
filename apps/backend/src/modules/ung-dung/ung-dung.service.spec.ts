@@ -1591,6 +1591,24 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       );
     });
 
+    it('ẩn app đã hiện nếu GitHub xác nhận README không tồn tại và app không có hướng dẫn CLI lưu sẵn', async () => {
+      cauHinhRepoChiCli('no-readme');
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        trangThai: 'HOAT_DONG',
+        phanTichAI: null,
+      });
+      mockGithubService.layReadme.mockResolvedValueOnce(null);
+
+      await service.dongBoRepo('owner', 'no-readme');
+
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ trangThai: 'KHONG_CO_BAN_CAI' }),
+          update: expect.objectContaining({ trangThai: 'KHONG_CO_BAN_CAI' }),
+        }),
+      );
+    });
+
     it('dongBoRepo gán trangThai = KHONG_CO_BAN_CAI khi repo không có file cài hợp lệ (VLC/RetroArch)', async () => {
       mockGithubService.layRepo.mockResolvedValueOnce({
         name: 'vlc',
