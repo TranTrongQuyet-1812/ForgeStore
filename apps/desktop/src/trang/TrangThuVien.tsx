@@ -1070,7 +1070,7 @@ export const TrangThuVien: React.FC = () => {
                         handleUninstallApp(app);
                       }}
                       className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-danger/10 hover:border-danger/30 text-muted hover:text-danger font-medium text-xs flex items-center gap-1.5 transition-colors"
-                      title="Xem lệnh gỡ cài đặt CLI"
+                      title="Xem lệnh gỡ cài đặt bằng dòng lệnh"
                     >
                       <Terminal className="w-3.5 h-3.5" />
                       <span>Lệnh Gỡ</span>

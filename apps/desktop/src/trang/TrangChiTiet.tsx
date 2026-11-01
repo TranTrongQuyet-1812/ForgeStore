@@ -1859,7 +1859,7 @@ export const TrangChiTiet: React.FC = () => {
 
                       <button
                         onClick={() => handleDownloadApk(asset)}
-                        className="btn-tactile px-3.5 py-1.5 rounded-lg bg-accent-ai hover:bg-accent-ai text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shrink-0"
+                        className="btn-tactile px-3.5 py-1.5 rounded-lg bg-accent-ai-solid hover:bg-accent-ai-solid/90 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shrink-0"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Tải về</span>
@@ -1943,7 +1943,7 @@ export const TrangChiTiet: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-accent-forge-text font-mono font-bold text-xs">
                   <Terminal className="w-4 h-4" />
-                  <span>PHÂN PHỐI QUA DÒNG LỆNH (CLI)</span>
+                  <span>CÀI BẰNG DÒNG LỆNH</span>
                 </div>
                 <button
                   onClick={handleToggleFavorite}
@@ -1983,7 +1983,7 @@ export const TrangChiTiet: React.FC = () => {
                 <div className="flex justify-between text-muted">
                   <span>Cách cài ưu tiên:</span>
                   <span className="text-accent-forge-text font-bold">
-                    {huongDanCli.cachCai[0]?.nhom || 'CLI'}
+                    {huongDanCli.cachCai[0]?.nhom || 'Dòng lệnh'}
                   </span>
                 </div>
               </div>
@@ -2015,7 +2015,7 @@ export const TrangChiTiet: React.FC = () => {
                     className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-black/40"
                   >
                     <Terminal className="w-4 h-4" />
-                    <span>Xem Hướng Dẫn Cài Đặt CLI</span>
+                    <span>Xem Hướng Dẫn Cài Bằng Dòng Lệnh</span>
                   </button>
                   <button
                     type="button"
@@ -2032,7 +2032,7 @@ export const TrangChiTiet: React.FC = () => {
                     ) : (
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     )}
-                    <span>Tôi đã cài qua CLI</span>
+                    <span>Tôi đã cài bằng dòng lệnh</span>
                   </button>
                 </div>
               )}
@@ -2092,7 +2092,7 @@ export const TrangChiTiet: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => apkAssets[0] && handleDownloadApk(apkAssets[0])}
-                  className="btn-tactile w-full h-12 rounded-xl bg-accent-ai hover:bg-accent-ai text-white font-display font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-black/20 transition-all cursor-pointer"
+                  className="btn-tactile w-full h-12 rounded-xl bg-accent-ai-solid hover:bg-accent-ai-solid/90 text-white font-display font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-black/20 transition-all cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   <span>Tải File APK (Android)</span>
@@ -2227,9 +2227,9 @@ export const TrangChiTiet: React.FC = () => {
                   effectiveStatus === 'DA_CAI_DAT'
                     ? 'bg-success-solid hover:bg-success-solid/90 text-white shadow-black/30'
                     : effectiveStatus === 'XAC_MINH'
-                      ? 'bg-warning-solid text-white cursor-wait'
+                      ? 'bg-warning-solid text-slate-950 cursor-wait'
                       : effectiveStatus === 'DANG_CAI_DAT'
-                        ? 'bg-accent-ai text-white cursor-wait'
+                        ? 'bg-accent-ai-solid text-white cursor-wait'
                         : effectiveStatus === 'DANG_TAI'
                           ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-default px-3'
                           : effectiveStatus === 'LOI'
@@ -2417,7 +2417,9 @@ export const TrangChiTiet: React.FC = () => {
                   title="Cuộn tới phần hướng dẫn cài đặt qua dòng lệnh"
                 >
                   <Terminal className="w-3.5 h-3.5 text-accent-forge-text" />
-                  <span>Hoặc cài qua dòng lệnh CLI ({huongDanCli.cachCai[0]?.nhom || 'CLI'})</span>
+                  <span>
+                    Hoặc cài bằng dòng lệnh ({huongDanCli.cachCai[0]?.nhom || 'dòng lệnh'})
+                  </span>
                 </button>
               )}
             </div>

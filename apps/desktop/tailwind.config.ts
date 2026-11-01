@@ -25,9 +25,10 @@ const config: Config = {
         warning: 'rgb(var(--color-warning) / <alpha-value>)',
         'accent-forge-text': 'rgb(var(--color-accent-forge-text) / <alpha-value>)',
         // Nền đặc (nút, chấm trạng thái): giữ nguyên ở cả hai giao diện
-        'success-solid': '#059669',
+        'success-solid': '#047857',
         'danger-solid': '#e11d48',
         'warning-solid': '#f59e0b',
+        'accent-ai-solid': '#2a7b81',
       },
     },
   },

@@ -87,7 +87,7 @@ export const TrangDanhMuc: React.FC = () => {
       return {
         name: c.ten,
         desc: meta.desc,
-        count: `${c.soLuong} app${c.soLuong > 1 ? 's' : ''}`,
+        count: `${c.soLuong} ứng dụng`,
         icon: meta.icon,
         color: meta.color,
       };

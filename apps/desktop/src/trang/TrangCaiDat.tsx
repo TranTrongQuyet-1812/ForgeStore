@@ -236,7 +236,7 @@ export const TrangCaiDat: React.FC = () => {
         <div>
           <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
             <Terminal className="w-4 h-4 text-accent-forge-text" />
-            <span>Trình dòng lệnh (Terminal cho ứng dụng CLI)</span>
+            <span>Trình dòng lệnh (Terminal) cho ứng dụng cài bằng dòng lệnh</span>
           </h3>
           <p className="text-xs text-secondary mt-1">
             Lựa chọn ứng dụng Terminal và thư mục làm việc mặc định khi nhấn "Mở Terminal" tại trang
@@ -390,7 +390,7 @@ export const TrangCaiDat: React.FC = () => {
               className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all ${
                 downloadSize === 0
                   ? 'bg-surface border border-border text-muted cursor-not-allowed'
-                  : 'bg-danger/90 hover:bg-danger-solid/90 text-white'
+                  : 'bg-danger-solid hover:bg-danger-solid/90 text-white'
               }`}
             >
               <Trash2 className={`w-3.5 h-3.5 ${isCleaning ? 'animate-spin' : ''}`} />

@@ -313,7 +313,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
         <div
           role="listbox"
           aria-label="Kết quả tìm kiếm"
-          className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl bg-surface/98 backdrop-blur-md border border-border shadow-2xl overflow-hidden flex flex-col animate-fade-in text-xs tactile-card"
+          className="absolute -left-[80px] -right-[80px] top-full mt-2 z-50 rounded-2xl bg-surface/98 backdrop-blur-md border border-border shadow-2xl overflow-hidden flex flex-col animate-fade-in text-xs tactile-card"
         >
           <div className="p-3 max-h-[440px] overflow-y-auto no-scrollbar flex flex-col gap-2">
             {/* Nhánh A: Phát hiện đường dẫn GitHub (Paste & Play) */}
