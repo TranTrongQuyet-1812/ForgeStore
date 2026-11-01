@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { layCapNhatLuuTru, taoMapTrangThaiLuuTru } from './day.core';
+import {
+  layBanDichCoKyHieu,
+  layCapNhatLuuTru,
+  taoMapBanDichCoKyHieu,
+  taoMapTrangThaiLuuTru,
+} from './day.core';
+import { taoDongChoDich } from './data-repo.core';
+import {
+  goKhungGiuNguyen,
+  type DoanDichReadme,
+} from '../../modules/ai/translation/tien-ich/readme-markdown-processor.util';
+import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
 describe('day.core', () => {
   it('đặt true cho repo archived và false cho repo được báo đang hoạt động', () => {
@@ -15,5 +26,85 @@ describe('day.core', () => {
   it('không thay đổi cờ nếu không truyền báo cáo hoặc repo không có trong báo cáo', () => {
     expect(layCapNhatLuuTru('owner/repo')).toEqual({});
     expect(layCapNhatLuuTru('owner/repo', new Map())).toEqual({});
+  });
+});
+
+describe('bản dịch có ký hiệu giữ chỗ cho bộ nhớ dịch chung', () => {
+  const cao: BanGhiDaCao = {
+    repo: 'owner/repo',
+    lo: 'dich-g01-l001',
+    caoLuc: '2026-10-31T00:00:00.000Z',
+    sao: 1,
+    moTaEn: null,
+    readmeEn: '# Title\n\nSee the [guide](https://example.com/guide) for details.\n',
+    readmeSha: null,
+    etagRepo: null,
+    etagReleases: null,
+    etagReadme: null,
+  };
+
+  function taoDaKiem(viCoKyHieu: Array<string | null>): DongDaKiem {
+    const doanNguon = taoDongChoDich(cao).doan;
+    return {
+      repo: cao.repo,
+      lo: cao.lo,
+      moTaEn: null,
+      moTaVi: null,
+      readmeSha: null,
+      etagRepo: null,
+      etagReleases: null,
+      etagReadme: null,
+      doan: doanNguon.map((doan, index) => ({
+        maBam: doan.maBam,
+        goc: doan.vanBanDaChe,
+        dich: doan.canDich
+          ? goKhungGiuNguyen(
+              { ...doan, khungGiuNguyen: doan.khungGiuNguyen ?? {} } as unknown as DoanDichReadme,
+              viCoKyHieu[index] ?? '',
+            )
+          : doan.vanBanDaChe,
+      })),
+      readmeVi: null,
+      nguon: 'test',
+    } as DongDaKiem;
+  }
+
+  function banDichMau(): Array<string | null> {
+    return taoDongChoDich(cao).doan.map((doan) =>
+      doan.canDich
+        ? doan.vanBanDaChe.replace('See the', 'Xem').replace('for details', 'để biết thêm')
+        : null,
+    );
+  }
+
+  it('trả về bản dịch còn nguyên ký hiệu giữ chỗ khi tháo ra khớp bản đã kiểm', () => {
+    const vi = banDichMau();
+    const ketQua = layBanDichCoKyHieu(cao, taoDaKiem(vi), vi);
+    const coKyHieu = [...ketQua.values()].some((giaTri) => /⟦C\d+⟧/.test(giaTri));
+
+    expect(ketQua.size).toBeGreaterThan(0);
+    expect(coKyHieu).toBe(true);
+  });
+
+  it('dừng nếu bản dịch có ký hiệu không khớp bản đã kiểm', () => {
+    const vi = banDichMau();
+    const daKiem = taoDaKiem(vi);
+    const doanLech = daKiem.doan.findIndex((doan) => doan.dich !== doan.goc);
+    daKiem.doan[doanLech]!.dich = 'một bản dịch khác hẳn';
+
+    expect(() => layBanDichCoKyHieu(cao, daKiem, vi)).toThrow(/không khớp/);
+  });
+
+  it('dừng nếu thiếu bản dịch có ký hiệu của repo', () => {
+    const vi = banDichMau();
+
+    expect(() => layBanDichCoKyHieu(cao, taoDaKiem(vi), undefined)).toThrow(/Thiếu hoặc lệch/);
+  });
+
+  it('gom bản dịch theo repo và để nguồn sau ghi đè nguồn trước', () => {
+    const dong = (vi: string) => ({ repo: 'Owner/Repo', doan: [{ vi }] }) as unknown as DongDich;
+    const map = taoMapBanDichCoKyHieu([[dong('cũ')], [dong('mới')]]);
+
+    expect(map.get('owner/repo')).toEqual(['mới']);
   });
 });

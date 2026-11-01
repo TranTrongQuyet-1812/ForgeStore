@@ -23,7 +23,7 @@
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -62,7 +62,12 @@ import {
 } from './kiem-tuoi.core';
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
-import { layCapNhatLuuTru, taoMapTrangThaiLuuTru } from './day.core';
+import {
+  layBanDichCoKyHieu,
+  layCapNhatLuuTru,
+  taoMapBanDichCoKyHieu,
+  taoMapTrangThaiLuuTru,
+} from './day.core';
 
 const NHAN_MO_HINH = 'antigravity/gemini-3.8-flash';
 
@@ -1352,10 +1357,70 @@ async function lenhDoiChieu(): Promise<void> {
   });
 }
 
+/** Đọc bản dịch dạng có ký hiệu ⟦Cn⟧ của cả kho: Nhom_01..09, rồi Dot_Va, rồi Dot_Va2 ghi đè. */
+function docBanDichCoKyHieu(thuMucGoc: string): Map<string, Array<string | null>> {
+  const cacThuMuc = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => path.join(thuMucGoc, `Nhom_0${n}`, THU_MUC.daDich)),
+    path.join(thuMucGoc, 'Dot_Va', THU_MUC.daDich),
+    path.join(thuMucGoc, 'Dot_Va2', THU_MUC.daDich),
+  ];
+  return taoMapBanDichCoKyHieu(
+    cacThuMuc.map((thuMuc) =>
+      layTepLo(thuMuc, /\.jsonl$/).flatMap((tep) => docJsonl<DongDich>(path.join(thuMuc, tep))),
+    ),
+  );
+}
+
+type PrismaDay = import('../../modules/prisma/prisma.service').PrismaService;
+
+/** Ghi bộ nhớ dịch chung đúng dạng backend đọc được (có ký hiệu giữ chỗ), không ghi đè mục đã có. */
+async function ghiBoNhoDichChung(
+  prisma: PrismaDay,
+  r: DongDaKiem,
+  che: Map<string, string>,
+  nhan: string,
+): Promise<void> {
+  for (const d of r.doan) {
+    const doanDich = che.get(d.maBam);
+    if (!doanDich) continue;
+    await prisma.boNhoDichChung.upsert({
+      where: { maBam_ngonNgu: { maBam: d.maBam, ngonNgu: 'vi' } },
+      create: { maBam: d.maBam, ngonNgu: 'vi', doanGoc: d.goc, doanDich, moHinhDich: nhan },
+      update: {},
+    });
+  }
+}
+
+/** Sửa các mục đã ghi sai dạng (không có ký hiệu) do lệnh day cũ; chỉ động vào mục có nhãn antigravity. */
+async function suaBoNhoDichChung(prisma: PrismaDay, che: Map<string, string>): Promise<number> {
+  let soDong = 0;
+  for (const [maBam, doanDich] of che) {
+    const kq = await prisma.boNhoDichChung.updateMany({
+      where: {
+        maBam,
+        ngonNgu: 'vi',
+        moHinhDich: { startsWith: 'antigravity/' },
+        NOT: { doanDich: { contains: '⟦C' } },
+      },
+      data: { doanDich },
+    });
+    soDong += kq.count;
+  }
+  return soDong;
+}
+
 async function lenhDay(): Promise<void> {
   const lo = batBuocLo();
   const ghi = coCo('ghi');
   const toiDa = Number(layThamSo('toi-da') ?? '20');
+  const thuMucNguonChe = layThamSo('nguon-che');
+  const suaBoNho = coCo('sua-bo-nho');
+  if (ghi && !thuMucNguonChe)
+    throw new Error(
+      'Cần --nguon-che <Dich_Hang_Loat> để ghi bộ nhớ dịch đúng dạng có ký hiệu ⟦Cn⟧.',
+    );
+  const viTheoRepo = thuMucNguonChe ? docBanDichCoKyHieu(path.resolve(thuMucNguonChe)) : undefined;
+  const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
   const fileLuuTru = layThamSo('luu-tru');
   const trangThaiLuuTru = fileLuuTru
     ? taoMapTrangThaiLuuTru(
@@ -1371,7 +1436,11 @@ async function lenhDay(): Promise<void> {
   );
   const chiRepo = layThamSo('repo')?.toLowerCase();
   const cho = dsKiem
-    .filter((r) => !daDay.has(r.repo) && (!chiRepo || r.repo.toLowerCase() === chiRepo))
+    .filter(
+      (r) =>
+        (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
+        (!chiRepo || r.repo.toLowerCase() === chiRepo),
+    )
     .slice(0, toiDa);
   console.info(
     `${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
@@ -1409,6 +1478,20 @@ async function lenhDay(): Promise<void> {
           ...chiTiet,
         });
       try {
+        const caoRow = dsCao.find((c) => c.repo.toLowerCase() === r.repo.toLowerCase());
+        const che =
+          viTheoRepo && caoRow
+            ? layBanDichCoKyHieu(caoRow, r, viTheoRepo.get(r.repo.toLowerCase()))
+            : undefined;
+        if ((ghi || suaBoNho) && !che)
+          throw new Error('Thiếu --nguon-che hoặc 01_da_cao cho repo này, không ghi bộ nhớ dịch.');
+        if (suaBoNho) {
+          const soMuc = ghi ? await suaBoNhoDichChung(prisma, che!) : 0;
+          console.info(
+            `${ghi ? '✓' : '[thử]'} ${r.repo}: ${che!.size} đoạn có ký hiệu${ghi ? `, sửa ${soMuc} mục bộ nhớ dịch` : ''}`,
+          );
+          continue;
+        }
         if (!ghi) {
           console.info(
             `[thử] ${r.repo}: sẽ dongBoRepo, ghi mô tả ${r.moTaVi ? 'có' : 'không'}, ${r.doan.length} đoạn vào bộ nhớ, ban_dich_readme ${r.readmeVi ? 'có' : 'không'}`,
@@ -1442,19 +1525,7 @@ async function lenhDay(): Promise<void> {
         }
         let readme = 'khong_co';
         if (r.readmeVi && r.readmeSha) {
-          for (const d of r.doan) {
-            await prisma.boNhoDichChung.upsert({
-              where: { maBam_ngonNgu: { maBam: d.maBam, ngonNgu: 'vi' } },
-              create: {
-                maBam: d.maBam,
-                ngonNgu: 'vi',
-                doanGoc: d.goc,
-                doanDich: d.dich,
-                moHinhDich: nhan,
-              },
-              update: {},
-            });
-          }
+          await ghiBoNhoDichChung(prisma, r, che!, nhan);
           await prisma.banDichReadme.upsert({
             where: { maUngDung_ngonNgu: { maUngDung: ud.maUngDung, ngonNgu: 'vi' } },
             create: {
