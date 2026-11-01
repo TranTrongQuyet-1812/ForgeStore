@@ -74,8 +74,10 @@ import { taoDieuKienNenTang } from './tien-ich/dieu-kien-nen-tang.util';
  * Phiên bản 3 (P3B-25): bộ bóc tách nhận thêm hậu tố `@latest`, dấu nhắc shell, `py -m pip`, `uv tool`,
  * nên các dấu "không có hướng dẫn" ghi từ phiên bản 2 (VD: README ghi `npm install -g x@latest`) được tính lại.
  * Phiên bản 4 (P3B-25): quy tắc chạy trên toàn README, không còn chờ tìm được mục "Cài đặt" (tiktoken, sharp...).
+ * Phiên bản 5 (P3B-25.12): thêm bước quét cả README nhưng chỉ nhận gói khớp tên repo (pandas, fzf...),
+ * nên các dấu "không có hướng dẫn" ghi từ phiên bản 4 được tính lại.
  */
-export const PHIEN_BAN_BOC_TACH_CLI = 4;
+export const PHIEN_BAN_BOC_TACH_CLI = 5;
 
 export function daCoKetQuaBocTachCli(hd: unknown): boolean {
   if (hd === null || hd === undefined) return false;
