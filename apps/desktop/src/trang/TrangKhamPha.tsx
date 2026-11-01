@@ -675,13 +675,24 @@ export const TrangKhamPha: React.FC = () => {
                 const luoi = (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {trang.map((app, index) => (
-                      <TheUngDung key={app.id} app={app} staggerIndex={index} />
+                      <TheUngDung
+                        key={app.id}
+                        app={app}
+                        // Chỉ trang đầu có hiệu ứng so le; các lượt tải thêm hiện thẳng cho khỏi giật
+                        staggerIndex={indexTrang === 0 ? index : undefined}
+                      />
                     ))}
                   </div>
                 );
 
                 return indexTrang === 0 ? (
-                  <AsciiReveal preset="dither" duration="fast" origin="top-left" key="trang-dau">
+                  // key theo bộ lọc để hiệu ứng giải mã phát lại mỗi khi đổi danh mục, sắp xếp hoặc khung thời gian
+                  <AsciiReveal
+                    preset="dither"
+                    duration="fast"
+                    origin="top-left"
+                    key={`trang-dau-${activeSort}-${activeCategory}-${timeWindow}`}
+                  >
                     {luoi}
                   </AsciiReveal>
                 ) : (
