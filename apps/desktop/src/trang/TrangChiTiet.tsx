@@ -44,6 +44,7 @@ import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
 import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { ApiError } from '../dich-vu/api/api-client';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
+import { layNhanHeDieuHanh, layNhanNhomCachCai } from './hien-thi-cach-cai.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
@@ -1539,7 +1540,7 @@ export const TrangChiTiet: React.FC = () => {
                           <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
                         )}
                         <span>
-                          {cach.nhom} • {cach.ten}
+                          {layNhanNhomCachCai(cach.nhom)} • {cach.ten}
                         </span>
                       </button>
                     );
@@ -1572,10 +1573,10 @@ export const TrangChiTiet: React.FC = () => {
                             {currentMethod.ten}
                           </span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-accent-forge-text font-bold uppercase">
-                            {currentMethod.nhom}
+                            {layNhanNhomCachCai(currentMethod.nhom)}
                           </span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-muted">
-                            Hệ điều hành: {currentMethod.heDieuHanh}
+                            Hệ điều hành: {layNhanHeDieuHanh(currentMethod.heDieuHanh)}
                           </span>
                         </div>
                       </div>
@@ -1984,7 +1985,9 @@ export const TrangChiTiet: React.FC = () => {
                 <div className="flex justify-between text-muted">
                   <span>Cách cài ưu tiên:</span>
                   <span className="text-accent-forge-text font-bold">
-                    {huongDanCli.cachCai[0]?.nhom || 'Dòng lệnh'}
+                    {huongDanCli.cachCai[0]
+                      ? layNhanNhomCachCai(huongDanCli.cachCai[0].nhom)
+                      : 'Dòng lệnh'}
                   </span>
                 </div>
               </div>
@@ -2419,7 +2422,11 @@ export const TrangChiTiet: React.FC = () => {
                 >
                   <Terminal className="w-3.5 h-3.5 text-accent-forge-text" />
                   <span>
-                    Hoặc cài bằng dòng lệnh ({huongDanCli.cachCai[0]?.nhom || 'dòng lệnh'})
+                    Hoặc cài bằng dòng lệnh (
+                    {huongDanCli.cachCai[0]
+                      ? layNhanNhomCachCai(huongDanCli.cachCai[0].nhom)
+                      : 'dòng lệnh'}
+                    )
                   </span>
                 </button>
               )}
