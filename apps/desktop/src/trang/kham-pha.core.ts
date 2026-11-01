@@ -14,3 +14,17 @@ export function gopTrangUngDung<T extends { maUngDung: string }>(trang: TrangCoD
     }),
   );
 }
+
+interface DuLieuPhanTrang<TTrang, TThamSo> {
+  pages: TTrang[];
+  pageParams: TThamSo[];
+}
+
+export function rutVeTrangDau<TTrang, TThamSo>(
+  data: DuLieuPhanTrang<TTrang, TThamSo> | undefined,
+): DuLieuPhanTrang<TTrang, TThamSo> | undefined {
+  if (!data || data.pages.length <= 1) return data;
+
+  // Giữ trang đầu và tham số tương ứng để bộ lọc đã dùng trước đó không mở lại ở trang cũ.
+  return { ...data, pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) };
+}

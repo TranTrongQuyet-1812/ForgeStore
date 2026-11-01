@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Star,
   Clock,
@@ -23,8 +23,9 @@ import {
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
-import type { UngDungTomTatDto } from '@forgestore/types';
-import { gopTrangUngDung } from './kham-pha.core';
+import type { InfiniteData } from '@tanstack/react-query';
+import type { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
+import { gopTrangUngDung, rutVeTrangDau } from './kham-pha.core';
 
 type SpotlightMode = 'trending' | 'curated' | 'security';
 type TimeWindow = 'today' | 'week' | 'month';
@@ -40,6 +41,7 @@ interface SpotlightConfig {
 }
 
 export const TrangKhamPha: React.FC = () => {
+  const queryClient = useQueryClient();
   const { openAppDetail, selectedCategory, setSelectedCategory } = useDieuHuongStore();
   const { layTrangThaiCaiDat } = useDeviceInstalledApps();
   const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
@@ -49,6 +51,18 @@ export const TrangKhamPha: React.FC = () => {
   const categoryScrollRef = useRef<HTMLDivElement>(null);
   const diemCuoiDanhSachRef = useRef<HTMLDivElement>(null);
   const dangTaiTrangKeRef = useRef(false);
+
+  const doiBoLoc = useCallback(
+    (capNhat: () => void) => {
+      // Thu gọn cache không hoạt động để khi quay lại bộ lọc cũ danh sách luôn bắt đầu từ trang đầu.
+      queryClient.setQueriesData<InfiniteData<TrangKetQua<UngDungTomTatDto>, number>>(
+        { queryKey: ['store-apps'], type: 'inactive' },
+        (data) => rutVeTrangDau(data),
+      );
+      capNhat();
+    },
+    [queryClient],
+  );
 
   // Cho phép dùng con lăn chuột (mouse wheel) cuộn ngang dải danh mục mượt mà
   useEffect(() => {
@@ -78,10 +92,10 @@ export const TrangKhamPha: React.FC = () => {
   // Đồng bộ danh mục khi được chọn từ TrangDanhMuc
   useEffect(() => {
     if (selectedCategory) {
-      setActiveCategory(selectedCategory);
+      doiBoLoc(() => setActiveCategory(selectedCategory));
       setSelectedCategory(null);
     }
-  }, [selectedCategory, setSelectedCategory]);
+  }, [selectedCategory, setSelectedCategory, doiBoLoc]);
 
   // Đấu nối TanStack Query: Nạp danh sách ứng dụng sống từ Supabase Backend (P3-05.1 & B2)
   const {
@@ -174,9 +188,9 @@ export const TrangKhamPha: React.FC = () => {
       activeCategory !== 'Tất cả' &&
       !serverCategories.some((c) => c.ten === activeCategory)
     ) {
-      setActiveCategory('Tất cả');
+      doiBoLoc(() => setActiveCategory('Tất cả'));
     }
-  }, [serverCategories, activeCategory]);
+  }, [serverCategories, activeCategory, doiBoLoc]);
 
   // Chuyển đổi dữ liệu backend DTO sang AppCardData, hoàn toàn từ dữ liệu sống (B3)
   const liveAppPages = useMemo(() => {
@@ -457,7 +471,7 @@ export const TrangKhamPha: React.FC = () => {
           <div className="shrink-0 flex items-center gap-2 max-w-full overflow-x-auto no-scrollbar">
             <div className="shrink-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-medium">
               <button
-                onClick={() => setActiveSort('trending')}
+                onClick={() => doiBoLoc(() => setActiveSort('trending'))}
                 className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'trending'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
@@ -471,7 +485,7 @@ export const TrangKhamPha: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveSort('stars')}
+                onClick={() => doiBoLoc(() => setActiveSort('stars'))}
                 className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'stars'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
@@ -485,7 +499,7 @@ export const TrangKhamPha: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setActiveSort('recent')}
+                onClick={() => doiBoLoc(() => setActiveSort('recent'))}
                 className={`btn-tactile shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
                   activeSort === 'recent'
                     ? 'bg-surface-elevated text-primary font-semibold shadow-sm'
@@ -503,7 +517,7 @@ export const TrangKhamPha: React.FC = () => {
             {activeSort === 'trending' && (
               <div className="shrink-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-border text-xs font-mono animate-fade-in">
                 <button
-                  onClick={() => setTimeWindow('today')}
+                  onClick={() => doiBoLoc(() => setTimeWindow('today'))}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'today'
                       ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
@@ -513,7 +527,7 @@ export const TrangKhamPha: React.FC = () => {
                   Hôm nay
                 </button>
                 <button
-                  onClick={() => setTimeWindow('week')}
+                  onClick={() => doiBoLoc(() => setTimeWindow('week'))}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'week'
                       ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
@@ -523,7 +537,7 @@ export const TrangKhamPha: React.FC = () => {
                   Tuần này
                 </button>
                 <button
-                  onClick={() => setTimeWindow('month')}
+                  onClick={() => doiBoLoc(() => setTimeWindow('month'))}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'month'
                       ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
@@ -546,7 +560,7 @@ export const TrangKhamPha: React.FC = () => {
               return (
                 <button
                   key={category.ten}
-                  onClick={() => setActiveCategory(category.ten)}
+                  onClick={() => doiBoLoc(() => setActiveCategory(category.ten))}
                   className={`btn-tactile px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-all flex items-center gap-2 outline-none ${
                     isActive
                       ? 'bg-surface-elevated text-primary font-bold shadow-xs border border-border-focus'
@@ -630,7 +644,7 @@ export const TrangKhamPha: React.FC = () => {
               <div className="flex items-center gap-2 mt-2">
                 {timeWindow !== 'month' && (
                   <button
-                    onClick={() => setTimeWindow('month')}
+                    onClick={() => doiBoLoc(() => setTimeWindow('month'))}
                     className="btn-tactile px-3 py-1.5 rounded-lg bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border"
                   >
                     Xem trong tháng này
@@ -638,7 +652,7 @@ export const TrangKhamPha: React.FC = () => {
                 )}
                 {activeCategory !== 'Tất cả' && (
                   <button
-                    onClick={() => setActiveCategory('Tất cả')}
+                    onClick={() => doiBoLoc(() => setActiveCategory('Tất cả'))}
                     className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge text-on-accent text-xs font-semibold"
                   >
                     Xem tất cả danh mục
@@ -647,7 +661,7 @@ export const TrangKhamPha: React.FC = () => {
               </div>
             ) : activeCategory !== 'Tất cả' ? (
               <button
-                onClick={() => setActiveCategory('Tất cả')}
+                onClick={() => doiBoLoc(() => setActiveCategory('Tất cả'))}
                 className="btn-tactile mt-2 px-4 py-1.5 rounded-lg bg-accent-forge text-on-accent text-xs font-semibold"
               >
                 Xem tất cả ứng dụng
