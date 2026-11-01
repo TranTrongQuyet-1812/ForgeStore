@@ -101,6 +101,14 @@ describe('bản dịch có ký hiệu giữ chỗ cho bộ nhớ dịch chung', 
     expect(() => layBanDichCoKyHieu(cao, taoDaKiem(vi), undefined)).toThrow(/Thiếu hoặc lệch/);
   });
 
+  it('thêm bản dịch mang tên mới cho repo đã đổi tên', () => {
+    const dong = { repo: 'old/Repo', doan: [{ vi: 'cũ' }] } as unknown as DongDich;
+    const map = taoMapBanDichCoKyHieu([[dong]], [{ tenCu: 'old/repo', tenMoi: 'new/repo' }]);
+
+    expect(map.get('new/repo')).toEqual(['cũ']);
+    expect(map.get('old/repo')).toEqual(['cũ']);
+  });
+
   it('gom bản dịch theo repo và để nguồn sau ghi đè nguồn trước', () => {
     const dong = (vi: string) => ({ repo: 'Owner/Repo', doan: [{ vi }] }) as unknown as DongDich;
     const map = taoMapBanDichCoKyHieu([[dong('cũ')], [dong('mới')]]);

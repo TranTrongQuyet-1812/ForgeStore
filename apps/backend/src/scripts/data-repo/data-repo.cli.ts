@@ -23,7 +23,7 @@
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -1358,7 +1358,10 @@ async function lenhDoiChieu(): Promise<void> {
 }
 
 /** Đọc bản dịch dạng có ký hiệu ⟦Cn⟧ của cả kho: Nhom_01..09, rồi Dot_Va, rồi Dot_Va2 ghi đè. */
-function docBanDichCoKyHieu(thuMucGoc: string): Map<string, Array<string | null>> {
+function docBanDichCoKyHieu(
+  thuMucGoc: string,
+  doiTen: DoiTenRepo[],
+): Map<string, Array<string | null>> {
   const cacThuMuc = [
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => path.join(thuMucGoc, `Nhom_0${n}`, THU_MUC.daDich)),
     path.join(thuMucGoc, 'Dot_Va', THU_MUC.daDich),
@@ -1368,6 +1371,7 @@ function docBanDichCoKyHieu(thuMucGoc: string): Map<string, Array<string | null>
     cacThuMuc.map((thuMuc) =>
       layTepLo(thuMuc, /\.jsonl$/).flatMap((tep) => docJsonl<DongDich>(path.join(thuMuc, tep))),
     ),
+    doiTen,
   );
 }
 
@@ -1419,7 +1423,9 @@ async function lenhDay(): Promise<void> {
     throw new Error(
       'Cần --nguon-che <Dich_Hang_Loat> để ghi bộ nhớ dịch đúng dạng có ký hiệu ⟦Cn⟧.',
     );
-  const viTheoRepo = thuMucNguonChe ? docBanDichCoKyHieu(path.resolve(thuMucNguonChe)) : undefined;
+  const viTheoRepo = thuMucNguonChe
+    ? docBanDichCoKyHieu(path.resolve(thuMucNguonChe), docDanhSachDoiTenTep(layThamSo('doi-ten')))
+    : undefined;
   const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
   const fileLuuTru = layThamSo('luu-tru');
   const trangThaiLuuTru = fileLuuTru
