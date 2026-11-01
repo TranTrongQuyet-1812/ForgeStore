@@ -523,6 +523,37 @@ winget install --id bad; rm -rf / -e
       // Lệnh bị loại hoặc không có trinhQuanLy/tenGoi hợp lệ
       expect(res?.cachCai.some((c) => c.tenGoi === 'bad; rm -rf /')).toBe(false);
     });
+
+    it('nhận tag phiên bản, gói scope, các dạng pip/uv và dấu nhắc shell', () => {
+      const mau = [
+        ['npm install -g openclaw@latest --allow-scripts=openclaw', 'npm', 'openclaw'],
+        ['npm install -g @scope/pkg@1.2.3', 'npm', '@scope/pkg'],
+        ['uv tool install ruff@latest', 'pip', 'ruff'],
+        ['> winget install MoeruAI.AIRI', 'winget', 'MoeruAI.AIRI'],
+        ['python -m pip install nanobot-ai', 'pip', 'nanobot-ai'],
+        ['$ npm install -g pnpm@latest', 'npm', 'pnpm'],
+        ['PS C:\\Users\\dev> pipx install ruff@next', 'pip', 'ruff'],
+        ['py -m pip install black@1.2.3', 'pip', 'black'],
+      ];
+      for (const [lenh, trinhQuanLy, tenGoi] of mau) {
+        const readme = `## Installation\n\`\`\`bash\n${lenh}\n\`\`\``;
+        const res = trichXuatHuongDanCliBangQuyTac(readme);
+        expect(res?.cachCai.map(({ trinhQuanLy: pm, tenGoi: pkg }) => `${pm}:${pkg}`)).toContain(
+          `${trinhQuanLy}:${tenGoi}`,
+        );
+      }
+    });
+
+    it('không cho cú pháp tag làm yếu chốt chặn lệnh nguy hiểm hoặc tên gói sai', () => {
+      const readme = `## Installation
+\`\`\`bash
+npm install -g openclaw@latest; rm -rf /
+npm install -g openclaw@latest$(whoami)
+npm install -g openclaw@bad tag
+\`\`\``;
+      const res = trichXuatHuongDanCliBangQuyTac(readme);
+      expect(res?.cachCai.some((c) => c.tenGoi === 'openclaw')).toBe(false);
+    });
   });
   describe('Dấu nhắc shell trong README (lỗi ripgrep)', () => {
     it('boDauNhacShell bỏ $, >, %, PS> nhưng giữ nguyên lệnh sạch', () => {

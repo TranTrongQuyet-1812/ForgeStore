@@ -372,6 +372,9 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       mockGithubService.layRepo.mockResolvedValue(mockRepo);
       mockGithubService.layDanhSachRelease.mockResolvedValue(mockReleases);
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '## Installation\n```bash\nnpm install -g rustdesk-cli\n```',
+      );
 
       const mockCreatedApp = {
         maUngDung: 'app-uuid-rustdesk',
@@ -455,12 +458,14 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
             nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
             danhMucChinh: 'Mạng & Giao tiếp',
             tenGoiAndroid: 'com.carriez.rustdesk',
+            trangThai: 'HOAT_DONG',
           }),
         }),
       );
 
       // Bản nháp draft 102 KHÔNG được đưa vào upsert
       expect(mockPrisma.banPhatHanh.upsert).toHaveBeenCalledTimes(1);
+      expect(mockGithubService.layReadme).not.toHaveBeenCalled();
 
       // Xác nhận xóa cache sau khi đồng bộ
       expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith(service.CACHE_KEY_LIST);
@@ -1422,6 +1427,34 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         }),
       );
     });
+
+    it('dán link repo chỉ có lệnh cài gọi dongBoRepo mà không cần cờ riêng', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce(null);
+      mockGithubService.layRepo.mockResolvedValueOnce({ full_name: 'owner/cli-only' });
+      mockGithubService.layDanhSachRelease.mockResolvedValueOnce([]);
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '## Installation\n```bash\nnpm install -g cli-only@latest\n```',
+      );
+      vi.spyOn(service, 'dongBoRepo').mockResolvedValueOnce({
+        maUngDung: 'cli-only-id',
+        tenRepoDayDu: 'owner/cli-only',
+      } as unknown as never);
+      vi.spyOn(service, 'phanTichUngDung').mockResolvedValueOnce(undefined as unknown as never);
+      vi.spyOn(service, 'layChiTietApp').mockResolvedValueOnce({
+        maUngDung: 'cli-only-id',
+        tenRepoDayDu: 'owner/cli-only',
+        huongDanCaiDat: {
+          cachCai: [{ nhom: 'NPM', trinhQuanLy: 'npm', tenGoi: 'cli-only', buoc: [] }],
+        },
+      } as unknown as never);
+
+      const result = await service.kiemDinhVaNapRepo({
+        urlRepo: 'https://github.com/owner/cli-only',
+      });
+
+      expect(service.dongBoRepo).toHaveBeenCalledWith('owner', 'cli-only');
+      expect(result.chiCoHuongDanCli).toBe(true);
+    });
   });
 
   describe('layDanhSachDanhMuc (K3)', () => {
@@ -1477,6 +1510,87 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
   });
 
   describe('Xử lý app không có file cài đặt (L1)', () => {
+    const cauHinhRepoChiCli = (ten: string) => {
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        name: ten,
+        full_name: `owner/${ten}`,
+        owner: { login: 'owner', avatar_url: null },
+        html_url: `https://github.com/owner/${ten}`,
+        description: 'A CLI tool',
+        stargazers_count: 10,
+        forks_count: 1,
+        license: null,
+        language: 'TypeScript',
+        topics: [],
+      });
+      mockGithubService.layDanhSachRelease.mockResolvedValueOnce([]);
+      mockPrisma.ungDung.upsert.mockResolvedValueOnce({
+        maUngDung: 'cli-app-id',
+        tenRepoDayDu: `owner/${ten}`,
+        trangThai: 'HOAT_DONG',
+      });
+      vi.spyOn(service, 'layChiTietApp').mockResolvedValueOnce({
+        maUngDung: 'cli-app-id',
+        tenRepoDayDu: `owner/${ten}`,
+        trangThai: 'HOAT_DONG',
+      } as unknown as never);
+    };
+
+    it('hiện repo chỉ có lệnh cài khi dongBoRepo được gọi không kèm cờ', async () => {
+      cauHinhRepoChiCli('cli-tool');
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce(null);
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '## Installation\n```bash\nnpm install -g cli-tool@latest\n```',
+      );
+
+      await service.dongBoRepo('owner', 'cli-tool');
+
+      expect(mockGithubService.layReadme).toHaveBeenCalledWith('owner', 'cli-tool');
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ trangThai: 'HOAT_DONG' }),
+          update: expect.objectContaining({ trangThai: 'HOAT_DONG' }),
+        }),
+      );
+    });
+
+    it('job đồng bộ release không ẩn app đã có hướng dẫn CLI hợp lệ', async () => {
+      cauHinhRepoChiCli('release-cli');
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        trangThai: 'HOAT_DONG',
+        phanTichAI: {
+          huongDanCaiDat: {
+            cachCai: [{ trinhQuanLy: 'npm', tenGoi: 'release-cli' }],
+          },
+        },
+      });
+
+      await service.dongBoRepo('owner', 'release-cli');
+
+      expect(mockGithubService.layReadme).not.toHaveBeenCalled();
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ update: expect.objectContaining({ trangThai: 'HOAT_DONG' }) }),
+      );
+    });
+
+    it('giữ nguyên trạng thái hiện tại nếu README lỗi mạng tạm thời', async () => {
+      cauHinhRepoChiCli('offline-cli');
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        trangThai: 'HOAT_DONG',
+        phanTichAI: null,
+      });
+      mockGithubService.layReadme.mockRejectedValueOnce(new Error('network unavailable'));
+
+      await service.dongBoRepo('owner', 'offline-cli');
+
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ trangThai: 'HOAT_DONG' }),
+          update: expect.objectContaining({ trangThai: 'HOAT_DONG' }),
+        }),
+      );
+    });
+
     it('dongBoRepo gán trangThai = KHONG_CO_BAN_CAI khi repo không có file cài hợp lệ (VLC/RetroArch)', async () => {
       mockGithubService.layRepo.mockResolvedValueOnce({
         name: 'vlc',

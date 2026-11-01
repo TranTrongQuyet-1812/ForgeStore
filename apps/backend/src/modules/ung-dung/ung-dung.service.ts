@@ -254,9 +254,16 @@ export class UngDungService {
     owner: string,
     repo: string,
     maNguoiDungYeuCau?: string,
-    laUngDungCli = false,
   ): Promise<UngDungChiTietDto> {
     this.logger.log(`Bắt đầu đồng bộ repository [${owner}/${repo}]...`);
+
+    const ungDungHienTai = await this.prisma.ungDung.findUnique({
+      where: { tenRepoDayDu: `${owner}/${repo}` },
+      select: {
+        trangThai: true,
+        phanTichAI: { select: { huongDanCaiDat: true } },
+      },
+    });
 
     // 1. Kéo dữ liệu từ GitHub Facade (được bảo vệ bởi ETag & Rate Limit)
     const repoData = await this.githubService.layRepo(owner, repo);
@@ -343,9 +350,9 @@ export class UngDungService {
     } else if (hasWindows) {
       nenTangHoTro = NenTangHoTro.WINDOWS;
     } else {
-      // L1: Không có file cài đặt hợp lệ nào cho Windows hoặc Android (như VLC, RetroArch)
-      // P3B-16: Nếu là ứng dụng chỉ có cài CLI (laUngDungCli === true), nạp vào Store ở trạng thái HOAT_DONG
-      trangThai = laUngDungCli ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
+      // P3B-16 trước đây dùng cờ laUngDungCli từ caller; nay suy từ README để mọi luồng đồng bộ thống nhất.
+      // Khi thiếu bộ cài desktop, README là nguồn xác định ứng dụng CLI có thể dùng được.
+      trangThai = await this.suyTrangThaiKhongCoTepCai(owner, repo, ungDungHienTai);
       const topics = (repoData.topics || []).map((t) => t.toLowerCase());
       if (topics.includes('android')) {
         nenTangHoTro = NenTangHoTro.ANDROID;
@@ -599,6 +606,32 @@ export class UngDungService {
 
     // 8. Trả về chi tiết ứng dụng đầy đủ
     return this.layChiTietApp(ungDungUpdated.maUngDung);
+  }
+
+  private async suyTrangThaiKhongCoTepCai(
+    owner: string,
+    repo: string,
+    ungDungHienTai: {
+      trangThai?: string | null;
+      phanTichAI?: { huongDanCaiDat?: unknown } | null;
+    } | null,
+  ): Promise<string> {
+    const huongDanCu = ungDungHienTai?.phanTichAI?.huongDanCaiDat as
+      HuongDanCaiDatDto | null | undefined;
+    if (coCachCaiCliHopLe(huongDanCu)) return 'HOAT_DONG';
+
+    try {
+      const readme = await this.githubService.layReadme(owner, repo);
+      if (readme) {
+        const huongDan = trichXuatHuongDanCliBangQuyTac(readme);
+        return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
+      }
+      this.logger.warn(`Không lấy được README [${owner}/${repo}], giữ trạng thái hiện có nếu có.`);
+    } catch (error) {
+      this.logger.warn(`Lỗi lấy README [${owner}/${repo}]: ${String(error)}`);
+    }
+
+    return ungDungHienTai?.trangThai || 'KHONG_CO_BAN_CAI';
   }
 
   /**
@@ -2286,7 +2319,7 @@ export class UngDungService {
         ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
         : null;
       if (coCachCaiCliHopLe(cliGuide)) {
-        const newApp = await this.dongBoRepo(owner, repo, undefined, true);
+        const newApp = await this.dongBoRepo(owner, repo);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
         });
@@ -2372,7 +2405,7 @@ export class UngDungService {
         ? trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullSlug}#readme`)
         : null;
       if (coCachCaiCliHopLe(cliGuide)) {
-        const newApp = await this.dongBoRepo(owner, repo, undefined, true);
+        const newApp = await this.dongBoRepo(owner, repo);
         await this.phanTichUngDung(newApp.maUngDung).catch((err) => {
           this.logger.error(`Lỗi phân tích AI cho [${newApp.tenRepoDayDu}]:`, err);
         });

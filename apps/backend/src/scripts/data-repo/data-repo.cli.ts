@@ -19,6 +19,7 @@
  *   pnpm data-repo hop-nhat --nguon <Dich_Hang_Loat> --va <Dot_Va> --ra <Kho_Cuoi> --thu # cách ghép cũ
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> --thu # xem số request, không gọi GitHub
  *   pnpm data-repo kiem-tuoi --nguon <Kho_Cuoi> --ra <Kiem_Tuoi> [--tiep] # kiểm độ tươi qua GitHub API
+ *   pnpm data-repo do-boc-tach --nguon <thư mục có 01_da_cao> # đo bộ nhận diện lệnh cài, chỉ đọc
  *   Danh sách dịch lại: mỗi dòng owner/repo stt_cũ (có thể là khoảng) hoặc owner/repo maBam.
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
@@ -53,6 +54,7 @@ import {
   type DoiTenRepo,
 } from './hop-nhat.core';
 import { ghepBanDichDaNhap, taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
+import { doBocTach, duDoanTrangThaiTuReadme } from './do-boc-tach.core';
 import {
   chayKiemTuoi,
   layChuaXuLy,
@@ -1462,6 +1464,16 @@ async function lenhDay(): Promise<void> {
     for (const row of trongLo) console.info(`[lưu trữ] ${row.repo}`);
   }
 
+  if (!ghi && !suaBoNho) {
+    for (const row of cho) {
+      const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
+      console.info(
+        `[thử] ${row.repo}: trạng thái dự kiến ${duDoanTrangThaiTuReadme(caoRow?.readmeEn)} theo README đã cào`,
+      );
+    }
+    return;
+  }
+
   await voiNest(async (app) => {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
     const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
@@ -1484,6 +1496,10 @@ async function lenhDay(): Promise<void> {
           ...chiTiet,
         });
       try {
+        const ungDungTruoc = await prisma.ungDung.findFirst({
+          where: { tenRepoDayDu: { equals: r.repo, mode: 'insensitive' } },
+          select: { trangThai: true },
+        });
         const caoRow = dsCao.find((c) => c.repo.toLowerCase() === r.repo.toLowerCase());
         const che =
           viTheoRepo && caoRow
@@ -1507,7 +1523,13 @@ async function lenhDay(): Promise<void> {
         await apps.dongBoRepo(owner, ten);
         const ud = await prisma.ungDung.findFirst({
           where: { tenRepoDayDu: { equals: r.repo, mode: 'insensitive' } },
-          select: { maUngDung: true, tenRepoDayDu: true, moTaGocTiengAnh: true, moTaVi: true },
+          select: {
+            maUngDung: true,
+            tenRepoDayDu: true,
+            moTaGocTiengAnh: true,
+            moTaVi: true,
+            trangThai: true,
+          },
         });
         if (!ud) throw new Error('Không thấy app sau khi đồng bộ');
 
@@ -1573,14 +1595,48 @@ async function lenhDay(): Promise<void> {
             phanTich = 'loi: ' + String(err).slice(0, 120);
           }
         }
-        ghiLog('ok', { moTa, readme, phanTich });
-        console.info(`✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}`);
+        ghiLog('ok', {
+          moTa,
+          readme,
+          phanTich,
+          trangThaiTruoc: ungDungTruoc?.trangThai ?? null,
+          trangThaiSau: ud.trangThai,
+        });
+        console.info(
+          `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${ungDungTruoc?.trangThai ?? 'mới'} → ${ud.trangThai}`,
+        );
       } catch (err) {
         ghiLog('loi', { thongBao: String(err).slice(0, 300) });
         console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
       }
     }
   });
+}
+
+async function lenhDoBocTach(): Promise<void> {
+  const nguon = layThamSo('nguon');
+  if (!nguon) throw new Error('Thiếu --nguon <thư mục có 01_da_cao>.');
+  const goc = path.resolve(nguon);
+  const thuMuc =
+    path.basename(goc).toLowerCase() === '01_da_cao' ? goc : path.join(goc, '01_da_cao');
+  if (!fs.existsSync(thuMuc)) throw new Error(`Không tìm thấy thư mục 01_da_cao: ${thuMuc}`);
+
+  const rows = fs
+    .readdirSync(thuMuc)
+    .filter((ten) => ten.toLowerCase().endsWith('.jsonl'))
+    .flatMap((ten) => docJsonl<BanGhiDaCao>(path.join(thuMuc, ten)));
+  const ketQua = doBocTach(rows);
+  console.info(
+    `Tổng ${ketQua.tongRepo} repo; có lệnh quen thuộc ${ketQua.repoCoLenh}; được nhận ${ketQua.repoDuocNhan}; bỏ sót ${ketQua.repoBoSot}.`,
+  );
+  console.info('Số dòng lệnh theo trình quản lý:');
+  for (const [quanLy, soLuong] of Object.entries(ketQua.theoQuanLy)) {
+    console.info(`- ${quanLy}: ${soLuong}`);
+  }
+  if (ketQua.dongBoSot.length) {
+    console.info('Các repo bỏ sót (tối đa 30 dòng):');
+    for (const dong of ketQua.dongBoSot) console.info(`- ${dong.repo}: ${dong.dong}`);
+  }
 }
 
 async function lenhHoanTac(): Promise<void> {
@@ -2063,11 +2119,13 @@ async function main(): Promise<void> {
       return lenhDoiChieu();
     case 'day':
       return lenhDay();
+    case 'do-boc-tach':
+      return lenhDoBocTach();
     case 'hoan-tac':
       return lenhHoanTac();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
       );
   }
 }

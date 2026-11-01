@@ -138,8 +138,8 @@ export function trichMucCaiDat(rawReadme: string, maxLen = 6000): string {
  */
 export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
   if (!lenh || typeof lenh !== 'string') return null;
-  // Chuẩn hóa loại bỏ prompt shell nếu có ở đầu dòng ($, #, >) (BE-01)
-  const l = lenh.trim().replace(/^[$#>]\s*/, '');
+  // Chuẩn hóa prompt gồm cả PowerShell có đường dẫn để README thường chép nguyên terminal.
+  const l = boDauNhacShell(lenh).replace(/^#\s*/, '');
 
   // WINGET
   if (/^winget\s+install\b/i.test(l)) {
@@ -153,7 +153,7 @@ export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
 
   // PIP
   if (
-    /^(pip|pip3|python\d*\s+-m\s+pip|uv\s+pip|uv\s+tool|pipx)\s+install\b/i.test(l) ||
+    /^(pip|pip3|python\d*\s+-m\s+pip|py\s+-m\s+pip|uv\s+(?:pip|tool)|pipx)\s+install\b/i.test(l) ||
     /^(pip|pip3|pipx)\s+/i.test(l) ||
     /^uv\s+(add|run)\b/i.test(l)
   ) {
@@ -237,7 +237,7 @@ export function kiemTraRuiRoCao(lenh: string): { ruiRoCao: boolean; lyDo?: strin
     return { ruiRoCao: false };
   }
 
-  const l = lenh.trim().replace(/^[$#>]\s*/, '');
+  const l = boDauNhacShell(lenh).replace(/^#\s*/, '');
 
   // 1. Tải và thực thi script trực tiếp qua shell / interpreter / process substitution (SEC-01, SEC-VULN-03 & SEC-R4-04)
   if (
@@ -319,13 +319,48 @@ export function kiemTraRuiRoCao(lenh: string): { ruiRoCao: boolean; lyDo?: strin
  * - Bỏ dấu backtick ở đầu và cuối nếu có (ví dụ: `pip install open-webui`)
  */
 function chuanHoaDongLenh(line: string): string {
-  let l = line.trim().replace(/^[$#>]\s*/, '');
+  let l = boDauNhacShell(line).replace(/^#\s*/, '');
   // Loại bỏ tiền tố nhãn cài đặt như "Install:", "Installation:", "Setup:", "Cài đặt:"
   l = l.replace(/^(?:install|installation|setup|cài\s*đặt)\s*:\s*/i, '');
   if (l.startsWith('`') && l.endsWith('`') && l.length >= 2) {
     l = l.slice(1, -1).trim();
   }
   return l;
+}
+
+/** Chuẩn hóa cú pháp trình cài đặt và thẻ phiên bản trước khi dùng bộ kiểm gói hiện có. */
+function chuanHoaLenhDeBocGoi(lenh: string): string {
+  const sach = boDauNhacShell(lenh).replace(/^#\s*/, '').trim();
+  const pipLenh = sach.replace(/^(?:python\d*|py)\s+-m\s+pip\s+install\b/i, 'pip install');
+  const pipUv = pipLenh.replace(/^uv\s+tool\s+install\b/i, 'pip install');
+  const pipx = pipUv.replace(/^pipx\s+install\b/i, 'pip install');
+  const uv = pipx.replace(/^uv\s+pip\s+install\b/i, 'pip install');
+  const nhanDien = nhanDienNhomLenh(sach);
+  if (!nhanDien || (!/^(?:npm|pnpm|yarn|bun)\b/i.test(sach) && nhanDien !== NhomCachCai.PIP)) {
+    return sach;
+  }
+
+  const dauLenh = uv.match(/^(?:pip|npm|pnpm|yarn|bun)\s+(?:install|i|add)\b/i);
+  if (!dauLenh?.[0]) return sach;
+  const truoc = uv.slice(0, dauLenh[0].length);
+  const tokens = uv.slice(dauLenh[0].length).trim().split(/\s+/);
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token || token.startsWith('-')) continue;
+    const viTriTag = token.startsWith('@')
+      ? token.indexOf('@', token.indexOf('/') + 1)
+      : token.lastIndexOf('@');
+    if (viTriTag <= 0) break;
+    const tag = token.slice(viTriTag + 1);
+    if (!/^(?:latest|next|beta|alpha|canary|\d+(?:\.[0-9A-Za-z_-]+)*)$/i.test(tag)) return sach;
+    tokens[i] = token.slice(0, viTriTag);
+    break;
+  }
+  return `${truoc} ${tokens.join(' ')}`.trim();
+}
+
+function trichTenGoiDaChuanHoa(lenh: string) {
+  return trichTenGoiTuLenhTho(chuanHoaLenhDeBocGoi(lenh));
 }
 
 /**
@@ -465,7 +500,7 @@ export function locVaChuanHoaHuongDanCaiDat(
     const nhomSuyDuan = nhanDienNhomLenh(buocHopLe[0]?.lenh || '') || cach.nhom;
 
     // P3B-16.3: Bóc tách tên gói và ghép lệnh cập nhật/gỡ từ manifest
-    const pkgInfo = trichTenGoiTuLenhTho(buocHopLe[0]?.lenh || '');
+    const pkgInfo = trichTenGoiDaChuanHoa(buocHopLe[0]?.lenh || '');
     const trinhQuanLy = pkgInfo?.trinhQuanLy || cach.trinhQuanLy;
     const tenGoi = pkgInfo?.tenGoi || cach.tenGoi;
     let lenhCapNhat = cach.lenhCapNhat;
@@ -587,7 +622,7 @@ export function bocTachHuongDanTuCodeBlocks(
       };
     });
 
-    const pkgInfo = trichTenGoiTuLenhTho(items[0]?.lenh || '');
+    const pkgInfo = trichTenGoiDaChuanHoa(items[0]?.lenh || '');
     let lenhCapNhat: string | undefined;
     let lenhGo: string | undefined;
     if (pkgInfo) {
