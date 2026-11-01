@@ -66,6 +66,7 @@ import { ResolveAssetDto } from './dto/giai-quyet-tai-san.dto';
 import { SearchQueryDto } from './dto/tim-kiem.dto';
 import { InspectRepoDto } from './dto/kiem-tra-repo.dto';
 import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
+import { taoDieuKienNenTang } from './tien-ich/dieu-kien-nen-tang.util';
 
 /**
  * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)
@@ -650,43 +651,8 @@ export class UngDungService {
 
     const where: Prisma.UngDungWhereInput = {
       trangThai: 'HOAT_DONG',
+      ...taoDieuKienNenTang(platform),
     };
-
-    if (platform === PlatformFilter.ANDROID) {
-      where.nenTangHoTro = { in: [NenTangHoTro.ANDROID, NenTangHoTro.DA_NEN_TANG] };
-      where.danhSachPhatHanh = {
-        some: {
-          danhSachTepCaiDat: {
-            some: { dinhDangTep: DinhDangTep.APK },
-          },
-        },
-      };
-    } else if (platform === PlatformFilter.WINDOWS) {
-      where.nenTangHoTro = { in: [NenTangHoTro.WINDOWS, NenTangHoTro.DA_NEN_TANG] };
-      where.danhSachPhatHanh = {
-        some: {
-          danhSachTepCaiDat: {
-            some: {
-              dinhDangTep: {
-                in: [DinhDangTep.EXE, DinhDangTep.MSI, DinhDangTep.ZIP_PORTABLE],
-              },
-            },
-          },
-        },
-      };
-    } else {
-      where.danhSachPhatHanh = {
-        some: {
-          danhSachTepCaiDat: {
-            some: {
-              dinhDangTep: {
-                in: [DinhDangTep.EXE, DinhDangTep.MSI, DinhDangTep.ZIP_PORTABLE, DinhDangTep.APK],
-              },
-            },
-          },
-        },
-      };
-    }
 
     const grouped = await this.prisma.ungDung.groupBy({
       by: ['danhMucChinh'],
@@ -762,29 +728,7 @@ export class UngDungService {
       where.danhMucChinh = category;
     }
 
-    if (platform === PlatformFilter.ANDROID) {
-      where.nenTangHoTro = { in: [NenTangHoTro.ANDROID, NenTangHoTro.DA_NEN_TANG] };
-      where.danhSachPhatHanh = {
-        some: {
-          danhSachTepCaiDat: {
-            some: { dinhDangTep: DinhDangTep.APK },
-          },
-        },
-      };
-    } else if (platform === PlatformFilter.WINDOWS) {
-      where.nenTangHoTro = { in: [NenTangHoTro.WINDOWS, NenTangHoTro.DA_NEN_TANG] };
-      where.danhSachPhatHanh = {
-        some: {
-          danhSachTepCaiDat: {
-            some: {
-              dinhDangTep: {
-                in: [DinhDangTep.EXE, DinhDangTep.MSI, DinhDangTep.ZIP_PORTABLE],
-              },
-            },
-          },
-        },
-      };
-    }
+    Object.assign(where, taoDieuKienNenTang(platform));
 
     // Xác định tiêu chí sắp xếp đẩy trực tiếp xuống PostgreSQL (P3B-03.3, P3B-03.4)
     let orderBy: Prisma.UngDungOrderByWithRelationInput[];
