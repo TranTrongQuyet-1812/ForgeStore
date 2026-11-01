@@ -62,7 +62,7 @@ export const DANH_SACH_SEED_REPOS: string[] = [
  * Dây chuyền nạp Repo quy mô lớn & Hàng đợi dịch nền (P3B-06 & P3B-05.4)
  *
  * 6 Chốt chặn an toàn (đã hoàn thiện theo review của Claude):
- * 1. Không xóa ứng viên bị loại: Gán BI_LOAI kèm mã LyDoLoaiUngVien, giữ repo CHI_CO_CAI_CLI cho P3B-16.
+ * 1. Không xóa ứng viên bị loại: Gán BI_LOAI kèm mã LyDoLoaiUngVien. Repo có lệnh CLI hợp lệ được nạp thẳng vào Store (D-30).
  * 2. Hạn mức GitHub: Dùng token, theo dõi x-ratelimit-remaining, dừng/chờ khi sắp hết (< 100 req).
  *    Lỗi mạng / 403 / 429 tạm thời: Dừng lô và giữ CHO_SANG_LOC, không loại oan vĩnh viễn.
  * 3. Không tạo bão dịch: Nạp repo KHÔNG kích hoạt dịch ngay; dịch qua hàng đợi có giới hạn song song và ngân sách ngày.
@@ -355,86 +355,57 @@ export class DayChuyenNapRepoService {
 
       // Không có bản phát hành nào
       if (!latestRelease || !latestRelease.assets || latestRelease.assets.length === 0) {
-        // Kiểm tra xem có hướng dẫn cài đặt CLI trong README không
-        let readme: string | null = null;
-        try {
-          readme = await this.githubService.layReadme(owner, repo);
-        } catch {
-          readme = null;
-        }
-        const cliGuide = readme
-          ? trichXuatHuongDanCliBangQuyTac(
-              readme,
-              `https://github.com/${candidate.tenRepoDayDu}#readme`,
-            )
-          : null;
-        const hasCli = coCachCaiCliHopLe(cliGuide);
+        // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
+        const hasCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
 
-        if (hasCli) {
-          // Chốt chặn 1: Giữ repo CHI_CO_CAI_CLI lại cho P3B-16, tuyệt đối không xóa!
-          await this.loaiUngVien(
-            candidate.maUngVien,
-            LyDoLoaiUngVien.CHI_CO_CAI_CLI,
-            chiTietBiLoai,
-          );
-        } else {
+        if (!hasCli) {
           await this.loaiUngVien(
             candidate.maUngVien,
             LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH,
             chiTietBiLoai,
           );
+          soLuongBiLoai++;
+          continue;
         }
-        soLuongBiLoai++;
-        continue;
-      }
 
-      // Kiểm tra xem có file cài đặt cho Windows hoặc Android không
-      let hasInstallableAsset = false;
-      for (const asset of latestRelease.assets) {
-        const kq = phanLoaiTep(asset.name);
-        if (
-          !kq.boQua &&
-          (kq.dinhDang === DinhDangTep.EXE ||
-            kq.dinhDang === DinhDangTep.MSI ||
-            kq.dinhDang === DinhDangTep.ZIP_PORTABLE ||
-            kq.dinhDang === DinhDangTep.APK)
-        ) {
-          hasInstallableAsset = true;
-          break;
+        this.logger.log(
+          `[CLI Ingestion] Repo [${candidate.tenRepoDayDu}] không có bản phát hành nhưng có lệnh cài CLI hợp lệ, cho phép nạp đầy đủ (D-30).`,
+        );
+      } else {
+        // Kiểm tra xem có file cài đặt cho Windows hoặc Android không
+        let hasInstallableAsset = false;
+        for (const asset of latestRelease.assets) {
+          const kq = phanLoaiTep(asset.name);
+          if (
+            !kq.boQua &&
+            (kq.dinhDang === DinhDangTep.EXE ||
+              kq.dinhDang === DinhDangTep.MSI ||
+              kq.dinhDang === DinhDangTep.ZIP_PORTABLE ||
+              kq.dinhDang === DinhDangTep.APK)
+          ) {
+            hasInstallableAsset = true;
+            break;
+          }
         }
-      }
 
-      if (!hasInstallableAsset) {
-        let readme: string | null = null;
-        try {
-          readme = await this.githubService.layReadme(owner, repo);
-        } catch {
-          readme = null;
-        }
-        const cliGuide = readme
-          ? trichXuatHuongDanCliBangQuyTac(
-              readme,
-              `https://github.com/${candidate.tenRepoDayDu}#readme`,
-            )
-          : null;
-        const hasCli = coCachCaiCliHopLe(cliGuide);
+        if (!hasInstallableAsset) {
+          // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
+          const hasCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
 
-        if (hasCli) {
-          // Chốt chặn 1: Giữ repo CHI_CO_CAI_CLI lại cho P3B-16, tuyệt đối không xóa!
-          await this.loaiUngVien(
-            candidate.maUngVien,
-            LyDoLoaiUngVien.CHI_CO_CAI_CLI,
-            chiTietBiLoai,
-          );
-        } else {
-          await this.loaiUngVien(
-            candidate.maUngVien,
-            LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
-            chiTietBiLoai,
+          if (!hasCli) {
+            await this.loaiUngVien(
+              candidate.maUngVien,
+              LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
+              chiTietBiLoai,
+            );
+            soLuongBiLoai++;
+            continue;
+          }
+
+          this.logger.log(
+            `[CLI Ingestion] Repo [${candidate.tenRepoDayDu}] không có file cài Windows/Android nhưng có lệnh cài CLI hợp lệ, cho phép nạp đầy đủ (D-30).`,
           );
         }
-        soLuongBiLoai++;
-        continue;
       }
 
       // --- BƯỚC 2: NẠP ĐẦY ĐỦ (FULL INGESTION) ---
@@ -512,6 +483,27 @@ export class DayChuyenNapRepoService {
       },
     });
     chiTietBiLoai[lyDoLoai] = (chiTietBiLoai[lyDoLoai] || 0) + 1;
+  }
+
+  /**
+   * Kiểm tra xem repo có hướng dẫn cài đặt CLI hợp lệ trong README không (D-30 / P3B-25.5)
+   */
+  private async kiemTraCoHuongDanCli(
+    owner: string,
+    repo: string,
+    tenRepoDayDu: string,
+  ): Promise<boolean> {
+    try {
+      const readme = await this.githubService.layReadme(owner, repo);
+      if (!readme) return false;
+      const cliGuide = trichXuatHuongDanCliBangQuyTac(
+        readme,
+        `https://github.com/${tenRepoDayDu}#readme`,
+      );
+      return coCachCaiCliHopLe(cliGuide);
+    } catch {
+      return false;
+    }
   }
 
   /**

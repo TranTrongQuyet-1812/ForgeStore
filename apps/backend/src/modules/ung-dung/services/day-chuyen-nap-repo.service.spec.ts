@@ -242,7 +242,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
       expect(mockPrisma.ungVienRepo.update).not.toHaveBeenCalled();
     });
 
-    it('Chốt chặn 1: giữ repo chỉ có lệnh cài CLI gán CHI_CO_CAI_CLI cho P3B-16', async () => {
+    it('P3B-25.5 (D-30): nạp đầy đủ repo chỉ có lệnh cài CLI thay vì loại bỏ', async () => {
       mockGithubService.getRateLimitInfo.mockReturnValue({
         remaining: 4500,
         limit: 5000,
@@ -265,16 +265,78 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
       const res = await service.sangLocVaNapLauNho(30, true);
 
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.CHI_CO_CAI_CLI]).toBe(1);
+      expect(res.soLuongBiLoai).toBe(0);
+      expect(res.soLuongDaNap).toBe(1);
+      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('cli-tool', 'fzf');
       expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
         where: { maUngVien: 'uv-cli' },
         data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.CHI_CO_CAI_CLI,
+          trangThai: TrangThaiUngVienRepo.DA_NAP,
+          lyDoLoai: null,
         },
       });
+    });
+
+    it('P3B-25.5 (D-30): nạp đầy đủ repo không có bản phát hành nhưng có lệnh cài CLI trong README', async () => {
+      mockGithubService.getRateLimitInfo.mockReturnValue({
+        remaining: 4500,
+        limit: 5000,
+        reset: 123456,
+      });
+      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
+        { maUngVien: 'uv-no-rel-cli', tenRepoDayDu: 'npm-pkg/serve' },
+      ]);
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        archived: false,
+        license: { key: 'mit' },
+      });
+      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(null);
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '# Installation\n```bash\nnpm install -g serve\n```',
+      );
+
+      const res = await service.sangLocVaNapLauNho(30, true);
+
+      expect(res.soLuongBiLoai).toBe(0);
+      expect(res.soLuongDaNap).toBe(1);
+      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('npm-pkg', 'serve');
+      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
+        where: { maUngVien: 'uv-no-rel-cli' },
+        data: {
+          trangThai: TrangThaiUngVienRepo.DA_NAP,
+          lyDoLoai: null,
+        },
+      });
+    });
+
+    it('P3B-25.5 (D-30): loại repo không có bản phát hành và không có lệnh CLI gán KHONG_CO_BAN_PHAT_HANH', async () => {
+      mockGithubService.getRateLimitInfo.mockReturnValue({
+        remaining: 4500,
+        limit: 5000,
+        reset: 123456,
+      });
+      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
+        { maUngVien: 'uv-no-rel-no-cli', tenRepoDayDu: 'docs/guide' },
+      ]);
+      mockGithubService.layRepo.mockResolvedValueOnce({
+        archived: false,
+        license: { key: 'mit' },
+      });
+      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(null);
+      mockGithubService.layReadme.mockResolvedValueOnce('# Just Documentation');
+
+      const res = await service.sangLocVaNapLauNho(30, true);
+
+      expect(res.soLuongBiLoai).toBe(1);
+      expect(res.chiTietBiLoai[LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH]).toBe(1);
       expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
+      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
+        where: { maUngVien: 'uv-no-rel-no-cli' },
+        data: {
+          trangThai: TrangThaiUngVienRepo.BI_LOAI,
+          lyDoLoai: LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH,
+        },
+      });
     });
 
     it('Chốt chặn 1: loại repo không có bộ cài và không có CLI gán KHONG_CO_FILE_CAI', async () => {
