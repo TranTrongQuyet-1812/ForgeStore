@@ -356,9 +356,15 @@ export class DayChuyenNapRepoService {
       // Không có bản phát hành nào
       if (!latestRelease || !latestRelease.assets || latestRelease.assets.length === 0) {
         // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
-        const hasCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
+        const ketQuaCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
 
-        if (!hasCli) {
+        // Lỗi tạm thời khi lấy README: không được loại oan repo chỉ cài bằng lệnh (D-30)
+        if (ketQuaCli === 'LOI_TAM_THOI') {
+          this.ghiLogTamDungLoLoiReadme(candidate.tenRepoDayDu);
+          break;
+        }
+
+        if (ketQuaCli === 'KHONG') {
           await this.loaiUngVien(
             candidate.maUngVien,
             LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH,
@@ -390,9 +396,15 @@ export class DayChuyenNapRepoService {
 
         if (!hasInstallableAsset) {
           // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
-          const hasCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
+          const ketQuaCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
 
-          if (!hasCli) {
+          // Lỗi tạm thời khi lấy README: không được loại oan repo chỉ cài bằng lệnh (D-30)
+          if (ketQuaCli === 'LOI_TAM_THOI') {
+            this.ghiLogTamDungLoLoiReadme(candidate.tenRepoDayDu);
+            break;
+          }
+
+          if (ketQuaCli === 'KHONG') {
             await this.loaiUngVien(
               candidate.maUngVien,
               LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
@@ -486,24 +498,34 @@ export class DayChuyenNapRepoService {
   }
 
   /**
-   * Kiểm tra xem repo có hướng dẫn cài đặt CLI hợp lệ trong README không (D-30 / P3B-25.5)
+   * Kiểm tra xem repo có hướng dẫn cài đặt CLI hợp lệ trong README không (D-30 / P3B-25.5).
+   * Tách riêng LOI_TAM_THOI (rate limit / rớt mạng) khỏi KHONG để không loại oan repo chỉ cài bằng lệnh.
    */
   private async kiemTraCoHuongDanCli(
     owner: string,
     repo: string,
     tenRepoDayDu: string,
-  ): Promise<boolean> {
+  ): Promise<'CO' | 'KHONG' | 'LOI_TAM_THOI'> {
     try {
       const readme = await this.githubService.layReadme(owner, repo);
-      if (!readme) return false;
+      if (!readme) return 'KHONG';
       const cliGuide = trichXuatHuongDanCliBangQuyTac(
         readme,
         `https://github.com/${tenRepoDayDu}#readme`,
       );
-      return coCachCaiCliHopLe(cliGuide);
-    } catch {
-      return false;
+      return coCachCaiCliHopLe(cliGuide) ? 'CO' : 'KHONG';
+    } catch (err) {
+      return this.laLoiTamThoi(err) ? 'LOI_TAM_THOI' : 'KHONG';
     }
+  }
+
+  /**
+   * Ghi log khi dừng lô vì lỗi tạm thời lúc lấy README; ứng viên vẫn giữ CHO_SANG_LOC
+   */
+  private ghiLogTamDungLoLoiReadme(tenRepoDayDu: string): void {
+    this.logger.warn(
+      `Phát hiện lỗi tạm thời/rate limit khi lấy README [${tenRepoDayDu}]. Giữ nguyên CHO_SANG_LOC và tạm dừng lô.`,
+    );
   }
 
   /**

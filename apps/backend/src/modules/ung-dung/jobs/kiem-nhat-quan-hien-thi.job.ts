@@ -20,6 +20,11 @@ interface UngDungDoiSoat {
   }>;
 }
 
+// Mỗi lần đọc một trang để không kéo hết bảng vào bộ nhớ
+const KICH_THUOC_TRANG = 200;
+// Chỉ in tên tối đa chừng này repo cảnh báo (b) để log không bị ngập; số lượng vẫn đếm đủ
+const SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG = 20;
+
 /**
  * Job chốt chặn tự động hằng ngày kiểm tra tính nhất quán trạng thái hiển thị (P3B-25.8, D-30).
  *
@@ -38,7 +43,7 @@ export class KiemNhatQuanHienThiJob {
   ) {}
 
   /**
-   * Chạy định kỳ vào 2:00 sáng mỗi ngày sau các đợt quét release và suy giảm điểm thịnh hành
+   * Chạy định kỳ vào 2:00 sáng mỗi ngày, sau job suy giảm điểm thịnh hành (nửa đêm)
    */
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async handleCron(): Promise<void> {
@@ -47,7 +52,8 @@ export class KiemNhatQuanHienThiJob {
   }
 
   /**
-   * Quét và đối soát tính nhất quán hiển thị trên toàn bộ ứng dụng trong CSDL
+   * Quét và đối soát tính nhất quán hiển thị trên toàn bộ ứng dụng trong CSDL.
+   * gioiHan là số app tối đa được tự sửa (a) trong một lần chạy.
    */
   async kiemTraVaSuaNhatQuanHienThi(
     gioiHan = 200,
@@ -64,7 +70,7 @@ export class KiemNhatQuanHienThiJob {
 
     try {
       soLuongDaSua = await this.xuLyAppBiAnNham(gioiHan);
-      soLuongCanhBao = await this.xuLyAppHienNham(gioiHan);
+      soLuongCanhBao = await this.xuLyAppHienNham();
 
       this.logger.log(
         `[Chốt chặn hoàn tất] Tổng số app đã tự sửa (a): ${soLuongDaSua}, Tổng số app cảnh báo (b): ${soLuongCanhBao}`,
@@ -80,71 +86,105 @@ export class KiemNhatQuanHienThiJob {
   }
 
   /**
-   * (a) Xử lý ứng dụng đang KHONG_CO_BAN_CAI nhưng thực tế đủ điều kiện hiển thị
+   * (a) Xử lý ứng dụng đang KHONG_CO_BAN_CAI nhưng thực tế đủ điều kiện hiển thị.
+   * Duyệt theo trang (không chỉ 200 dòng đầu) để dòng không đủ điều kiện không chặn các dòng phía sau.
    */
   private async xuLyAppBiAnNham(gioiHan: number): Promise<number> {
-    const appsBiAn = await this.layDanhSachAppTheoTrangThai('KHONG_CO_BAN_CAI', gioiHan);
     let daSua = 0;
+    let conTro: string | undefined;
 
-    for (const app of appsBiAn) {
-      const coTep = this.coTepCaiWindowsHoacAndroid(app.danhSachPhatHanh);
-      const coCli = this.coHuongDanCliHopLe(app.phanTichAI?.huongDanCaiDat);
-
-      // Nếu có tệp cài đặt hợp lệ HOẶC có lệnh cài CLI thì phải cho hiện (D-30)
-      if (coTep || coCli) {
-        await this.prisma.ungDung.update({
-          where: { maUngDung: app.maUngDung },
-          data: { trangThai: 'HOAT_DONG' },
-        });
-
-        daSua++;
-        this.logger.log(
-          `[Chốt chặn (a)] Tự sửa trạng thái repo [${app.tenRepoDayDu}]: KHONG_CO_BAN_CAI -> HOAT_DONG (Tệp: ${coTep}, CLI: ${coCli})`,
-        );
+    try {
+      while (daSua < gioiHan) {
+        const trang = await this.layTrangAppTheoTrangThai('KHONG_CO_BAN_CAI', conTro);
+        for (const app of trang) {
+          if (daSua >= gioiHan) break;
+          if (await this.suaAppBiAnNham(app)) daSua++;
+        }
+        const dongCuoi = trang.at(-1);
+        if (!dongCuoi || trang.length < KICH_THUOC_TRANG) break;
+        conTro = dongCuoi.maUngDung;
       }
-    }
-
-    // Xóa cache danh sách, chi tiết và danh mục nếu có thay đổi trạng thái
-    if (daSua > 0) {
-      await this.xoaCacheHienThi();
+    } finally {
+      // Xóa cache kể cả khi lỗi giữa chừng, vì các app đã sửa trước đó cần hiện ngay
+      if (daSua > 0) await this.xoaCacheHienThi();
     }
 
     return daSua;
   }
 
   /**
-   * (b) Xử lý ứng dụng đang HOAT_DONG nhưng không có tệp cài và không có lệnh CLI
+   * Đổi một app đang bị ẩn nhầm sang HOAT_DONG nếu có tệp cài hoặc lệnh CLI hợp lệ (D-30)
    */
-  private async xuLyAppHienNham(gioiHan: number): Promise<number> {
-    const appsHoatDong = await this.layDanhSachAppTheoTrangThai('HOAT_DONG', gioiHan);
+  private async suaAppBiAnNham(app: UngDungDoiSoat): Promise<boolean> {
+    const coTep = this.coTepCaiWindowsHoacAndroid(app.danhSachPhatHanh);
+    const coCli = this.coHuongDanCliHopLe(app.phanTichAI?.huongDanCaiDat);
+    if (!coTep && !coCli) return false;
+
+    await this.prisma.ungDung.update({
+      where: { maUngDung: app.maUngDung },
+      data: { trangThai: 'HOAT_DONG' },
+    });
+
+    this.logger.log(
+      `[Chốt chặn (a)] Tự sửa trạng thái repo [${app.tenRepoDayDu}]: KHONG_CO_BAN_CAI -> HOAT_DONG (Tệp: ${coTep}, CLI: ${coCli})`,
+    );
+    return true;
+  }
+
+  /**
+   * (b) Xử lý ứng dụng đang HOAT_DONG nhưng không có tệp cài và không có lệnh CLI.
+   * Chỉ cảnh báo, không tự đổi trạng thái vì có thể là lỗi dữ liệu cần người xem.
+   */
+  private async xuLyAppHienNham(): Promise<number> {
     let canhBao = 0;
+    let conTro: string | undefined;
 
-    for (const app of appsHoatDong) {
-      const coTep = this.coTepCaiWindowsHoacAndroid(app.danhSachPhatHanh);
-      const coCli = this.coHuongDanCliHopLe(app.phanTichAI?.huongDanCaiDat);
-
-      // Nếu không có tệp cài và không có lệnh CLI thì cảnh báo (không tự ý đổi)
-      if (!coTep && !coCli) {
+    for (;;) {
+      const trang = await this.layTrangAppTheoTrangThai('HOAT_DONG', conTro);
+      for (const app of trang) {
+        if (!this.laAppHienNham(app)) continue;
         canhBao++;
-        this.logger.warn(
-          `[Chốt chặn (b)] Cảnh báo: Repo [${app.tenRepoDayDu}] đang HOAT_DONG nhưng không có tệp cài và không có hướng dẫn CLI hợp lệ.`,
-        );
+        if (canhBao <= SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG) {
+          this.logger.warn(
+            `[Chốt chặn (b)] Cảnh báo: Repo [${app.tenRepoDayDu}] đang HOAT_DONG nhưng không có tệp cài và không có hướng dẫn CLI hợp lệ.`,
+          );
+        }
       }
+      const dongCuoi = trang.at(-1);
+      if (!dongCuoi || trang.length < KICH_THUOC_TRANG) break;
+      conTro = dongCuoi.maUngDung;
     }
 
+    if (canhBao > SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG) {
+      this.logger.warn(
+        `[Chốt chặn (b)] ... và ${canhBao - SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG} repo cảnh báo khác chưa liệt kê tên.`,
+      );
+    }
     return canhBao;
   }
 
   /**
-   * Truy vấn danh sách ứng dụng theo trạng thái kèm tệp cài đặt và hướng dẫn CLI
+   * App đang hiện mà không có tệp cài lẫn lệnh CLI hợp lệ
    */
-  private async layDanhSachAppTheoTrangThai(
+  private laAppHienNham(app: UngDungDoiSoat): boolean {
+    return (
+      !this.coTepCaiWindowsHoacAndroid(app.danhSachPhatHanh) &&
+      !this.coHuongDanCliHopLe(app.phanTichAI?.huongDanCaiDat)
+    );
+  }
+
+  /**
+   * Lấy một trang app theo trạng thái (sắp theo mã, phân trang bằng con trỏ), kèm tệp cài và hướng dẫn CLI.
+   * Dùng "mã lớn hơn con trỏ" thay vì skip để vẫn đúng khi trạng thái các dòng đã đọc bị đổi.
+   */
+  private async layTrangAppTheoTrangThai(
     trangThai: string,
-    gioiHan: number,
+    conTro?: string,
   ): Promise<UngDungDoiSoat[]> {
     return this.prisma.ungDung.findMany({
-      where: { trangThai },
-      take: gioiHan,
+      where: { trangThai, ...(conTro ? { maUngDung: { gt: conTro } } : {}) },
+      orderBy: { maUngDung: 'asc' },
+      take: KICH_THUOC_TRANG,
       select: {
         maUngDung: true,
         tenRepoDayDu: true,

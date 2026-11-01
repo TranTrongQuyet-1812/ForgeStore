@@ -190,4 +190,74 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
 
     expect(spy).toHaveBeenCalled();
   });
+
+  const taoApp = (ma: string, coTep: boolean) => ({
+    maUngDung: ma,
+    tenRepoDayDu: `org/${ma}`,
+    trangThai: 'KHONG_CO_BAN_CAI',
+    phanTichAI: null,
+    danhSachPhatHanh: coTep ? [{ danhSachTepCaiDat: [{ maTep: `f-${ma}` }] }] : [],
+  });
+
+  it('(a) Duyệt sang trang sau: 200 dòng đầu không đủ điều kiện không được chặn dòng phía sau', async () => {
+    const trangDau = Array.from({ length: 200 }, (_, i) =>
+      taoApp(`a-${String(i).padStart(3, '0')}`, false),
+    );
+    mockPrisma.ungDung.findMany
+      .mockResolvedValueOnce(trangDau)
+      .mockResolvedValueOnce([taoApp('b-001', true)])
+      .mockResolvedValueOnce([]); // (b) không có app HOAT_DONG
+
+    const result = await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(result.soLuongDaSua).toBe(1);
+    expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'b-001' },
+      data: { trangThai: 'HOAT_DONG' },
+    });
+    // Trang 2 phải bắt đầu sau dòng cuối của trang 1
+    expect(mockPrisma.ungDung.findMany.mock.calls[1][0].where).toEqual({
+      trangThai: 'KHONG_CO_BAN_CAI',
+      maUngDung: { gt: 'a-199' },
+    });
+  });
+
+  it('(a) Tôn trọng giới hạn số app tự sửa mỗi lần chạy', async () => {
+    mockPrisma.ungDung.findMany
+      .mockResolvedValueOnce([taoApp('x-1', true), taoApp('x-2', true), taoApp('x-3', true)])
+      .mockResolvedValueOnce([]);
+
+    const result = await job.kiemTraVaSuaNhatQuanHienThi(2);
+
+    expect(result.soLuongDaSua).toBe(2);
+    expect(mockPrisma.ungDung.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('(a) Lỗi giữa chừng vẫn xóa cache cho các app đã sửa trước đó', async () => {
+    mockPrisma.ungDung.update
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('Mất kết nối giữa chừng'));
+    mockPrisma.ungDung.findMany.mockResolvedValueOnce([taoApp('y-1', true), taoApp('y-2', true)]);
+
+    await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(mockCacheService.xoaTheoPrefix).toHaveBeenCalledWith('fs:apps:list:');
+    expect((job as unknown as { isRunning: boolean }).isRunning).toBe(false);
+  });
+
+  it('(b) Duyệt hết các trang HOAT_DONG và đếm đủ số cảnh báo', async () => {
+    const hienNham = (ma: string) => ({ ...taoApp(ma, false), trangThai: 'HOAT_DONG' });
+    const trangDau = Array.from({ length: 200 }, (_, i) =>
+      hienNham(`h-${String(i).padStart(3, '0')}`),
+    );
+    mockPrisma.ungDung.findMany
+      .mockResolvedValueOnce([]) // (a) không có app ẩn nào
+      .mockResolvedValueOnce(trangDau)
+      .mockResolvedValueOnce([hienNham('h-200'), hienNham('h-201')]);
+
+    const result = await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(result.soLuongCanhBao).toBe(202);
+    expect(mockPrisma.ungDung.update).not.toHaveBeenCalled();
+  });
 });

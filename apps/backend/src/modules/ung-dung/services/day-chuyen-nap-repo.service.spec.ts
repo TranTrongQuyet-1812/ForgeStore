@@ -339,6 +339,42 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
       });
     });
 
+    it.each([
+      ['không có bản phát hành', null],
+      ['có bản phát hành nhưng không có file cài', { tag_name: 'v1', assets: [{ name: 'a.txt' }] }],
+    ])(
+      'P3B-25.5 (D-30): lỗi rate limit khi lấy README (%s) -> giữ CHO_SANG_LOC, dừng lô, không loại oan',
+      async (_moTa, release) => {
+        mockGithubService.getRateLimitInfo.mockReturnValue({
+          remaining: 4500,
+          limit: 5000,
+          reset: 123456,
+        });
+        mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
+          { maUngVien: 'uv-readme-429', tenRepoDayDu: 'cli-tool/busy' },
+          { maUngVien: 'uv-sau', tenRepoDayDu: 'cli-tool/sau' },
+        ]);
+        mockGithubService.layRepo.mockResolvedValueOnce({
+          archived: false,
+          license: { key: 'mit' },
+        });
+        mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(release);
+        mockGithubService.layReadme.mockRejectedValueOnce({
+          status: 429,
+          message: 'Rate limit exceeded',
+        });
+
+        const res = await service.sangLocVaNapLauNho(30, true);
+
+        expect(res.soLuongBiLoai).toBe(0);
+        expect(res.soLuongDaNap).toBe(0);
+        expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
+        expect(mockPrisma.ungVienRepo.update).not.toHaveBeenCalled();
+        // Dừng lô: ứng viên phía sau không bị đụng tới
+        expect(mockGithubService.layRepo).toHaveBeenCalledTimes(1);
+      },
+    );
+
     it('Chốt chặn 1: loại repo không có bộ cài và không có CLI gán KHONG_CO_FILE_CAI', async () => {
       mockGithubService.getRateLimitInfo.mockReturnValue({
         remaining: 4500,
