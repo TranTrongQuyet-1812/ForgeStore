@@ -16,13 +16,13 @@ export const colors = {
 
   // 30% - Typography (Hệ chữ phân cấp)
   textPrimary: '#F4F2F2', // Tiêu đề & Tên App: Soft Mist
-  textSecondary: '#9BA3AF', // Mô tả ngắn & Tác giả: Xám bạc
-  textMuted: '#687282', // Metadata, số phiên bản, dung lượng
+  textSecondary: '#B3BAC5', // Mô tả ngắn & Tác giả: Xám bạc
+  textMuted: '#8B94A3', // Metadata, số phiên bản, dung lượng
 
   // 10% - Accents & Intelligence (Điểm nhấn nhận diện & AI)
   accentForge: '#FF9E20', // [Lửa Rèn] Forge Amber: Nút "Cài đặt 1-Click", CTA chính, Progress Bar
   accentForgeHover: '#E68A13', // Trạng thái hover/active nút cài đặt
-  accentAi: '#215E61', // [Deep Teal] Huy hiệu Jev AI, nút "AI Tóm Tắt"
+  accentAi: '#3F9AA0', // [Teal] Huy hiệu Jev AI, nút "AI Tóm Tắt"
 
   // Semantic Tokens: Chỉ số Uy tín & Trạng thái An toàn (Ngưỡng 80/60)
   trustHigh: '#10B981', // Xanh Emerald: Trust Score 80-100 (Rất an toàn)
@@ -33,7 +33,7 @@ export const colors = {
   success: '#10B981',
   warning: '#F59E0B',
   danger: '#EF4444',
-  info: '#215E61',
+  info: '#3F9AA0',
 
   // Cấu trúc phân nhóm ngữ nghĩa (Nested)
   bg: {
@@ -47,13 +47,13 @@ export const colors = {
   },
   text: {
     primary: '#F4F2F2',
-    secondary: '#9BA3AF',
-    muted: '#687282',
+    secondary: '#B3BAC5',
+    muted: '#8B94A3',
   },
   accent: {
     forge: '#FF9E20',
     forgeHover: '#E68A13',
-    ai: '#215E61',
+    ai: '#3F9AA0',
   },
   trust: {
     high: '#10B981',

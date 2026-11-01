@@ -121,20 +121,27 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     setIsSearching(true);
     setInspectError(null);
 
+    // Gõ tiếp khi yêu cầu cũ chưa về thì bỏ kết quả cũ, tránh ghi đè kết quả của từ khóa mới.
+    let daHuy = false;
     const timer = setTimeout(async () => {
       try {
         const res = await khoUngDungService.timKiem(trimmed, 'WINDOWS');
+        if (daHuy) return;
         setSearchResult(res);
         setSelectedIndex(res.duLieu && res.duLieu.length > 0 ? 0 : -1);
       } catch (err) {
+        if (daHuy) return;
         console.error('Lỗi tìm kiếm:', err);
         setSearchResult(null);
       } finally {
-        setIsSearching(false);
+        if (!daHuy) setIsSearching(false);
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      daHuy = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   // Xử lý nạp và kiểm định repo Paste & Play
@@ -318,7 +325,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                     <span>DÁN ĐƯỜNG DẪN GITHUB ĐỂ CÀI</span>
                   </div>
                   {searchResult?.duongDanUrl?.daCoTrongStore && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30">
                       ĐÃ CÓ TRONG STORE
                     </span>
                   )}
@@ -331,20 +338,20 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                 </p>
 
                 {inspectError && (
-                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{inspectError}</span>
                   </div>
                 )}
 
                 {inspectSuccess && (
-                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
                       {inspectSuccess.chiCoHuongDanCli ? (
                         <>
-                          Ứng dụng phân phối qua hướng dẫn CLI. Đang mở trang chi tiết của{' '}
-                          <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
+                          Ứng dụng này cài bằng dòng lệnh, trang chi tiết sẽ hướng dẫn từng bước.
+                          Đang mở trang của <strong>{inspectSuccess.ungDung?.tenKhoChua}</strong>...
                         </>
                       ) : (
                         <>
@@ -363,7 +370,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                       setIsOpen(false);
                       setSearchModalOpen(false);
                     }}
-                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20"
+                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20"
                   >
                     <span>
                       {kiemTraAppDaCai(undefined, searchResult.duongDanUrl!.repo)
@@ -376,7 +383,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                   <button
                     onClick={() => handleInspectRepo(query.trim())}
                     disabled={isInspecting || !!inspectSuccess}
-                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20 disabled:opacity-70 disabled:cursor-wait"
+                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20 disabled:opacity-70 disabled:cursor-wait"
                   >
                     {isInspecting ? (
                       <>
@@ -407,13 +414,13 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                 {(isInspecting || inspectError || inspectSuccess) && (
                   <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-1.5 mb-1">
                     {inspectError && (
-                      <div className="text-rose-400 text-xs flex items-center gap-2">
+                      <div className="text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>{inspectError}</span>
                       </div>
                     )}
                     {inspectSuccess && (
-                      <div className="text-emerald-400 text-xs flex items-center gap-2">
+                      <div className="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span>Đang mở trang chi tiết...</span>
                       </div>
@@ -438,6 +445,8 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                       return (
                         <div
                           key={app.maUngDung}
+                          role="option"
+                          aria-selected={isSelected}
                           onClick={() => handleSelectApp(app)}
                           onMouseEnter={() => setSelectedIndex(idx)}
                           className={`btn-tactile p-2.5 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${
@@ -467,12 +476,12 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                                   {app.tenKhoChua}
                                 </span>
                                 {kiemTraAppDaCai(app.maUngDung, app.tenRepoDayDu) && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30 shrink-0">
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30 shrink-0">
                                     ✓ Đã cài
                                   </span>
                                 )}
                                 {isFromGithub ? (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30 shrink-0">
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-600 dark:text-purple-300 font-semibold border border-purple-500/30 shrink-0">
                                     GitHub
                                   </span>
                                 ) : (
@@ -501,10 +510,10 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                               <span
                                 className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                                   app.diemUyTin >= 80
-                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                                     : app.diemUyTin >= 60
-                                      ? 'bg-amber-500/10 text-amber-400'
-                                      : 'bg-rose-500/10 text-rose-400'
+                                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
                                 }`}
                               >
                                 {app.diemUyTin}/100

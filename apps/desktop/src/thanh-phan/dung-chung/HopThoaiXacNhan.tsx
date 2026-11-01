@@ -140,7 +140,7 @@ export const HopThoaiXacNhan: React.FC = () => {
         return 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-amber-900/10';
       case 'primary':
       default:
-        return 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/20';
+        return 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-orange-950/20';
     }
   };
 

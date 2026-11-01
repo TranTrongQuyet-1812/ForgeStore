@@ -313,7 +313,7 @@ export const HopThoaiTimKiem: React.FC = () => {
                     openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl!));
                     setSearchModalOpen(false);
                   }}
-                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30"
+                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30"
                 >
                   <span>
                     {kiemTraAppDaCai(undefined, searchResult.duongDanUrl!.repo)
@@ -326,7 +326,7 @@ export const HopThoaiTimKiem: React.FC = () => {
                 <button
                   onClick={() => handleInspectRepo(query.trim())}
                   disabled={isInspecting || !!inspectSuccess}
-                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30 disabled:opacity-70 disabled:cursor-wait"
+                  className="btn-tactile w-full py-2.5 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/30 disabled:opacity-70 disabled:cursor-wait"
                 >
                   {isInspecting ? (
                     <>

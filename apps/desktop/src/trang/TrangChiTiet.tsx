@@ -1121,7 +1121,7 @@ export const TrangChiTiet: React.FC = () => {
           </button>
           <button
             onClick={() => refetch()}
-            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2"
+            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Thử lại</span>
@@ -1238,7 +1238,7 @@ export const TrangChiTiet: React.FC = () => {
                   onClick={() => setReadmeLang('vi')}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     readmeLang === 'vi'
-                      ? 'bg-accent-forge text-white shadow-sm'
+                      ? 'bg-accent-forge text-on-accent shadow-sm'
                       : 'text-secondary hover:text-primary hover:bg-surface-hover'
                   }`}
                 >
@@ -1253,7 +1253,7 @@ export const TrangChiTiet: React.FC = () => {
                   onClick={() => setReadmeLang('en')}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     readmeLang === 'en'
-                      ? 'bg-accent-forge text-white shadow-sm'
+                      ? 'bg-accent-forge text-on-accent shadow-sm'
                       : 'text-secondary hover:text-primary hover:bg-surface-hover'
                   }`}
                 >
@@ -1641,7 +1641,7 @@ export const TrangChiTiet: React.FC = () => {
                                   onClick={() =>
                                     handleOpenTerminal(buoc.lenh, buoc.ruiRoCao, buoc.canhBaoRuiRo)
                                   }
-                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-white text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm font-semibold"
+                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm font-semibold"
                                   title="Mở Terminal đã chuẩn bị sẵn câu lệnh trong biến môi trường và Clipboard (D-27)"
                                 >
                                   <Terminal className="w-3 h-3" />
@@ -1744,7 +1744,7 @@ export const TrangChiTiet: React.FC = () => {
                             type="button"
                             onClick={() => handleRecordCliInstall(currentMethod)}
                             disabled={isRecordingCli}
-                            className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-bold text-xs flex items-center gap-2 shadow-sm"
+                            className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent font-bold text-xs flex items-center gap-2 shadow-sm"
                             title="Ghi nhận ứng dụng vào Thư viện máy này (Chờ xác nhận sau 24h)"
                           >
                             {isRecordingCli ? (
@@ -2014,7 +2014,7 @@ export const TrangChiTiet: React.FC = () => {
                         .getElementById('cli-guide-section')
                         ?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40"
+                    className="btn-tactile w-full h-12 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent font-display font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-950/40"
                   >
                     <Terminal className="w-4 h-4" />
                     <span>Xem Hướng Dẫn Cài Đặt CLI</span>
@@ -2236,7 +2236,7 @@ export const TrangChiTiet: React.FC = () => {
                           ? 'bg-surface-elevated text-primary border border-accent-forge/50 cursor-default px-3'
                           : effectiveStatus === 'LOI'
                             ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-950/40'
-                            : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/40'
+                            : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-orange-950/40'
                 }`}
               >
                 {effectiveStatus === 'DANG_TAI' && (

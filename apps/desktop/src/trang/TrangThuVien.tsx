@@ -806,7 +806,7 @@ export const TrangThuVien: React.FC = () => {
             />
             <span>{dangQuet ? 'Đang quét...' : 'Kiểm Tra Cập Nhật'}</span>
             {soLuongBanCapNhat > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-accent-forge text-white font-mono text-[10px] font-bold">
+              <span className="px-1.5 py-0.2 rounded-full bg-accent-forge text-on-accent font-mono text-[10px] font-bold">
                 {soLuongBanCapNhat}
               </span>
             )}
@@ -833,7 +833,7 @@ export const TrangThuVien: React.FC = () => {
           </div>
           <button
             onClick={() => xacThucService.dangNhapGithub()}
-            className="btn-tactile h-8 px-4 rounded-lg bg-accent-forge hover:bg-accent-forge/90 text-white text-xs font-medium transition-all shadow-xs shrink-0"
+            className="btn-tactile h-8 px-4 rounded-lg bg-accent-forge hover:bg-accent-forge/90 text-on-accent text-xs font-medium transition-all shadow-xs shrink-0"
           >
             Đăng nhập ngay
           </button>
@@ -1188,7 +1188,7 @@ export const TrangThuVien: React.FC = () => {
           </p>
           <button
             onClick={() => navigateTo('explore')}
-            className="btn-tactile mt-2 px-4 py-2.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
+            className="btn-tactile mt-2 px-4 py-2.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-2 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
           >
             <Compass className="w-4 h-4" />
             <span>Khám Phá Ứng Dụng Ngay</span>
@@ -1364,7 +1364,7 @@ export const TrangThuVien: React.FC = () => {
                   setCliUpdateModalApp(null);
                   void kiemTraCapNhatThuCong();
                 }}
-                className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-bold flex items-center gap-1.5 shadow-sm"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Đã cập nhật xong</span>

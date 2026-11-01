@@ -164,7 +164,7 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
                   trangThaiCaiDat.trangThai === 'XAC_MINH' ||
                   trangThaiCaiDat.trangThai === 'DANG_CAI_DAT'
                 ? 'bg-accent-forge/20 text-accent-forge border border-accent-forge/40 focus-visible:ring-accent-forge'
-                : 'bg-surface-elevated group-hover:bg-accent-forge text-secondary group-hover:text-white border border-border group-hover:border-accent-forge focus-visible:ring-accent-forge'
+                : 'bg-surface-elevated group-hover:bg-accent-forge text-secondary group-hover:text-on-accent border border-border group-hover:border-accent-forge focus-visible:ring-accent-forge'
           }`}
           title={
             trangThaiCaiDat.trangThai === 'DA_CAI_DAT'

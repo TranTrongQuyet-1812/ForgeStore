@@ -77,7 +77,7 @@ export const TrangYeuThich: React.FC = () => {
 
           <button
             onClick={() => setAuthModalOpen(true)}
-            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2 shrink-0 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none cursor-pointer"
+            className="btn-tactile px-4 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-2 shrink-0 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Đăng Nhập Ngay</span>
@@ -138,7 +138,7 @@ export const TrangYeuThich: React.FC = () => {
           </p>
           <button
             onClick={() => navigateTo('explore')}
-            className="btn-tactile mt-2 px-4 py-2.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-2 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
+            className="btn-tactile mt-2 px-4 py-2.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-2 shadow-sm focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
           >
             <Compass className="w-4 h-4" />
             <span>Khám Phá Kho Ứng Dụng Ngay</span>

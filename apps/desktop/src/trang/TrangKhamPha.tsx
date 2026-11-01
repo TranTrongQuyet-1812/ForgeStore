@@ -376,8 +376,8 @@ export const TrangKhamPha: React.FC = () => {
                           isInstalled
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
                             : isProcessing
-                              ? 'bg-accent-forge/80 text-white shadow-orange-950/30'
-                              : 'bg-accent-forge hover:bg-accent-forge-hover text-white shadow-orange-950/30'
+                              ? 'bg-accent-forge/80 text-on-accent shadow-orange-950/30'
+                              : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-orange-950/30'
                         }`}
                       >
                         {isInstalled ? (
@@ -603,7 +603,7 @@ export const TrangKhamPha: React.FC = () => {
                 {activeCategory !== 'Tất cả' && (
                   <button
                     onClick={() => setActiveCategory('Tất cả')}
-                    className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge text-white text-xs font-semibold"
+                    className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge text-on-accent text-xs font-semibold"
                   >
                     Xem tất cả danh mục
                   </button>
@@ -612,7 +612,7 @@ export const TrangKhamPha: React.FC = () => {
             ) : activeCategory !== 'Tất cả' ? (
               <button
                 onClick={() => setActiveCategory('Tất cả')}
-                className="btn-tactile mt-2 px-4 py-1.5 rounded-lg bg-accent-forge text-white text-xs font-semibold"
+                className="btn-tactile mt-2 px-4 py-1.5 rounded-lg bg-accent-forge text-on-accent text-xs font-semibold"
               >
                 Xem tất cả ứng dụng
               </button>

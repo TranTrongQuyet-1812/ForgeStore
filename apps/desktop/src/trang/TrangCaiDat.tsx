@@ -212,7 +212,7 @@ export const TrangCaiDat: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => chonThuMucQuaDialog()}
-              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-1.5 shadow-sm"
             >
               <FolderOpen className="w-3.5 h-3.5" />
               <span>Chọn thư mục...</span>
@@ -337,7 +337,7 @@ export const TrangCaiDat: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => chonThuMucTerminalQuaDialog()}
-              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-1.5 shadow-sm"
             >
               <FolderOpen className="w-3.5 h-3.5" />
               <span>Chọn thư mục...</span>
