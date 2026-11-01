@@ -1495,11 +1495,14 @@ async function lenhDay(): Promise<void> {
           ketQua,
           ...chiTiet,
         });
+      let trangThaiTruoc: string | null = null;
+      let trangThaiSau: string | null = null;
       try {
         const ungDungTruoc = await prisma.ungDung.findFirst({
           where: { tenRepoDayDu: { equals: r.repo, mode: 'insensitive' } },
           select: { trangThai: true },
         });
+        trangThaiTruoc = ungDungTruoc?.trangThai ?? null;
         const caoRow = dsCao.find((c) => c.repo.toLowerCase() === r.repo.toLowerCase());
         const che =
           viTheoRepo && caoRow
@@ -1532,6 +1535,7 @@ async function lenhDay(): Promise<void> {
           },
         });
         if (!ud) throw new Error('Không thấy app sau khi đồng bộ');
+        trangThaiSau = ud.trangThai;
 
         const data: Record<string, unknown> = {
           etagRepo: r.etagRepo,
@@ -1599,14 +1603,18 @@ async function lenhDay(): Promise<void> {
           moTa,
           readme,
           phanTich,
-          trangThaiTruoc: ungDungTruoc?.trangThai ?? null,
-          trangThaiSau: ud.trangThai,
+          trangThaiTruoc,
+          trangThaiSau,
         });
         console.info(
-          `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${ungDungTruoc?.trangThai ?? 'mới'} → ${ud.trangThai}`,
+          `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${trangThaiTruoc ?? 'mới'} → ${trangThaiSau}`,
         );
       } catch (err) {
-        ghiLog('loi', { thongBao: String(err).slice(0, 300) });
+        ghiLog('loi', {
+          thongBao: String(err).slice(0, 300),
+          trangThaiTruoc,
+          trangThaiSau,
+        });
         console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
       }
     }
