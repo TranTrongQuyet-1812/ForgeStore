@@ -4,6 +4,7 @@ import { NhanTinCay } from './NhanTinCay';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import { NhanLuuTru } from './NhanLuuTru';
+import { rutGonGiayPhep } from './giay-phep.core';
 
 export interface AppCardData {
   id: string;
@@ -93,7 +94,7 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
               <NhanLuuTru daLuuTru={app.daLuuTru} />
             </div>
 
-            <div className="flex items-center gap-2 mt-1 text-xs">
+            <div className="flex min-w-0 items-center gap-2 mt-1 text-xs">
               <span className="flex items-center gap-1 text-secondary font-mono">
                 <Star className="w-3 h-3 text-muted" />
                 <span className="font-tnum">{formatStars(app.soSaoGithub)}</span>
@@ -101,15 +102,23 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
               {app.giayPhep && (
                 <>
                   <span className="text-muted">•</span>
-                  <span className="text-muted text-xs font-mono uppercase bg-surface-elevated px-1.5 py-0.2 rounded border border-border/50">
-                    {app.giayPhep}
+                  <span
+                    title={app.giayPhep}
+                    className="max-w-32 truncate whitespace-nowrap shrink-0 text-muted text-xs font-mono bg-surface-elevated px-1.5 py-0.2 rounded border border-border/50"
+                  >
+                    {rutGonGiayPhep(app.giayPhep)}
                   </span>
                 </>
               )}
               {app.phienBanMoiNhat && (
                 <>
                   <span className="text-muted">•</span>
-                  <span className="text-xs text-muted font-mono">{app.phienBanMoiNhat}</span>
+                  <span
+                    title={app.phienBanMoiNhat}
+                    className="min-w-0 truncate text-xs text-muted font-mono"
+                  >
+                    {app.phienBanMoiNhat}
+                  </span>
                 </>
               )}
             </div>
