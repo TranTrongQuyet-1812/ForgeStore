@@ -1469,8 +1469,17 @@ async function lenhDay(): Promise<void> {
   if (!canKhoiTaoNestDay(ghi, suaBoNho)) {
     for (const row of cho) {
       const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
+      // Vẫn kiểm bản dịch có ký hiệu khi chạy thử để bắt lệch sớm, trước khi ghi thật.
+      let kiemBanDich = 'chưa kiểm (thiếu --nguon-che)';
+      if (viTheoRepo && caoRow) {
+        try {
+          kiemBanDich = `${layBanDichCoKyHieu(caoRow, row, viTheoRepo.get(row.repo.toLowerCase())).size} đoạn khớp`;
+        } catch (err) {
+          kiemBanDich = `LỆCH: ${String(err).slice(0, 120)}`;
+        }
+      }
       console.info(
-        `[thử] ${row.repo}: trạng thái dự kiến ${duDoanTrangThaiTuReadme(caoRow?.readmeEn)} theo README đã cào`,
+        `[thử] ${row.repo}: trạng thái dự kiến ${duDoanTrangThaiTuReadme(caoRow?.readmeEn)} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,
       );
     }
     return;
