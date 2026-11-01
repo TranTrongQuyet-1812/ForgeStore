@@ -168,7 +168,7 @@ export function XemMarkdown({
                 void openExternalUrl(resolvedHref);
               }
             }}
-            className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors cursor-pointer inline-flex items-center gap-0.5"
+            className="text-success hover:text-success underline underline-offset-2 transition-colors cursor-pointer inline-flex items-center gap-0.5"
             target="_blank"
             rel="noreferrer noopener"
             {...props}
@@ -220,7 +220,7 @@ export function XemMarkdown({
       ),
       blockquote: ({ node: _node, children, ...props }) => (
         <blockquote
-          className="border-l-4 border-emerald-500/50 pl-3 py-1 my-2 text-sm text-muted italic bg-surface-elevated/40 rounded-r-lg"
+          className="border-l-4 border-success/50 pl-3 py-1 my-2 text-sm text-muted italic bg-surface-elevated/40 rounded-r-lg"
           {...props}
         >
           {children}
@@ -231,7 +231,7 @@ export function XemMarkdown({
         if (isInline) {
           return (
             <code
-              className="px-1.5 py-0.5 rounded bg-surface-elevated text-emerald-400 font-mono text-xs border border-border"
+              className="px-1.5 py-0.5 rounded bg-surface-elevated text-success font-mono text-xs border border-border"
               {...props}
             >
               {children}
@@ -239,14 +239,14 @@ export function XemMarkdown({
           );
         }
         return (
-          <code className={clsx('font-mono text-xs text-emerald-400', codeClass)} {...props}>
+          <code className={clsx('font-mono text-xs text-success', codeClass)} {...props}>
             {children}
           </code>
         );
       },
       pre: ({ node: _node, children, ...props }) => (
         <pre
-          className="p-3 rounded-xl bg-surface-elevated border border-border font-mono text-xs overflow-x-auto text-emerald-400 my-3"
+          className="p-3 rounded-xl bg-surface-elevated border border-border font-mono text-xs overflow-x-auto text-success my-3"
           {...props}
         >
           {children}

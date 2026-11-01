@@ -10,12 +10,12 @@ export const KhungThongBao: React.FC = () => {
   const renderIcon = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />;
+        return <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />;
       case 'error':
-        return <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />;
+        return <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />;
       case 'info':
       default:
-        return <Info className="w-4 h-4 text-cyan-600 dark:text-accent-ai shrink-0 mt-0.5" />;
+        return <Info className="w-4 h-4 text-accent-ai shrink-0 mt-0.5" />;
     }
   };
 

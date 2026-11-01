@@ -173,7 +173,7 @@ export const TrangCaiDat: React.FC = () => {
             }`}
           >
             <div className="w-10 h-10 rounded-lg bg-[#F8FAFC] border border-border flex items-center justify-center text-slate-800">
-              <Sun className="w-5 h-5 text-amber-500" />
+              <Sun className="w-5 h-5 text-warning" />
             </div>
             <div>
               <div className="text-xs font-semibold text-primary">Giao diện sáng</div>
@@ -188,7 +188,7 @@ export const TrangCaiDat: React.FC = () => {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
-              <FolderArchive className="w-4 h-4 text-accent-forge" />
+              <FolderArchive className="w-4 h-4 text-accent-forge-text" />
               <span>Thư mục lưu bản Portable (.zip)</span>
             </h3>
             <p className="text-xs text-secondary mt-1">
@@ -235,7 +235,7 @@ export const TrangCaiDat: React.FC = () => {
       <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
         <div>
           <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-accent-forge" />
+            <Terminal className="w-4 h-4 text-accent-forge-text" />
             <span>Trình dòng lệnh (Terminal cho ứng dụng CLI)</span>
           </h3>
           <p className="text-xs text-secondary mt-1">
@@ -257,18 +257,18 @@ export const TrangCaiDat: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-primary">
-                  <Terminal className="w-4 h-4 text-accent-forge" />
+                  <Terminal className="w-4 h-4 text-accent-forge-text" />
                 </div>
                 <span className="text-xs font-semibold text-primary">Windows Terminal</span>
               </div>
               {trinhTerminal === 'windows-terminal' && (
-                <Check className="w-4 h-4 text-accent-forge" />
+                <Check className="w-4 h-4 text-accent-forge-text" />
               )}
             </div>
             <p className="text-[11px] text-muted leading-relaxed">
               Mở <code>wt.exe</code> đa nhiệm hiện đại (khuyên dùng cho Windows 10/11).
               {!isWtAvailable && (
-                <span className="text-amber-400 block mt-1 font-mono text-[10px]">
+                <span className="text-warning block mt-1 font-mono text-[10px]">
                   (Chưa phát hiện wt.exe - sẽ tự fallback sang PowerShell)
                 </span>
               )}
@@ -285,12 +285,14 @@ export const TrangCaiDat: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-sky-400 font-mono text-xs font-bold">
+                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-accent-ai font-mono text-xs font-bold">
                   PS
                 </div>
                 <span className="text-xs font-semibold text-primary">PowerShell</span>
               </div>
-              {trinhTerminal === 'powershell' && <Check className="w-4 h-4 text-accent-forge" />}
+              {trinhTerminal === 'powershell' && (
+                <Check className="w-4 h-4 text-accent-forge-text" />
+              )}
             </div>
             <p className="text-[11px] text-muted leading-relaxed">
               Mở cửa sổ <code>powershell.exe</code> độc lập chuẩn mực hệ thống.
@@ -307,12 +309,12 @@ export const TrangCaiDat: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-amber-400 font-mono text-xs font-bold">
+                <div className="w-7 h-7 rounded-lg bg-surface border border-border flex items-center justify-center text-warning font-mono text-xs font-bold">
                   C:&gt;
                 </div>
                 <span className="text-xs font-semibold text-primary">Command Prompt</span>
               </div>
-              {trinhTerminal === 'cmd' && <Check className="w-4 h-4 text-accent-forge" />}
+              {trinhTerminal === 'cmd' && <Check className="w-4 h-4 text-accent-forge-text" />}
             </div>
             <p className="text-[11px] text-muted leading-relaxed">
               Mở cửa sổ <code>cmd.exe</code> cổ điển nhẹ nhàng và tương thích cao.
@@ -361,7 +363,7 @@ export const TrangCaiDat: React.FC = () => {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
-              <Trash2 className="w-4 h-4 text-accent-forge" />
+              <Trash2 className="w-4 h-4 text-accent-forge-text" />
               <span>Dọn dẹp tệp tải về</span>
             </h3>
             <p className="text-xs text-secondary mt-1">
@@ -388,7 +390,7 @@ export const TrangCaiDat: React.FC = () => {
               className={`btn-tactile px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all ${
                 downloadSize === 0
                   ? 'bg-surface border border-border text-muted cursor-not-allowed'
-                  : 'bg-rose-500/90 hover:bg-rose-600 text-white'
+                  : 'bg-danger/90 hover:bg-danger-solid/90 text-white'
               }`}
             >
               <Trash2 className={`w-3.5 h-3.5 ${isCleaning ? 'animate-spin' : ''}`} />
@@ -403,7 +405,7 @@ export const TrangCaiDat: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
-              <FileText className="w-4 h-4 text-accent-forge" />
+              <FileText className="w-4 h-4 text-accent-forge-text" />
               <span>Nhật ký hoạt động</span>
             </h3>
             <p className="text-xs text-secondary mt-1">
@@ -435,7 +437,7 @@ export const TrangCaiDat: React.FC = () => {
             </button>
             <button
               onClick={handleOpenLogDirectory}
-              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge/10 hover:bg-accent-forge/20 border border-accent-forge/30 text-accent-forge text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+              className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge/10 hover:bg-accent-forge/20 border border-accent-forge/30 text-accent-forge-text text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
             >
               <FolderOpen className="w-3.5 h-3.5" />
               <span>Mở thư mục nhật ký</span>
@@ -447,7 +449,7 @@ export const TrangCaiDat: React.FC = () => {
       {/* Thông tin phần cứng & Định danh máy (FE-V3-07) */}
       <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-3">
         <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
-          <Laptop className="w-4 h-4 text-accent-forge" />
+          <Laptop className="w-4 h-4 text-accent-forge-text" />
           <span>Thông tin thiết bị</span>
         </h3>
         <div className="flex flex-col gap-2 text-xs">

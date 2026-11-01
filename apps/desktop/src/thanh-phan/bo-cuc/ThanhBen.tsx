@@ -57,7 +57,7 @@ export const ThanhBen: React.FC = () => {
             />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-display font-black text-lg text-primary tracking-tight leading-none group-hover:text-accent-forge transition-colors">
+            <span className="font-display font-black text-lg text-primary tracking-tight leading-none group-hover:text-accent-forge-text transition-colors">
               ForgeStore
             </span>
             <span className="text-[10px] font-mono tracking-wider text-muted uppercase font-semibold flex items-center gap-1.5 mt-1">
@@ -98,14 +98,14 @@ export const ThanhBen: React.FC = () => {
 
                     <div className={`flex items-center gap-3 ${isActive ? 'pl-1.5' : ''}`}>
                       <Icon
-                        className={`w-4 h-4 transition-colors ${isActive ? 'text-accent-forge' : 'text-muted group-hover:text-primary'}`}
+                        className={`w-4 h-4 transition-colors ${isActive ? 'text-accent-forge-text' : 'text-muted group-hover:text-primary'}`}
                         strokeWidth={isActive ? 2 : 1.75}
                       />
                       <span>{item.label}</span>
                     </div>
 
                     {hasUpdateBadge && (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-accent-forge/15 text-accent-forge border border-accent-forge/30 font-mono font-bold shadow-xs">
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-accent-forge/15 text-accent-forge-text border border-accent-forge/30 font-mono font-bold shadow-xs">
                         {soLuongBanCapNhat}
                       </span>
                     )}
@@ -121,7 +121,7 @@ export const ThanhBen: React.FC = () => {
       <div className="p-3 border-t border-border shrink-0">
         <div className="p-2.5 rounded-xl bg-surface-elevated border border-border flex items-center justify-between text-[11px] font-mono text-muted">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-success-solid animate-pulse" />
             <span className="text-secondary font-medium">v0.1.0 • FOSS</span>
           </div>
           <span className="text-[10px] text-muted font-medium">Desktop</span>

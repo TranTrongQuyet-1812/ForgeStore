@@ -252,7 +252,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
         <div className="flex items-center gap-2.5 flex-1 min-w-0 pr-2">
           <Search
             className={`w-4 h-4 transition-colors shrink-0 ${
-              isOpen ? 'text-accent-forge' : 'text-muted group-hover:text-primary'
+              isOpen ? 'text-accent-forge-text' : 'text-muted group-hover:text-primary'
             }`}
           />
           <input
@@ -278,7 +278,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
 
         <div className="flex items-center gap-2 shrink-0">
           {isSearching && (
-            <Loader2 className="w-3.5 h-3.5 text-accent-forge animate-spin shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 text-accent-forge-text animate-spin shrink-0" />
           )}
 
           {query && !isSearching && (
@@ -318,14 +318,14 @@ export const ThanhTimKiemDropdown: React.FC = () => {
           <div className="p-3 max-h-[440px] overflow-y-auto no-scrollbar flex flex-col gap-2">
             {/* Nhánh A: Phát hiện đường dẫn GitHub (Paste & Play) */}
             {isGithubUrl || searchResult?.loaiTruyVan === 'URL' ? (
-              <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-2.5">
+              <div className="p-3.5 rounded-xl bg-accent-forge/10 border border-accent-forge/30 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-accent-forge font-semibold text-xs">
+                  <div className="flex items-center gap-2 text-accent-forge-text font-semibold text-xs">
                     <Github className="w-4 h-4" />
                     <span>DÁN ĐƯỜNG DẪN GITHUB ĐỂ CÀI</span>
                   </div>
                   {searchResult?.duongDanUrl?.daCoTrongStore && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-success/20 text-success font-semibold border border-success/30">
                       ĐÃ CÓ TRONG STORE
                     </span>
                   )}
@@ -338,14 +338,14 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                 </p>
 
                 {inspectError && (
-                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/30 text-danger text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{inspectError}</span>
                   </div>
                 )}
 
                 {inspectSuccess && (
-                  <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-lg bg-success/10 border border-success/30 text-success text-xs flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
                       {inspectSuccess.chiCoHuongDanCli ? (
@@ -370,7 +370,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                       setIsOpen(false);
                       setSearchModalOpen(false);
                     }}
-                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20"
+                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-black/20"
                   >
                     <span>
                       {kiemTraAppDaCai(undefined, searchResult.duongDanUrl!.repo)
@@ -383,7 +383,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                   <button
                     onClick={() => handleInspectRepo(query.trim())}
                     disabled={isInspecting || !!inspectSuccess}
-                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-950/20 disabled:opacity-70 disabled:cursor-wait"
+                    className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-black/20 disabled:opacity-70 disabled:cursor-wait"
                   >
                     {isInspecting ? (
                       <>
@@ -412,21 +412,21 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                 )}
 
                 {(isInspecting || inspectError || inspectSuccess) && (
-                  <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 flex flex-col gap-1.5 mb-1">
+                  <div className="p-2.5 rounded-xl bg-accent-forge/10 border border-accent-forge/30 flex flex-col gap-1.5 mb-1">
                     {inspectError && (
-                      <div className="text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
+                      <div className="text-danger text-xs flex items-center gap-2">
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                         <span>{inspectError}</span>
                       </div>
                     )}
                     {inspectSuccess && (
-                      <div className="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                      <div className="text-success text-xs flex items-center gap-2">
                         <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span>Đang mở trang chi tiết...</span>
                       </div>
                     )}
                     {isInspecting && (
-                      <div className="text-accent-forge text-xs flex items-center gap-2">
+                      <div className="text-accent-forge-text text-xs flex items-center gap-2">
                         <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                         <span>Đang kết nối GitHub và kiểm tra gói cài đặt...</span>
                       </div>
@@ -476,12 +476,12 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                                   {app.tenKhoChua}
                                 </span>
                                 {kiemTraAppDaCai(app.maUngDung, app.tenRepoDayDu) && (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30 shrink-0">
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-success/20 text-success font-semibold border border-success/30 shrink-0">
                                     ✓ Đã cài
                                   </span>
                                 )}
                                 {isFromGithub ? (
-                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-600 dark:text-purple-300 font-semibold border border-purple-500/30 shrink-0">
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-accent-ai/20 text-accent-ai font-semibold border border-accent-ai/30 shrink-0">
                                     GitHub
                                   </span>
                                 ) : (
@@ -510,17 +510,17 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                               <span
                                 className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                                   app.diemUyTin >= 80
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                    ? 'bg-success/10 text-success'
                                     : app.diemUyTin >= 60
-                                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                                      ? 'bg-warning/10 text-warning'
+                                      : 'bg-danger/10 text-danger'
                                 }`}
                               >
                                 {app.diemUyTin}/100
                               </span>
                             )}
                             <CornerDownLeft
-                              className={`w-3 h-3 ${isSelected ? 'text-accent-forge' : 'text-muted'}`}
+                              className={`w-3 h-3 ${isSelected ? 'text-accent-forge-text' : 'text-muted'}`}
                             />
                           </div>
                         </div>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import './fonts.css';
 
 @tailwind base;
 @tailwind components;
@@ -34,6 +34,12 @@ html {
   --color-text-secondary: #475569;
   --color-text-muted: #64748b;
   --color-text-on-accent: #0f172a;
+  /* Màu trạng thái (R G B): thành công, lỗi, cảnh báo */
+  --color-success: 4 120 87;
+  --color-danger: 190 18 60;
+  --color-warning: 180 83 9;
+  /* Chữ màu cam: sáng dùng cam đậm cho đủ tương phản, tối dùng cam thương hiệu */
+  --color-accent-forge-text: 180 83 9;
   --card-specular: rgba(255, 255, 255, 0.9);
   --card-shadow: rgba(15, 23, 42, 0.04);
   --card-shadow-hover: rgba(15, 23, 42, 0.08);
@@ -56,6 +62,10 @@ html {
   --color-text-secondary: #b3bac5;
   --color-text-muted: #8b94a3;
   --color-text-on-accent: #0f172a;
+  --color-success: 52 211 153;
+  --color-danger: 251 113 133;
+  --color-warning: 251 191 36;
+  --color-accent-forge-text: 255 158 32;
   --card-specular: rgba(244, 242, 242, 0.05);
   --card-shadow: rgba(0, 0, 0, 0.35);
   --card-shadow-hover: rgba(0, 0, 0, 0.5);

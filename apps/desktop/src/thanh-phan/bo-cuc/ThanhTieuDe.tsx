@@ -229,7 +229,7 @@ export const ThanhTieuDe: React.FC = () => {
                     }}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
                   >
-                    <Heart className="w-3.5 h-3.5 text-muted group-hover:text-rose-500 transition-colors shrink-0" />
+                    <Heart className="w-3.5 h-3.5 text-muted group-hover:text-danger transition-colors shrink-0" />
                     <span className="flex-1">Kho yêu thích của tôi</span>
                   </button>
 
@@ -240,7 +240,7 @@ export const ThanhTieuDe: React.FC = () => {
                     }}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
                   >
-                    <Settings className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge transition-colors shrink-0" />
+                    <Settings className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge-text transition-colors shrink-0" />
                     <span className="flex-1">Cài đặt & Giao diện</span>
                   </button>
                 </div>
@@ -263,9 +263,9 @@ export const ThanhTieuDe: React.FC = () => {
                         xacThucService.logout();
                       }
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 mt-1 rounded-lg text-left hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-xs font-medium group"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 mt-1 rounded-lg text-left hover:bg-danger/10 text-danger transition-colors cursor-pointer text-xs font-medium group"
                   >
-                    <LogOut className="w-3.5 h-3.5 text-rose-500/80 group-hover:text-rose-500 transition-colors shrink-0" />
+                    <LogOut className="w-3.5 h-3.5 text-danger/80 group-hover:text-danger transition-colors shrink-0" />
                     <span>Đăng xuất</span>
                   </button>
                 </div>
@@ -302,7 +302,7 @@ export const ThanhTieuDe: React.FC = () => {
           <button
             onClick={handleClose}
             title="Đóng ứng dụng"
-            className="w-8 h-8 flex items-center justify-center text-muted hover:text-white hover:bg-red-600 transition-colors rounded-lg"
+            className="w-8 h-8 flex items-center justify-center text-muted hover:text-white hover:bg-danger-solid/90 transition-colors rounded-lg"
           >
             <X className="w-3.5 h-3.5" />
           </button>

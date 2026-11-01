@@ -122,25 +122,25 @@ export const HopThoaiXacNhan: React.FC = () => {
   const getIconWrapperClass = () => {
     switch (variant) {
       case 'danger':
-        return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+        return 'bg-danger/10 text-danger border-danger/20';
       case 'warning':
-        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+        return 'bg-warning/10 text-warning border-warning/20';
       case 'primary':
       default:
-        return 'bg-accent-forge/10 text-accent-forge border-accent-forge/20';
+        return 'bg-accent-forge/10 text-accent-forge-text border-accent-forge/20';
     }
   };
 
   const getConfirmButtonClass = () => {
     switch (variant) {
       case 'danger':
-        return 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/20';
+        return 'bg-danger-solid hover:bg-danger-solid/90 text-white shadow-black/20';
       case 'warning':
         // Chuẩn hóa tương phản 10.5:1 (WCAG AAA)
-        return 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold shadow-amber-900/10';
+        return 'bg-warning-solid hover:bg-warning-solid/90 text-slate-950 font-bold shadow-black/10';
       case 'primary':
       default:
-        return 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-orange-950/20';
+        return 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-black/20';
     }
   };
 

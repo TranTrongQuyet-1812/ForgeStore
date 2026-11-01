@@ -178,26 +178,26 @@ export const TrangKhamPha: React.FC = () => {
       trending: {
         app: topStarApp,
         badge: 'ĐANG ĐƯỢC QUAN TÂM',
-        badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge" />,
+        badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge-text" />,
         subtitle: `Dẫn đầu cộng đồng FOSS (${((topStarApp.soSaoGithub || 0) / 1000).toFixed(0)}k sao)`,
         quote: `"${topStarApp.moTaNgan}"`,
-        gradient: 'from-orange-500 to-amber-600',
+        gradient: 'from-accent-forge to-warning',
       },
       curated: {
         app: curatedApp,
         badge: 'FORGE ĐỀ XUẤT • TIÊU ĐIỂM FOSS',
-        badgeIcon: <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />,
+        badgeIcon: <Star className="w-3.5 h-3.5 fill-warning text-warning" />,
         subtitle: 'Tuyển chọn chất lượng: mã nguồn minh bạch, hiệu năng cao',
         quote: `"${curatedApp.moTaNgan}"`,
-        gradient: 'from-purple-500 to-indigo-600',
+        gradient: 'from-accent-ai to-accent-ai',
       },
       security: {
         app: securityApp,
         badge: `ĐIỂM UY TÍN CAO • ${securityApp.diemUyTin || 100}/100`,
-        badgeIcon: <Shield className="w-3.5 h-3.5 text-emerald-400" />,
+        badgeIcon: <Shield className="w-3.5 h-3.5 text-success" />,
         subtitle: 'Đánh giá dựa trên lịch sử kho mã và tính minh bạch',
         quote: `"${securityApp.moTaNgan}"`,
-        gradient: 'from-blue-600 to-cyan-600',
+        gradient: 'from-accent-ai to-accent-ai',
       },
     };
   }, [featuredAppsList]);
@@ -287,7 +287,7 @@ export const TrangKhamPha: React.FC = () => {
                 {/* Cột trái: Thông tin ứng dụng theo chế độ đang chọn */}
                 <div className="flex-1 max-w-2xl flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge border border-accent-forge/40 flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge-text border border-accent-forge/40 flex items-center gap-1">
                       {currentSpotlight.badgeIcon}
                       <span>{currentSpotlight.badge}</span>
                     </span>
@@ -316,10 +316,7 @@ export const TrangKhamPha: React.FC = () => {
                           {spotlightApp.tenApp}
                         </h2>
                         {spotlightApp.isVerifiedFoss && (
-                          <span
-                            className="text-emerald-400"
-                            title="Mã nguồn mở đã xác minh minh bạch"
-                          >
+                          <span className="text-success" title="Mã nguồn mở đã xác minh minh bạch">
                             <Check className="w-4 h-4 stroke-[2.5]" />
                           </span>
                         )}
@@ -328,7 +325,7 @@ export const TrangKhamPha: React.FC = () => {
                         {spotlightApp.repoHandle} • ⭐ {formatStars(spotlightApp.soSaoGithub)} sao
                         GitHub
                         {spotlightApp.starDelta && (
-                          <span className="text-emerald-400 font-semibold ml-1.5">
+                          <span className="text-success font-semibold ml-1.5">
                             ({spotlightApp.starDelta})
                           </span>
                         )}
@@ -374,10 +371,10 @@ export const TrangKhamPha: React.FC = () => {
                         onClick={() => openAppDetail(spotlightApp.id)}
                         className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
                           isInstalled
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+                            ? 'bg-success-solid hover:bg-success-solid/90 text-white shadow-black/30'
                             : isProcessing
-                              ? 'bg-accent-forge/80 text-on-accent shadow-orange-950/30'
-                              : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-orange-950/30'
+                              ? 'bg-accent-forge/80 text-on-accent shadow-black/30'
+                              : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-black/30'
                         }`}
                       >
                         {isInstalled ? (
@@ -429,7 +426,7 @@ export const TrangKhamPha: React.FC = () => {
                 }`}
               >
                 <Flame
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'trending' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'trending' ? 'text-accent-forge-text' : 'text-muted'}`}
                 />
                 <span className="whitespace-nowrap">Thịnh Hành</span>
               </button>
@@ -443,7 +440,7 @@ export const TrangKhamPha: React.FC = () => {
                 }`}
               >
                 <Star
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'stars' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'stars' ? 'text-accent-forge-text' : 'text-muted'}`}
                 />
                 <span className="whitespace-nowrap">Nhiều Sao Nhất</span>
               </button>
@@ -457,7 +454,7 @@ export const TrangKhamPha: React.FC = () => {
                 }`}
               >
                 <Clock
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'recent' ? 'text-accent-forge' : 'text-muted'}`}
+                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'recent' ? 'text-accent-forge-text' : 'text-muted'}`}
                 />
                 <span className="whitespace-nowrap">Mới Cập Nhật</span>
               </button>
@@ -470,7 +467,7 @@ export const TrangKhamPha: React.FC = () => {
                   onClick={() => setTimeWindow('today')}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'today'
-                      ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
+                      ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
                   }`}
                 >
@@ -480,7 +477,7 @@ export const TrangKhamPha: React.FC = () => {
                   onClick={() => setTimeWindow('week')}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'week'
-                      ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
+                      ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
                   }`}
                 >
@@ -490,7 +487,7 @@ export const TrangKhamPha: React.FC = () => {
                   onClick={() => setTimeWindow('month')}
                   className={`btn-tactile shrink-0 whitespace-nowrap px-2.5 py-1 rounded-lg transition-colors ${
                     timeWindow === 'month'
-                      ? 'bg-surface-elevated text-accent-forge font-semibold shadow-sm'
+                      ? 'bg-surface-elevated text-accent-forge-text font-semibold shadow-sm'
                       : 'text-muted hover:text-primary'
                   }`}
                 >
@@ -525,7 +522,7 @@ export const TrangKhamPha: React.FC = () => {
                     <span
                       className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono leading-none shrink-0 ${
                         isActive
-                          ? 'bg-accent-forge/15 text-accent-forge border border-accent-forge/25 font-bold'
+                          ? 'bg-accent-forge/15 text-accent-forge-text border border-accent-forge/25 font-bold'
                           : 'bg-surface-hover text-muted border border-border'
                       }`}
                     >
@@ -548,8 +545,8 @@ export const TrangKhamPha: React.FC = () => {
           </div>
         ) : isAppsError ? (
           /* Trạng thái Lỗi kết nối kèm nút Thử lại (B3) */
-          <div className="p-8 rounded-2xl bg-surface border border-red-500/20 flex flex-col items-center justify-center text-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+          <div className="p-8 rounded-2xl bg-surface border border-danger/20 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger">
               <AlertCircle className="w-5 h-5" />
             </div>
             <h3 className="text-sm font-bold text-primary">Không thể kết nối máy chủ Store</h3>
@@ -560,7 +557,7 @@ export const TrangKhamPha: React.FC = () => {
               onClick={() => refetchApps()}
               className="btn-tactile mt-2 px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold flex items-center gap-2 border border-border"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-accent-forge" />
+              <RefreshCw className="w-3.5 h-3.5 text-accent-forge-text" />
               <span>Thử lại ngay</span>
             </button>
           </div>

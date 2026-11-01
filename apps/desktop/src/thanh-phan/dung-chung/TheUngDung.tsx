@@ -76,14 +76,11 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-base font-bold font-display text-primary truncate group-hover:text-accent-forge transition-colors">
+              <h3 className="text-base font-bold font-display text-primary truncate group-hover:text-accent-forge-text transition-colors">
                 {app.tenApp}
               </h3>
               {app.isVerifiedFoss && (
-                <span
-                  title="Xác minh mã nguồn mở minh bạch"
-                  className="text-emerald-600 dark:text-emerald-400 shrink-0"
-                >
+                <span title="Xác minh mã nguồn mở minh bạch" className="text-success shrink-0">
                   <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                 </span>
               )}
@@ -159,11 +156,11 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
           }}
           className={`btn-tactile h-7 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all outline-none focus-visible:ring-2 ${
             trangThaiCaiDat.trangThai === 'DA_CAI_DAT'
-              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 focus-visible:ring-emerald-400'
+              ? 'bg-success/15 text-success border border-success/30 hover:bg-success/25 focus-visible:ring-success'
               : trangThaiCaiDat.trangThai === 'DANG_TAI' ||
                   trangThaiCaiDat.trangThai === 'XAC_MINH' ||
                   trangThaiCaiDat.trangThai === 'DANG_CAI_DAT'
-                ? 'bg-accent-forge/20 text-accent-forge border border-accent-forge/40 focus-visible:ring-accent-forge'
+                ? 'bg-accent-forge/20 text-accent-forge-text border border-accent-forge/40 focus-visible:ring-accent-forge'
                 : 'bg-surface-elevated group-hover:bg-accent-forge text-secondary group-hover:text-on-accent border border-border group-hover:border-accent-forge focus-visible:ring-accent-forge'
           }`}
           title={

@@ -37,7 +37,7 @@ export const TrangYeuThich: React.FC = () => {
       <div className="flex items-center justify-between border-b border-border/60 pb-4">
         <div>
           <h1 className="text-xl font-bold font-display text-primary flex items-center gap-2">
-            <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
+            <Heart className="w-5 h-5 text-danger fill-danger" />
             <span>Kho Yêu Thích</span>
           </h1>
           <p className="text-xs text-muted mt-1">
@@ -63,7 +63,7 @@ export const TrangYeuThich: React.FC = () => {
         <div className="p-4 rounded-2xl bg-surface-elevated/80 border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent-forge/10 border border-accent-forge/20 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5 text-accent-forge" />
+              <Sparkles className="w-5 h-5 text-accent-forge-text" />
             </div>
             <div>
               <h3 className="text-xs font-bold text-primary font-display">
@@ -96,8 +96,8 @@ export const TrangYeuThich: React.FC = () => {
 
       {/* Trạng thái lỗi mạng */}
       {isError && (
-        <div className="p-8 rounded-2xl bg-surface border border-rose-500/30 flex flex-col items-center justify-center text-center gap-3">
-          <AlertCircle className="w-8 h-8 text-rose-400" />
+        <div className="p-8 rounded-2xl bg-surface border border-danger/30 flex flex-col items-center justify-center text-center gap-3">
+          <AlertCircle className="w-8 h-8 text-danger" />
           <h3 className="text-sm font-bold text-primary">Không thể tải kho yêu thích</h3>
           <p className="text-xs text-muted max-w-md">
             Đã xảy ra lỗi khi kết nối tới máy chủ. Vui lòng kiểm tra lại đường truyền mạng.
@@ -126,7 +126,7 @@ export const TrangYeuThich: React.FC = () => {
       {/* Trạng thái rỗng (Empty State) */}
       {!isLoading && !isError && displayApps.length === 0 && (
         <div className="p-12 rounded-2xl bg-surface border border-border/60 flex flex-col items-center justify-center text-center gap-3 my-4">
-          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-2">
+          <div className="w-14 h-14 rounded-2xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger mb-2">
             <Heart className="w-7 h-7 stroke-[1.5]" />
           </div>
           <h3 className="text-base font-bold font-display text-primary">

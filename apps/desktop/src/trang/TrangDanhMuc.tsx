@@ -28,42 +28,42 @@ const CATEGORY_META: Record<
   'Lập trình & Phát triển': {
     desc: 'IDE, Text Editor, Git Tools, Terminal, Dev Environments',
     icon: Code,
-    color: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
   },
   'Tiện ích hệ thống': {
     desc: 'Điều khiển từ xa, tối ưu hệ điều hành, giải nén, clipboard',
     icon: Wrench,
-    color: 'text-accent-forge bg-orange-500/10 border-orange-500/20',
+    color: 'text-accent-forge-text bg-accent-forge/10 border-accent-forge/20',
   },
   'Đa phương tiện': {
     desc: 'Trình phát video, nghe nhạc, ghi hình màn hình, biên tập',
     icon: Film,
-    color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    color: 'text-warning bg-warning/10 border-warning/20',
   },
   'Bảo mật & Quyền riêng tư': {
     desc: 'Quản lý mật khẩu, VPN mã hóa, 2FA authenticator, che chắn',
     icon: Shield,
-    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    color: 'text-success bg-success/10 border-success/20',
   },
   'Năng suất & Văn phòng': {
     desc: 'Ghi chú Second Brain, Markdown, PDF reader, bảng tính',
     icon: FileText,
-    color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
   },
   'Mạng & Giao tiếp': {
     desc: 'Trình duyệt bảo mật, chat P2P, truyền tệp LAN, torrent',
     icon: Radio,
-    color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
   },
   'Học tập & Giáo dục': {
     desc: 'Phần mềm toán học, học ngoại ngữ, tra cứu mã nguồn, flashcard',
     icon: GraduationCap,
-    color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
   },
   'Trò chơi & Giải trí': {
     desc: 'Game indie, game engine FOSS, retro emulator, minigames',
     icon: Gamepad2,
-    color: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+    color: 'text-danger bg-danger/10 border-danger/20',
   },
 };
 
@@ -166,7 +166,7 @@ export const TrangDanhMuc: React.FC = () => {
 
                   <div className="mt-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-bold font-display text-primary group-hover:text-accent-forge transition-colors line-clamp-1">
+                      <h3 className="text-sm font-bold font-display text-primary group-hover:text-accent-forge-text transition-colors line-clamp-1">
                         {cat.name}
                       </h3>
                       <ArrowRight className="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />

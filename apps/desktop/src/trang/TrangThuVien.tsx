@@ -779,7 +779,7 @@ export const TrangThuVien: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
           <h1 className="text-xl font-bold font-display text-primary flex items-center gap-2">
-            <Library className="w-5 h-5 text-accent-forge" />
+            <Library className="w-5 h-5 text-accent-forge-text" />
             <span>Thư Viện Của Máy Này</span>
           </h1>
           <div className="flex items-center gap-2 text-xs text-muted mt-1 font-mono">
@@ -802,7 +802,7 @@ export const TrangThuVien: React.FC = () => {
             className="btn-tactile h-9 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-2 transition-all shadow-xs focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 text-accent-forge ${dangQuet ? 'animate-spin' : ''}`}
+              className={`w-3.5 h-3.5 text-accent-forge-text ${dangQuet ? 'animate-spin' : ''}`}
             />
             <span>{dangQuet ? 'Đang quét...' : 'Kiểm Tra Cập Nhật'}</span>
             {soLuongBanCapNhat > 0 && (
@@ -818,7 +818,7 @@ export const TrangThuVien: React.FC = () => {
       {!isAuthenticated && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-surface-elevated/80 border border-border/80">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-accent-forge/10 flex items-center justify-center text-accent-forge shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-accent-forge/10 flex items-center justify-center text-accent-forge-text shrink-0">
               <Laptop className="w-4 h-4" />
             </div>
             <div>
@@ -910,25 +910,25 @@ export const TrangThuVien: React.FC = () => {
 
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-bold font-display text-primary truncate group-hover:text-accent-forge transition-colors">
+                    <h3 className="text-sm font-bold font-display text-primary truncate group-hover:text-accent-forge-text transition-colors">
                       {app.tenApp}
                     </h3>
                     {app.laAppCli && (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-accent-forge font-mono text-[10px] font-bold shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-accent-forge-text font-mono text-[10px] font-bold shrink-0">
                         CLI: {app.trinhQuanLyGoi}
                       </span>
                     )}
                     {app.laAppCli && app.trangThaiXacNhan === 'CHO_XAC_NHAN' ? (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[10px] font-bold flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-warning/10 border border-warning/30 text-warning font-mono text-[10px] font-bold flex items-center gap-1 shrink-0">
                         <AlertTriangle className="w-3 h-3" />
                         Chờ xác nhận (24h)
                       </span>
                     ) : app.daBiGoBenNgoai ? (
-                      <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono text-[10px] font-bold shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-danger/10 border border-danger/30 text-danger font-mono text-[10px] font-bold shrink-0">
                         Đã bị gỡ bên ngoài Windows
                       </span>
                     ) : app.coBanMoi ? (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-[10px] font-bold shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-warning/10 border border-warning/30 text-warning font-mono text-[10px] font-bold shrink-0">
                         Bản mới: {app.phienBanMoi || 'Mới'}
                       </span>
                     ) : null}
@@ -977,11 +977,11 @@ export const TrangThuVien: React.FC = () => {
                   <button
                     onClick={() => handleUninstallApp(app)}
                     disabled={isUninstallingId !== null}
-                    className="btn-tactile h-8 px-3.5 rounded-lg bg-surface-elevated hover:bg-rose-500/15 border border-rose-500/30 text-rose-400 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-rose-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn-tactile h-8 px-3.5 rounded-lg bg-surface-elevated hover:bg-danger/15 border border-danger/30 text-danger font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-danger outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Dọn bản ghi này khỏi danh sách quản lý máy này"
                   >
                     {isUninstallingId === app.maUngDung ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge" />
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge-text" />
                     ) : (
                       <Trash2 className="w-3.5 h-3.5" />
                     )}
@@ -997,7 +997,7 @@ export const TrangThuVien: React.FC = () => {
                           handleConfirmCli(app);
                         }}
                         disabled={isConfirmingCliId === app.maUngDung}
-                        className="btn-tactile h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                        className="btn-tactile h-8 px-3 rounded-lg bg-success-solid hover:bg-success-solid/90 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
                         title="Xác nhận bạn đã cài phần mềm này và hủy tự động hết hạn 24h"
                       >
                         {isConfirmingCliId === app.maUngDung ? (
@@ -1041,7 +1041,7 @@ export const TrangThuVien: React.FC = () => {
                               openAppDetail(app.maUngDung);
                             }
                           }}
-                          className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
+                          className="btn-tactile h-8 px-3 rounded-lg bg-warning-solid hover:bg-warning-solid/90 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all outline-none"
                           title="Xem lệnh cập nhật phiên bản mới"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -1069,7 +1069,7 @@ export const TrangThuVien: React.FC = () => {
                         e.stopPropagation();
                         handleUninstallApp(app);
                       }}
-                      className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-rose-500/10 hover:border-rose-500/30 text-muted hover:text-rose-400 font-medium text-xs flex items-center gap-1.5 transition-colors"
+                      className="btn-tactile h-8 px-2.5 rounded-lg border border-border hover:bg-danger/10 hover:border-danger/30 text-muted hover:text-danger font-medium text-xs flex items-center gap-1.5 transition-colors"
                       title="Xem lệnh gỡ cài đặt CLI"
                     >
                       <Terminal className="w-3.5 h-3.5" />
@@ -1100,7 +1100,7 @@ export const TrangThuVien: React.FC = () => {
                         <button
                           onClick={() => handleQuickUpdate(app)}
                           disabled={isUninstallingId !== null}
-                          className="btn-tactile h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-amber-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="btn-tactile h-8 px-3 rounded-lg bg-warning-solid hover:bg-warning-solid/90 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-warning outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Cập nhật nhanh lên phiên bản mới"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -1131,7 +1131,7 @@ export const TrangThuVien: React.FC = () => {
                       <button
                         onClick={() => handleOpenApp(app)}
                         disabled={isUninstallingId !== null}
-                        className="btn-tactile h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-emerald-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn-tactile h-8 px-3.5 rounded-lg bg-success-solid hover:bg-success-solid/90 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-success outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Khởi chạy ứng dụng"
                       >
                         <Play className="w-3.5 h-3.5 fill-white" />
@@ -1156,11 +1156,11 @@ export const TrangThuVien: React.FC = () => {
                     <button
                       onClick={() => handleUninstallApp(app)}
                       disabled={isUninstallingId !== null}
-                      className="btn-tactile h-8 w-8 rounded-lg border border-border hover:bg-rose-500/10 hover:border-rose-500/30 text-muted hover:text-rose-400 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-rose-400 outline-none disabled:opacity-50"
+                      className="btn-tactile h-8 w-8 rounded-lg border border-border hover:bg-danger/10 hover:border-danger/30 text-muted hover:text-danger flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:ring-danger outline-none disabled:opacity-50"
                       title="Gỡ cài đặt phần mềm này khỏi máy"
                     >
                       {isUninstallingId === app.maUngDung ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-accent-forge-text" />
                       ) : (
                         <Trash2 className="w-3.5 h-3.5" />
                       )}
@@ -1176,7 +1176,7 @@ export const TrangThuVien: React.FC = () => {
       {/* Trạng thái rỗng (Empty State) khi chưa cài app nào */}
       {!isLoading && allInstalledApps.length === 0 && (
         <div className="p-12 rounded-2xl bg-surface border border-border/60 flex flex-col items-center justify-center text-center gap-3 my-4">
-          <div className="w-14 h-14 rounded-2xl bg-accent-forge/10 border border-accent-forge/20 flex items-center justify-center text-accent-forge mb-2">
+          <div className="w-14 h-14 rounded-2xl bg-accent-forge/10 border border-accent-forge/20 flex items-center justify-center text-accent-forge-text mb-2">
             <Library className="w-7 h-7 stroke-[1.5]" />
           </div>
           <h3 className="text-base font-bold font-display text-primary">
@@ -1209,7 +1209,7 @@ export const TrangThuVien: React.FC = () => {
           <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <div className="w-8 h-8 rounded-lg bg-danger/10 border border-danger/20 flex items-center justify-center text-danger">
                   <Terminal className="w-4 h-4" />
                 </div>
                 <div>
@@ -1238,7 +1238,7 @@ export const TrangThuVien: React.FC = () => {
 
             {/* Khung lệnh gỡ */}
             <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
-              <pre className="p-3.5 pr-28 text-xs font-mono text-rose-400 overflow-x-auto leading-relaxed select-text font-medium">
+              <pre className="p-3.5 pr-28 text-xs font-mono text-danger overflow-x-auto leading-relaxed select-text font-medium">
                 <code>{cliUninstallModalApp.lenhGo}</code>
               </pre>
               <button
@@ -1248,8 +1248,8 @@ export const TrangThuVien: React.FC = () => {
               >
                 {copiedCliId === 'cli-uninstall' ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
-                    <span className="text-emerald-400 font-semibold">Đã chép</span>
+                    <Check className="w-3.5 h-3.5 text-success animate-pop" />
+                    <span className="text-success font-semibold">Đã chép</span>
                   </>
                 ) : (
                   <>
@@ -1261,7 +1261,7 @@ export const TrangThuVien: React.FC = () => {
             </div>
 
             <div className="p-3 rounded-xl bg-surface/50 border border-border text-[11px] text-muted flex items-start gap-2 leading-relaxed">
-              <Shield className="w-4 h-4 text-accent-forge shrink-0 mt-0.5" />
+              <Shield className="w-4 h-4 text-accent-forge-text shrink-0 mt-0.5" />
               <span>
                 Sau khi bạn đã hoàn tất gỡ cài đặt trong Terminal, hãy bấm nút{' '}
                 <strong>"Xác nhận đã gỡ"</strong> bên dưới để xóa bản ghi khỏi Thư viện máy này.
@@ -1280,7 +1280,7 @@ export const TrangThuVien: React.FC = () => {
                 type="button"
                 onClick={handleConfirmCliUninstalled}
                 disabled={isUninstallingCli}
-                className="btn-tactile h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                className="btn-tactile h-9 px-4 rounded-xl bg-danger-solid hover:bg-danger-solid/90 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
               >
                 {isUninstallingCli ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1300,7 +1300,7 @@ export const TrangThuVien: React.FC = () => {
           <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <div className="w-8 h-8 rounded-lg bg-warning/10 border border-warning/20 flex items-center justify-center text-warning">
                   <Download className="w-4 h-4" />
                 </div>
                 <div>
@@ -1328,7 +1328,7 @@ export const TrangThuVien: React.FC = () => {
 
             {/* Khung lệnh cập nhật */}
             <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
-              <pre className="p-3.5 pr-28 text-xs font-mono text-emerald-400 overflow-x-auto leading-relaxed select-text font-medium">
+              <pre className="p-3.5 pr-28 text-xs font-mono text-success overflow-x-auto leading-relaxed select-text font-medium">
                 <code>{cliUpdateModalApp.lenhCapNhatCli}</code>
               </pre>
               <button
@@ -1338,8 +1338,8 @@ export const TrangThuVien: React.FC = () => {
               >
                 {copiedCliId === 'cli-update' ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400 animate-pop" />
-                    <span className="text-emerald-400 font-semibold">Đã chép</span>
+                    <Check className="w-3.5 h-3.5 text-success animate-pop" />
+                    <span className="text-success font-semibold">Đã chép</span>
                   </>
                 ) : (
                   <>

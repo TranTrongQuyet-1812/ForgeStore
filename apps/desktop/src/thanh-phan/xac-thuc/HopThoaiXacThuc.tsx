@@ -184,7 +184,7 @@ export const HopThoaiXacThuc: React.FC = () => {
                 setLoadingProvider(null);
                 xacThucService.huyDangNhapHienTai();
               }}
-              className="text-[11px] text-muted hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer inline-flex items-center gap-1 font-medium underline underline-offset-4"
+              className="text-[11px] text-muted hover:text-danger dark:hover:text-danger transition-colors cursor-pointer inline-flex items-center gap-1 font-medium underline underline-offset-4"
             >
               Hủy kết nối và thử lại
             </button>

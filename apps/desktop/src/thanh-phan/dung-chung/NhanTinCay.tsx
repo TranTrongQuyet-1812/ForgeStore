@@ -36,10 +36,10 @@ export const NhanTinCay: React.FC<TrustPillProps> = ({
   const isMedium = score >= NGUONG_CAN_LUU_Y && score < NGUONG_AN_TOAN_CAO;
 
   const colorStyles = isHigh
-    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 hover:border-emerald-500/40'
+    ? 'bg-success/10 text-success border-success/25 hover:border-success/40'
     : isMedium
-      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 hover:border-amber-500/40'
-      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25 hover:border-rose-500/40';
+      ? 'bg-warning/10 text-warning border-warning/25 hover:border-warning/40'
+      : 'bg-danger/10 text-danger border-danger/25 hover:border-danger/40';
 
   const Icon = isHigh ? ShieldCheck : isMedium ? AlertTriangle : ShieldAlert;
 
