@@ -17,6 +17,9 @@ import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { AsciiSkeleton, AsciiReveal } from '../thanh-phan/dung-chung/KhungXuongAscii';
 
+// Mọi danh mục dùng chung một màu nhấn để giao diện gọn, không rực rỡ nhiều màu.
+const MAU_DANH_MUC = 'text-accent-forge-text bg-accent-forge/10 border-accent-forge/20';
+
 const CATEGORY_META: Record<
   string,
   {
@@ -28,42 +31,42 @@ const CATEGORY_META: Record<
   'Lập trình & Phát triển': {
     desc: 'IDE, Text Editor, Git Tools, Terminal, Dev Environments',
     icon: Code,
-    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
+    color: MAU_DANH_MUC,
   },
   'Tiện ích hệ thống': {
     desc: 'Điều khiển từ xa, tối ưu hệ điều hành, giải nén, clipboard',
     icon: Wrench,
-    color: 'text-accent-forge-text bg-accent-forge/10 border-accent-forge/20',
+    color: MAU_DANH_MUC,
   },
   'Đa phương tiện': {
     desc: 'Trình phát video, nghe nhạc, ghi hình màn hình, biên tập',
     icon: Film,
-    color: 'text-warning bg-warning/10 border-warning/20',
+    color: MAU_DANH_MUC,
   },
   'Bảo mật & Quyền riêng tư': {
     desc: 'Quản lý mật khẩu, VPN mã hóa, 2FA authenticator, che chắn',
     icon: Shield,
-    color: 'text-success bg-success/10 border-success/20',
+    color: MAU_DANH_MUC,
   },
   'Năng suất & Văn phòng': {
     desc: 'Ghi chú Second Brain, Markdown, PDF reader, bảng tính',
     icon: FileText,
-    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
+    color: MAU_DANH_MUC,
   },
   'Mạng & Giao tiếp': {
     desc: 'Trình duyệt bảo mật, chat P2P, truyền tệp LAN, torrent',
     icon: Radio,
-    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
+    color: MAU_DANH_MUC,
   },
   'Học tập & Giáo dục': {
     desc: 'Phần mềm toán học, học ngoại ngữ, tra cứu mã nguồn, flashcard',
     icon: GraduationCap,
-    color: 'text-accent-ai bg-accent-ai/10 border-accent-ai/20',
+    color: MAU_DANH_MUC,
   },
   'Trò chơi & Giải trí': {
     desc: 'Game indie, game engine FOSS, retro emulator, minigames',
     icon: Gamepad2,
-    color: 'text-danger bg-danger/10 border-danger/20',
+    color: MAU_DANH_MUC,
   },
 };
 

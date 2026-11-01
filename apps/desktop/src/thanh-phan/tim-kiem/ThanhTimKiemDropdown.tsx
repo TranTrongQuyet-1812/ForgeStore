@@ -47,6 +47,17 @@ export const ThanhTimKiemDropdown: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Chọn xong một kết quả thì đóng khung và xóa chữ đã gõ, để ô tìm kiếm sạch khi sang trang khác.
+  const dongVaXoaTimKiem = () => {
+    setIsOpen(false);
+    setSearchModalOpen(false);
+    setQuery('');
+    setSearchResult(null);
+    setSelectedIndex(-1);
+    setInspectError(null);
+    setInspectSuccess(null);
+  };
+
   // Đồng bộ trạng thái mở nếu có nơi khác kích hoạt setSearchModalOpen
   useEffect(() => {
     if (isSearchModalOpen && !isOpen) {
@@ -161,8 +172,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
         }
         autoCloseTimerRef.current = setTimeout(() => {
           openAppDetail(res.ungDung!.tenRepoDayDu || res.ungDung!.maUngDung);
-          setIsOpen(false);
-          setSearchModalOpen(false);
+          dongVaXoaTimKiem();
         }, 800);
       } else {
         const errorMsg =
@@ -205,8 +215,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
       if (isGithubUrl || searchResult?.loaiTruyVan === 'URL') {
         if (searchResult?.duongDanUrl?.daCoTrongStore) {
           openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl));
-          setIsOpen(false);
-          setSearchModalOpen(false);
+          dongVaXoaTimKiem();
         } else {
           handleInspectRepo(query.trim());
         }
@@ -216,8 +225,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
           handleInspectRepo(selectedApp.duongDanGithub || selectedApp.tenRepoDayDu);
         } else {
           openAppDetail(selectedApp.tenRepoDayDu || selectedApp.maUngDung);
-          setIsOpen(false);
-          setSearchModalOpen(false);
+          dongVaXoaTimKiem();
         }
       }
     }
@@ -234,8 +242,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
       handleInspectRepo(app.duongDanGithub || `https://github.com/${app.tenRepoDayDu}`);
     } else {
       openAppDetail(app.tenRepoDayDu || app.maUngDung);
-      setIsOpen(false);
-      setSearchModalOpen(false);
+      dongVaXoaTimKiem();
     }
   };
 
@@ -367,8 +374,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                   <button
                     onClick={() => {
                       openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl!));
-                      setIsOpen(false);
-                      setSearchModalOpen(false);
+                      dongVaXoaTimKiem();
                     }}
                     className="btn-tactile w-full py-2 px-3.5 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md shadow-black/20"
                   >
