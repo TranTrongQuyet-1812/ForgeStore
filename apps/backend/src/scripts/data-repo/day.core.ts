@@ -8,6 +8,19 @@ import {
   phanTichReadme,
 } from '../../modules/ai/translation/tien-ich/readme-markdown-processor.util';
 
+/** Chỉ khởi tạo ứng dụng khi cần ghi DB hoặc xử lý bộ nhớ dịch. */
+export function canKhoiTaoNestDay(ghi: boolean, suaBoNho: boolean): boolean {
+  return ghi || suaBoNho;
+}
+
+/** Giữ cùng tên trường trạng thái trong cả log thành công và log lỗi để đối chiếu khi hoàn tác. */
+export function taoChiTietTrangThaiDay(
+  trangThaiTruoc: string | null,
+  trangThaiSau: string | null,
+): { trangThaiTruoc: string | null; trangThaiSau: string | null } {
+  return { trangThaiTruoc, trangThaiSau };
+}
+
 export interface DongBaoCaoLuuTru {
   repo: string;
   loai: string;

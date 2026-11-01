@@ -2,16 +2,23 @@ import { coCachCaiCliHopLe } from '@forgestore/types';
 import { trichXuatHuongDanCliBangQuyTac } from '../../modules/ai/tien-ich/cli-guide-extractor.util';
 import type { BanGhiDaCao } from './data-repo.types';
 
+const TIEN_TO_LENH = String.raw`^(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S+)\s+)*(?:PS(?:\s+[^>\r\n]*)?>\s*|[$>%]\s*)?`;
 const MAU_LENH_QUEN_THUOC: Record<string, RegExp> = {
-  npm: /\b(?:npm\s+(?:install|i)|pnpm\s+(?:add|install|i)|yarn\s+(?:add|global\s+add)|bun\s+(?:add|i))\b/i,
-  pip: /\b(?:pip\d*\s+install|python\d*\s+-m\s+pip\s+install|py\s+-m\s+pip\s+install|pipx\s+install)\b/i,
-  uv: /\buv\s+(?:tool\s+install|pip\s+install)\b/i,
-  winget: /\bwinget\s+install\b/i,
-  scoop: /\bscoop\s+install\b/i,
-  choco: /\bchoco\s+install\b/i,
-  cargo: /\bcargo\s+install\b/i,
-  go: /\bgo\s+install\b/i,
-  docker: /\bdocker\s+(?:pull|run)\b/i,
+  npm: new RegExp(
+    `${TIEN_TO_LENH}(?:npm\\s+(?:install|i)|pnpm\\s+(?:add|install|i)|yarn\\s+(?:add|global\\s+add)|bun\\s+(?:add|i))\\b`,
+    'i',
+  ),
+  pip: new RegExp(
+    `${TIEN_TO_LENH}(?:pip\\d*\\s+install|python\\d*\\s+-m\\s+pip\\s+install|py\\s+-m\\s+pip\\s+install|pipx\\s+install)\\b`,
+    'i',
+  ),
+  uv: new RegExp(`${TIEN_TO_LENH}uv\\s+(?:tool\\s+install|pip\\s+install)\\b`, 'i'),
+  winget: new RegExp(`${TIEN_TO_LENH}winget\\s+install\\b`, 'i'),
+  scoop: new RegExp(`${TIEN_TO_LENH}scoop\\s+install\\b`, 'i'),
+  choco: new RegExp(`${TIEN_TO_LENH}choco\\s+install\\b`, 'i'),
+  cargo: new RegExp(`${TIEN_TO_LENH}cargo\\s+install\\b`, 'i'),
+  go: new RegExp(`${TIEN_TO_LENH}go\\s+install\\b`, 'i'),
+  docker: new RegExp(`${TIEN_TO_LENH}docker\\s+(?:pull|run)\\b`, 'i'),
 };
 
 export interface DongDoBocTach {
@@ -30,14 +37,30 @@ export interface KetQuaDoBocTach {
   dongBoSot: DongDoBocTach[];
 }
 
+function layUngVienLenh(dong: string): string[] {
+  const htmlCode = [...dong.matchAll(/<code\b[^>]*>(.*?)<\/code>/gi)].map(
+    (match) => match[1] || '',
+  );
+  const markdownCode = [...dong.matchAll(/`+([^`\r\n]+?)`+/g)].map((match) => match[1] || '');
+  const code = [...htmlCode, ...markdownCode].map((s) => s.trim()).filter(Boolean);
+  if (code.length) return code;
+
+  const dongSach = dong
+    .replace(/<!--.*?-->/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/^\s*(?:[-*+]\s+|>\s+)/, '')
+    .trim();
+  return dongSach ? [dongSach] : [];
+}
+
 function timDongLenh(readme: string): Array<{ quanLy: string; dong: string }> {
-  return readme
-    .split(/\r?\n/)
-    .map((dong) => dong.trim())
-    .flatMap((dong) => {
+  return readme.split(/\r?\n/).flatMap((dongGoc) =>
+    layUngVienLenh(dongGoc).flatMap((dong) => {
       const quanLy = Object.entries(MAU_LENH_QUEN_THUOC).find(([, mau]) => mau.test(dong))?.[0];
       return quanLy ? [{ quanLy, dong }] : [];
-    });
+    }),
+  );
 }
 
 /** Đo khả năng bắt lệnh cài trên dữ liệu cào, không gọi mạng hay ghi dữ liệu. */

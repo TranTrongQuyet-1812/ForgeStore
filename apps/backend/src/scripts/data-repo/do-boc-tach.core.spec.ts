@@ -46,4 +46,66 @@ describe('do-boc-tach.core', () => {
     );
     expect(duDoanTrangThaiTuReadme('# Library\nNo installer')).toBe('KHONG_CO_BAN_CAI');
   });
+
+  it('bỏ qua nhắc đến lệnh trong văn xuôi và thuộc tính HTML', () => {
+    const result = doBocTach([
+      {
+        repo: 'owner/docs',
+        lo: 'l001',
+        caoLuc: '',
+        sao: 0,
+        moTaEn: null,
+        readmeEn:
+          'From a global npm install to your phone.\n<img alt="npm install -g fake-package">',
+        readmeSha: null,
+        etagRepo: null,
+        etagReleases: null,
+        etagReadme: null,
+      },
+    ]);
+
+    expect(result.repoCoLenh).toBe(0);
+    expect(result.theoQuanLy.npm).toBe(0);
+    expect(result.dongBoSot).toEqual([]);
+  });
+
+  it('đọc lệnh trong khối code và báo riêng lệnh nằm trong thẻ HTML code mà bộ tách chưa nhận', () => {
+    const result = doBocTach([
+      {
+        repo: 'owner/cli',
+        lo: 'l001',
+        caoLuc: '',
+        sao: 0,
+        moTaEn: null,
+        readmeEn: '## Installation\n```sh\nnpm install -g cli-tool\n```',
+        readmeSha: null,
+        etagRepo: null,
+        etagReleases: null,
+        etagReadme: null,
+      },
+      {
+        repo: 'owner/html',
+        lo: 'l001',
+        caoLuc: '',
+        sao: 0,
+        moTaEn: null,
+        readmeEn:
+          '## Installation\n<table><tr><td><code>npm install -g html-tool</code></td></tr></table>',
+        readmeSha: null,
+        etagRepo: null,
+        etagReleases: null,
+        etagReadme: null,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      repoCoLenh: 2,
+      repoDuocNhan: 1,
+      repoBoSot: 1,
+      theoQuanLy: expect.objectContaining({ npm: 2 }),
+    });
+    expect(result.dongBoSot).toContainEqual(
+      expect.objectContaining({ repo: 'owner/html', dong: 'npm install -g html-tool' }),
+    );
+  });
 });

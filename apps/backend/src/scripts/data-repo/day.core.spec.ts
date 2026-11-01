@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canKhoiTaoNestDay,
   layBanDichCoKyHieu,
   layCapNhatLuuTru,
+  taoChiTietTrangThaiDay,
   taoMapBanDichCoKyHieu,
   taoMapTrangThaiLuuTru,
 } from './day.core';
@@ -13,6 +15,23 @@ import {
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 
 describe('day.core', () => {
+  it('chạy thử thông thường không cần khởi tạo Nest; chế độ ghi và sửa bộ nhớ thì cần', () => {
+    expect(canKhoiTaoNestDay(false, false)).toBe(false);
+    expect(canKhoiTaoNestDay(true, false)).toBe(true);
+    expect(canKhoiTaoNestDay(false, true)).toBe(true);
+  });
+
+  it('tạo cùng cặp trạng thái cho log thành công, lỗi và app mới', () => {
+    expect(taoChiTietTrangThaiDay('KHONG_CO_BAN_CAI', 'HOAT_DONG')).toEqual({
+      trangThaiTruoc: 'KHONG_CO_BAN_CAI',
+      trangThaiSau: 'HOAT_DONG',
+    });
+    expect(taoChiTietTrangThaiDay(null, 'KHONG_CO_BAN_CAI')).toEqual({
+      trangThaiTruoc: null,
+      trangThaiSau: 'KHONG_CO_BAN_CAI',
+    });
+  });
+
   it('đặt true cho repo archived và false cho repo được báo đang hoạt động', () => {
     const trangThai = taoMapTrangThaiLuuTru([
       { repo: 'owner/archived', loai: 'luu_tru', archived: true },

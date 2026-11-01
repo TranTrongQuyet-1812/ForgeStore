@@ -65,8 +65,10 @@ import {
 import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 import {
+  canKhoiTaoNestDay,
   layBanDichCoKyHieu,
   layCapNhatLuuTru,
+  taoChiTietTrangThaiDay,
   taoMapBanDichCoKyHieu,
   taoMapTrangThaiLuuTru,
 } from './day.core';
@@ -1464,7 +1466,7 @@ async function lenhDay(): Promise<void> {
     for (const row of trongLo) console.info(`[lưu trữ] ${row.repo}`);
   }
 
-  if (!ghi && !suaBoNho) {
+  if (!canKhoiTaoNestDay(ghi, suaBoNho)) {
     for (const row of cho) {
       const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
       console.info(
@@ -1603,8 +1605,7 @@ async function lenhDay(): Promise<void> {
           moTa,
           readme,
           phanTich,
-          trangThaiTruoc,
-          trangThaiSau,
+          ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
         });
         console.info(
           `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${trangThaiTruoc ?? 'mới'} → ${trangThaiSau}`,
@@ -1612,8 +1613,7 @@ async function lenhDay(): Promise<void> {
       } catch (err) {
         ghiLog('loi', {
           thongBao: String(err).slice(0, 300),
-          trangThaiTruoc,
-          trangThaiSau,
+          ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
         });
         console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
       }
