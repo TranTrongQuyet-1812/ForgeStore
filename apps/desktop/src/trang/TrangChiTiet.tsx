@@ -43,6 +43,7 @@ import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service'
 import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
 import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { ApiError } from '../dich-vu/api/api-client';
+import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
@@ -1503,7 +1504,7 @@ export const TrangChiTiet: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-accent-forge-text" />
                   <h3 className="text-sm font-bold font-display text-primary uppercase tracking-wider">
-                    HƯỚNG DẪN CÀI ĐẶT QUA DÒNG LỆNH (CLI)
+                    {TIEU_DE_HUONG_DAN_DONG_LENH}
                   </h3>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/20 font-semibold flex items-center gap-1">
                     <Check className="w-3 h-3 stroke-[3]" />

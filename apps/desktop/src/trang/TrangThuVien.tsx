@@ -915,7 +915,7 @@ export const TrangThuVien: React.FC = () => {
                     </h3>
                     {app.laAppCli && (
                       <span className="px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-accent-forge-text font-mono text-[10px] font-bold shrink-0">
-                        CLI: {app.trinhQuanLyGoi}
+                        Dòng lệnh: {app.trinhQuanLyGoi}
                       </span>
                     )}
                     {app.laAppCli && app.trangThaiXacNhan === 'CHO_XAC_NHAN' ? (
