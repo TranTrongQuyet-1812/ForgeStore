@@ -71,8 +71,10 @@ import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
 /**
  * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)
  * bị coi là lỗi thời và được bóc tách lại một lần (VD: README có `$ winget install ...` từng bị bỏ sót).
+ * Phiên bản 3 (P3B-25): bộ bóc tách nhận thêm hậu tố `@latest`, dấu nhắc shell, `py -m pip`, `uv tool`,
+ * nên các dấu "không có hướng dẫn" ghi từ phiên bản 2 (VD: README ghi `npm install -g x@latest`) được tính lại.
  */
-export const PHIEN_BAN_BOC_TACH_CLI = 2;
+export const PHIEN_BAN_BOC_TACH_CLI = 3;
 
 export function daCoKetQuaBocTachCli(hd: unknown): boolean {
   if (hd === null || hd === undefined) return false;
