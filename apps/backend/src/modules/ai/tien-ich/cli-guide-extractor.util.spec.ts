@@ -16,6 +16,7 @@ import {
   trichMucCaiDat,
   trichXuatHuongDanCliBangQuyTac,
   xacDinhHeDieuHanhLenh,
+  tenGoiKhopTenRepo,
 } from './cli-guide-extractor.util';
 
 describe('cli-guide-extractor.util', () => {
@@ -600,5 +601,57 @@ npm install -g openclaw@bad tag
         true,
       );
     });
+  });
+});
+
+describe('P3B-25.12: quét cả README nhưng chỉ nhận gói có tên khớp tên repo', () => {
+  const DEM = 'Lorem ipsum dolor sit amet. '.repeat(250);
+  const url = (repo: string) => `https://github.com/${repo}#readme`;
+  const cach = (md: string, repo: string) =>
+    (trichXuatHuongDanCliBangQuyTac(md, url(repo))?.cachCai ?? [])
+      .filter((c) => c.trinhQuanLy && c.tenGoi)
+      .map((c) => `${c.trinhQuanLy}:${c.tenGoi}`);
+
+  it('nhận pip install nằm sau 4.000 ký tự dưới tiêu đề không phải "Installation" (pandas)', () => {
+    const md = `# pandas\n\n${DEM}\n\n## Where to get it\n\n\`\`\`sh\n# conda\nconda install -c conda-forge pandas\n\`\`\`\n\n\`\`\`sh\n# or PyPI\npip install pandas\n\`\`\`\n\n## Installation from sources\n\n\`\`\`sh\npip install .\n\`\`\`\n`;
+
+    expect(cach(md, 'pandas-dev/pandas')).toEqual(['pip:pandas']);
+  });
+
+  it('nhận lệnh npm trong hàng bảng dù có lệnh npx đứng trước (worldmonitor)', () => {
+    const md = `${DEM}\n\n| **Terminal** | \`npx worldmonitor\` | docs |\n| **CLI** | \`npm install -g worldmonitor\` | docs |\n`;
+
+    expect(cach(md, 'koala73/worldmonitor')).toEqual(['npm:worldmonitor']);
+  });
+
+  it('nhận lệnh nằm rất xa đầu README (OmniRoute)', () => {
+    const md = `${DEM.repeat(30)}\n\n\`\`\`bash\nnpm install -g omniroute\n\`\`\`\n`;
+
+    expect(cach(md, 'cheaper-inference/OmniRoute')).toEqual(['npm:omniroute']);
+  });
+
+  it('vẫn loại lệnh phát triển không có tên gói', () => {
+    const md = `${DEM}\n\n\`\`\`bash\npip install -r requirements.txt\nnpm install\n\`\`\`\n`;
+
+    expect(cach(md, 'owner/project')).toEqual([]);
+  });
+
+  it('loại gói có tên không khớp tên repo', () => {
+    const md = `${DEM}\n\n\`\`\`bash\npip install torch\n\`\`\`\n`;
+
+    expect(cach(md, 'Comfy-Org/ComfyUI')).toEqual([]);
+  });
+
+  it('không mở đường chèn lệnh: gói đúng tên nhưng nối lệnh khác vẫn bị từ chối', () => {
+    const md = `${DEM}\n\n\`\`\`bash\npip install pandas; rm -rf /\n\`\`\`\n`;
+
+    expect(cach(md, 'pandas-dev/pandas')).toEqual([]);
+  });
+
+  it('tenGoiKhopTenRepo: bằng nhau, chứa nhau khi đủ dài, loại tên quá ngắn', () => {
+    expect(tenGoiKhopTenRepo('plotly.js-dist-min', 'plotly.js')).toBe(true);
+    expect(tenGoiKhopTenRepo('BurntSushi.ripgrep.MSVC', 'ripgrep')).toBe(true);
+    expect(tenGoiKhopTenRepo('torch', 'ComfyUI')).toBe(false);
+    expect(tenGoiKhopTenRepo('go', 'golang')).toBe(false);
   });
 });

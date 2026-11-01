@@ -5,6 +5,7 @@ import {
   BuocCaiDto,
   NhomCachCai,
   PhanCungYeuCau,
+  coCachCaiCliHopLe,
   trichTenGoiTuLenhTho,
   boDauNhacShell,
   ghepLenhCliAnToan,
@@ -650,6 +651,76 @@ export function bocTachHuongDanTuCodeBlocks(
   return locVaChuanHoaHuongDanCaiDat({ cachCai }, rawReadme, duongDanReadmeGoc);
 }
 
+/** Lấy tên repo từ đường dẫn README gốc (https://github.com/owner/repo#readme). */
+function layTenRepoTuDuongDan(duongDan?: string): string | null {
+  const m = duongDan?.match(/github\.com\/[^/\s]+\/([^/#?\s]+)/i);
+  return m?.[1] ?? null;
+}
+
+function chuanHoaTenSoSanh(ten: string): string {
+  return ten.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Tên gói khớp tên repo: bằng nhau, hoặc chứa nhau khi đủ dài (plotly.js-dist-min với plotly.js,
+ * nanobot-ai với nanobot, BurntSushi.ripgrep.MSVC với ripgrep). Tên dưới 3 ký tự chỉ chấp nhận khi bằng nhau.
+ */
+export function tenGoiKhopTenRepo(tenGoi: string, tenRepo: string): boolean {
+  const goi = chuanHoaTenSoSanh(tenGoi);
+  const repo = chuanHoaTenSoSanh(tenRepo);
+  if (!goi || !repo) return false;
+  if (goi === repo) return true;
+  if (goi.length < 3 || repo.length < 3) return false;
+  return goi.includes(repo) || repo.includes(goi);
+}
+
+function locCachCaiKhopTenRepo(huongDan: HuongDanCaiDatDto | null, tenRepo: string): CachCaiDto[] {
+  return (huongDan?.cachCai ?? []).filter(
+    (c) => Boolean(c.trinhQuanLy && c.tenGoi) && tenGoiKhopTenRepo(String(c.tenGoi), tenRepo),
+  );
+}
+
+/**
+ * Quét cả README (khối mã và mã nội dòng, kể cả hàng bảng Markdown) và chỉ giữ cách cài có tên gói khớp tên repo.
+ * Thử từng lệnh riêng vì nhóm trình quản lý lấy lệnh ĐẦU để đọc tên gói: một dòng `npx x` hay `npm install`
+ * đứng trước sẽ làm hỏng cả nhóm nếu gộp chung.
+ */
+function trichTheoTenRepoTrongToanReadme(
+  rawReadme: string,
+  duongDanReadmeGoc?: string,
+): HuongDanCaiDatDto | null {
+  const tenRepo = layTenRepoTuDuongDan(duongDanReadmeGoc);
+  if (!tenRepo) return null;
+
+  const ungVien = new Set<string>();
+  for (const khoi of rawReadme.matchAll(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g)) {
+    for (const dong of (khoi[1] ?? '').split(/\r?\n/)) if (dong.trim()) ungVien.add(dong.trim());
+  }
+  for (const dong of rawReadme.split(/\r?\n/)) {
+    for (const m of dong.matchAll(/`([^`]{5,200})`/g)) if (m[1]) ungVien.add(m[1].trim());
+  }
+
+  const timThay = new Map<string, CachCaiDto>();
+  let khung: HuongDanCaiDatDto | null = null;
+  for (const lenh of [...ungVien].slice(0, 300)) {
+    if (!nhanDienNhomLenh(lenh)) continue;
+    const ketQua = bocTachHuongDanTuCodeBlocks(
+      '```bash\n' + lenh + '\n```',
+      rawReadme,
+      duongDanReadmeGoc,
+    );
+    for (const cach of locCachCaiKhopTenRepo(ketQua, tenRepo)) {
+      const khoa = `${cach.trinhQuanLy}:${cach.tenGoi}`;
+      if (timThay.has(khoa)) continue;
+      timThay.set(khoa, cach);
+      khung = khung ?? ketQua;
+    }
+  }
+  return khung && timThay.size > 0
+    ? { ...khung, cachCai: [...timThay.values()], nguon: 'README' }
+    : null;
+}
+
 /**
  * Trích xuất hướng dẫn cài đặt dòng lệnh hoàn toàn bằng quy tắc thuần từ README (P3B-16.3).
  * Tuyệt đối không dùng AI. Coi là gợi ý, ghi rõ nguồn là README.
@@ -670,8 +741,12 @@ export function trichXuatHuongDanCliBangQuyTac(
 
   // 3. Thử trích xuất từ các code blocks trong phạm vi quét
   let result = bocTachHuongDanTuCodeBlocks(targetScope, rawReadme, duongDanReadmeGoc);
+  // Chỉ thoát sớm khi kết quả HỢP LỆ (có trình quản lý và tên gói). Khối mã đầu tiên có thể chỉ là lệnh chạy
+  // (npx x) hay lệnh phát triển, nếu thoát sớm thì không bao giờ tới bước quét cả README (P3B-25.12).
+  let duPhong: HuongDanCaiDatDto | null = null;
   if (result && result.cachCai.length > 0) {
-    return { ...result, nguon: 'README' };
+    if (coCachCaiCliHopLe(result)) return { ...result, nguon: 'README' };
+    duPhong = { ...result, nguon: 'README' };
   }
 
   // 4. Fallback: Quét từng dòng trong phạm vi quét an toàn
@@ -714,9 +789,15 @@ export function trichXuatHuongDanCliBangQuyTac(
     const syntheticSection = '```bash\n' + matchedLines.join('\n') + '\n```';
     result = bocTachHuongDanTuCodeBlocks(syntheticSection, rawReadme, duongDanReadmeGoc);
     if (result && result.cachCai.length > 0) {
-      return { ...result, nguon: 'README' };
+      if (coCachCaiCliHopLe(result)) return { ...result, nguon: 'README' };
+      duPhong = duPhong ?? { ...result, nguon: 'README' };
     }
   }
 
-  return null;
+  // 5. Fallback cuối (P3B-25.12): các bước trên không ra cách cài hợp lệ, có thể vì lệnh nằm ngoài vùng quét
+  // (VD: pandas dưới tiêu đề "Where to get it" trong khi mục "Installation from sources" mới là mục được nhận ra,
+  // OmniRoute ở ký tự 61.000). Quét cả README nhưng CHỈ nhận cách cài có tên gói khớp tên repo, để lệnh của mục
+  // phát triển (pip install -r requirements.txt, npm install) vẫn bị loại.
+  // Không tìm thấy cách cài hợp lệ ở đâu thì giữ kết quả không hợp lệ cũ (nếu có) như trước đây.
+  return trichTheoTenRepoTrongToanReadme(rawReadme, duongDanReadmeGoc) ?? duPhong;
 }
