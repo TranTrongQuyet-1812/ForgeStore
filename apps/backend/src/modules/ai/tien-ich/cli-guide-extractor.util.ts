@@ -651,6 +651,11 @@ export function bocTachHuongDanTuCodeBlocks(
   return locVaChuanHoaHuongDanCaiDat({ cachCai }, rawReadme, duongDanReadmeGoc);
 }
 
+/** Kiểm hợp lệ trả về boolean thường (không phải type guard) để không làm TypeScript thu hẹp kiểu về never ở nhánh sai. */
+function laCachCaiHopLe(huongDan: HuongDanCaiDatDto): boolean {
+  return coCachCaiCliHopLe(huongDan);
+}
+
 /** Lấy tên repo từ đường dẫn README gốc (https://github.com/owner/repo#readme). */
 function layTenRepoTuDuongDan(duongDan?: string): string | null {
   const m = duongDan?.match(/github\.com\/[^/\s]+\/([^/#?\s]+)/i);
@@ -745,7 +750,7 @@ export function trichXuatHuongDanCliBangQuyTac(
   // (npx x) hay lệnh phát triển, nếu thoát sớm thì không bao giờ tới bước quét cả README (P3B-25.12).
   let duPhong: HuongDanCaiDatDto | null = null;
   if (result && result.cachCai.length > 0) {
-    if (coCachCaiCliHopLe(result)) return { ...result, nguon: 'README' };
+    if (laCachCaiHopLe(result)) return { ...result, nguon: 'README' };
     duPhong = { ...result, nguon: 'README' };
   }
 
@@ -789,7 +794,7 @@ export function trichXuatHuongDanCliBangQuyTac(
     const syntheticSection = '```bash\n' + matchedLines.join('\n') + '\n```';
     result = bocTachHuongDanTuCodeBlocks(syntheticSection, rawReadme, duongDanReadmeGoc);
     if (result && result.cachCai.length > 0) {
-      if (coCachCaiCliHopLe(result)) return { ...result, nguon: 'README' };
+      if (laCachCaiHopLe(result)) return { ...result, nguon: 'README' };
       duPhong = duPhong ?? { ...result, nguon: 'README' };
     }
   }
