@@ -1926,6 +1926,33 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
     });
   });
 
+  describe('P3B-25: bóc tách CLI không phụ thuộc mục "Cài đặt"', () => {
+    it('README không có tiêu đề cài đặt nhưng có lệnh pip install vẫn lưu hướng dẫn hợp lệ', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        maUngDung: 'tk-id',
+        tenRepoDayDu: 'openai/tiktoken',
+        chuSoHuu: 'openai',
+        tenKhoChua: 'tiktoken',
+        danhSachPhatHanh: [],
+      });
+      // Dấu "không có" do phiên bản cũ ghi: phải được tính lại
+      mockPrisma.phanTichAI.findUnique.mockResolvedValueOnce({
+        maUngDung: 'tk-id',
+        huongDanCaiDat: { khongCoHuongDan: true, phienBanBocTach: 2, cachCai: [] },
+      });
+      mockGithubService.layReadme.mockResolvedValueOnce(
+        '# tiktoken\n\ntiktoken is a fast BPE tokeniser.\n\n```\npip install tiktoken\n```\n\n## Performance\n',
+      );
+
+      await service.phanTichUngDung('tk-id');
+
+      expect(mockPrisma.phanTichAI.update).toHaveBeenCalledTimes(1);
+      const saved = mockPrisma.phanTichAI.update.mock.calls[0]![0].data.huongDanCaiDat;
+      expect(saved.khongCoHuongDan).toBeUndefined();
+      expect(saved.cachCai[0].tenGoi).toBe('tiktoken');
+    });
+  });
+
   describe('Task P3B-03: Tính Sẵn Thịnh Hành & Tối Ưu Truy Vấn CSDL (P3B-03.1 -> P3B-03.5)', () => {
     it('dongBoRepo lấy 15 releases và dọn dẹp các bản phát hành vượt quá 15 bản (P3B-03.5)', async () => {
       mockGithubService.layRepo.mockResolvedValueOnce({

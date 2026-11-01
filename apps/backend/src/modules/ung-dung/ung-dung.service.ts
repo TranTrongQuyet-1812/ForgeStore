@@ -53,7 +53,6 @@ import {
 } from './tien-ich/chon-ban-phat-hanh.util';
 import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './tien-ich/dieu-phoi-dau-vao.util';
 import {
-  trichMucCaiDat,
   sapXepCachCai,
   trichXuatHuongDanCliBangQuyTac,
 } from '../ai/tien-ich/cli-guide-extractor.util';
@@ -73,8 +72,9 @@ import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
  * bị coi là lỗi thời và được bóc tách lại một lần (VD: README có `$ winget install ...` từng bị bỏ sót).
  * Phiên bản 3 (P3B-25): bộ bóc tách nhận thêm hậu tố `@latest`, dấu nhắc shell, `py -m pip`, `uv tool`,
  * nên các dấu "không có hướng dẫn" ghi từ phiên bản 2 (VD: README ghi `npm install -g x@latest`) được tính lại.
+ * Phiên bản 4 (P3B-25): quy tắc chạy trên toàn README, không còn chờ tìm được mục "Cài đặt" (tiktoken, sharp...).
  */
-export const PHIEN_BAN_BOC_TACH_CLI = 3;
+export const PHIEN_BAN_BOC_TACH_CLI = 4;
 
 export function daCoKetQuaBocTachCli(hd: unknown): boolean {
   if (hd === null || hd === undefined) return false;
@@ -1512,19 +1512,18 @@ export class UngDungService {
 
             let huongDanCaiDat: HuongDanCaiDatDto | null = null;
             let aiBiLoi = false;
-            const installSection = trichMucCaiDat(readme);
 
-            if (installSection) {
-              try {
-                const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
-                // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
-                huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
-              } catch (err: unknown) {
-                aiBiLoi = true;
-                this.logger.warn(
-                  `Lỗi bổ sung hướng dẫn CLI cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-                );
-              }
+            // Bộ quy tắc chạy trên toàn README, không chờ tìm được mục "Cài đặt": nhiều README (tiktoken, sharp...)
+            // không có tiêu đề kiểu đó nhưng vẫn có lệnh cài hợp lệ (P3B-25).
+            try {
+              const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
+              // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
+              huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
+            } catch (err: unknown) {
+              aiBiLoi = true;
+              this.logger.warn(
+                `Lỗi bổ sung hướng dẫn CLI cho [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+              );
             }
 
             // NẾU AI hoặc bóc tách gặp lỗi (429, timeout, network error):
@@ -1655,19 +1654,17 @@ export class UngDungService {
           let huongDanCaiDat: HuongDanCaiDatDto | null = null;
           let aiCliBiLoi = false;
           if (!fetchReadmeLoi && readme) {
-            const installSection = trichMucCaiDat(readme);
-            if (installSection) {
-              try {
-                const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
+            // Chạy quy tắc trên toàn README, không phụ thuộc có tìm được mục "Cài đặt" hay không (P3B-25)
+            try {
+              const readmeUrl = `https://github.com/${app.tenRepoDayDu}#readme`;
 
-                // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
-                huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
-              } catch (err: unknown) {
-                aiCliBiLoi = true;
-                this.logger.warn(
-                  `Lỗi bóc tách hướng dẫn CLI [${app.tenRepoDayDu}]: ${(err as Error).message}`,
-                );
-              }
+              // P3B-16.3: Trích xuất câu lệnh cài đặt từ README bằng quy tắc thuần (KHÔNG dùng AI)
+              huongDanCaiDat = trichXuatHuongDanCliBangQuyTac(readme, readmeUrl);
+            } catch (err: unknown) {
+              aiCliBiLoi = true;
+              this.logger.warn(
+                `Lỗi bóc tách hướng dẫn CLI [${app.tenRepoDayDu}]: ${(err as Error).message}`,
+              );
             }
           }
 
