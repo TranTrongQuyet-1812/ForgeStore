@@ -44,7 +44,7 @@ import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
 import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { ApiError } from '../dich-vu/api/api-client';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
-import { layNhanHeDieuHanh, layNhanNhomCachCai } from './hien-thi-cach-cai.core';
+import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi-cach-cai.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
@@ -1540,7 +1540,7 @@ export const TrangChiTiet: React.FC = () => {
                           <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
                         )}
                         <span>
-                          {layNhanNhomCachCai(cach.nhom)} • {cach.ten}
+                          {layNhanNhomCachCai(cach.nhom)} • {layTenCachCai(cach.ten, cach.nhom)}
                         </span>
                       </button>
                     );
@@ -1570,7 +1570,7 @@ export const TrangChiTiet: React.FC = () => {
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold font-display text-primary">
-                            {currentMethod.ten}
+                            {layTenCachCai(currentMethod.ten, currentMethod.nhom)}
                           </span>
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-accent-forge-text font-bold uppercase">
                             {layNhanNhomCachCai(currentMethod.nhom)}

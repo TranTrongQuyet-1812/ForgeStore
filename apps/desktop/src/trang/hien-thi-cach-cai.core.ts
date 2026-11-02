@@ -28,6 +28,17 @@ export function layNhanNhomCachCai(value: string): string {
   return NHAN_NHOM_CACH_CAI[value as NhomCachCai] ?? lamSachNhanLa(value);
 }
 
+/**
+ * Backend ghép sẵn tên cách cài dạng "Cài đặt qua <MÃ NHÓM>" (vd "Cài đặt qua NGUON").
+ * Dữ liệu cũ đã lưu vẫn mang mã thô nên đổi ngay lúc hiển thị; tên tự đặt khác giữ nguyên.
+ */
+export function layTenCachCai(ten: string, nhom: string): string {
+  const laTenMacDinh =
+    ten.trim().toLocaleLowerCase('vi') === `cài đặt qua ${nhom}`.toLocaleLowerCase('vi');
+  if (!laTenMacDinh) return ten;
+  return nhom === NhomCachCai.NGUON ? 'Cài từ mã nguồn' : `Cài đặt qua ${layNhanNhomCachCai(nhom)}`;
+}
+
 export function layNhanHeDieuHanh(value: string): string {
   return NHAN_HE_DIEU_HANH[value as HeDieuHanhCli] ?? lamSachNhanLa(value);
 }
