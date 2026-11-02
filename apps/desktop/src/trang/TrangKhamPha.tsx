@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
+import { LuoiAoUngDung } from '../thanh-phan/dung-chung/LuoiAoUngDung';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import {
   KhungXuongCard,
@@ -288,6 +289,8 @@ export const TrangKhamPha: React.FC = () => {
 
   // Sử dụng dữ liệu ứng dụng sống từ API Backend
   const processedApps = liveAppPages.flat();
+  const trangDau = liveAppPages[0] ?? [];
+  const cacTrangConLai = useMemo(() => liveAppPages.slice(1).flat(), [liveAppPages]);
 
   const formatStars = (stars: number) => {
     if (stars >= 1000) return `${(stars / 1000).toFixed(1)}k`;
@@ -699,23 +702,17 @@ export const TrangKhamPha: React.FC = () => {
         ) : (
           <>
             <div className="flex flex-col gap-5">
-              {liveAppPages.map((trang, indexTrang) => {
-                const luoi = <LuoiTrangUngDung trang={trang} coHieuUngSoLe={indexTrang === 0} />;
-
-                return indexTrang === 0 ? (
-                  // key theo bộ lọc để hiệu ứng giải mã phát lại mỗi khi đổi danh mục, sắp xếp hoặc khung thời gian
-                  <AsciiReveal
-                    preset="dither"
-                    duration="fast"
-                    origin="top-left"
-                    key={`trang-dau-${activeSort}-${activeCategory}-${timeWindow}`}
-                  >
-                    {luoi}
-                  </AsciiReveal>
-                ) : (
-                  <React.Fragment key={`trang-${indexTrang}`}>{luoi}</React.Fragment>
-                );
-              })}
+              {/* key theo bộ lọc để hiệu ứng giải mã phát lại mỗi khi đổi danh mục, sắp xếp hoặc khung thời gian */}
+              <AsciiReveal
+                preset="dither"
+                duration="fast"
+                origin="top-left"
+                key={`trang-dau-${activeSort}-${activeCategory}-${timeWindow}`}
+              >
+                <LuoiTrangUngDung trang={trangDau} coHieuUngSoLe />
+              </AsciiReveal>
+              {/* Từ đợt tải thứ 2 trở đi dùng lưới ảo: chỉ vẽ các hàng đang nhìn thấy nên cuộn sâu vẫn nhẹ */}
+              {cacTrangConLai.length > 0 && <LuoiAoUngDung apps={cacTrangConLai} />}
             </div>
 
             {hasNextPage ? (
