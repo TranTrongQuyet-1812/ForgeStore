@@ -184,7 +184,8 @@ export const TrangKhamPha: React.FC = () => {
       (entries) => {
         if (entries[0]?.isIntersecting) taiTrangKe();
       },
-      { rootMargin: '320px' },
+      // Tải trước từ xa (~2 màn hình) để đợt mới về khi người dùng chưa tới đáy, không nhảy ra giữa lúc đang cuộn
+      { rootMargin: '1600px' },
     );
     observer.observe(diemCuoi);
     return () => observer.disconnect();
