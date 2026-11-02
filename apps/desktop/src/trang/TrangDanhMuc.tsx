@@ -10,6 +10,7 @@ import {
   Gamepad2,
   Radio,
   GraduationCap,
+  Sparkles,
   ArrowRight,
   PackageOpen,
 } from 'lucide-react';
@@ -28,6 +29,11 @@ const CATEGORY_META: Record<
     color: string;
   }
 > = {
+  AI: {
+    desc: 'Trợ lý AI, mô hình chạy trên máy và công cụ hỗ trợ lập trình',
+    icon: Sparkles,
+    color: MAU_DANH_MUC,
+  },
   'Lập trình & Phát triển': {
     desc: 'IDE, Text Editor, Git Tools, Terminal, Dev Environments',
     icon: Code,
@@ -112,8 +118,8 @@ export const TrangDanhMuc: React.FC = () => {
 
       {/* Lưới danh mục CSDL sống động theo nền tảng (K3) */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 9 }).map((_, i) => (
             <div
               key={i}
               className="tactile-card p-5 rounded-2xl flex flex-col justify-between min-h-[160px] select-none text-muted font-mono"
@@ -139,7 +145,7 @@ export const TrangDanhMuc: React.FC = () => {
         </div>
       ) : displayedCategories.length > 0 ? (
         <AsciiReveal preset="dither" duration="fast" origin="top-left">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {displayedCategories.map((cat) => {
               const Icon = cat.icon;
               return (
