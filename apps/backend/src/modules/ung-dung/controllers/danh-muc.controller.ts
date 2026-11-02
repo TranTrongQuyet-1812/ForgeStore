@@ -13,9 +13,9 @@ export class DanhMucController {
   @CongKhai()
   @Get()
   @ApiOperation({
-    summary: 'Lấy danh sách danh mục có app khả dụng theo nền tảng (K3)',
+    summary: 'Lấy danh sách danh mục và số ứng dụng theo nền tảng (K3)',
     description:
-      'Trả về danh sách danh mục có ít nhất một ứng dụng khả dụng trên nền tảng yêu cầu (windows/android) kèm số lượng app thật. Giúp client dựng chip danh mục động và loại bỏ các danh mục rỗng.',
+      'Trả về danh sách danh mục kèm số lượng ứng dụng khả dụng trên nền tảng yêu cầu (windows/android). Danh mục AI vẫn được trả với số lượng 0 để client hiển thị trước khi có dữ liệu; các danh mục rỗng khác được loại bỏ.',
   })
   @ApiQuery({
     name: 'platform',
