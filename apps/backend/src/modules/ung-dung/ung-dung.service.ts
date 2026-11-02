@@ -640,7 +640,7 @@ export class UngDungService {
   }
 
   /**
-   * Lấy danh sách danh mục khả dụng theo nền tảng kèm số lượng ứng dụng thật (K3).
+   * Lấy danh sách danh mục có ít nhất một ứng dụng khả dụng theo nền tảng kèm số lượng app thật (K3).
    *
    * @param platform Nền tảng lọc (windows/android)
    */
@@ -678,9 +678,6 @@ export class UngDungService {
       if (count !== undefined && count > 0) {
         result.push({ ten: dm, soLuong: count });
         categoryMap.delete(dm);
-      } else if (dm === 'AI') {
-        // Luôn công bố danh mục AI để Desktop có thể hiện ô và chip trước khi dữ liệu được xếp loại.
-        result.push({ ten: dm, soLuong: 0 });
       }
     }
     for (const [dm, count] of categoryMap.entries()) {

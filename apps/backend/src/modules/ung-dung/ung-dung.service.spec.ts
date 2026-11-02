@@ -1469,7 +1469,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(mockPrisma.ungDung.groupBy).not.toHaveBeenCalled();
     });
 
-    it('trả AI với số lượng 0, lọc danh mục rỗng khác và lưu cache', async () => {
+    it('truy vấn Prisma groupBy khi chưa có cache, lọc danh mục có app >= 1 và lưu cache', async () => {
       mockCacheService.lay.mockResolvedValueOnce(null);
       mockPrisma.ungDung.groupBy.mockResolvedValueOnce([
         { danhMucChinh: 'Lập trình & Phát triển', _count: { _all: 6 } },
@@ -1490,9 +1490,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         }),
       );
 
-      // AI vẫn có mặt để giao diện hiển thị danh mục mới trước khi dữ liệu được xếp loại.
-      expect(result[0]).toEqual({ ten: 'AI', soLuong: 0 });
-      // Các danh mục cũ không có ứng dụng tiếp tục bị ẩn.
+      // Kết quả phải lọc bỏ 'Học tập & Giáo dục' (0 app)
       expect(result.some((r) => r.ten === 'Học tập & Giáo dục')).toBe(false);
       // Kết quả phải giữ các danh mục có > 0 app
       expect(result).toEqual(
@@ -1510,7 +1508,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       );
     });
 
-    it('đặt AI đứng đầu khi có ứng dụng và giữ AI với số lượng 0 khi chưa có ứng dụng nào', async () => {
+    it('đặt AI đứng đầu khi có ứng dụng và ẩn AI khi chưa có ứng dụng nào', async () => {
       mockCacheService.lay.mockResolvedValueOnce(null);
       mockPrisma.ungDung.groupBy.mockResolvedValueOnce([
         { danhMucChinh: 'Lập trình & Phát triển', _count: { _all: 6 } },
@@ -1524,7 +1522,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         { danhMucChinh: 'Lập trình & Phát triển', _count: { _all: 6 } },
       ]);
       const khongAi = await service.layDanhSachDanhMuc(PlatformFilter.WINDOWS);
-      expect(khongAi[0]).toEqual({ ten: 'AI', soLuong: 0 });
+      expect(khongAi.some((r) => r.ten === 'AI')).toBe(false);
     });
   });
 
