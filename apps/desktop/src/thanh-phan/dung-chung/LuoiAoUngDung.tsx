@@ -3,8 +3,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { TheUngDung, type AppCardData } from './TheUngDung';
 import { chiaThanhHang, laySoCot } from './luoi-ao.core';
 
-// Chiều cao ước tính một hàng thẻ trước khi đo thật (thẻ có hàng chip nên cao thấp khác nhau chút)
-const CHIEU_CAO_HANG_UOC_TINH = 300;
+// Chiều cao ước tính một hàng thẻ trước khi đo thật (đo thực tế khoảng 250px; thẻ có hàng chip dài thì cao hơn chút)
+const CHIEU_CAO_HANG_UOC_TINH = 250;
 // Khoảng cách giữa các hàng, bằng gap-5 của lưới thường
 const KHOANG_CACH_HANG = 20;
 
@@ -74,6 +74,10 @@ export const LuoiAoUngDung: React.FC<LuoiAoUngDungProps> = ({ apps }) => {
     estimateSize: () => CHIEU_CAO_HANG_UOC_TINH + KHOANG_CACH_HANG,
     overscan: 3,
     scrollMargin: leTren,
+    // Lưới ảo xuất hiện giữa lúc người dùng đang cuộn (khi đợt 2 về). Phải tắt tới khi tìm được vùng cuộn,
+    // nếu không thư viện nhớ vị trí 0 ở lần vẽ đầu rồi kéo trang về đầu; khi bật thì lấy đúng vị trí đang cuộn.
+    enabled: vungCuon !== null,
+    initialOffset: () => vungCuon?.scrollTop ?? 0,
   });
 
   return (
