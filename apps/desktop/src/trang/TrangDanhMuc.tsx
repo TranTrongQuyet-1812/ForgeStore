@@ -118,7 +118,7 @@ export const TrangDanhMuc: React.FC = () => {
 
       {/* Lưới danh mục CSDL sống động theo nền tảng (K3) */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 9 }).map((_, i) => (
             <div
               key={i}
@@ -145,7 +145,7 @@ export const TrangDanhMuc: React.FC = () => {
         </div>
       ) : displayedCategories.length > 0 ? (
         <AsciiReveal preset="dither" duration="fast" origin="top-left">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayedCategories.map((cat) => {
               const Icon = cat.icon;
               return (
