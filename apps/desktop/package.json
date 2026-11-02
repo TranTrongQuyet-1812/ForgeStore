@@ -16,7 +16,6 @@
     "@forgestore/types": "workspace:*",
     "@forgestore/ui-tokens": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
-    "@tanstack/react-virtual": "^3.14.24",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-deep-link": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Star,
   Clock,
@@ -14,7 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
-import { LuoiAoUngDung } from '../thanh-phan/dung-chung/LuoiAoUngDung';
+import { ThanhPhanTrang } from '../thanh-phan/dung-chung/ThanhPhanTrang';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import {
   KhungXuongCard,
@@ -24,38 +24,10 @@ import {
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
-import type { InfiniteData } from '@tanstack/react-query';
-import type { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
-import { gopTrangUngDung, haiTrangGiongNhau, rutVeTrangDau, taoAnhXaCoNho } from './kham-pha.core';
+import type { UngDungTomTatDto } from '@forgestore/types';
 
-// Giữ nguyên đối tượng thẻ giữa các lần tải thêm để thẻ cũ không phải vẽ lại
-const anhXaTheCoNho = taoAnhXaCoNho((dto: UngDungTomTatDto) =>
-  khoUngDungService.anhXaDtoSangTheUngDung(dto),
-);
-
-interface LuoiTrangUngDungProps {
-  trang: AppCardData[];
-  coHieuUngSoLe: boolean;
-}
-
-// Mỗi đợt tải là một lưới riêng; đợt không đổi thì bỏ qua, tránh vẽ lại hàng trăm thẻ khi cuộn
-const LuoiTrangUngDung = React.memo(
-  ({ trang, coHieuUngSoLe }: LuoiTrangUngDungProps) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {trang.map((app, index) => (
-        <TheUngDung
-          key={app.id}
-          app={app}
-          // Chỉ trang đầu có hiệu ứng so le; các lượt tải thêm hiện thẳng cho khỏi giật
-          staggerIndex={coHieuUngSoLe ? index : undefined}
-        />
-      ))}
-    </div>
-  ),
-  (truoc, sau) =>
-    truoc.coHieuUngSoLe === sau.coHieuUngSoLe && haiTrangGiongNhau(truoc.trang, sau.trang),
-);
-LuoiTrangUngDung.displayName = 'LuoiTrangUngDung';
+// Số ứng dụng mỗi trang: đủ để duyệt nhanh nhưng chỉ có chừng này thẻ trên màn hình
+const SO_UNG_DUNG_MOI_TRANG = 30;
 
 type SpotlightMode = 'trending' | 'curated' | 'security';
 type TimeWindow = 'today' | 'week' | 'month';
@@ -79,20 +51,20 @@ export const TrangKhamPha: React.FC = () => {
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
   const categoryScrollRef = useRef<HTMLDivElement>(null);
-  const diemCuoiDanhSachRef = useRef<HTMLDivElement>(null);
-  const dangTaiTrangKeRef = useRef(false);
+  const [trang, setTrang] = useState(1);
+  const dauDanhSachRef = useRef<HTMLDivElement>(null);
 
-  const doiBoLoc = useCallback(
-    (capNhat: () => void) => {
-      // Thu gọn cache không hoạt động để khi quay lại bộ lọc cũ danh sách luôn bắt đầu từ trang đầu.
-      queryClient.setQueriesData<InfiniteData<TrangKetQua<UngDungTomTatDto>, number>>(
-        { queryKey: ['store-apps'], type: 'inactive' },
-        (data) => rutVeTrangDau(data),
-      );
-      capNhat();
-    },
-    [queryClient],
-  );
+  // Đổi danh mục, sắp xếp hoặc khung thời gian thì quay về trang 1 của bộ lọc mới
+  const doiBoLoc = useCallback((capNhat: () => void) => {
+    capNhat();
+    setTrang(1);
+  }, []);
+
+  const chuyenTrang = useCallback((trangMoi: number) => {
+    setTrang(trangMoi);
+    // Về đầu danh sách ngay để người dùng thấy ứng dụng đầu trang mới, không cuộn mượt cho đỡ giật
+    dauDanhSachRef.current?.scrollIntoView({ block: 'start' });
+  }, []);
 
   // Cho phép dùng con lăn chuột (mouse wheel) cuộn ngang dải danh mục mượt mà
   useEffect(() => {
@@ -128,69 +100,46 @@ export const TrangKhamPha: React.FC = () => {
   }, [selectedCategory, setSelectedCategory, doiBoLoc]);
 
   // Đấu nối TanStack Query: Nạp danh sách ứng dụng sống từ Supabase Backend (P3-05.1 & B2)
+  const truyVanTrang = useCallback(
+    (trangSo: number) => ({
+      queryKey: [
+        'store-apps',
+        activeCategory,
+        activeSort,
+        activeSort === 'trending' ? timeWindow : undefined,
+        trangSo,
+      ],
+      queryFn: () =>
+        khoUngDungService.layDanhSachUngDung({
+          platform: 'windows',
+          category: activeCategory !== 'Tất cả' ? activeCategory : undefined,
+          sort: activeSort,
+          window: activeSort === 'trending' ? timeWindow : undefined,
+          page: trangSo,
+          limit: SO_UNG_DUNG_MOI_TRANG,
+        }),
+      staleTime: 1000 * 60 * 3, // 3 phút cache
+    }),
+    [activeCategory, activeSort, timeWindow],
+  );
+
   const {
     data: appsResponse,
     isLoading: isAppsLoading,
     isError: isAppsError,
     refetch: refetchApps,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isFetchNextPageError,
     isPlaceholderData,
-  } = useInfiniteQuery({
-    queryKey: [
-      'store-apps',
-      activeCategory,
-      activeSort,
-      activeSort === 'trending' ? timeWindow : undefined,
-    ],
-    queryFn: ({ pageParam }) =>
-      khoUngDungService.layDanhSachUngDung({
-        platform: 'windows',
-        category: activeCategory !== 'Tất cả' ? activeCategory : undefined,
-        sort: activeSort,
-        window: activeSort === 'trending' ? timeWindow : undefined,
-        page: pageParam,
-        limit: 30,
-      }),
-    initialPageParam: 1,
-    getNextPageParam: (trangCuoi) =>
-      trangCuoi.trangHienTai < trangCuoi.tongSoTrang ? trangCuoi.trangHienTai + 1 : undefined,
-    staleTime: 1000 * 60 * 3, // 3 phút cache
-    placeholderData: (previousData) => previousData, // FE-V3-06: Giữ dữ liệu cũ mượt mà khi đổi category/sort, chống nhấp nháy skeleton
+  } = useQuery({
+    ...truyVanTrang(trang),
+    placeholderData: (previousData) => previousData, // FE-V3-06: Giữ dữ liệu cũ mượt mà khi đổi trang/bộ lọc, chống nhấp nháy skeleton
   });
 
-  const taiTrangKe = useCallback(() => {
-    if (dangTaiTrangKeRef.current) return;
-    dangTaiTrangKeRef.current = true;
-    void fetchNextPage().finally(() => {
-      dangTaiTrangKeRef.current = false;
-    });
-  }, [fetchNextPage]);
-
+  // Tải sẵn trang kế để bấm "Sau" là có ngay
+  const tongSoTrang = appsResponse?.tongSoTrang ?? 0;
   useEffect(() => {
-    const diemCuoi = diemCuoiDanhSachRef.current;
-    if (
-      !diemCuoi ||
-      !hasNextPage ||
-      isFetchingNextPage ||
-      isFetchNextPageError ||
-      isPlaceholderData
-    )
-      return;
-
-    // Dừng tự tải khi lỗi để không lặp request liên tục; nút thử lại cho người dùng chủ động tiếp tục.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) taiTrangKe();
-      },
-      // Tải trước từ xa (~2 màn hình) để đợt mới về khi người dùng chưa tới đáy, không nhảy ra giữa lúc đang cuộn
-      { rootMargin: '1600px' },
-    );
-    observer.observe(diemCuoi);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, isPlaceholderData, taiTrangKe]);
+    if (isPlaceholderData || trang >= tongSoTrang) return;
+    void queryClient.prefetchQuery(truyVanTrang(trang + 1));
+  }, [isPlaceholderData, trang, tongSoTrang, queryClient, truyVanTrang]);
 
   // Đấu nối TanStack Query: Nạp các ứng dụng nổi bật (Featured Apps)
   const { data: featuredAppsData, isLoading: isFeaturedLoading } = useQuery({
@@ -224,10 +173,13 @@ export const TrangKhamPha: React.FC = () => {
   }, [serverCategories, activeCategory, doiBoLoc]);
 
   // Chuyển đổi dữ liệu backend DTO sang AppCardData, hoàn toàn từ dữ liệu sống (B3)
-  const liveAppPages = useMemo(() => {
-    const trangDaGop = gopTrangUngDung(appsResponse?.pages ?? []);
-    return trangDaGop.map((trang) => trang.map(anhXaTheCoNho));
-  }, [appsResponse]);
+  const processedApps = useMemo(
+    () =>
+      (appsResponse?.duLieu ?? []).map((dto: UngDungTomTatDto) =>
+        khoUngDungService.anhXaDtoSangTheUngDung(dto),
+      ),
+    [appsResponse],
+  );
 
   const featuredAppsList = useMemo(() => {
     if (featuredAppsData && featuredAppsData.length > 0) {
@@ -286,11 +238,6 @@ export const TrangKhamPha: React.FC = () => {
 
   const currentSpotlight = spotlightConfigs ? spotlightConfigs[spotlightMode] : null;
   const spotlightApp = currentSpotlight?.app;
-
-  // Sử dụng dữ liệu ứng dụng sống từ API Backend
-  const processedApps = liveAppPages.flat();
-  const trangDau = liveAppPages[0] ?? [];
-  const cacTrangConLai = useMemo(() => liveAppPages.slice(1).flat(), [liveAppPages]);
 
   const formatStars = (stars: number) => {
     if (stars >= 1000) return `${(stars / 1000).toFixed(1)}k`;
@@ -627,7 +574,7 @@ export const TrangKhamPha: React.FC = () => {
               <KhungXuongCard key={i} index={i} variant="dither" />
             ))}
           </div>
-        ) : isAppsError && !appsResponse?.pages.length ? (
+        ) : isAppsError && !appsResponse ? (
           /* Trạng thái Lỗi kết nối kèm nút Thử lại (B3) */
           <div className="p-8 rounded-2xl bg-surface border border-danger/20 flex flex-col items-center justify-center text-center gap-3">
             <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger">
@@ -701,51 +648,40 @@ export const TrangKhamPha: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="flex flex-col gap-5">
-              {/* key theo bộ lọc để hiệu ứng giải mã phát lại mỗi khi đổi danh mục, sắp xếp hoặc khung thời gian */}
+            {/* scroll-mt: chừa chút khoảng trống phía trên khi nhảy về đầu danh sách */}
+            <div
+              ref={dauDanhSachRef}
+              className={`scroll-mt-4 transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
+            >
+              {/* key theo bộ lọc và trang đã về để hiệu ứng giải mã phát lại cho dữ liệu mới */}
               <AsciiReveal
                 preset="dither"
                 duration="fast"
                 origin="top-left"
-                key={`trang-dau-${activeSort}-${activeCategory}-${timeWindow}`}
+                key={`${activeSort}-${activeCategory}-${timeWindow}-${appsResponse?.trangHienTai ?? 1}`}
               >
-                <LuoiTrangUngDung trang={trangDau} coHieuUngSoLe />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {processedApps.map((app, index) => (
+                    <TheUngDung key={app.id} app={app} staggerIndex={index} />
+                  ))}
+                </div>
               </AsciiReveal>
-              {/* Từ đợt tải thứ 2 trở đi dùng lưới ảo: chỉ vẽ các hàng đang nhìn thấy nên cuộn sâu vẫn nhẹ */}
-              {cacTrangConLai.length > 0 && <LuoiAoUngDung apps={cacTrangConLai} />}
             </div>
 
-            {hasNextPage ? (
-              <div ref={diemCuoiDanhSachRef} className="flex flex-col items-center gap-2 py-3">
-                {isFetchingNextPage && (
-                  <p className="flex items-center gap-2 text-xs text-muted" aria-live="polite">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Đang tải thêm ứng dụng...
-                  </p>
-                )}
-                {isFetchNextPageError ? (
-                  <button
-                    type="button"
-                    onClick={taiTrangKe}
-                    disabled={isFetchingNextPage}
-                    className="btn-tactile px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border disabled:opacity-60"
-                  >
-                    Thử lại
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={taiTrangKe}
-                    disabled={isFetchingNextPage || isPlaceholderData}
-                    className="btn-tactile px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border disabled:opacity-60"
-                  >
-                    Xem thêm
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="py-3 text-center text-xs text-muted" aria-live="polite">
-                Đã xem hết {appsResponse?.pages[0]?.tongSo ?? processedApps.length} ứng dụng
+            <ThanhPhanTrang
+              trangHienTai={appsResponse?.trangHienTai ?? trang}
+              tongSoTrang={tongSoTrang}
+              tongSo={appsResponse?.tongSo ?? processedApps.length}
+              kichThuocTrang={appsResponse?.kichThuocTrang ?? SO_UNG_DUNG_MOI_TRANG}
+              dangTai={isPlaceholderData}
+              onChuyenTrang={chuyenTrang}
+            />
+            {isAppsError && (
+              <p className="text-center text-xs text-danger">
+                Không tải được trang này.{' '}
+                <button type="button" onClick={() => refetchApps()} className="underline">
+                  Thử lại
+                </button>
               </p>
             )}
           </>
