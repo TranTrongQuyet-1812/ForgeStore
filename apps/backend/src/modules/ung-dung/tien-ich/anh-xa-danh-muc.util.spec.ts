@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { anhXaDanhMuc, doanTenGoiAndroid } from './anh-xa-danh-muc.util';
+import { anhXaDanhMuc, DANH_MUC_CHUAN, doanTenGoiAndroid } from './anh-xa-danh-muc.util';
 
 describe('category-mapper.util (N2)', () => {
   describe('anhXaDanhMuc - Cơ bản & Topics chuẩn', () => {
@@ -154,6 +154,114 @@ describe('category-mapper.util (N2)', () => {
           'jellyfin/jellyfin-android',
         ),
       ).toBe('Đa phương tiện');
+    });
+  });
+
+  describe('anhXaDanhMuc - danh mục AI', () => {
+    it('đặt AI đầu tiên trong danh sách 9 danh mục', () => {
+      expect(DANH_MUC_CHUAN).toHaveLength(9);
+      expect(DANH_MUC_CHUAN[0]).toBe('AI');
+    });
+
+    it.each([
+      [['ai']],
+      [['llm', 'ollama']],
+      [['machine-learning', 'deep-learning']],
+      [['ai-agents']],
+    ])('xếp topic cốt lõi %j vào AI', (topics) => {
+      expect(anhXaDanhMuc(topics)).toBe('AI');
+    });
+
+    it('chỉ dùng topics, không dùng mô tả để xếp vào AI', () => {
+      expect(anhXaDanhMuc([], 'Artificial intelligence and machine learning tools')).not.toBe('AI');
+    });
+
+    it.each([
+      ['dbeaver/dbeaver', 'Lập trình & Phát triển'],
+      ['zeromicro/go-zero', 'Lập trình & Phát triển'],
+      ['drawdb-io/drawdb', 'Lập trình & Phát triển'],
+      ['rustfs/rustfs', 'Tiện ích hệ thống'],
+      ['oblien/openship', 'Tiện ích hệ thống'],
+      ['netdata/netdata', 'Tiện ích hệ thống'],
+      ['thejoefin/text-grab', 'Tiện ích hệ thống'],
+      ['tesseract-ocr/tesseract', 'Năng suất & Văn phòng'],
+      ['naptha/tesseract.js', 'Năng suất & Văn phòng'],
+      ['opencv/opencv', 'Đa phương tiện'],
+      ['ossrs/srs', 'Đa phương tiện'],
+      ['wkentaro/labelme', 'Đa phương tiện'],
+      ['t8rin/imagetoolbox', 'Đa phương tiện'],
+      ['livekit/livekit', 'Mạng & Giao tiếp'],
+    ])('giữ danh mục cũ cho ngoại lệ %s dù có topic AI', (repo, expected) => {
+      expect(anhXaDanhMuc(['ai', 'database'], null, repo)).toBe(expected);
+    });
+
+    it.each([
+      'anomalyco/opencode',
+      'openai/codex',
+      'earendil-works/pi',
+      'openai/whisper',
+      'colbymchenry/codegraph',
+      'cline/cline',
+      'karpathy/nanogpt',
+      'hkuds/cli-anything',
+      'oobabooga/textgen',
+      'justvugg/colibri',
+      'tashfeenahmed/freellmapi',
+      'vercel-labs/agent-browser',
+      'stanfordnlp/dspy',
+      'musistudio/claude-code-router',
+      'openai/codex-plugin-cc',
+      'yeachan-heo/oh-my-codex',
+      'allenai/olmocr',
+      'openai/tiktoken',
+      'gastownhall/gastown',
+      'huggingface/trl',
+      'huggingface/sentence-transformers',
+      'state-spaces/mamba',
+      'andrewyng/openworker',
+      'karpathy/micrograd',
+      'langchain-ai/langchainjs',
+      'avante-corp/avante.nvim',
+      'langchain-ai/openwiki',
+      'microsoft/data-formulator',
+      'lllyasviel/framepack',
+      'kittenml/kittentts',
+      'comfy-org/comfyui-manager',
+      'andrewyng/aisuite',
+      'hkuds/openharness',
+      'neonbjb/tortoise-tts',
+      'andymik90/aperant',
+    ])('xếp repo AI thủ công %s vào AI dù không có topics', (repo) => {
+      expect(anhXaDanhMuc([], null, repo)).toBe('AI');
+    });
+
+    it.each([
+      [['agent']],
+      [['agents']],
+      [['gemini']],
+      [['copilot']],
+      [['codex']],
+      [['gpt']],
+      [['prompt', 'shell']],
+      [['ml']],
+      [['ocr']],
+      [['tts']],
+      [['whisper']],
+      [['text-to-speech']],
+      [['computer-vision']],
+      [['chatbot', 'messaging']],
+      [['rain']],
+      [['maintain']],
+      [['ragtime']],
+    ])('không xếp topic dễ nhầm %j vào AI', (topics) => {
+      expect(anhXaDanhMuc(topics)).not.toBe('AI');
+    });
+
+    it('ưu tiên bảng thủ công hơn AI, và AI hơn điểm danh mục thường', () => {
+      expect(anhXaDanhMuc(['ai', 'security'], null, 'dbeaver/dbeaver')).toBe(
+        'Lập trình & Phát triển',
+      );
+      expect(anhXaDanhMuc(['ai', 'security'])).toBe('AI');
     });
   });
 

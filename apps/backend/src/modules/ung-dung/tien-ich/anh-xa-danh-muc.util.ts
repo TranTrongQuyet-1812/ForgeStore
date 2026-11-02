@@ -1,7 +1,8 @@
 /**
- * Danh sách 8 danh mục ứng dụng chuẩn hóa của ForgeStore
+ * Danh sách 9 danh mục ứng dụng chuẩn hóa của ForgeStore
  */
 export const DANH_MUC_CHUAN = [
+  'AI',
   'Tiện ích hệ thống',
   'Bảo mật & Quyền riêng tư',
   'Đa phương tiện',
@@ -16,7 +17,9 @@ export type DanhMucChuan = (typeof DANH_MUC_CHUAN)[number];
 
 // Bảng từ khóa ánh xạ từ GitHub Topics và mô tả sang danh mục chuẩn hóa (N2)
 // Mỗi từ khóa chỉ thuộc duy nhất MỘT danh mục. Đã bỏ 'windows', 'android', phân tách 'editor'.
-const TU_KHOA_DANH_MUC: Record<DanhMucChuan, string[]> = {
+type DanhMucThuong = Exclude<DanhMucChuan, 'AI'>;
+
+const TU_KHOA_DANH_MUC: Record<DanhMucThuong, string[]> = {
   'Bảo mật & Quyền riêng tư': [
     'security',
     'privacy',
@@ -189,7 +192,102 @@ export const BANG_DANH_MUC_THU_CONG: Record<string, DanhMucChuan> = {
   'ip7z/7zip': 'Tiện ích hệ thống',
   'syncthing/syncthing': 'Mạng & Giao tiếp',
   'syncthing/syncthing-android': 'Mạng & Giao tiếp',
+  'dbeaver/dbeaver': 'Lập trình & Phát triển',
+  'zeromicro/go-zero': 'Lập trình & Phát triển',
+  'drawdb-io/drawdb': 'Lập trình & Phát triển',
+  'rustfs/rustfs': 'Tiện ích hệ thống',
+  'oblien/openship': 'Tiện ích hệ thống',
+  'netdata/netdata': 'Tiện ích hệ thống',
+  'thejoefin/text-grab': 'Tiện ích hệ thống',
+  'tesseract-ocr/tesseract': 'Năng suất & Văn phòng',
+  'naptha/tesseract.js': 'Năng suất & Văn phòng',
+  'opencv/opencv': 'Đa phương tiện',
+  'ossrs/srs': 'Đa phương tiện',
+  'wkentaro/labelme': 'Đa phương tiện',
+  't8rin/imagetoolbox': 'Đa phương tiện',
+  'livekit/livekit': 'Mạng & Giao tiếp',
+  'anomalyco/opencode': 'AI',
+  'openai/codex': 'AI',
+  'earendil-works/pi': 'AI',
+  'openai/whisper': 'AI',
+  'colbymchenry/codegraph': 'AI',
+  'cline/cline': 'AI',
+  'karpathy/nanogpt': 'AI',
+  'hkuds/cli-anything': 'AI',
+  'oobabooga/textgen': 'AI',
+  'justvugg/colibri': 'AI',
+  'tashfeenahmed/freellmapi': 'AI',
+  'vercel-labs/agent-browser': 'AI',
+  'stanfordnlp/dspy': 'AI',
+  'musistudio/claude-code-router': 'AI',
+  'openai/codex-plugin-cc': 'AI',
+  'yeachan-heo/oh-my-codex': 'AI',
+  'allenai/olmocr': 'AI',
+  'openai/tiktoken': 'AI',
+  'gastownhall/gastown': 'AI',
+  'huggingface/trl': 'AI',
+  'huggingface/sentence-transformers': 'AI',
+  'state-spaces/mamba': 'AI',
+  'andrewyng/openworker': 'AI',
+  'karpathy/micrograd': 'AI',
+  'langchain-ai/langchainjs': 'AI',
+  'avante-corp/avante.nvim': 'AI',
+  'langchain-ai/openwiki': 'AI',
+  'microsoft/data-formulator': 'AI',
+  'lllyasviel/framepack': 'AI',
+  'kittenml/kittentts': 'AI',
+  'comfy-org/comfyui-manager': 'AI',
+  'andrewyng/aisuite': 'AI',
+  'hkuds/openharness': 'AI',
+  'neonbjb/tortoise-tts': 'AI',
+  'andymik90/aperant': 'AI',
 };
+
+// Chỉ các chủ đề nhận diện rõ AI mới được dùng để tránh kéo nhầm công cụ phổ thông.
+const TU_KHOA_AI_COT_LOI = [
+  'ai',
+  'llm',
+  'llms',
+  'large-language-models',
+  'large-language-model',
+  'machine-learning',
+  'deep-learning',
+  'artificial-intelligence',
+  'generative-ai',
+  'genai',
+  'ai-agents',
+  'ai-agent',
+  'agentic',
+  'chatgpt',
+  'openai',
+  'claude',
+  'claude-code',
+  'ollama',
+  'stable-diffusion',
+  'diffusion',
+  'image-generation',
+  'comfyui',
+  'rag',
+  'mcp',
+  'mcp-server',
+  'langchain',
+  'deepseek',
+  'qwen',
+  'llama',
+  'local-llm',
+  'neural-network',
+  'neural-networks',
+  'pytorch',
+  'tensorflow',
+  'transformers',
+  'huggingface',
+  'nlp',
+  'vector-database',
+  'embeddings',
+  'ai-tools',
+  'self-hosted-ai',
+  'aigc',
+] as const;
 
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -234,11 +332,19 @@ export function anhXaDanhMuc(
   }
 
   const normalizedTopics = (topics || []).map((t) => t.toLowerCase().trim());
+  if (
+    normalizedTopics.some((topic) =>
+      TU_KHOA_AI_COT_LOI.some((keyword) => kiemTraTopicKhop(topic, keyword)),
+    )
+  ) {
+    return 'AI';
+  }
+
   const normalizedDesc = (moTa || '').toLowerCase();
 
   // Đếm điểm phù hợp cho từng danh mục
   // Phân tách điểm Topic và điểm Mô tả để giải quyết hòa điểm (N2)
-  const scores: Record<DanhMucChuan, { total: number; topic: number }> = {
+  const scores: Record<DanhMucThuong, { total: number; topic: number }> = {
     'Bảo mật & Quyền riêng tư': { total: 0, topic: 0 },
     'Đa phương tiện': { total: 0, topic: 0 },
     'Năng suất & Văn phòng': { total: 0, topic: 0 },
@@ -250,7 +356,7 @@ export function anhXaDanhMuc(
   };
 
   for (const [danhMuc, keywords] of Object.entries(TU_KHOA_DANH_MUC) as [
-    DanhMucChuan,
+    DanhMucThuong,
     string[],
   ][]) {
     for (const kw of keywords) {
@@ -279,7 +385,7 @@ export function anhXaDanhMuc(
   let bestCategory: DanhMucChuan = 'Tiện ích hệ thống';
 
   for (const [danhMuc, sc] of Object.entries(scores) as [
-    DanhMucChuan,
+    DanhMucThuong,
     { total: number; topic: number },
   ][]) {
     if (sc.total > maxScore) {
