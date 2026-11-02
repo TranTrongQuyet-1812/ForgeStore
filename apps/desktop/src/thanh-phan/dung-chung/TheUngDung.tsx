@@ -5,6 +5,7 @@ import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import { NhanLuuTru } from './NhanLuuTru';
 import { rutGonGiayPhep } from './giay-phep.core';
+import { thuNhoAnhDaiDien } from './anh-dai-dien.core';
 
 export interface AppCardData {
   id: string;
@@ -69,7 +70,7 @@ const TheUngDungGoc: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
           <div className="w-12 h-12 rounded-xl bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-200">
             {app.iconUrl ? (
               <img
-                src={app.iconUrl}
+                src={thuNhoAnhDaiDien(app.iconUrl, 96)}
                 alt={app.tenApp}
                 loading="lazy"
                 decoding="async"
