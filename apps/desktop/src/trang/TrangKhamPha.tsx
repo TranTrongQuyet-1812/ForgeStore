@@ -25,7 +25,36 @@ import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service'
 import { useDeviceInstalledApps } from '../hooks/useDeviceInstalledApps';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
-import { gopTrangUngDung, rutVeTrangDau } from './kham-pha.core';
+import { gopTrangUngDung, haiTrangGiongNhau, rutVeTrangDau, taoAnhXaCoNho } from './kham-pha.core';
+
+// Giữ nguyên đối tượng thẻ giữa các lần tải thêm để thẻ cũ không phải vẽ lại
+const anhXaTheCoNho = taoAnhXaCoNho((dto: UngDungTomTatDto) =>
+  khoUngDungService.anhXaDtoSangTheUngDung(dto),
+);
+
+interface LuoiTrangUngDungProps {
+  trang: AppCardData[];
+  coHieuUngSoLe: boolean;
+}
+
+// Mỗi đợt tải là một lưới riêng; đợt không đổi thì bỏ qua, tránh vẽ lại hàng trăm thẻ khi cuộn
+const LuoiTrangUngDung = React.memo(
+  ({ trang, coHieuUngSoLe }: LuoiTrangUngDungProps) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {trang.map((app, index) => (
+        <TheUngDung
+          key={app.id}
+          app={app}
+          // Chỉ trang đầu có hiệu ứng so le; các lượt tải thêm hiện thẳng cho khỏi giật
+          staggerIndex={coHieuUngSoLe ? index : undefined}
+        />
+      ))}
+    </div>
+  ),
+  (truoc, sau) =>
+    truoc.coHieuUngSoLe === sau.coHieuUngSoLe && haiTrangGiongNhau(truoc.trang, sau.trang),
+);
+LuoiTrangUngDung.displayName = 'LuoiTrangUngDung';
 
 type SpotlightMode = 'trending' | 'curated' | 'security';
 type TimeWindow = 'today' | 'week' | 'month';
@@ -195,9 +224,7 @@ export const TrangKhamPha: React.FC = () => {
   // Chuyển đổi dữ liệu backend DTO sang AppCardData, hoàn toàn từ dữ liệu sống (B3)
   const liveAppPages = useMemo(() => {
     const trangDaGop = gopTrangUngDung(appsResponse?.pages ?? []);
-    return trangDaGop.map((trang) =>
-      trang.map((dto: UngDungTomTatDto) => khoUngDungService.anhXaDtoSangTheUngDung(dto)),
-    );
+    return trangDaGop.map((trang) => trang.map(anhXaTheCoNho));
   }, [appsResponse]);
 
   const featuredAppsList = useMemo(() => {
@@ -672,18 +699,7 @@ export const TrangKhamPha: React.FC = () => {
           <>
             <div className="flex flex-col gap-5">
               {liveAppPages.map((trang, indexTrang) => {
-                const luoi = (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {trang.map((app, index) => (
-                      <TheUngDung
-                        key={app.id}
-                        app={app}
-                        // Chỉ trang đầu có hiệu ứng so le; các lượt tải thêm hiện thẳng cho khỏi giật
-                        staggerIndex={indexTrang === 0 ? index : undefined}
-                      />
-                    ))}
-                  </div>
-                );
+                const luoi = <LuoiTrangUngDung trang={trang} coHieuUngSoLe={indexTrang === 0} />;
 
                 return indexTrang === 0 ? (
                   // key theo bộ lọc để hiệu ứng giải mã phát lại mỗi khi đổi danh mục, sắp xếp hoặc khung thời gian

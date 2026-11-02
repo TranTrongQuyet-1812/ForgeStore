@@ -31,8 +31,9 @@ interface AppCardProps {
   staggerIndex?: number;
 }
 
-export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
-  const { openAppDetail } = useDieuHuongStore();
+const TheUngDungGoc: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
+  // Chỉ lấy đúng hàm cần dùng để thẻ không bị vẽ lại mỗi khi phần khác của kho điều hướng đổi
+  const openAppDetail = useDieuHuongStore((s) => s.openAppDetail);
   const { layTrangThaiCaiDat } = useDeviceInstalledApps();
   const trangThaiCaiDat = layTrangThaiCaiDat(app.id, app.repoHandle);
 
@@ -67,7 +68,13 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
           {/* App Icon với bóng đổ tinh tế */}
           <div className="w-12 h-12 rounded-xl bg-surface-elevated border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:scale-105 transition-transform duration-200">
             {app.iconUrl ? (
-              <img src={app.iconUrl} alt={app.tenApp} className="w-full h-full object-cover" />
+              <img
+                src={app.iconUrl}
+                alt={app.tenApp}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-primary font-bold text-lg font-display">
                 {app.tenApp.charAt(0).toUpperCase()}
@@ -201,3 +208,6 @@ export const TheUngDung: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
     </div>
   );
 };
+
+// React.memo: thẻ có cùng dữ liệu thì không vẽ lại khi danh sách cha thay đổi (cuộn tải thêm)
+export const TheUngDung = React.memo(TheUngDungGoc);

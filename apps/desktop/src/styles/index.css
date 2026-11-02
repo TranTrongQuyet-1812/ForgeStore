@@ -79,6 +79,9 @@ html {
 @layer utilities {
   /* Lớp bề mặt Tactile với viền sáng Specular Rim Light 1px (Raycast / Linear Style) - Êm ái, mượt mà */
   .tactile-card {
+    /* Thẻ nằm ngoài màn hình không phải vẽ; "auto" nhớ chiều cao thật sau lần vẽ đầu để thanh cuộn không nhảy */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 260px;
     background-color: var(--color-bg-surface-elevated);
     border: 1px solid var(--color-border-subtle);
     box-shadow:

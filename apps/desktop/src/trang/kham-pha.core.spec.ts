@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { gopTrangUngDung, rutVeTrangDau } from './kham-pha.core';
+import { describe, expect, it, vi } from 'vitest';
+import { gopTrangUngDung, haiTrangGiongNhau, rutVeTrangDau, taoAnhXaCoNho } from './kham-pha.core';
 
 describe('gộp các trang ứng dụng', () => {
   it('loại ứng dụng trùng ID mà vẫn giữ thứ tự và ranh giới từng lượt tải', () => {
@@ -34,5 +34,28 @@ describe('gộp các trang ứng dụng', () => {
     const cache = { pages: [{ trang: 1 }], pageParams: [1] };
     expect(rutVeTrangDau(undefined)).toBeUndefined();
     expect(rutVeTrangDau(cache)).toBe(cache);
+  });
+});
+
+describe('taoAnhXaCoNho', () => {
+  it('trả lại đúng đối tượng cũ và chỉ ánh xạ một lần cho cùng dữ liệu nguồn', () => {
+    const anhXa = vi.fn((nguon: { id: string }) => ({ ten: nguon.id }));
+    const anhXaCoNho = taoAnhXaCoNho(anhXa);
+    const nguon = { id: 'a' };
+
+    expect(anhXaCoNho(nguon)).toBe(anhXaCoNho(nguon));
+    expect(anhXa).toHaveBeenCalledTimes(1);
+    expect(anhXaCoNho({ id: 'a' })).not.toBe(anhXaCoNho(nguon));
+  });
+});
+
+describe('haiTrangGiongNhau', () => {
+  it('chỉ giống khi cùng độ dài và từng phần tử cùng tham chiếu', () => {
+    const a = { id: 1 };
+    const b = { id: 2 };
+
+    expect(haiTrangGiongNhau([a, b], [a, b])).toBe(true);
+    expect(haiTrangGiongNhau([a], [a, b])).toBe(false);
+    expect(haiTrangGiongNhau([a, b], [a, { id: 2 }])).toBe(false);
   });
 });

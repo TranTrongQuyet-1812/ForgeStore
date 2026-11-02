@@ -100,7 +100,10 @@ export function layTrangThaiCaiDatHelper(params: {
  * Kết hợp dữ liệu RAM từ useCaiDatUngDungStore để phản hồi tức thì khi đang tải/cài
  */
 export function useDeviceInstalledApps() {
-  const { user, isAuthenticated, maThietBi } = useXacThucStore();
+  // Tách từng giá trị để thẻ chỉ vẽ lại khi đúng giá trị đó đổi, không phải mỗi lần kho đăng nhập đổi
+  const user = useXacThucStore((s) => s.user);
+  const isAuthenticated = useXacThucStore((s) => s.isAuthenticated);
+  const maThietBi = useXacThucStore((s) => s.maThietBi);
   const caiDatMap = useCaiDatUngDungStore((s) => s.caiDatMap);
 
   const {
