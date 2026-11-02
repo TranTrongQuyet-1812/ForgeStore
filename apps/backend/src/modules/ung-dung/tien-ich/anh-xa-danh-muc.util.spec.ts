@@ -191,6 +191,23 @@ describe('category-mapper.util (N2)', () => {
       ['wkentaro/labelme', 'Đa phương tiện'],
       ['t8rin/imagetoolbox', 'Đa phương tiện'],
       ['livekit/livekit', 'Mạng & Giao tiếp'],
+      ['tw93/pake', 'Lập trình & Phát triển'],
+      ['gitleaks/gitleaks', 'Lập trình & Phát triển'],
+      ['dolthub/dolt', 'Lập trình & Phát triển'],
+      ['casdoor/casdoor', 'Bảo mật & Quyền riêng tư'],
+      ['0xjacky/nginx-ui', 'Lập trình & Phát triển'],
+      ['electerm/electerm', 'Mạng & Giao tiếp'],
+      ['joeanamier/xhs-downloader', 'Lập trình & Phát triển'],
+      ['nukeop/nuclear', 'Đa phương tiện'],
+      ['t8y2/dbx', 'Lập trình & Phát triển'],
+      ['tabularisdb/tabularis', 'Lập trình & Phát triển'],
+      ['siyuan-note/siyuan', 'Năng suất & Văn phòng'],
+      ['purocean/yn', 'Năng suất & Văn phòng'],
+      ['richqaq/pastemd', 'Năng suất & Văn phòng'],
+      ['wasp-lang/open-saas', 'Lập trình & Phát triển'],
+      ['streamlit/streamlit', 'Lập trình & Phát triển'],
+      ['marimo-team/marimo', 'Lập trình & Phát triển'],
+      ['googleworkspace/cli', 'Lập trình & Phát triển'],
     ])('giữ danh mục cũ cho ngoại lệ %s dù có topic AI', (repo, expected) => {
       expect(anhXaDanhMuc(['ai', 'database'], null, repo)).toBe(expected);
     });
