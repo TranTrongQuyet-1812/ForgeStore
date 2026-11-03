@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
@@ -6,6 +6,7 @@ import { VaiTro } from '@prisma/client';
 import { UngDungService } from '../ung-dung.service';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { DayChuyenNapRepoService } from '../services/day-chuyen-nap-repo.service';
+import { LlmRateLimiterService } from '../../ai/services/llm-rate-limiter.service';
 import { VaiTroYeuCau } from '../../../common/decorators/vai-tro.decorator';
 
 export class PrewarmAiDto {
@@ -46,7 +47,20 @@ export class AiQuanTriController {
     private readonly appsService: UngDungService,
     private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
     private readonly repoIngestionPipelineService: DayChuyenNapRepoService,
+    private readonly llmRateLimiterService: LlmRateLimiterService,
   ) {}
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Get('thong-ke-ngay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Lấy số liệu AI theo ngày: số yêu cầu từng mô hình và số mục xếp hàng (P3B-28.6)',
+  })
+  @ApiResponse({ status: 200, description: 'Số liệu hạn mức AI trong ngày theo giờ Pacific' })
+  @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
+  async layThongKeNgay() {
+    return this.llmRateLimiterService.layThongKeGeminiTheoNgay();
+  }
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
   @Post('lam-nong')

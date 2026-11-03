@@ -25,6 +25,7 @@
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
  *   pnpm data-repo sinh-vector --mo-hinh 2 [--toi-da 900] [--lam-lai-truoc <ISO>] [--ghi] # bổ sung (hoặc sinh lại) vector, mặc định chỉ đếm
+ *   pnpm data-repo thong-ke-ai                  # xem số liệu yêu cầu AI theo ngày và số mục xếp hàng (P3B-28.6)
  *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
@@ -2125,6 +2126,21 @@ async function lenhSinhVector(): Promise<void> {
   });
 }
 
+// P3B-28.6: Báo cáo số liệu yêu cầu AI theo ngày và số mục xếp hàng sang hôm sau
+async function lenhThongKeAi(): Promise<void> {
+  await voiNest(async (app) => {
+    const { LlmRateLimiterService } =
+      await import('../../modules/ai/services/llm-rate-limiter.service');
+    const thongKe = await app.get(LlmRateLimiterService).layThongKeGeminiTheoNgay();
+    console.info(`\n=== SỐ LIỆU HẠN MỨC AI THEO NGÀY (Pacific: ${thongKe.ngayPacific}) ===`);
+    console.info('1. Hạn mức dịch nội dung (Trần: 500 yêu cầu / ngày mỗi mô hình):');
+    for (const [model, soDaDung] of Object.entries(thongKe.theoMoHinh)) {
+      console.info(`   - ${model}: ${soDaDung} / 500 yêu cầu (còn ${Math.max(0, 500 - soDaDung)})`);
+    }
+    console.info(`2. Số mục xếp hàng sang hôm sau: ${thongKe.soMucChoSangNgayMai} mục\n`);
+  });
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
@@ -2166,9 +2182,11 @@ async function main(): Promise<void> {
       return lenhHoanTac();
     case 'sinh-vector':
       return lenhSinhVector();
+    case 'thong-ke-ai':
+      return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac | sinh-vector (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }
