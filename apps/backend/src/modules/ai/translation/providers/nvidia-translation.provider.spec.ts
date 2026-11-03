@@ -10,16 +10,16 @@ describe('NvidiaTranslationProvider', () => {
     mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'NVIDIA_API_KEY') return 'test-key-nvidia';
-        if (key === 'NVIDIA_TRANSLATE_MODEL') return 'google/diffusiongemma-26b-a4b-it';
+        if (key === 'NVIDIA_TRANSLATE_MODEL') return 'poolside/laguna-xs-2.1';
         return undefined;
       }),
     } as unknown as ConfigService;
   });
 
-  it('khởi tạo thành công với model google/diffusiongemma-26b-a4b-it', () => {
+  it('khởi tạo thành công với model poolside/laguna-xs-2.1', () => {
     provider = new NvidiaTranslationProvider(mockConfigService);
     expect(provider.providerName).toBe('nvidia');
-    expect(provider.modelName).toBe('google/diffusiongemma-26b-a4b-it');
+    expect(provider.modelName).toBe('poolside/laguna-xs-2.1');
     expect(provider.isAvailable()).toBe(true);
   });
 
