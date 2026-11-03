@@ -28,7 +28,7 @@ export type LyDoLoc =
   | 'LA_FORK'
   | 'DA_LUU_TRU'
   | 'KHONG_CON_CAP_NHAT'
-  | 'GIAY_PHEP_CAN_DUYET'
+  | 'KHONG_CO_GIAY_PHEP'
   | 'TRONG_DANH_SACH_CHAN'
   | 'KHONG_CO_BAN_PHAT_HANH'
   | 'KHONG_CO_FILE_CAI';
@@ -95,9 +95,10 @@ export function locCucBo(
   if (soThangTu(repo.pushed_at, now) > nguong.maxPushThang) {
     return { dat: false, lyDo: 'KHONG_CON_CAP_NHAT', chiTiet: 'push cũ' };
   }
-  const spdx = repo.license?.spdx_id;
-  if (!spdx || spdx === 'NOASSERTION' || spdx.toLowerCase() === 'other') {
-    return { dat: false, lyDo: 'GIAY_PHEP_CAN_DUYET', chiTiet: spdx ?? 'không có' };
+  // D-36: nhận mọi giấy phép kể cả NOASSERTION và other (tác giả có ghi, GitHub chỉ không đọc ra mã);
+  // chỉ loại repo hoàn toàn không có giấy phép vì theo luật là mọi quyền được bảo lưu.
+  if (!repo.license) {
+    return { dat: false, lyDo: 'KHONG_CO_GIAY_PHEP', chiTiet: 'không có' };
   }
   const chan = trongDanhSachChan(repo);
   if (chan) return { dat: false, lyDo: 'TRONG_DANH_SACH_CHAN', chiTiet: chan };

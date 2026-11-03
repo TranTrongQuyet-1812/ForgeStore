@@ -38,12 +38,10 @@ describe('locCucBo (P3B-06.3 bộ lọc 1 đến 5 và 7)', () => {
       'KHONG_CON_CAP_NHAT',
     );
   });
-  it('giấy phép trống, NOASSERTION hoặc other chờ duyệt tay', () => {
-    expect(locCucBo(repo({ license: null }), NOW).lyDo).toBe('GIAY_PHEP_CAN_DUYET');
-    expect(locCucBo(repo({ license: { spdx_id: 'NOASSERTION' } }), NOW).lyDo).toBe(
-      'GIAY_PHEP_CAN_DUYET',
-    );
-    expect(locCucBo(repo({ license: { spdx_id: 'other' } }), NOW).lyDo).toBe('GIAY_PHEP_CAN_DUYET');
+  it('không có giấy phép bị loại, còn NOASSERTION và other thì đạt (D-36)', () => {
+    expect(locCucBo(repo({ license: null }), NOW).lyDo).toBe('KHONG_CO_GIAY_PHEP');
+    expect(locCucBo(repo({ license: { spdx_id: 'NOASSERTION' } }), NOW).dat).toBe(true);
+    expect(locCucBo(repo({ license: { spdx_id: 'other' } }), NOW).dat).toBe(true);
   });
   it('danh sách chặn bắt crack, keygen, awesome-*, nhưng không chặn nhầm tên thường', () => {
     expect(trongDanhSachChan(repo({ name: 'photoshop-crack' }))).toBe('crack');
