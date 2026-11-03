@@ -502,7 +502,10 @@ export class TranslationRotationService {
 
           // 3. Chốt chặn Claude: Bản dịch phải khác bản gốc tiếng Anh
           const textGoc = chunkMap.get(id) || '';
-          if (banDichTrim.toLowerCase() === textGoc.trim().toLowerCase()) {
+          if (
+            options?.loai === 'mo_ta' &&
+            banDichTrim.toLowerCase() === textGoc.trim().toLowerCase()
+          ) {
             this.logger.warn(
               `Bản dịch cho mục [${id}] trùng 100% bản gốc tiếng Anh. Bỏ qua không nhận làm bản dịch.`,
             );

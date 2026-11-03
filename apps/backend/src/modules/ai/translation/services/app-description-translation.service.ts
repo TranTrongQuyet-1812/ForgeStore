@@ -89,6 +89,7 @@ export class AppDescriptionTranslationService {
 
     const ketQuaBatch = await this.translationRotationService.dichGomLoJson(items, {
       batchSize: 25,
+      loai: 'mo_ta',
     });
 
     let dichThanhCong = 0;
@@ -115,21 +116,12 @@ export class AppDescriptionTranslationService {
 
     const idsChoNgayMai = ketQuaBatch.choNgayMai ? ketQuaBatch.thieuIds : [];
     if (idsChoNgayMai.length > 0) {
+      // Giữ mô tả cũ để giao diện không mất nội dung trong lúc chờ bản dịch mới.
       const idsHangCho = appsCanDich
         .filter((app) => idsChoNgayMai.includes(app.maUngDung))
         .map((app) => `${app.maUngDung}:mo_ta`);
       await this.ghiNhanMoTaChoNgayMai(appsCanDich, idsChoNgayMai, ketQuaBatch.retryAfterSec ?? 0);
       await this.translationRotationService.ghiNhanMucChoNgayMai(idsHangCho);
-      await Promise.all(
-        appsCanDich
-          .filter((app) => idsChoNgayMai.includes(app.maUngDung))
-          .map((app) =>
-            this.prisma.ungDung.update({
-              where: { maUngDung: app.maUngDung },
-              data: { moTaVi: null, maBamMoTa: null },
-            }),
-          ),
-      );
     }
 
     // Xóa cache danh sách và cache chi tiết của các app vừa dịch

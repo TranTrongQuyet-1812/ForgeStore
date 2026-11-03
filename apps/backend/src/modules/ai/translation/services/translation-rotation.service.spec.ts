@@ -86,6 +86,28 @@ describe('TranslationRotationService', () => {
     expect(gemini35.translateBatchJson).toHaveBeenCalledOnce();
   });
 
+  it('chỉ từ chối bản dịch trùng nguyên văn với mô tả, vẫn nhận đoạn README vốn là tên riêng', async () => {
+    for (const provider of [gemini31, gemini35]) {
+      vi.mocked(provider.translateBatchJson!).mockResolvedValue({
+        data: { '1': 'ForgeStore CLI' },
+        lyDoLoi: null,
+        provider: 'gemini',
+        model: provider.modelName,
+      });
+    }
+
+    const readme = await service.dichGomLoJson([{ id: '1', text: 'ForgeStore CLI' }], {
+      loai: 'readme',
+    });
+    const moTa = await service.dichGomLoJson([{ id: '1', text: 'ForgeStore CLI' }], {
+      loai: 'mo_ta',
+    });
+
+    expect(readme.ketQua).toEqual({ '1': 'ForgeStore CLI' });
+    expect(moTa.ketQua).toEqual({});
+    expect(moTa.thieuIds).toEqual(['1']);
+  });
+
   it('xếp lô sang ngày mai khi hai hũ hết hạn mức', async () => {
     for (const provider of [gemini35, gemini31]) {
       vi.mocked(provider.translateBatchJson!).mockResolvedValue({

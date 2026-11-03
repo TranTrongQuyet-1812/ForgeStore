@@ -119,7 +119,7 @@ describe('AppDescriptionTranslationService', () => {
         { id: 'app-1', text: 'Remote desktop client' },
         { id: 'app-2', text: 'Password manager' },
       ],
-      { batchSize: 25 },
+      { batchSize: 25, loai: 'mo_ta' },
     );
 
     expect(mockPrisma.ungDung.update).toHaveBeenCalledTimes(2);
@@ -235,14 +235,11 @@ describe('AppDescriptionTranslationService', () => {
       'app-1:mo_ta',
       'app-2:mo_ta',
     ]);
-    expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
-      where: { maUngDung: 'app-1' },
-      data: { moTaVi: null, maBamMoTa: null },
-    });
-    expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
-      where: { maUngDung: 'app-2' },
-      data: { moTaVi: null, maBamMoTa: null },
-    });
+    expect(mockPrisma.ungDung.update).not.toHaveBeenCalled();
+    expect(mockRotationService.dichGomLoJson).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ loai: 'mo_ta' }),
+    );
     expect(mockCacheService.luu).toHaveBeenCalledWith(
       'fs:ai:translation:deferred:mo_ta:app-1',
       expect.objectContaining({ maBam: expect.any(String), retryAt: expect.any(Number) }),

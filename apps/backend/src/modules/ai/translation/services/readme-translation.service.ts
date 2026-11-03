@@ -6,6 +6,7 @@ import { CacheService } from '../../../redis/cache.service';
 import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
+import { StructureValidator } from '../tien-ich/structure-validator.util';
 import {
   goKhungGiuNguyen,
   kiemBatBienReadme,
@@ -19,6 +20,8 @@ import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types
 export class ReadmeTranslationService {
   private readonly logger = new Logger(ReadmeTranslationService.name);
   private readonly dangDichSet = new Set<string>();
+  // Giới hạn fallback để một README lỗi gom lô không tiêu thụ quá nhiều yêu cầu dịch lẻ.
+  private readonly SO_LAN_DICH_LE_TOI_DA_MOI_README = 5;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -582,6 +585,11 @@ export class ReadmeTranslationService {
     return placeholdersGoc.every((val, idx) => val === placeholdersDich[idx]);
   }
 
+  private chuanHoaKyHieuGiuCho(text: string): string {
+    // Một số model đổi ngoặc ký hiệu; chuẩn hóa trước khi ghép để khôi phục đúng khung gốc.
+    return text.replace(/\[C(\d+)\]/g, '⟦C$1⟧');
+  }
+
   /**
    * Tác vụ dịch README chạy nền non-blocking (P3B-05.3, P3B-05.4 & P3B-28.4).
    */
@@ -667,6 +675,7 @@ export class ReadmeTranslationService {
       // 2. Gom lô các đoạn cần AI dịch thành các nhóm khoảng 2.500 ký tự (P3B-28.4)
       if (doanCanDichAI.length > 0) {
         const danhSachLo = this.gomLoDoanReadme(doanCanDichAI, 2500);
+        let soLanDichLe = 0;
 
         for (const lo of danhSachLo) {
           const items = lo.map((d) => ({
@@ -692,37 +701,52 @@ export class ReadmeTranslationService {
             const idStr = String(doan.stt);
             let banDichDoan = ketQuaBatch?.ketQua?.[idStr] ?? null;
 
-            // Kiểm tra bảo toàn ký hiệu giữ chỗ từng đoạn trong lô (P3B-28.4)
-            if (banDichDoan && !this.kiemTraGiuChoKyHieu(doan.vanBanDaChe, banDichDoan)) {
-              this.logger.warn(
-                `Đoạn ${doan.stt} trong lô không bảo toàn ký hiệu giữ chỗ. Fallback dịch riêng lẻ.`,
+            if (banDichDoan) {
+              banDichDoan = StructureValidator.cleanOutput(banDichDoan, doan.vanBanDaChe);
+              banDichDoan = this.chuanHoaKyHieuGiuCho(banDichDoan);
+              const loiCauTruc = StructureValidator.findStructureProblem(
+                doan.vanBanDaChe,
+                banDichDoan,
               );
-              banDichDoan = null;
+              if (loiCauTruc || !this.kiemTraGiuChoKyHieu(doan.vanBanDaChe, banDichDoan)) {
+                this.logger.warn(
+                  `Đoạn ${doan.stt} trong lô lỗi cấu trúc (${loiCauTruc || 'placeholders_changed'}). Fallback dịch riêng lẻ.`,
+                );
+                banDichDoan = null;
+              }
             }
 
             // Nếu lô không trả về bản dịch cho đoạn này hoặc hỏng ký hiệu -> fallback dịch đơn lẻ
             let modelUsed = ketQuaBatch?.model || ketQuaBatch?.provider || lastModelUsed;
             if (ketQuaBatch?.choNgayMai && !banDichDoan) {
-              await this.xepHangNgayMai(maUngDung, readmeSha, ketQuaBatch.retryAfterSec ?? 0);
-              await this.luuDoanDichThanhCong(cacDoanChoLuu);
-              await this.prisma.banDichReadme.update({
-                where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
-                data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: new Date() },
-              });
+              await this.tamDungDichReadme(
+                maUngDung,
+                readmeSha,
+                ketQuaBatch.retryAfterSec ?? 0,
+                cacDoanChoLuu,
+              );
               return false;
             }
             if (!banDichDoan) {
+              if (soLanDichLe >= this.SO_LAN_DICH_LE_TOI_DA_MOI_README) {
+                this.logger.warn(
+                  `README [${owner}/${repo}] đã chạm giới hạn ${this.SO_LAN_DICH_LE_TOI_DA_MOI_README} lượt dịch lẻ, xếp hàng thử lại.`,
+                );
+                await this.tamDungDichReadme(maUngDung, readmeSha, 0, cacDoanChoLuu, false);
+                return false;
+              }
+              soLanDichLe++;
               const ketQuaDon = await this.translationRotationService.dichVanBan(doan.vanBanDaChe, {
                 context: doan.tieuDeMuc,
               });
 
               if (ketQuaDon?.choNgayMai) {
-                await this.xepHangNgayMai(maUngDung, readmeSha, ketQuaDon.retryAfterSec ?? 0);
-                await this.luuDoanDichThanhCong(cacDoanChoLuu);
-                await this.prisma.banDichReadme.update({
-                  where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
-                  data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: new Date() },
-                });
+                await this.tamDungDichReadme(
+                  maUngDung,
+                  readmeSha,
+                  ketQuaDon.retryAfterSec ?? 0,
+                  cacDoanChoLuu,
+                );
                 return false;
               }
 
@@ -848,13 +872,46 @@ export class ReadmeTranslationService {
     readmeSha: string,
     retryAfterSec: number,
   ): Promise<void> {
+    await this.xepHangThuLai(maUngDung, readmeSha, retryAfterSec);
+    await this.translationRotationService.ghiNhanMucChoNgayMai([`${maUngDung}:readme`]);
+  }
+
+  private async xepHangThuLai(
+    maUngDung: string,
+    readmeSha: string,
+    retryAfterSec: number,
+  ): Promise<void> {
     const ttl = Math.max(60, retryAfterSec + 300);
     await this.cacheService.luu(
       `fs:ai:translation:deferred:${maUngDung}`,
       { readmeSha, retryAt: Date.now() + ttl * 1000 },
       ttl,
     );
-    await this.translationRotationService.ghiNhanMucChoNgayMai([`${maUngDung}:readme`]);
+  }
+
+  private async tamDungDichReadme(
+    maUngDung: string,
+    readmeSha: string,
+    retryAfterSec: number,
+    cacDoanChoLuu: Array<{
+      maBam: string;
+      doanGoc: string;
+      doanDich: string;
+      moHinhDich: string;
+    }>,
+    ghiThongKeNgayMai = true,
+  ): Promise<void> {
+    // Lưu phần đã đạt trước khi xếp lại để lần chạy sau chỉ cần xử lý phần còn thiếu.
+    if (ghiThongKeNgayMai) {
+      await this.xepHangNgayMai(maUngDung, readmeSha, retryAfterSec);
+    } else {
+      await this.xepHangThuLai(maUngDung, readmeSha, retryAfterSec);
+    }
+    await this.luuDoanDichThanhCong(cacDoanChoLuu);
+    await this.prisma.banDichReadme.update({
+      where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
+      data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: new Date() },
+    });
   }
 
   private async luuDoanDichThanhCong(

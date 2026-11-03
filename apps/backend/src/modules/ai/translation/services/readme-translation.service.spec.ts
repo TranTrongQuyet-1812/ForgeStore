@@ -769,6 +769,132 @@ MIT License.`;
       expect(mockRotationService.dichVanBan).toHaveBeenCalledTimes(1);
     });
 
+    it('làm sạch và kiểm cấu trúc từng đoạn batch, chỉ fallback đoạn hỏng', async () => {
+      const banGoc = '## First\nFirst source\n\n## Second\nSecond source';
+      const hash = service.tinhMaBam(banGoc);
+      let soDoanTrongLo = 0;
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockImplementation(async (items) => {
+        soDoanTrongLo = items.length;
+        const ketQua = Object.fromEntries(
+          items.map((item, index) => {
+            if (index !== 0) return [item.id, item.text];
+            const soTieuDe = (item.text.match(/^#{1,6}\s/gm) ?? []).length;
+            const loiCauTruc = soTieuDe
+              ? item.text.replace(/^#{1,6}\s.*$/gm, '')
+              : `${item.text}\n## Extra heading`;
+            return [item.id, `<think>ẩn</think>\n\`\`\`markdown\n${loiCauTruc}\n\`\`\``];
+          }),
+        );
+        return {
+          thanhCong: true,
+          ketQua,
+          thieuIds: [],
+          provider: 'gemini',
+          model: 'gemini-3.1-flash-lite',
+          chiTietLoi: [],
+        };
+      });
+      vi.mocked(mockRotationService.dichVanBan).mockImplementation(async (text) => ({
+        thanhCong: true,
+        banDich: text,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        thoiGianMs: 60,
+        chiTietLoi: [],
+      }));
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      expect(mockRotationService.dichVanBan).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledTimes(soDoanTrongLo);
+    });
+
+    it('chuẩn hóa [C1] về ký hiệu nội bộ trước khi lưu để tránh fallback thừa', async () => {
+      const banGoc = 'Hello `tool`';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: true,
+        ketQua: { '1': 'Xin chào [C1]' },
+        thieuIds: [],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ doanDich: 'Xin chào ⟦C1⟧' }),
+        }),
+      );
+    });
+
+    it('giới hạn năm lượt dịch lẻ mỗi README rồi lưu phần đạt và xếp hàng phần còn lại', async () => {
+      const banGoc = Array.from(
+        { length: 7 },
+        (_, index) => `## Heading ${index + 1}\nSource paragraph ${index + 1}`,
+      ).join('\n\n');
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: false,
+        ketQua: {},
+        thieuIds: ['1', '2', '3', '4', '5', '6', '7'],
+        provider: null,
+        model: null,
+        chiTietLoi: [],
+      });
+      vi.mocked(mockRotationService.dichVanBan).mockImplementation(async (text) => ({
+        thanhCong: true,
+        banDich: text.replace('Source paragraph', 'Đoạn dịch'),
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        thoiGianMs: 60,
+        chiTietLoi: [],
+      }));
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(false);
+      expect(mockRotationService.dichVanBan).toHaveBeenCalledTimes(5);
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledTimes(5);
+      expect(mockRotationService.ghiNhanMucChoNgayMai).not.toHaveBeenCalled();
+      expect(mockCacheService.luu).toHaveBeenCalledWith(
+        'fs:ai:translation:deferred:app-uuid',
+        expect.objectContaining({ readmeSha: hash, retryAt: expect.any(Number) }),
+        300,
+      );
+      expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ trangThai: TrangThaiDichReadme.DANG_DICH }),
+        }),
+      );
+    });
+
     it('giữ nguyên đoạn cũ theo maBam từ boNhoDichChung và chỉ gọi gom lô AI cho đoạn mới (repo cập nhật)', async () => {
       const banGoc = 'Unchanged text\n\nNew updated text';
       const hash = service.tinhMaBam(banGoc);
