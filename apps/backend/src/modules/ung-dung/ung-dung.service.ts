@@ -34,7 +34,6 @@ import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
 import { YeuThichService } from '../yeu-thich/yeu-thich.service';
 import { JevClientService } from '../ai/services/jev-client.service';
-import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { SemanticSearchService } from '../ai/services/semantic-search.service';
@@ -152,7 +151,6 @@ export class UngDungService {
     private readonly githubService: GithubService,
     private readonly cacheService: CacheService,
     private readonly jevClientService: JevClientService,
-    private readonly llmRotationService: LlmRotationService,
     private readonly trustScoreService: TrustScoreService,
     private readonly apkInspectorService: ApkInspectorService,
     private readonly semanticSearchService: SemanticSearchService,
@@ -1676,25 +1674,8 @@ export class UngDungService {
             this.logger.warn(`Lỗi sinh/lưu vector embedding: ${(err as Error).message}`);
           }
 
-          // 7. Tóm tắt changelog nếu có release mới nhất (P2-34)
-          if (latestRelease && latestRelease.nhatKyThayDoiGoc && !latestRelease.tomTatNangCapVi) {
-            try {
-              const changelogRes = await this.llmRotationService.tomTatChangelog(
-                latestRelease.nhatKyThayDoiGoc,
-                app.tenKhoChua,
-              );
-              await this.prisma.banPhatHanh.update({
-                where: { maPhatHanh: latestRelease.maPhatHanh },
-                data: {
-                  tomTatNangCapVi: changelogRes.ketQua.diemMoi.join('\n- '),
-                },
-              });
-            } catch (err: unknown) {
-              this.logger.warn(`Lỗi tóm tắt changelog: ${(err as Error).message}`);
-            }
-          }
-
-          // 8. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
+          // D-34: Không dịch hoặc tóm tắt changelog; giữ cột tóm tắt để tương thích dữ liệu cũ.
+          // 7. Làm sạch cache chi tiết app (ARCH-01: dùng xoaTheoPrefix dọn sạch mọi biến thể :platform:arch)
           await this.xoaCacheChiTietApp(app);
           await this.cacheService.del([
             `${this.CACHE_KEY_DETAIL}${app.maUngDung}`,

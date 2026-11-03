@@ -12,7 +12,6 @@ import {
   TimeWindowFilter,
 } from './dto/truy-van-ung-dung.dto';
 import { JevClientService } from '../ai/services/jev-client.service';
-import { LlmRotationService } from '../ai/services/llm-rotation.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { SemanticSearchService } from '../ai/services/semantic-search.service';
@@ -67,9 +66,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
     isEnabled: boolean;
     hoiChoice: ReturnType<typeof vi.fn>;
     hoiNoulBatch: ReturnType<typeof vi.fn>;
-  };
-  let mockLlmRotationService: {
-    tomTatChangelog: ReturnType<typeof vi.fn>;
   };
   let mockTrustScoreService: {
     tinhTrustScore: ReturnType<typeof vi.fn>;
@@ -179,15 +175,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       hoiNoulBatch: vi.fn(),
     };
 
-    mockLlmRotationService = {
-      tomTatChangelog: vi.fn().mockResolvedValue({
-        ketQua: {
-          tomTatNangCapVi: ['Sửa lỗi âm thanh', 'Tăng tốc kết nối'],
-        },
-        moHinhTomTat: 'gemini-2.0-flash',
-      }),
-    };
-
     mockTrustScoreService = {
       tinhTrustScore: vi.fn().mockResolvedValue({
         diemUyTin: 95,
@@ -247,7 +234,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       mockGithubService as unknown as GithubService,
       mockCacheService as unknown as CacheService,
       mockJevClientService as unknown as JevClientService,
-      mockLlmRotationService as unknown as LlmRotationService,
       mockTrustScoreService as unknown as TrustScoreService,
       mockApkInspectorService as unknown as ApkInspectorService,
       mockSemanticSearchService as unknown as SemanticSearchService,
@@ -1049,8 +1035,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         Array.from({ length: 10 }).map(() => service.phanTichUngDung('app-uuid-rustdesk')),
       );
 
-      // Nghiệm thu P3B-10.1 & D-17: Không còn gọi LLM tóm tắt README khi nạp app (method đã bị gỡ bỏ 100%)
-      expect((mockLlmRotationService as Record<string, unknown>).tomTatReadme).toBeUndefined();
       // Single-flight lock vẫn đảm bảo chỉ chạy phân tích đúng 1 lần
       expect(mockTrustScoreService.tinhTrustScore).toHaveBeenCalledTimes(1);
     });
@@ -1078,7 +1062,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       await service.phanTichUngDung('app-uuid-rustdesk');
 
-      expect((mockLlmRotationService as Record<string, unknown>).tomTatReadme).toBeUndefined();
       expect(mockPrisma.phanTichAI.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({

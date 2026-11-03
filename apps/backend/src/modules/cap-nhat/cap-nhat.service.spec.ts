@@ -40,7 +40,7 @@ describe('CapNhatService (P2-52)', () => {
     );
   });
 
-  it('phát hiện bản cập nhật mới khi client gửi danh sách ứng dụng', async () => {
+  it('vẫn phát hiện bản cập nhật mới khi changelog chưa có tóm tắt tiếng Việt', async () => {
     mockPrisma.thietBi.findUnique.mockResolvedValue({
       maThietBi,
       tenThietBi: 'Laptop Dell',
@@ -57,7 +57,7 @@ describe('CapNhatService (P2-52)', () => {
           maUngDung,
           tenPhienBan: 'v1.2.3',
           tieuDePhatHanh: 'Bản vá bảo mật',
-          tomTatNangCapVi: 'Sửa lỗi kết nối',
+          tomTatNangCapVi: null,
           laBanThuNghiem: false,
           ngayPhatHanh: new Date('2026-09-20'),
           danhSachTepCaiDat: [
@@ -95,6 +95,8 @@ describe('CapNhatService (P2-52)', () => {
     expect(result.danhSachCapNhat[0].phienBanMoiNhat).toBe('v1.2.3');
     expect(result.danhSachCapNhat[0].coBanCapNhat).toBe(true);
     expect(result.danhSachCapNhat[0].banPhatHanhMoiNhat?.tenPhienBan).toBe('v1.2.3');
+    expect(result.danhSachCapNhat[0].tomTatNangCapVi).toBeNull();
+    expect(result.danhSachCapNhat[0].banPhatHanhMoiNhat?.tomTatNangCapVi).toBeNull();
     expect(mockPrisma.thietBi.update).toHaveBeenCalled();
   });
 
