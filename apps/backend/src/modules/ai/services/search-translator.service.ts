@@ -23,7 +23,8 @@ export class SearchTranslatorService {
     groqProvider: GroqTranslationProvider,
     private readonly cacheService: CacheService,
   ) {
-    this.providers = [nvidiaProvider, cloudflareProvider, groqProvider];
+    // Thứ tự do Chủ chốt 03/11/2026: NVIDIA kém ổn định nên đứng cuối chuỗi.
+    this.providers = [cloudflareProvider, groqProvider, nvidiaProvider];
   }
 
   /**

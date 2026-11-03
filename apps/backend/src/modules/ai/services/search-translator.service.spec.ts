@@ -39,29 +39,36 @@ describe('SearchTranslatorService', () => {
     };
   }
 
-  it('chỉ dùng thứ tự NVIDIA → Cloudflare → Groq, không gọi Gemini', async () => {
+  it('chỉ dùng thứ tự Cloudflare → Groq → NVIDIA, không gọi Gemini', async () => {
     const { service, nvidia, cloudflare, groq } = taoDichVu(
-      null,
-      null,
       '{"tuKhoa":["markdown"],"topics":[]}',
+      null,
+      null,
     );
     await expect(service.dichCauTimKiem('trình ghi chú')).resolves.toEqual({
       tuKhoa: ['markdown'],
       topics: [],
     });
-    expect(nvidia.translateSearchJson).toHaveBeenCalledOnce();
     expect(cloudflare.translateSearchJson).toHaveBeenCalledOnce();
     expect(groq.translateSearchJson).toHaveBeenCalledOnce();
+    expect(nvidia.translateSearchJson).toHaveBeenCalledOnce();
+    const thuTu = (f: unknown) => vi.mocked(f as () => void).mock.invocationCallOrder[0];
+    expect(thuTu(cloudflare.translateSearchJson)).toBeLessThan(thuTu(groq.translateSearchJson));
+    expect(thuTu(groq.translateSearchJson)).toBeLessThan(thuTu(nvidia.translateSearchJson));
   });
 
   it('dừng ở nhà dịch đầu tiên trả JSON hợp lệ và giữ cache 24 giờ', async () => {
-    const { service, nvidia, cloudflare } = taoDichVu('{"tuKhoa":["editor"],"topics":[]}', null);
+    const { service, nvidia, cloudflare, groq } = taoDichVu(
+      null,
+      '{"tuKhoa":["editor"],"topics":[]}',
+    );
     await expect(service.dichCauTimKiem('trình soạn thảo')).resolves.toEqual({
       tuKhoa: ['editor'],
       topics: [],
     });
-    expect(nvidia.translateSearchJson).toHaveBeenCalledOnce();
-    expect(cloudflare.translateSearchJson).not.toHaveBeenCalled();
+    expect(cloudflare.translateSearchJson).toHaveBeenCalledOnce();
+    expect(groq.translateSearchJson).not.toHaveBeenCalled();
+    expect(nvidia.translateSearchJson).not.toHaveBeenCalled();
     expect(cache.dat).toHaveBeenCalledWith(expect.any(String), expect.any(Object), 86400);
   });
 
