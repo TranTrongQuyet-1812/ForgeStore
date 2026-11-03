@@ -197,6 +197,15 @@ export class LlmRateLimiterService {
     }
   }
 
+  /**
+   * Hũ ngày riêng cho từng mô hình Embedding: AI Studio cho 1.000 yêu cầu/ngày mỗi mô hình (D-33).
+   * Đếm trước khi gọi để nhiều tiến trình cùng chạy vẫn không vượt hũ.
+   */
+  async giuChoEmbedding(model: string): Promise<boolean> {
+    const khoaDem = `fs:llm:daily:${model}:${this.layNgayPacific()}`;
+    return (await this.cacheService.tangSo(khoaDem, 1, 172800)) <= 1000;
+  }
+
   async layThongKeGeminiTheoNgay(): Promise<ThongKeGeminiTheoNgay> {
     const ngayPacific = this.layNgayPacific();
     const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];

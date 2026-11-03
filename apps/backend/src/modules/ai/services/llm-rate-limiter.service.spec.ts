@@ -121,6 +121,16 @@ describe('LlmRateLimiterService (AI1)', () => {
     );
   });
 
+  it('hũ ngày Embedding riêng từng mô hình, nhận đến yêu cầu thứ 1.000 rồi chặn', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(
+      new Date(),
+    );
+    memoryStore.set(`fs:llm:daily:gemini-embedding-2:${today}`, 999);
+    await expect(service.giuChoEmbedding('gemini-embedding-2')).resolves.toBe(true);
+    await expect(service.giuChoEmbedding('gemini-embedding-2')).resolves.toBe(false);
+    await expect(service.giuChoEmbedding('gemini-embedding-001')).resolves.toBe(true);
+  });
+
   it('đọc tổng lượt dùng theo model và số README đã xếp hàng hôm nay', async () => {
     const ngay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(
       new Date(),

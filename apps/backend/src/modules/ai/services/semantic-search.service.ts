@@ -56,6 +56,28 @@ interface RawSearchResult {
 export const NGUONG_KHOANG_CACH_TOI_DA = 0.42;
 export const BIEN_DO_SO_VOI_KET_QUA_TOT_NHAT = 0.05;
 
+/**
+ * D-33 / P3B-28.3: mỗi mô hình Embedding ghi vào một cột vector riêng. Vector của hai mô hình
+ * không so sánh được với nhau, nên câu tìm kiếm sinh bằng mô hình nào thì chỉ tìm trong cột đó.
+ * Thứ tự là thứ tự ưu tiên khi tìm kiếm: hết hũ ngày của mô hình trước thì dùng mô hình sau.
+ */
+export const MO_HINH_EMBEDDING = [
+  {
+    model: 'gemini-embedding-001',
+    cot: 'vector_ngu_nghia',
+    khoaRpm: 'gemini_embedding',
+    nguong: 0.42,
+  },
+  // shortcut: ngưỡng Embedding 2 tạm bằng Embedding 1; đo lại khi cột 2 đã sinh đủ vector (P3B-20.7).
+  {
+    model: 'gemini-embedding-2',
+    cot: 'vector_ngu_nghia_v2',
+    khoaRpm: 'gemini_embedding_2',
+    nguong: 0.42,
+  },
+] as const;
+export type MoHinhEmbedding = (typeof MO_HINH_EMBEDDING)[number];
+
 /** Lọc danh sách đã sắp tăng dần theo khoảng cách: ít kết quả thì trả ít, có thể trả rỗng. */
 export function locTheoNguongDoGiong<T extends { khoangCach: number }>(
   ketQua: T[],
@@ -73,7 +95,6 @@ export function locTheoNguongDoGiong<T extends { khoangCach: number }>(
 export class SemanticSearchService {
   private readonly logger = new Logger(SemanticSearchService.name);
   private readonly client: GoogleGenAI | null = null;
-  public readonly embeddingModel: string;
   public static readonly CHIEU_DAI_VECTOR = 768; // Quyết định D-10
 
   constructor(
@@ -82,14 +103,12 @@ export class SemanticSearchService {
     private readonly rateLimiter: LlmRateLimiterService,
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.embeddingModel =
-      this.configService.get<string>('GEMINI_EMBEDDING_MODEL') || 'gemini-embedding-001';
 
     if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
       try {
         this.client = new GoogleGenAI({ apiKey: apiKey.trim() });
         this.logger.log(
-          `SemanticSearchService khởi tạo thành công với embedding model [${this.embeddingModel}] (768 chiều)`,
+          `SemanticSearchService khởi tạo với ${MO_HINH_EMBEDDING.map((m) => m.model).join(', ')} (768 chiều)`,
         );
       } catch (err) {
         this.logger.error('Lỗi khởi tạo GoogleGenAI cho Embedding:', err);
@@ -130,21 +149,32 @@ export class SemanticSearchService {
   }
 
   /**
-   * Sinh vector embedding 768 chiều qua GoogleGenAI (P2-36.1, D-10).
+   * Sinh vector embedding 768 chiều qua GoogleGenAI (P2-36.1, D-10), có tính vào hũ ngày của mô hình.
    * Không xoay sang NVIDIA NIM theo quy chuẩn P2-39.8.
    */
-  async sinhEmbedding(vanBan: string): Promise<number[]> {
+  async sinhEmbedding(
+    vanBan: string,
+    moHinh: MoHinhEmbedding = MO_HINH_EMBEDDING[0],
+  ): Promise<number[]> {
     if (!this.client) {
       throw new Error('GEMINI_API_KEY không khả dụng để sinh embedding.');
     }
-
-    const cleanText = vanBan.trim();
-    if (!cleanText) {
+    if (!vanBan.trim()) {
       throw new Error('Văn bản đầu vào sinh embedding không được để trống.');
     }
+    if (!(await this.rateLimiter.giuChoEmbedding(moHinh.model))) {
+      throw new Error(`${moHinh.model} đã hết lượt trong ngày.`);
+    }
+    return this.goiEmbedding(vanBan, moHinh);
+  }
 
-    // Kiểm tra Token Bucket cho Gemini Embedding (80 RPM) (AI1)
-    const token = await this.rateLimiter.layToken('gemini_embedding', 3000);
+  /** Gọi API Embedding (đã giữ chỗ hũ ngày), chặn thêm theo số yêu cầu mỗi phút (AI1). */
+  private async goiEmbedding(vanBan: string, moHinh: MoHinhEmbedding): Promise<number[]> {
+    if (!this.client) {
+      throw new Error('GEMINI_API_KEY không khả dụng để sinh embedding.');
+    }
+    const cleanText = vanBan.trim();
+    const token = await this.rateLimiter.layToken(moHinh.khoaRpm, 3000);
     if (!token.chapNhan) {
       throw new Error(
         `Gemini Embedding đã chạm trần Rate Limit (${token.capacity} RPM). Vui lòng thử lại sau.`,
@@ -152,8 +182,9 @@ export class SemanticSearchService {
     }
 
     try {
+      // Mỗi lần gửi đúng một chuỗi: Embedding 2 gộp nhiều chuỗi thành một vector (đo 04/11/2026).
       const response = await this.client.models.embedContent({
-        model: this.embeddingModel,
+        model: moHinh.model,
         contents: cleanText,
         config: {
           outputDimensionality: SemanticSearchService.CHIEU_DAI_VECTOR,
@@ -179,21 +210,77 @@ export class SemanticSearchService {
   }
 
   /**
-   * Lưu vector embedding vào cột `vector_ngu_nghia` qua SQL thô ($executeRaw) theo P2-36.2.
+   * Lưu vector vào cột của đúng mô hình đã sinh ra nó, qua SQL thô ($executeRaw) theo P2-36.2.
    * Cột Unsupported("vector(768)") không thể cập nhật trực tiếp qua Prisma Client API.
    */
-  async luuVectorNguNghia(maPhanTich: string, vector: number[]): Promise<void> {
+  async luuVectorNguNghia(
+    maPhanTich: string,
+    vector: number[],
+    moHinh: MoHinhEmbedding = MO_HINH_EMBEDDING[0],
+  ): Promise<void> {
     if (!vector || vector.length === 0) {
       return;
     }
 
     const vectorStr = `[${vector.join(',')}]`;
+    // Tên cột lấy từ hằng MO_HINH_EMBEDDING, không bao giờ từ dữ liệu người dùng.
     await this.prisma.$executeRaw`
       UPDATE "phan_tich_ai"
-      SET "vector_ngu_nghia" = ${vectorStr}::vector,
+      SET ${Prisma.raw(`"${moHinh.cot}"`)} = ${vectorStr}::vector,
           "ngay_cap_nhat" = NOW()
       WHERE "ma_phan_tich" = ${maPhanTich}::uuid
     `;
+  }
+
+  /**
+   * P3B-28.3: sinh vector cho các app đã phân tích còn thiếu cột của mô hình này.
+   * `ghi = false` chỉ đếm, không gọi AI. Dừng ngay khi hết hũ ngày để hôm sau chạy tiếp.
+   */
+  async boSungVectorConThieu(
+    moHinh: MoHinhEmbedding,
+    toiDa: number,
+    ghi: boolean,
+  ): Promise<{ conThieu: number; daGhi: number; loi: number }> {
+    const cot = Prisma.raw(`pa."${moHinh.cot}"`);
+    const dong = await this.prisma.$queryRaw<
+      Array<{
+        maPhanTich: string;
+        tenKhoChua: string;
+        khauHieu: string | null;
+        chuDe: string[];
+        moTa: string | null;
+      }>
+    >`
+      SELECT pa."ma_phan_tich" AS "maPhanTich", u."ten_kho_chua" AS "tenKhoChua",
+             pa."khau_hieu_tieng_viet" AS "khauHieu", u."danh_sach_chu_de" AS "chuDe",
+             COALESCE(NULLIF(u."mo_ta_vi", ''), u."mo_ta_goc_tieng_anh") AS "moTa"
+      FROM "phan_tich_ai" pa JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
+      WHERE ${cot} IS NULL
+      ORDER BY u."so_sao_github" DESC
+    `;
+    const ketQua = { conThieu: dong.length, daGhi: 0, loi: 0 };
+    if (!ghi) return ketQua;
+
+    for (const app of dong.slice(0, toiDa)) {
+      // Ghép văn bản giống hệt bước phân tích (ung-dung.service) để vector hai đường khớp nhau.
+      const vanBan = this.chuanBiVanBanNhung({
+        tenKhoChua: app.tenKhoChua,
+        slogan: app.khauHieu,
+        tinhNang: app.chuDe,
+        topics: app.chuDe,
+        moTa: app.moTa,
+      });
+      try {
+        const vector = await this.sinhEmbedding(vanBan, moHinh);
+        await this.luuVectorNguNghia(app.maPhanTich, vector, moHinh);
+        ketQua.daGhi++;
+      } catch (err) {
+        ketQua.loi++;
+        this.logger.warn(`Bổ sung vector ${moHinh.model} lỗi: ${(err as Error).message}`);
+        if ((err as Error).message.includes('hết lượt trong ngày')) break;
+      }
+    }
+    return ketQua;
   }
 
   /**
@@ -206,8 +293,23 @@ export class SemanticSearchService {
     gioiHan = 20,
     platform?: string,
   ): Promise<KetQuaTimKiemNguNghia[]> {
-    const vector = await this.sinhEmbedding(cauTruyVan);
+    for (const moHinh of MO_HINH_EMBEDDING) {
+      if (!(await this.rateLimiter.giuChoEmbedding(moHinh.model))) continue;
+      const vector = await this.goiEmbedding(cauTruyVan, moHinh);
+      return this.timTheoCotVector(vector, moHinh, gioiHan, platform);
+    }
+    throw new Error('Các mô hình Embedding đều đã hết lượt trong ngày.');
+  }
+
+  /** Chỉ so vector câu tìm kiếm với cột của đúng mô hình đã sinh ra nó (cấm trộn, D-33). */
+  private async timTheoCotVector(
+    vector: number[],
+    moHinh: MoHinhEmbedding,
+    gioiHan: number,
+    platform?: string,
+  ): Promise<KetQuaTimKiemNguNghia[]> {
     const vectorStr = `[${vector.join(',')}]`;
+    const cot = Prisma.raw(`pa."${moHinh.cot}"`);
 
     const plat = platform ? platform.toUpperCase() : undefined;
     let platformCondition = Prisma.empty;
@@ -243,17 +345,17 @@ export class SemanticSearchService {
         pa."khau_hieu_tieng_viet" AS "khauHieuTiengViet",
         pa."diem_uy_tin" AS "diemUyTin",
         pa."muc_do_an_toan" AS "mucDoAnToan",
-        (pa."vector_ngu_nghia" <=> ${vectorStr}::vector) AS "khoangCach"
+        (${cot} <=> ${vectorStr}::vector) AS "khoangCach"
       FROM "phan_tich_ai" pa
       JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
-      WHERE pa."vector_ngu_nghia" IS NOT NULL
+      WHERE ${cot} IS NOT NULL
         AND u."trang_thai" = 'HOAT_DONG'
         ${platformCondition}
-      ORDER BY pa."vector_ngu_nghia" <=> ${vectorStr}::vector ASC
+      ORDER BY ${cot} <=> ${vectorStr}::vector ASC
       LIMIT ${gioiHan}
     `;
 
-    return locTheoNguongDoGiong(ketQua).map((row) => ({
+    return locTheoNguongDoGiong(ketQua, moHinh.nguong).map((row) => ({
       maUngDung: row.maUngDung,
       tenRepoDayDu: row.tenRepoDayDu,
       chuSoHuu: row.chuSoHuu,

@@ -37,7 +37,7 @@ import { YeuThichService } from '../yeu-thich/yeu-thich.service';
 import { JevClientService } from '../ai/services/jev-client.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
-import { SemanticSearchService } from '../ai/services/semantic-search.service';
+import { MO_HINH_EMBEDDING, SemanticSearchService } from '../ai/services/semantic-search.service';
 import { SearchTranslatorService } from '../ai/services/search-translator.service';
 import {
   phanLoaiTep,
@@ -1688,19 +1688,26 @@ export class UngDungService {
             },
           });
 
-          // 6. Sinh vector 768 chiều & lưu pgvector (P2-36)
-          try {
-            const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
-              tenKhoChua: app.tenKhoChua,
-              slogan: khauHieuTiengViet,
-              tinhNang: app.danhSachChuDe || [],
-              topics: app.danhSachChuDe,
-              moTa: app.moTaVi || app.moTaGocTiengAnh,
-            });
-            const vector = await this.semanticSearchService.sinhEmbedding(textEmbed);
-            await this.semanticSearchService.luuVectorNguNghia(phanTich.maPhanTich, vector);
-          } catch (err: unknown) {
-            this.logger.warn(`Lỗi sinh/lưu vector embedding: ${(err as Error).message}`);
+          // 6. Sinh vector 768 chiều & lưu pgvector (P2-36), mỗi mô hình Embedding một cột (P3B-28.3)
+          const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
+            tenKhoChua: app.tenKhoChua,
+            slogan: khauHieuTiengViet,
+            tinhNang: app.danhSachChuDe || [],
+            topics: app.danhSachChuDe,
+            moTa: app.moTaVi || app.moTaGocTiengAnh,
+          });
+          for (const moHinh of MO_HINH_EMBEDDING) {
+            // Mô hình nào lỗi hay hết lượt thì cột đó để trống, lệnh `data-repo sinh-vector` bổ sung sau.
+            try {
+              const vector = await this.semanticSearchService.sinhEmbedding(textEmbed, moHinh);
+              await this.semanticSearchService.luuVectorNguNghia(
+                phanTich.maPhanTich,
+                vector,
+                moHinh,
+              );
+            } catch (err: unknown) {
+              this.logger.warn(`Lỗi sinh/lưu vector ${moHinh.model}: ${(err as Error).message}`);
+            }
           }
 
           // D-34: Không dịch hoặc tóm tắt changelog; giữ cột tóm tắt để tương thích dữ liệu cũ.

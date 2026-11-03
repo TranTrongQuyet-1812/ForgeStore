@@ -24,6 +24,7 @@
  *   pnpm data-repo xem  --lo pilot-01        # 04_da_kiem → 05_xem/pilot-01.md (bảng Anh | Việt để duyệt)
  *   pnpm data-repo doi-chieu --repo o/r      # ĐỌC DB: đối chiếu mã băm đoạn với bo_nho_dich_chung của BE
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
+ *   pnpm data-repo sinh-vector --mo-hinh 2 [--toi-da 900] [--ghi] # bổ sung vector còn thiếu (mặc định chỉ đếm)
  *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
@@ -2101,6 +2102,25 @@ async function lenhPhanTich(): Promise<void> {
   }, true);
 }
 
+// P3B-28.3: điền cột vector còn trống của một mô hình Embedding; mỗi mô hình hũ 1.000 yêu cầu/ngày.
+async function lenhSinhVector(): Promise<void> {
+  const soMoHinh = Number(layThamSo('mo-hinh') ?? '2');
+  const toiDa = Number(layThamSo('toi-da') ?? '900');
+  const ghi = coCo('ghi');
+  await voiNest(async (app) => {
+    const { SemanticSearchService, MO_HINH_EMBEDDING } =
+      await import('../../modules/ai/services/semantic-search.service');
+    const moHinh = MO_HINH_EMBEDDING[soMoHinh - 1];
+    if (!moHinh) throw new Error(`--mo-hinh chỉ nhận 1 đến ${MO_HINH_EMBEDDING.length}`);
+    const kq = await app.get(SemanticSearchService).boSungVectorConThieu(moHinh, toiDa, ghi);
+    console.info(
+      `${moHinh.model} → cột ${moHinh.cot}:`,
+      kq,
+      ghi ? '' : '(chạy thử, thêm --ghi để ghi)',
+    );
+  });
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
@@ -2140,9 +2160,11 @@ async function main(): Promise<void> {
       return lenhDoBocTach();
     case 'hoan-tac':
       return lenhHoanTac();
+    case 'sinh-vector':
+      return lenhSinhVector();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac | sinh-vector (xem phần đầu file này)',
       );
   }
 }

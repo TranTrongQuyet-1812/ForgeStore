@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfigService } from '@nestjs/config';
-import { SemanticSearchService, locTheoNguongDoGiong } from './semantic-search.service';
+import {
+  MO_HINH_EMBEDDING,
+  SemanticSearchService,
+  locTheoNguongDoGiong,
+} from './semantic-search.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LlmRateLimiterService } from './llm-rate-limiter.service';
 
@@ -14,6 +18,7 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
   let mockRateLimiter: {
     layToken: ReturnType<typeof vi.fn>;
     layRpm: ReturnType<typeof vi.fn>;
+    giuChoEmbedding: ReturnType<typeof vi.fn>;
   };
   let mockEmbedContent: ReturnType<typeof vi.fn>;
 
@@ -21,7 +26,6 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
     mockConfigService = {
       get: vi.fn((key: string) => {
         if (key === 'GEMINI_API_KEY') return 'test-gemini-key';
-        if (key === 'GEMINI_EMBEDDING_MODEL') return 'gemini-embedding-001';
         return null;
       }),
     };
@@ -38,6 +42,7 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
         capacity: 80,
       }),
       layRpm: vi.fn().mockReturnValue(80),
+      giuChoEmbedding: vi.fn().mockResolvedValue(true),
     };
 
     mockEmbedContent = vi.fn().mockResolvedValue({
@@ -175,6 +180,73 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].tenRepoDayDu).toBe('rustdesk/rustdesk');
       expect(results[0].doTuongDong).toBeCloseTo(0.85); // 1 - 0.15
+    });
+  });
+
+  describe('Embedding 2, cột vector riêng (P3B-28.3)', () => {
+    const [E1, E2] = MO_HINH_EMBEDDING;
+
+    it('hết hũ ngày thì không gọi API', async () => {
+      mockRateLimiter.giuChoEmbedding.mockResolvedValueOnce(false);
+      await expect(service.sinhEmbedding('text', E2)).rejects.toThrow('hết lượt trong ngày');
+      expect(mockEmbedContent).not.toHaveBeenCalled();
+    });
+
+    it('sinh bằng Embedding 2 thì dùng đúng mô hình, hũ phút và cột của nó', async () => {
+      await service.sinhEmbedding('text', E2);
+      expect(mockRateLimiter.giuChoEmbedding).toHaveBeenCalledWith('gemini-embedding-2');
+      expect(mockRateLimiter.layToken).toHaveBeenCalledWith('gemini_embedding_2', 3000);
+      expect(mockEmbedContent.mock.calls[0][0].model).toBe('gemini-embedding-2');
+
+      await service.luuVectorNguNghia('11111111-1111-1111-1111-111111111111', [0.1], E2);
+      expect(JSON.stringify(mockPrisma.$executeRaw.mock.calls[0])).toContain('vector_ngu_nghia_v2');
+    });
+
+    it('hết hũ Embedding 1 thì tìm bằng Embedding 2 trong cột 2, không trộn cột 1', async () => {
+      mockRateLimiter.giuChoEmbedding.mockImplementation(async (m: string) => m !== E1.model);
+      mockPrisma.$queryRaw.mockResolvedValue([]);
+
+      await service.timKiemNguNghia('ghi chú');
+
+      expect(mockEmbedContent.mock.calls[0][0].model).toBe('gemini-embedding-2');
+      const sql = JSON.stringify(mockPrisma.$queryRaw.mock.calls[0]);
+      expect(sql).toContain('pa.\\"vector_ngu_nghia_v2\\"');
+      expect(sql).not.toContain('pa.\\"vector_ngu_nghia\\"');
+    });
+
+    it('cả hai mô hình hết hũ thì báo lỗi, không gọi API', async () => {
+      mockRateLimiter.giuChoEmbedding.mockResolvedValue(false);
+      await expect(service.timKiemNguNghia('ghi chú')).rejects.toThrow('đều đã hết lượt');
+      expect(mockEmbedContent).not.toHaveBeenCalled();
+    });
+
+    it('bổ sung vector: chạy thử chỉ đếm, chạy thật dừng khi hết hũ ngày', async () => {
+      const dong = (id: string) => ({
+        maPhanTich: id,
+        tenKhoChua: 'app',
+        khauHieu: null,
+        chuDe: ['notes'],
+        moTa: 'Ghi chú',
+      });
+      mockPrisma.$queryRaw.mockResolvedValue([dong('a'), dong('b'), dong('c')]);
+
+      await expect(service.boSungVectorConThieu(E2, 10, false)).resolves.toEqual({
+        conThieu: 3,
+        daGhi: 0,
+        loi: 0,
+      });
+      expect(mockEmbedContent).not.toHaveBeenCalled();
+
+      mockRateLimiter.giuChoEmbedding
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValue(true);
+      await expect(service.boSungVectorConThieu(E2, 10, true)).resolves.toEqual({
+        conThieu: 3,
+        daGhi: 1,
+        loi: 1,
+      });
+      expect(mockEmbedContent).toHaveBeenCalledTimes(1);
     });
   });
 

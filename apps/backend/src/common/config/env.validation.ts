@@ -42,7 +42,6 @@ export const envSchema = z.object({
     .string({ required_error: 'GEMINI_API_KEY là bắt buộc' })
     .min(1, 'GEMINI_API_KEY không được để trống'),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
-  GEMINI_EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
   TYPESAFE_API_KEY: z.string().optional(),
   JEV_ENABLED: z
     .preprocess(
