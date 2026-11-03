@@ -96,6 +96,20 @@ describe('CloudflareTranslationProvider', () => {
     expect(res.lyDoLoi).toBeNull();
   });
 
+  it('gửi prompt tìm kiếm riêng và trả JSON thô cho bước kiểm tra schema', async () => {
+    provider = new CloudflareTranslationProvider(mockConfigService);
+    let body: Record<string, unknown> = {};
+    global.fetch = vi.fn().mockImplementation(async (_url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ translation: '{"tuKhoa":["editor"]}' }) };
+    });
+
+    await expect(provider.translateSearchJson('prompt', 'system')).resolves.toBe(
+      '{"tuKhoa":["editor"]}',
+    );
+    expect(body).toMatchObject({ text: 'prompt', context: 'system', response_format: 'json' });
+  });
+
   it('bắt lỗi khi worker trả về translation null kèm lý do lỗi cố định (P3B-05.14)', async () => {
     provider = new CloudflareTranslationProvider(mockConfigService);
     global.fetch = vi.fn().mockResolvedValue({

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GoogleGenAI } from '@google/genai';
 import * as crypto from 'crypto';
 import { CacheService } from '../../redis/cache.service';
+import { NvidiaTranslationProvider } from '../translation/providers/nvidia-translation.provider';
+import { CloudflareTranslationProvider } from '../translation/providers/cloudflare-translation.provider';
+import { GroqTranslationProvider } from '../translation/providers/groq-translation.provider';
 import {
   PROMPT_SEARCH_TRANSLATOR_SYSTEM,
   taoPromptDichTimKiem,
@@ -12,26 +13,17 @@ import { KetQuaDichTimKiem, KetQuaDichTimKiemSchema } from '../dto/search-transl
 @Injectable()
 export class SearchTranslatorService {
   private readonly logger = new Logger(SearchTranslatorService.name);
-  private readonly client: GoogleGenAI | null = null;
-  private readonly modelName: string;
+  private readonly providers: Array<
+    NvidiaTranslationProvider | CloudflareTranslationProvider | GroqTranslationProvider
+  >;
 
   constructor(
-    private readonly configService: ConfigService,
+    nvidiaProvider: NvidiaTranslationProvider,
+    cloudflareProvider: CloudflareTranslationProvider,
+    groqProvider: GroqTranslationProvider,
     private readonly cacheService: CacheService,
   ) {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
-
-    if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
-      try {
-        this.client = new GoogleGenAI({ apiKey: apiKey.trim() });
-        this.logger.log(`SearchTranslatorService khởi tạo với model [${this.modelName}]`);
-      } catch (err) {
-        this.logger.error('Lỗi khởi tạo GoogleGenAI cho SearchTranslator:', err);
-      }
-    } else {
-      this.logger.warn('GEMINI_API_KEY chưa cấu hình. Sẽ dùng fallback từ khóa.');
-    }
+    this.providers = [nvidiaProvider, cloudflareProvider, groqProvider];
   }
 
   /**
@@ -52,49 +44,31 @@ export class SearchTranslatorService {
       return cached;
     }
 
-    // Nếu không có Gemini client, dùng giải pháp dự phòng
-    if (!this.client) {
-      return this.fallbackTuKhoa(cleanQuery);
-    }
-
-    try {
-      const prompt = taoPromptDichTimKiem(cleanQuery);
-      const response = await this.client.models.generateContent({
-        model: this.modelName,
-        contents: prompt,
-        config: {
-          systemInstruction: PROMPT_SEARCH_TRANSLATOR_SYSTEM,
-          temperature: 0.1,
-          responseMimeType: 'application/json',
-        },
-      });
-
-      const rawJson = response.text?.trim() || '{}';
-      let parsedObj: unknown;
+    const prompt = taoPromptDichTimKiem(cleanQuery);
+    for (const provider of this.providers) {
+      if (!provider.isAvailable()) continue;
       try {
-        parsedObj = JSON.parse(rawJson);
-      } catch {
-        this.logger.warn(`Gemini trả JSON không hợp lệ: [${rawJson.slice(0, 100)}]`);
-        return this.fallbackTuKhoa(cleanQuery);
+        const rawJson = await provider.translateSearchJson(prompt, PROMPT_SEARCH_TRANSLATOR_SYSTEM);
+        const parsed = this.kiemTraKetQua(rawJson);
+        if (!parsed) continue;
+        await this.cacheService.dat(cacheKey, parsed, 86400);
+        return parsed;
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Nhà dịch tìm kiếm [${provider.providerName}] gặp lỗi; thử nhà tiếp theo: ${(err as Error).message}`,
+        );
       }
+    }
+    return this.fallbackTuKhoa(cleanQuery);
+  }
 
-      const parseResult = KetQuaDichTimKiemSchema.safeParse(parsedObj);
-      if (!parseResult.success) {
-        this.logger.warn(`Zod validate thất bại cho kết quả dịch: ${parseResult.error.message}`);
-        return this.fallbackTuKhoa(cleanQuery);
-      }
-
-      const ketQua = parseResult.data;
-
-      // Lưu cache 24h (86.400s)
-      await this.cacheService.dat(cacheKey, ketQua, 86400);
-
-      return ketQua;
-    } catch (err: unknown) {
-      this.logger.warn(
-        `Lỗi khi gọi Gemini dịch tìm kiếm: ${(err as Error).message}. Dùng fallback.`,
-      );
-      return this.fallbackTuKhoa(cleanQuery);
+  private kiemTraKetQua(rawJson: string | null): KetQuaDichTimKiem | null {
+    if (!rawJson) return null;
+    try {
+      const parsed = KetQuaDichTimKiemSchema.safeParse(JSON.parse(rawJson));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
     }
   }
 

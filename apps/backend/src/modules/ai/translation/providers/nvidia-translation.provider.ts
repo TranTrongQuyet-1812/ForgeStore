@@ -44,6 +44,28 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
     return this.isAvailable();
   }
 
+  public async translateSearchJson(prompt: string, systemPrompt: string): Promise<string | null> {
+    if (!this.apiKey) return null;
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      body: JSON.stringify({
+        model: this.modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+      }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return data.choices?.[0]?.message?.content ?? null;
+  }
+
   public async translate(
     text: string,
     options?: TranslationProviderOptions,

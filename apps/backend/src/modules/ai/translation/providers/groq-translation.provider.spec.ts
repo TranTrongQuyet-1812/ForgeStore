@@ -23,6 +23,23 @@ describe('GroqTranslationProvider', () => {
     expect(provider.isAvailable()).toBe(true);
   });
 
+  it('gửi prompt tìm kiếm cùng system prompt và trả nội dung JSON', async () => {
+    provider = new GroqTranslationProvider(mockConfigService);
+    let payload: Record<string, unknown> = {};
+    global.fetch = vi.fn().mockImplementation(async (_url, options) => {
+      payload = JSON.parse(options.body);
+      return {
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '{"tuKhoa":["editor"]}' } }] }),
+      };
+    });
+    await expect(provider.translateSearchJson('prompt', 'system')).resolves.toContain('editor');
+    expect(payload.messages).toEqual([
+      { role: 'system', content: 'system' },
+      { role: 'user', content: 'prompt' },
+    ]);
+  });
+
   it('báo not_configured khi thiếu API key', async () => {
     const emptyConfig = {
       get: vi.fn(() => undefined),
