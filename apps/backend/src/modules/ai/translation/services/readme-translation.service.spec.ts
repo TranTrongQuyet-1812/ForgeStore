@@ -44,6 +44,7 @@ describe('ReadmeTranslationService', () => {
       luu: vi.fn().mockResolvedValue(true),
       xoa: vi.fn().mockResolvedValue(true),
       setNx: vi.fn().mockResolvedValue(true),
+      tangSo: vi.fn().mockResolvedValue(1),
     } as unknown as CacheService;
 
     service = new ReadmeTranslationService(
@@ -684,6 +685,47 @@ MIT License.`;
       );
       // Khi gom lô thành công, không cần gọi dichVanBan lẻ
       expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
+    });
+
+    it('xếp README sang ngày mai khi hai hũ hết lượt và giữ trạng thái đang dịch', async () => {
+      const banGoc = 'New README text';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: false,
+        ketQua: {},
+        thieuIds: ['1'],
+        provider: null,
+        model: null,
+        chiTietLoi: [],
+        choNgayMai: true,
+        retryAfterSec: 3600,
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(false);
+      expect(mockCacheService.luu).toHaveBeenCalledWith(
+        'fs:ai:translation:deferred:app-uuid',
+        expect.objectContaining({ readmeSha: hash, retryAt: expect.any(Number) }),
+        3900,
+      );
+      expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: expect.any(Date) },
+        }),
+      );
+      expect(mockPrisma.banDichReadme.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ trangThai: TrangThaiDichReadme.THAT_BAI }),
+        }),
+      );
     });
 
     it('fallback sang dichVanBan khi một đoạn trong lô bị lỗi ký hiệu giữ chỗ', async () => {

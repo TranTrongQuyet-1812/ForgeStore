@@ -13,8 +13,10 @@ export type LyDoLoiDich =
   | 'empty_output'
   | 'ai_error'
   | 'rate_limited'
+  | 'daily_quota_exhausted'
   | 'not_configured'
-  | 'unhealthy';
+  | 'unhealthy'
+  | 'daily_quota_exhausted';
 
 export interface KetQuaDichDoan {
   text: string | null;
@@ -34,6 +36,7 @@ export interface ChiTietLoiProvider {
   model: string;
   lyDoLoi: LyDoLoiDich;
   thoiGianMs?: number;
+  retryAfterSec?: number;
 }
 
 export interface KetQuaDichBatchJson {
@@ -79,4 +82,7 @@ export interface ITranslationProvider {
     items: Array<{ id: string; text: string }>,
     options?: { timeoutMs?: number; loai?: 'mo_ta' | 'readme' },
   ): Promise<KetQuaDichBatchJson>;
+
+  /** Dịch riêng câu tìm kiếm và trả nội dung JSON để bộ gọi tự kiểm tra cấu trúc. */
+  translateSearchJson?(prompt: string, systemPrompt: string): Promise<string | null>;
 }

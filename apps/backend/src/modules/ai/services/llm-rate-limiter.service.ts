@@ -14,6 +14,20 @@ export interface KetQuaCapToken {
   thoiGianChoMs?: number;
 }
 
+export interface KetQuaGiuChoGemini {
+  chapNhan: boolean;
+  soDaDung: number;
+  thoiGianChoGiay?: number;
+  hetHanMucNgay?: boolean;
+}
+
+const PACIFIC_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 @Injectable()
 export class LlmRateLimiterService {
   private readonly logger = new Logger(LlmRateLimiterService.name);
@@ -124,5 +138,74 @@ export class LlmRateLimiterService {
     }
 
     return firstTry;
+  }
+
+  /**
+   * Giữ hũ riêng cho từng model Gemini, chặn ở 500 yêu cầu/ngày và cách nhau ít nhất 4 giây.
+   */
+  async layQuyenGemini(model: string): Promise<KetQuaGiuChoGemini> {
+    const ngay = this.layNgayPacific();
+    const khoaDem = `fs:llm:daily:${model}:${ngay}`;
+    const khoaCuoi = `fs:llm:last-request:${model}`;
+    const khoa = `fs:lock:llm:gemini:${model}`;
+
+    while (true) {
+      let ketQua: {
+        chapNhan: boolean;
+        soDaDung: number;
+        thoiGianChoGiay?: number;
+        hetHanMucNgay?: boolean;
+        choMs?: number;
+      };
+      try {
+        ketQua = await this.cacheService.withLock(khoa, 2000, async () => {
+          const soDaDung = (await this.cacheService.get<number>(khoaDem)) ?? 0;
+          if (soDaDung >= 500) {
+            return {
+              chapNhan: false,
+              soDaDung,
+              thoiGianChoGiay: this.layGiayDenNuaDemPacific(),
+              hetHanMucNgay: true,
+            };
+          }
+
+          const lanCuoi = (await this.cacheService.get<number>(khoaCuoi)) ?? 0;
+          const conPhaiCho = Math.max(0, 4000 - (Date.now() - lanCuoi));
+          if (conPhaiCho > 0) return { chapNhan: false, soDaDung, choMs: conPhaiCho };
+
+          await this.cacheService.tangSo(khoaDem, 1, 172800);
+          await this.cacheService.set(khoaCuoi, Date.now(), 86400);
+          return { chapNhan: true, soDaDung: soDaDung + 1 };
+        });
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes('đang bị khóa')) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
+
+      if ('choMs' in ketQua) {
+        await new Promise((resolve) => setTimeout(resolve, ketQua.choMs));
+        continue;
+      }
+      return ketQua;
+    }
+  }
+
+  /** Trả khóa ngày theo giờ Thái Bình Dương để hũ tự đổi đúng lúc 00:00 địa phương. */
+  private layNgayPacific(moc = new Date()): string {
+    return PACIFIC_DATE_FORMATTER.format(moc);
+  }
+
+  private layGiayDenNuaDemPacific(): number {
+    const batDau = Date.now();
+    const ngayHienTai = this.layNgayPacific(new Date(batDau));
+    let thap = 0;
+    let cao = 36 * 60 * 60;
+    while (cao - thap > 1) {
+      const giua = Math.floor((thap + cao) / 2);
+      if (this.layNgayPacific(new Date(batDau + giua * 1000)) === ngayHienTai) thap = giua;
+      else cao = giua;
+    }
+    return cao;
   }
 }

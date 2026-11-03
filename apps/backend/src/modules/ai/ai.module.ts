@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RedisModule } from '../redis/redis.module';
 import { GithubModule } from '../github/github.module';
@@ -21,7 +21,11 @@ import { GeminiTranslationProvider } from './translation/providers/gemini-transl
 import { NvidiaTranslationProvider } from './translation/providers/nvidia-translation.provider';
 import { CloudflareTranslationProvider } from './translation/providers/cloudflare-translation.provider';
 import { GroqTranslationProvider } from './translation/providers/groq-translation.provider';
-import { TranslationRotationService } from './translation/services/translation-rotation.service';
+import {
+  GEMINI_31_TRANSLATION_PROVIDER,
+  GEMINI_35_TRANSLATION_PROVIDER,
+  TranslationRotationService,
+} from './translation/services/translation-rotation.service';
 import { AppDescriptionTranslationService } from './translation/services/app-description-translation.service';
 import { ReadmeTranslationService } from './translation/services/readme-translation.service';
 
@@ -41,7 +45,18 @@ import { ReadmeTranslationService } from './translation/services/readme-translat
     SearchTranslatorService,
     JevBenchmarkService,
     // Lớp Dịch Dùng Chung Đa Tầng (Shared Translation Engine)
-    GeminiTranslationProvider,
+    {
+      provide: GEMINI_31_TRANSLATION_PROVIDER,
+      useFactory: (config: ConfigService, limiter: LlmRateLimiterService) =>
+        new GeminiTranslationProvider(config, limiter, 'gemini-3.1-flash-lite'),
+      inject: [ConfigService, LlmRateLimiterService],
+    },
+    {
+      provide: GEMINI_35_TRANSLATION_PROVIDER,
+      useFactory: (config: ConfigService, limiter: LlmRateLimiterService) =>
+        new GeminiTranslationProvider(config, limiter, 'gemini-3.5-flash-lite'),
+      inject: [ConfigService, LlmRateLimiterService],
+    },
     NvidiaTranslationProvider,
     CloudflareTranslationProvider,
     GroqTranslationProvider,

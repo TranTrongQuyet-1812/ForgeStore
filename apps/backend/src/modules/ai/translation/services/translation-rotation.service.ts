@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CacheService } from '../../../redis/cache.service';
 import {
   ChiTietLoiProvider,
@@ -9,9 +9,9 @@ import {
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { GeminiTranslationProvider } from '../providers/gemini-translation.provider';
-import { NvidiaTranslationProvider } from '../providers/nvidia-translation.provider';
-import { CloudflareTranslationProvider } from '../providers/cloudflare-translation.provider';
-import { GroqTranslationProvider } from '../providers/groq-translation.provider';
+
+export const GEMINI_31_TRANSLATION_PROVIDER = 'GEMINI_31_TRANSLATION_PROVIDER';
+export const GEMINI_35_TRANSLATION_PROVIDER = 'GEMINI_35_TRANSLATION_PROVIDER';
 
 export interface KetQuaDichVanBan {
   thanhCong: boolean;
@@ -20,6 +20,8 @@ export interface KetQuaDichVanBan {
   model: string | null;
   thoiGianMs: number;
   chiTietLoi: ChiTietLoiProvider[];
+  choNgayMai?: boolean;
+  retryAfterSec?: number;
 }
 
 export interface KetQuaDichDanhSach {
@@ -43,6 +45,8 @@ export interface KetQuaDichGomLoJson {
   provider: NhaCungCapDich | null;
   model: string | null;
   chiTietLoi: ChiTietLoiProvider[];
+  choNgayMai?: boolean;
+  retryAfterSec?: number;
 }
 
 @Injectable()
@@ -53,27 +57,21 @@ export class TranslationRotationService {
   public static readonly PREFIX_UNHEALTHY = 'fs:ai:translation:unhealthy:';
   public static readonly PREFIX_429_COUNT = 'fs:ai:translation:429_count:';
 
-  // Danh sách 4 nhà cung cấp dịch thuật được sắp xếp cố định theo thứ tự xoay tua P3B-05.6 & D-24:
-  // 1. Gemini -> 2. NVIDIA NIM -> 3. Cloudflare Workers AI -> 4. Groq
+  // Nội dung chỉ dùng hai mô hình Gemini theo D-33; nhà dịch khác không được nhận README.
   private readonly providers: ITranslationProvider[];
 
   constructor(
+    @Inject(GEMINI_31_TRANSLATION_PROVIDER)
     private readonly geminiProvider: GeminiTranslationProvider,
-    private readonly nvidiaProvider: NvidiaTranslationProvider,
-    private readonly cloudflareProvider: CloudflareTranslationProvider,
-    private readonly groqProvider: GroqTranslationProvider,
+    @Inject(GEMINI_35_TRANSLATION_PROVIDER)
+    private readonly gemini35Provider: GeminiTranslationProvider,
     private readonly cacheService: CacheService,
   ) {
-    this.providers = [
-      this.geminiProvider,
-      this.nvidiaProvider,
-      this.cloudflareProvider,
-      this.groqProvider,
-    ];
+    this.providers = [this.geminiProvider, this.gemini35Provider];
   }
 
   /**
-   * Lấy danh sách thông tin cấu hình của 4 providers.
+   * Lấy danh sách thông tin cấu hình của hai mô hình dịch nội dung.
    */
   public layDanhSachProviders(): Array<{
     provider: NhaCungCapDich;
@@ -87,10 +85,20 @@ export class TranslationRotationService {
     }));
   }
 
+  private async layDanhSachXoayVong(): Promise<ITranslationProvider[]> {
+    const lan = await this.cacheService.tangSo('fs:ai:translation:gemini:rotation', 1, 86400);
+    const diemBatDau = (lan - 1) % this.providers.length;
+    return [...this.providers.slice(diemBatDau), ...this.providers.slice(0, diemBatDau)];
+  }
+
+  private layKhoaProvider(provider: ITranslationProvider): string {
+    return provider.providerName === 'gemini' ? provider.modelName : provider.providerName;
+  }
+
   /**
    * Khóa tạm một nhà cung cấp vào Redis/RAM trong khoảng thời gian quy định khi gặp rate limit (429).
    */
-  public async khoaCooldown(provider: NhaCungCapDich, thoiGianGiay: number): Promise<void> {
+  public async khoaCooldown(provider: string, thoiGianGiay: number): Promise<void> {
     const key = `${TranslationRotationService.PREFIX_COOLDOWN}${provider}`;
     const ttl = Math.max(1, thoiGianGiay);
     await this.cacheService.set(key, true, ttl);
@@ -100,7 +108,7 @@ export class TranslationRotationService {
   /**
    * Kiểm tra nhà cung cấp có đang bị khóa cooldown hay không.
    */
-  public async kiemTraCooldown(provider: NhaCungCapDich): Promise<boolean> {
+  public async kiemTraCooldown(provider: string): Promise<boolean> {
     const key = `${TranslationRotationService.PREFIX_COOLDOWN}${provider}`;
     const isCool = await this.cacheService.get<boolean>(key);
     return Boolean(isCool);
@@ -109,7 +117,7 @@ export class TranslationRotationService {
   /**
    * P3B-05.14 / Mục 4: Kiểm tra trạng thái unhealthy của nhà cung cấp.
    */
-  public async kiemTraUnhealthy(provider: NhaCungCapDich): Promise<boolean> {
+  public async kiemTraUnhealthy(provider: string): Promise<boolean> {
     const key = `${TranslationRotationService.PREFIX_UNHEALTHY}${provider}`;
     const isUnhealthy = await this.cacheService.get<boolean>(key);
     return Boolean(isUnhealthy);
@@ -118,7 +126,7 @@ export class TranslationRotationService {
   /**
    * P3B-05.14 / Mục 4: Đếm lỗi liên tiếp và tự động đánh dấu unhealthy khi lỗi >= 3 lần.
    */
-  public async danhDauLoiLienTiep(provider: NhaCungCapDich): Promise<void> {
+  public async danhDauLoiLienTiep(provider: string): Promise<void> {
     const errKey = `${TranslationRotationService.PREFIX_CONSECUTIVE_ERRORS}${provider}`;
     // Dùng tangSo nguyên tử an toàn khi chạy song song đa luồng (Fix Lỗi 3)
     const currentCount = await this.cacheService.tangSo(errKey, 1, 3600); // Lưu bộ đếm trong 1 giờ
@@ -135,7 +143,7 @@ export class TranslationRotationService {
   /**
    * Reset bộ đếm lỗi và gỡ trạng thái unhealthy khi dịch thành công.
    */
-  public async resetLoiLienTiep(provider: NhaCungCapDich): Promise<void> {
+  public async resetLoiLienTiep(provider: string): Promise<void> {
     const errKey = `${TranslationRotationService.PREFIX_CONSECUTIVE_ERRORS}${provider}`;
     const unhealthyKey = `${TranslationRotationService.PREFIX_UNHEALTHY}${provider}`;
     const count429Key = `${TranslationRotationService.PREFIX_429_COUNT}${provider}`;
@@ -147,10 +155,7 @@ export class TranslationRotationService {
   /**
    * P3B-05.14 / Mục 7: Tính toán thời gian cooldown tăng dần (Backoff) khi gặp 429 lặp lại.
    */
-  public async tinhCooldownBackoff(
-    provider: NhaCungCapDich,
-    baseRetrySec?: number,
-  ): Promise<number> {
+  public async tinhCooldownBackoff(provider: string, baseRetrySec?: number): Promise<number> {
     const countKey = `${TranslationRotationService.PREFIX_429_COUNT}${provider}`;
     // Dùng tangSo nguyên tử an toàn khi chạy song song đa luồng (Fix Lỗi 3)
     const current429Count = await this.cacheService.tangSo(countKey, 1, 86400); // Lưu trong 24h
@@ -194,8 +199,9 @@ export class TranslationRotationService {
     const { maskedText, placeholderMap } = MarkdownMasker.mask(rawMarkdown);
     const chiTietLoi: ChiTietLoiProvider[] = [];
 
-    // 2. Duyệt qua 4 nhà cung cấp theo đúng thứ tự xoay tua
-    for (const provider of this.providers) {
+    // 2. Duyệt hai model theo lượt xoay để mỗi model tự giữ hũ riêng.
+    for (const provider of await this.layDanhSachXoayVong()) {
+      const khoaProvider = this.layKhoaProvider(provider);
       if (!provider.isAvailable()) {
         chiTietLoi.push({
           provider: provider.providerName,
@@ -206,7 +212,7 @@ export class TranslationRotationService {
       }
 
       // P3B-05.14 / Mục 4: Bỏ qua nếu nhà cung cấp đang ở trạng thái unhealthy (lỗi >= 3 lần liên tiếp)
-      const isUnhealthy = await this.kiemTraUnhealthy(provider.providerName);
+      const isUnhealthy = await this.kiemTraUnhealthy(khoaProvider);
       if (isUnhealthy) {
         this.logger.warn(
           `Nhà dịch [${provider.providerName}] đang ở trạng thái [unhealthy] do lỗi liên tiếp. Bỏ qua và chuyển tiếp.`,
@@ -219,7 +225,7 @@ export class TranslationRotationService {
         continue;
       }
 
-      const isCooldown = await this.kiemTraCooldown(provider.providerName);
+      const isCooldown = await this.kiemTraCooldown(khoaProvider);
       if (isCooldown) {
         this.logger.warn(
           `Nhà dịch [${provider.providerName}] đang trong thời gian cooldown. Bỏ qua và chuyển tiếp.`,
@@ -239,23 +245,21 @@ export class TranslationRotationService {
 
       // Nếu gặp rate_limited (429) -> Khóa cooldown tăng dần (Mục 7)
       if (ketQua.lyDoLoi === 'rate_limited') {
-        const retrySec = await this.tinhCooldownBackoff(
-          provider.providerName,
-          ketQua.retryAfterSec,
-        );
-        await this.khoaCooldown(provider.providerName, retrySec);
+        const retrySec = await this.tinhCooldownBackoff(khoaProvider, ketQua.retryAfterSec);
+        await this.khoaCooldown(khoaProvider, retrySec);
         chiTietLoi.push({
           provider: provider.providerName,
           model: provider.modelName,
           lyDoLoi: 'rate_limited',
           thoiGianMs: ketQua.thoiGianMs,
+          retryAfterSec: ketQua.retryAfterSec,
         });
         continue;
       }
 
       // Nếu gặp lỗi cấu trúc, timeout, hoặc rỗng -> ghi nhận lỗi liên tiếp (Mục 4) và chuyển nhà tiếp theo
       if (ketQua.lyDoLoi !== null || ketQua.text === null) {
-        await this.danhDauLoiLienTiep(provider.providerName);
+        await this.danhDauLoiLienTiep(khoaProvider);
         this.logger.warn(
           sanitizeLogMessage(
             `Nhà dịch [${provider.providerName}] thất bại với lý do [${ketQua.lyDoLoi}]. Chuyển nhà tiếp theo.`,
@@ -266,12 +270,13 @@ export class TranslationRotationService {
           model: provider.modelName,
           lyDoLoi: ketQua.lyDoLoi ?? 'ai_error',
           thoiGianMs: ketQua.thoiGianMs,
+          retryAfterSec: ketQua.retryAfterSec,
         });
         continue;
       }
 
       // Nhận được bản dịch hợp lệ -> Reset lỗi liên tiếp và ráp unmask triệt để
-      await this.resetLoiLienTiep(provider.providerName);
+      await this.resetLoiLienTiep(khoaProvider);
       const unmasked = MarkdownMasker.unmask(ketQua.text, placeholderMap);
       const thoiGianMs = Date.now() - tongStartTime;
 
@@ -289,10 +294,15 @@ export class TranslationRotationService {
       };
     }
 
-    // Cả 4 nhà dịch đều thất bại:
+    // Cả hai mô hình đều thất bại:
     // TUYỆT ĐỐI KHÔNG BAO GIỜ COI BẢN GỐC LÀ BẢN DỊCH (Chốt chặn nghiêm ngặt)
     const thoiGianMs = Date.now() - tongStartTime;
-    this.logger.warn(`Cả 4 nhà dịch đều thất bại sau ${thoiGianMs}ms. Không có bản dịch.`);
+    this.logger.warn(`Cả hai mô hình dịch đều thất bại sau ${thoiGianMs}ms. Không có bản dịch.`);
+    const choNgayMai =
+      chiTietLoi.length >= this.providers.length &&
+      chiTietLoi
+        .slice(-this.providers.length)
+        .every((loi) => loi.lyDoLoi === 'daily_quota_exhausted');
 
     return {
       thanhCong: false,
@@ -301,6 +311,10 @@ export class TranslationRotationService {
       model: null,
       thoiGianMs,
       chiTietLoi,
+      choNgayMai,
+      retryAfterSec: choNgayMai
+        ? Math.max(...chiTietLoi.slice(-this.providers.length).map((loi) => loi.retryAfterSec ?? 0))
+        : undefined,
     };
   }
 
@@ -390,7 +404,8 @@ export class TranslationRotationService {
     for (const chunk of chunks) {
       let mucChuaDich = [...chunk];
 
-      for (const provider of this.providers) {
+      const loiBatDauChunk = chiTietLoi.length;
+      for (const provider of await this.layDanhSachXoayVong()) {
         if (mucChuaDich.length === 0) break;
 
         if (!provider.isAvailable() || typeof provider.translateBatchJson !== 'function') {
@@ -402,7 +417,8 @@ export class TranslationRotationService {
           continue;
         }
 
-        const isUnhealthy = await this.kiemTraUnhealthy(provider.providerName);
+        const khoaProvider = this.layKhoaProvider(provider);
+        const isUnhealthy = await this.kiemTraUnhealthy(khoaProvider);
         if (isUnhealthy) {
           chiTietLoi.push({
             provider: provider.providerName,
@@ -412,7 +428,7 @@ export class TranslationRotationService {
           continue;
         }
 
-        const isCooldown = await this.kiemTraCooldown(provider.providerName);
+        const isCooldown = await this.kiemTraCooldown(khoaProvider);
         if (isCooldown) {
           chiTietLoi.push({
             provider: provider.providerName,
@@ -429,8 +445,8 @@ export class TranslationRotationService {
         const res = await provider.translateBatchJson(mucChuaDich, options);
 
         if (res.lyDoLoi === 'rate_limited') {
-          const retrySec = await this.tinhCooldownBackoff(provider.providerName, res.retryAfterSec);
-          await this.khoaCooldown(provider.providerName, retrySec);
+          const retrySec = await this.tinhCooldownBackoff(khoaProvider, res.retryAfterSec);
+          await this.khoaCooldown(khoaProvider, retrySec);
           chiTietLoi.push({
             provider: provider.providerName,
             model: provider.modelName,
@@ -447,6 +463,7 @@ export class TranslationRotationService {
             model: provider.modelName,
             lyDoLoi: res.lyDoLoi ?? 'ai_error',
             thoiGianMs: res.thoiGianMs,
+            retryAfterSec: res.retryAfterSec,
           });
           continue;
         }
@@ -483,6 +500,27 @@ export class TranslationRotationService {
         // Kiểm tra xem còn mục nào chưa có bản dịch không
         mucChuaDich = mucChuaDich.filter((m) => !ketQuaTong[m.id]);
       }
+
+      // Chỉ xếp hàng ngày mai khi cả hai mô hình đều báo hết hũ ngày.
+      const loiChunk = chiTietLoi.slice(loiBatDauChunk);
+      if (
+        mucChuaDich.length > 0 &&
+        loiChunk.length >= this.providers.length &&
+        loiChunk
+          .slice(-this.providers.length)
+          .every((loi) => loi.lyDoLoi === 'daily_quota_exhausted')
+      ) {
+        return {
+          thanhCong: false,
+          ketQua: ketQuaTong,
+          thieuIds: items.map((item) => item.id).filter((id) => !ketQuaTong[id]),
+          provider: lastProvider,
+          model: lastModel,
+          chiTietLoi,
+          choNgayMai: true,
+          retryAfterSec: Math.max(...loiChunk.map((loi) => loi.retryAfterSec ?? 0)),
+        };
+      }
     }
 
     const thieuIds = items.map((i) => i.id).filter((id) => !ketQuaTong[id]);
@@ -495,6 +533,7 @@ export class TranslationRotationService {
       provider: lastProvider,
       model: lastModel,
       chiTietLoi,
+      choNgayMai: false,
     };
   }
 }

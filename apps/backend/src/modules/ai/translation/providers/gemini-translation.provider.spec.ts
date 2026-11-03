@@ -43,20 +43,20 @@ describe('GeminiTranslationProvider', () => {
     expect(res.lyDoLoi).toBeNull();
   });
 
-  it('bị chặn và trả về rate_limited khi LlmRateLimiterService hết token bucket (Mục 6)', async () => {
+  it('đưa model sang lượt sau khi hết hũ ngày', async () => {
     const mockRateLimiter = {
-      layToken: vi.fn().mockResolvedValue({
+      layQuyenGemini: vi.fn().mockResolvedValue({
         chapNhan: false,
-        conLai: 0,
-        capacity: 12,
-        thoiGianChoMs: 8000,
+        soDaDung: 500,
+        hetHanMucNgay: true,
+        thoiGianChoGiay: 8,
       }),
     } as unknown as LlmRateLimiterService;
 
     provider = new GeminiTranslationProvider(mockConfigService, mockRateLimiter);
     const res = await provider.translate('Hello world');
     expect(res.text).toBeNull();
-    expect(res.lyDoLoi).toBe('rate_limited');
+    expect(res.lyDoLoi).toBe('daily_quota_exhausted');
     expect(res.retryAfterSec).toBe(8);
   });
 

@@ -24,10 +24,12 @@ export class GeminiTranslationProvider implements ITranslationProvider {
   constructor(
     private readonly configService: ConfigService,
     @Optional() private readonly rateLimiterService?: LlmRateLimiterService,
+    modelOverride?: string,
   ) {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     // P3B-05.6 / Mục 3: Khớp tên biến GEMINI_MODEL trong .env.example
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
+    this.modelName =
+      modelOverride || this.configService.get<string>('GEMINI_MODEL') || 'gemini-3.1-flash-lite';
 
     if (apiKey && apiKey.trim() && !apiKey.startsWith('your_')) {
       try {
@@ -81,14 +83,12 @@ export class GeminiTranslationProvider implements ITranslationProvider {
 
     // P3B-04.4 / Mục 6: Đồng bộ hạn mức Token Bucket qua LlmRateLimiterService (D-15/P2-39)
     if (this.rateLimiterService) {
-      const tokenResult = await this.rateLimiterService.layToken('gemini');
+      const tokenResult = await this.rateLimiterService.layQuyenGemini(this.modelName);
       if (!tokenResult.chapNhan) {
-        const waitSec = Math.ceil((tokenResult.thoiGianChoMs || 5000) / 1000);
-        this.logger.warn(`Gemini bị chặn bởi Token Bucket Rate Limiter (cần chờ ${waitSec}s)`);
         return {
           text: null,
-          lyDoLoi: 'rate_limited',
-          retryAfterSec: waitSec,
+          lyDoLoi: 'daily_quota_exhausted',
+          retryAfterSec: tokenResult.thoiGianChoGiay,
           provider: this.providerName,
           model: this.modelName,
           thoiGianMs: Date.now() - startTime,
@@ -239,16 +239,12 @@ export class GeminiTranslationProvider implements ITranslationProvider {
     }
 
     if (this.rateLimiterService) {
-      const tokenResult = await this.rateLimiterService.layToken('gemini');
+      const tokenResult = await this.rateLimiterService.layQuyenGemini(this.modelName);
       if (!tokenResult.chapNhan) {
-        const waitSec = Math.ceil((tokenResult.thoiGianChoMs || 5000) / 1000);
-        this.logger.warn(
-          `Gemini gom lô bị chặn bởi Token Bucket Rate Limiter (cần chờ ${waitSec}s)`,
-        );
         return {
           data: null,
-          lyDoLoi: 'rate_limited',
-          retryAfterSec: waitSec,
+          lyDoLoi: 'daily_quota_exhausted',
+          retryAfterSec: tokenResult.thoiGianChoGiay,
           provider: this.providerName,
           model: this.modelName,
           thoiGianMs: Date.now() - startTime,

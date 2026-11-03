@@ -358,6 +358,23 @@ export class ReadmeTranslationService {
       },
     });
 
+    const khoaChoNgayMai = `fs:ai:translation:deferred:${app.maUngDung}`;
+    const mucCho = await this.cacheService.lay<{ readmeSha: string; retryAt: number }>(
+      khoaChoNgayMai,
+    );
+    if (mucCho?.readmeSha === hashGoc && mucCho.retryAt > Date.now()) {
+      return {
+        maUngDung: app.maUngDung,
+        tenRepoDayDu: app.tenRepoDayDu,
+        banGoc,
+        banDich: null,
+        trangThai: TrangThaiDichReadme.DANG_DICH,
+        moHinhDich: banDichDb?.moHinhDich || null,
+        readmeSha: hashGoc,
+      };
+    }
+    if (mucCho && mucCho.retryAt <= Date.now()) await this.cacheService.xoa(khoaChoNgayMai);
+
     // 1. Nếu đã dịch xong và hash khớp với nội dung gốc (bỏ qua cờ force vì bản dịch đã hoàn tất và mới nhất)
     if (
       banDichDb &&
@@ -654,10 +671,29 @@ export class ReadmeTranslationService {
 
             // Nếu lô không trả về bản dịch cho đoạn này hoặc hỏng ký hiệu -> fallback dịch đơn lẻ
             let modelUsed = ketQuaBatch?.model || ketQuaBatch?.provider || lastModelUsed;
+            if (ketQuaBatch?.choNgayMai && !banDichDoan) {
+              await this.xepHangNgayMai(maUngDung, readmeSha, ketQuaBatch.retryAfterSec ?? 0);
+              await this.luuDoanDichThanhCong(cacDoanChoLuu);
+              await this.prisma.banDichReadme.update({
+                where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
+                data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: new Date() },
+              });
+              return false;
+            }
             if (!banDichDoan) {
               const ketQuaDon = await this.translationRotationService.dichVanBan(doan.vanBanDaChe, {
                 context: doan.tieuDeMuc,
               });
+
+              if (ketQuaDon?.choNgayMai) {
+                await this.xepHangNgayMai(maUngDung, readmeSha, ketQuaDon.retryAfterSec ?? 0);
+                await this.luuDoanDichThanhCong(cacDoanChoLuu);
+                await this.prisma.banDichReadme.update({
+                  where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
+                  data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: new Date() },
+                });
+                return false;
+              }
 
               if (!ketQuaDon || !ketQuaDon.thanhCong || ketQuaDon.banDich === null) {
                 this.logger.warn(`Dịch đoạn README thất bại cho repo [${owner}/${repo}]`);
@@ -773,6 +809,37 @@ export class ReadmeTranslationService {
       return false;
     } finally {
       this.dangDichSet.delete(maUngDung);
+    }
+  }
+
+  private async xepHangNgayMai(
+    maUngDung: string,
+    readmeSha: string,
+    retryAfterSec: number,
+  ): Promise<void> {
+    const ttl = Math.max(60, retryAfterSec + 300);
+    await this.cacheService.luu(
+      `fs:ai:translation:deferred:${maUngDung}`,
+      { readmeSha, retryAt: Date.now() + ttl * 1000 },
+      ttl,
+    );
+  }
+
+  private async luuDoanDichThanhCong(
+    doanList: Array<{ maBam: string; doanGoc: string; doanDich: string; moHinhDich: string }>,
+  ): Promise<void> {
+    for (const doan of doanList) {
+      await this.prisma.boNhoDichChung.upsert({
+        where: { maBam_ngonNgu: { maBam: doan.maBam, ngonNgu: 'vi' } },
+        create: {
+          maBam: doan.maBam,
+          ngonNgu: 'vi',
+          doanGoc: doan.doanGoc,
+          doanDich: doan.doanDich,
+          moHinhDich: doan.moHinhDich,
+        },
+        update: { doanDich: doan.doanDich, moHinhDich: doan.moHinhDich },
+      });
     }
   }
 }

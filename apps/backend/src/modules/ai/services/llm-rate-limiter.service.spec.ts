@@ -11,10 +11,10 @@ describe('LlmRateLimiterService (AI1)', () => {
     set: ReturnType<typeof vi.fn>;
     withLock: ReturnType<typeof vi.fn>;
   };
-  let memoryStore: Map<string, TokenBucketState>;
+  let memoryStore: Map<string, unknown>;
 
   beforeEach(() => {
-    memoryStore = new Map<string, TokenBucketState>();
+    memoryStore = new Map<string, unknown>();
 
     mockConfigService = {
       get: vi.fn((key: string) => {
@@ -32,6 +32,11 @@ describe('LlmRateLimiterService (AI1)', () => {
       }),
       withLock: vi.fn(async (_lockKey: string, _ttl: number, action: () => Promise<unknown>) => {
         return action();
+      }),
+      tangSo: vi.fn(async (key: string, amount = 1) => {
+        const next = Number(memoryStore.get(key) ?? 0) + amount;
+        memoryStore.set(key, next);
+        return next;
       }),
     };
 
@@ -91,5 +96,46 @@ describe('LlmRateLimiterService (AI1)', () => {
     expect(res.chapNhan).toBe(true);
     // Hồi được ~2 token, trừ 1 token còn ~1 token
     expect(res.conLai).toBeCloseTo(1, 0);
+  });
+
+  it('giữ hạn mức ngày riêng theo model Gemini và trả số đã dùng', async () => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(
+      new Date(),
+    );
+    memoryStore.set(`fs:llm:daily:gemini-3.1-flash-lite:${today}`, 500);
+    const permission = await service.layQuyenGemini('gemini-3.1-flash-lite');
+
+    expect(permission.chapNhan).toBe(false);
+    expect(permission.hetHanMucNgay).toBe(true);
+    expect(memoryStore.get(`fs:llm:daily:gemini-3.1-flash-lite:${today}`)).toBe(500);
+  });
+
+  it('đếm một yêu cầu Gemini đã được nhận trước khi gửi mô hình', async () => {
+    const permission = await service.layQuyenGemini('gemini-3.5-flash-lite');
+    expect(permission.chapNhan).toBe(true);
+    expect(permission.soDaDung).toBe(1);
+    expect(mockCacheService.tangSo).toHaveBeenCalledWith(
+      expect.stringMatching(/^fs:llm:daily:gemini-3\.5-flash-lite:/),
+      1,
+      172800,
+    );
+  });
+
+  it('giãn hai lượt liên tiếp của cùng model ít nhất 4 giây', async () => {
+    vi.useFakeTimers();
+    try {
+      await service.layQuyenGemini('gemini-3.1-flash-lite');
+      const lanThuHai = service.layQuyenGemini('gemini-3.1-flash-lite');
+      let daXong = false;
+      void lanThuHai.then(() => {
+        daXong = true;
+      });
+      await vi.advanceTimersByTimeAsync(3999);
+      expect(daXong).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(lanThuHai).resolves.toMatchObject({ chapNhan: true, soDaDung: 2 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
