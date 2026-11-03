@@ -15,6 +15,12 @@
  *   Body:   { "texts": ["đoạn 1", "đoạn 2"] }   hoặc   { "text": "một đoạn" }
  *   Trả về: { provider, model, translations: [string|null], reasons: [string|null], failed: number,
  *             translation?: string|null }   (translation chỉ có khi gửi "text")
+ *
+ * POST /search   (P3B-28.2: dịch câu tìm kiếm tiếng Việt sang JSON từ khóa GitHub)
+ *   Header: X-ForgeStore-Secret
+ *   Body:   { "prompt": "câu cần xử lý", "system": "lời nhắc hệ thống của backend", "model"?: "@cf/..." }
+ *   Trả về: { provider, model, result: string|null, reason: string|null }   (result là chuỗi JSON thô để backend tự kiểm)
+ *   Tách khỏi /translate vì /translate cố định lời nhắc "dịch sang tiếng Việt" và giới hạn ngữ cảnh 500 ký tự.
  */
 
 const DEFAULT_MODEL = '@cf/aisingapore/gemma-sea-lion-v4-27b-it';
@@ -26,6 +32,11 @@ const MAX_TOTAL_CHARS = 40000;
 const MAX_BODY_BYTES = 200_000;
 const MAX_OUTPUT_TOKENS = 6000;
 const CONCURRENCY = 3;
+
+// Đường /search chỉ nhận câu tìm kiếm ngắn và đầu ra là một đối tượng JSON nhỏ.
+const MAX_SEARCH_PROMPT_CHARS = 1500;
+const MAX_SEARCH_SYSTEM_CHARS = 4000;
+const MAX_SEARCH_OUTPUT_TOKENS = 400;
 
 const SYSTEM_PROMPT = `Bạn là biên dịch viên tài liệu kỹ thuật phần mềm mã nguồn mở, dịch sang tiếng Việt chính xác và tự nhiên.
 Văn bản nguồn có thể là tiếng Anh, tiếng Trung hoặc lẫn nhiều ngôn ngữ: hãy dịch toàn bộ phần văn xuôi sang tiếng Việt.
@@ -40,7 +51,10 @@ QUY TẮC BẮT BUỘC:
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method !== 'POST' || url.pathname !== '/translate') {
+    if (
+      request.method !== 'POST' ||
+      (url.pathname !== '/translate' && url.pathname !== '/search')
+    ) {
       return json({ error: 'not_found' }, 404);
     }
 
@@ -65,6 +79,8 @@ export default {
       return json({ error: 'invalid_json' }, 400);
     }
 
+    if (url.pathname === '/search') return chayTimKiem(env, body);
+
     const single = typeof body?.text === 'string' && !Array.isArray(body?.texts);
     const check = validate(body, single);
     if (check.error) {
@@ -87,6 +103,61 @@ export default {
     return json(payload);
   },
 };
+
+/** Đường /search: chạy lời nhắc của backend nguyên văn, lấy ra chuỗi JSON; không ép cấu trúc dịch README. */
+async function chayTimKiem(env, body) {
+  const { prompt, system } = body ?? {};
+  if (
+    typeof prompt !== 'string' ||
+    prompt.trim() === '' ||
+    prompt.length > MAX_SEARCH_PROMPT_CHARS
+  ) {
+    return json({ error: 'prompt_invalid' }, 400);
+  }
+  if (
+    typeof system !== 'string' ||
+    system.trim() === '' ||
+    system.length > MAX_SEARCH_SYSTEM_CHARS
+  ) {
+    return json({ error: 'system_invalid' }, 400);
+  }
+  const model =
+    typeof body?.model === 'string' && body.model.startsWith('@cf/')
+      ? body.model
+      : env.TRANSLATE_MODEL || DEFAULT_MODEL;
+  const payload = { provider: 'cloudflare-workers-ai', model, result: null, reason: null };
+
+  try {
+    const input = {
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0,
+      max_tokens: MAX_SEARCH_OUTPUT_TOKENS,
+    };
+    if (env.TRANSLATE_DISABLE_THINKING === '1') {
+      input.chat_template_kwargs = { enable_thinking: false };
+    }
+    const out = await withTimeout(env.AI.run(model, input), timeoutMs(env));
+    const result = cleanJsonOutput(extractText(out));
+    if (result === '') payload.reason = 'empty_output';
+    else payload.result = result;
+  } catch (err) {
+    console.warn('search translate failed:', String(err?.message ?? err));
+    payload.reason = err?.code === 'TIMEOUT' ? 'timeout' : 'ai_error';
+  }
+  return json(payload);
+}
+
+/** Bỏ phần "suy nghĩ" và hàng rào ```json bọc ngoài để backend chỉ nhận chuỗi JSON thô. */
+export function cleanJsonOutput(text) {
+  const t = String(text)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
+  const wrapped = t.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
+  return wrapped ? wrapped[1].trim() : t;
+}
 
 function validate(body, single) {
   if (!body || typeof body !== 'object') return { error: 'invalid_body' };

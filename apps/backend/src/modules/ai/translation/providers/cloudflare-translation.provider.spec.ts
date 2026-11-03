@@ -99,15 +99,34 @@ describe('CloudflareTranslationProvider', () => {
   it('gửi prompt tìm kiếm riêng và trả JSON thô cho bước kiểm tra schema', async () => {
     provider = new CloudflareTranslationProvider(mockConfigService);
     let body: Record<string, unknown> = {};
-    global.fetch = vi.fn().mockImplementation(async (_url, options) => {
+    let calledUrl = '';
+    global.fetch = vi.fn().mockImplementation(async (url, options) => {
+      calledUrl = url;
       body = JSON.parse(options.body);
-      return { ok: true, json: async () => ({ translation: '{"tuKhoa":["editor"]}' }) };
+      return { ok: true, json: async () => ({ result: '{"tuKhoa":["editor"]}' }) };
     });
 
     await expect(provider.translateSearchJson('prompt', 'system')).resolves.toBe(
       '{"tuKhoa":["editor"]}',
     );
-    expect(body).toMatchObject({ text: 'prompt', context: 'system', response_format: 'json' });
+    // Phải gọi đường /search của Worker; /translate chỉ dịch README sang tiếng Việt.
+    expect(calledUrl).toBe('https://worker.test/search');
+    expect(body).toEqual({
+      prompt: 'prompt',
+      system: 'system',
+      model: '@cf/aisingapore/gemma-sea-lion-v4-27b-it',
+    });
+  });
+
+  it('tìm kiếm trả null khi worker lỗi hoặc không có result', async () => {
+    provider = new CloudflareTranslationProvider(mockConfigService);
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    await expect(provider.translateSearchJson('p', 's')).resolves.toBeNull();
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ result: null, reason: 'ai_error' }) });
+    await expect(provider.translateSearchJson('p', 's')).resolves.toBeNull();
   });
 
   it('bắt lỗi khi worker trả về translation null kèm lý do lỗi cố định (P3B-05.14)', async () => {

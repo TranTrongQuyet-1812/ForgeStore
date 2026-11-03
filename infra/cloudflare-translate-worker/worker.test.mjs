@@ -2,7 +2,12 @@
 // Chạy:  node --test infra/cloudflare-translate-worker/worker.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { cleanOutput, extractText, findStructureProblem } from './worker.js';
+import worker, {
+  cleanJsonOutput,
+  cleanOutput,
+  extractText,
+  findStructureProblem,
+} from './worker.js';
 
 const SECRET = 'khoa-thu-nghiem';
 
@@ -224,4 +229,87 @@ test('đầu vào không hợp lệ thì 400, giới hạn đoạn và độ dà
 test('không có CORS: trình duyệt của người lạ không gọi được', async () => {
   const res = await call(makeEnv(), { body: { texts: ['a'] } });
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('/search chạy lời nhắc của backend nguyên văn và trả chuỗi JSON thô', async () => {
+  let captured;
+  const run = async (_model, input) => {
+    captured = input;
+    return { response: '```json\n{"tuKhoa":["note"],"topics":["notes"]}\n```' };
+  };
+  const res = await call(makeEnv(run), {
+    path: '/search',
+    body: { prompt: 'ứng dụng ghi chú', system: 'Trả JSON từ khóa' },
+  });
+  const data = await res.json();
+  assert.equal(data.result, '{"tuKhoa":["note"],"topics":["notes"]}');
+  assert.equal(data.reason, null);
+  assert.equal(captured.messages[0].content, 'Trả JSON từ khóa');
+  assert.equal(captured.messages[1].content, 'ứng dụng ghi chú');
+  assert.equal(captured.temperature, 0);
+});
+
+test('/search nhận lời nhắc hệ thống dài hơn 500 ký tự mà /translate từ chối', async () => {
+  const system = 'x'.repeat(1200);
+  const res = await call(
+    makeEnv(async () => ({ response: '{}' })),
+    {
+      path: '/search',
+      body: { prompt: 'a', system },
+    },
+  );
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).result, '{}');
+});
+
+test('/search: AI lỗi hoặc rỗng thì result null kèm lý do, không trả bản gốc', async () => {
+  const hong = await call(
+    makeEnv(async () => {
+      throw new Error('boom');
+    }),
+    { path: '/search', body: { prompt: 'a', system: 's' } },
+  );
+  assert.deepEqual(await hong.json(), {
+    provider: 'cloudflare-workers-ai',
+    model: '@cf/aisingapore/gemma-sea-lion-v4-27b-it',
+    result: null,
+    reason: 'ai_error',
+  });
+  const rong = await call(
+    makeEnv(async () => ({ response: '<think>nghĩ</think>' })),
+    {
+      path: '/search',
+      body: { prompt: 'a', system: 's' },
+    },
+  );
+  assert.equal((await rong.json()).reason, 'empty_output');
+});
+
+test('/search: đầu vào sai thì 400, thiếu khóa thì 401, và không gọi AI', async () => {
+  let goi = 0;
+  const env = makeEnv(async () => {
+    goi++;
+    return { response: '{}' };
+  });
+  assert.equal(
+    (await call(env, { path: '/search', body: { prompt: '', system: 's' } })).status,
+    400,
+  );
+  assert.equal((await call(env, { path: '/search', body: { prompt: 'a' } })).status, 400);
+  assert.equal(
+    (await call(env, { path: '/search', body: { prompt: 'a'.repeat(1501), system: 's' } })).status,
+    400,
+  );
+  assert.equal(
+    (await call(env, { path: '/search', secret: 'sai', body: { prompt: 'a', system: 's' } }))
+      .status,
+    401,
+  );
+  assert.equal(goi, 0);
+});
+
+test('cleanJsonOutput bỏ suy nghĩ và hàng rào json, giữ nguyên JSON thuần', () => {
+  assert.equal(cleanJsonOutput('<think>x</think>{"a":1}'), '{"a":1}');
+  assert.equal(cleanJsonOutput('```\n{"a":1}\n```'), '{"a":1}');
+  assert.equal(cleanJsonOutput('{"a":1}'), '{"a":1}');
 });

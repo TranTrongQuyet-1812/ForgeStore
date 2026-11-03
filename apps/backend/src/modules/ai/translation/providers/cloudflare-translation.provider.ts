@@ -16,6 +16,8 @@ interface CloudflareWorkerResponse {
   translations?: (string | null)[];
   reasons?: (string | null)[];
   translation?: string | null;
+  // Chỉ có ở đường /search: chuỗi JSON thô do mô hình trả về.
+  result?: string | null;
   error?: string | null;
 }
 
@@ -59,22 +61,19 @@ export class CloudflareTranslationProvider implements ITranslationProvider {
 
   public async translateSearchJson(prompt: string, systemPrompt: string): Promise<string | null> {
     if (!this.workerUrl || !this.secret) return null;
+    // Đường /translate cố định lời nhắc dịch README, nên tìm kiếm dùng đường /search riêng của Worker.
+    const urlTimKiem = this.workerUrl.replace(/\/translate$/, '/search');
     return goiFetchCoTimeout(
-      this.workerUrl,
+      urlTimKiem,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-ForgeStore-Secret': this.secret },
-        body: JSON.stringify({
-          text: prompt,
-          context: systemPrompt,
-          model: this.modelName,
-          response_format: 'json',
-        }),
+        body: JSON.stringify({ prompt, system: systemPrompt, model: this.modelName }),
       },
       async (response) => {
         if (!response.ok) return null;
         const data = (await response.json()) as CloudflareWorkerResponse;
-        return data.translation ?? null;
+        return data.result ?? null;
       },
     );
   }

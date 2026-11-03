@@ -53,6 +53,21 @@ curl -X POST "$CLOUDFLARE_TRANSLATE_URL/translate" \
 Kết quả: `{"provider":"cloudflare-workers-ai","model":"...","translations":["..."],"reasons":[null],"failed":0}`.
 Gửi `{"text":"..."}` (một đoạn) thì có thêm trường `translation`.
 
+### Đường `/search` (dịch câu tìm kiếm, P3B-28.2)
+
+Đường `/translate` cố định lời nhắc "dịch sang tiếng Việt", nên không dùng được cho việc đổi câu tìm kiếm tiếng Việt thành JSON từ khóa. Backend gọi đường riêng:
+
+```bash
+curl -X POST "$CLOUDFLARE_TRANSLATE_URL/search" \
+  -H "Content-Type: application/json" \
+  -H "X-ForgeStore-Secret: $CLOUDFLARE_TRANSLATE_SECRET" \
+  -d '{"prompt":"ứng dụng ghi chú","system":"<lời nhắc hệ thống của backend>"}'
+```
+
+Kết quả: `{"provider":"...","model":"...","result":"{\"tuKhoa\":[...]}","reason":null}`. Lỗi hoặc rỗng thì `result` là `null` kèm `reason`.
+`prompt` tối đa 1.500 ký tự, `system` tối đa 4.000 ký tự. Worker chỉ bỏ phần suy nghĩ và hàng rào ```json; backend tự kiểm JSON bằng schema.
+**Phải triển khai lại Worker** (`wrangler deploy`) thì backend mới gọi được đường này.
+
 ## Giới hạn
 
 | Hạng mục               | Giá trị                                                 |
