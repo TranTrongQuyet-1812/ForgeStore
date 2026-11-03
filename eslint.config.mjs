@@ -14,6 +14,7 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       '.antigravity/**',
       'docs/**',
+      'scratchpad/**',
     ],
   },
   js.configs.recommended,

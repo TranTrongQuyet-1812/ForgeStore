@@ -72,11 +72,11 @@ export interface ITranslationProvider {
   translate(text: string, options?: TranslationProviderOptions): Promise<KetQuaDichDoan>;
 
   /**
-   * Thực hiện dịch gom lô danh sách mục sang JSON { [id]: "bản dịch tiếng Việt" } (P3B-04).
-   * Giúp tiết kiệm hạn ngạch RPM khi dịch hàng loạt mô tả app ngắn.
+   * Thực hiện dịch gom lô danh sách mục sang JSON { [id]: "bản dịch tiếng Việt" } (P3B-04 & P3B-28.4).
+   * Hỗ trợ dịch gom lô mô tả app hoặc các phân đoạn README Markdown.
    */
   translateBatchJson?(
     items: Array<{ id: string; text: string }>,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; loai?: 'mo_ta' | 'readme' },
   ): Promise<KetQuaDichBatchJson>;
 }

@@ -361,7 +361,7 @@ export class TranslationRotationService {
    */
   public async dichGomLoJson(
     items: Array<{ id: string; text: string }>,
-    options?: { batchSize?: number; timeoutMs?: number },
+    options?: { batchSize?: number; timeoutMs?: number; loai?: 'mo_ta' | 'readme' },
   ): Promise<KetQuaDichGomLoJson> {
     if (!items || items.length === 0) {
       return {

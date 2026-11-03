@@ -490,7 +490,52 @@ export class ReadmeTranslationService {
   }
 
   /**
-   * Tác vụ dịch README chạy nền non-blocking (P3B-05.3, P3B-05.4).
+   * Gom nhiều phân đoạn README vào các lô khoảng 2.500 ký tự (P3B-28.4).
+   * Giúp giảm từ ~94 yêu cầu xuống còn ~4 yêu cầu cho README mới, ~1 yêu cầu khi cập nhật.
+   */
+  public gomLoDoanReadme<T extends { vanBanDaChe: string }>(
+    doanList: T[],
+    nguongKyTu = 2500,
+  ): T[][] {
+    if (!doanList || doanList.length === 0) return [];
+    const cacLo: T[][] = [];
+    let loHienTai: T[] = [];
+    let tongDoDaiHienTai = 0;
+
+    for (const doan of doanList) {
+      const doDai = doan.vanBanDaChe.length;
+      // Nếu lô hiện tại đã có đoạn và việc thêm đoạn này vượt quá 2500 ký tự thì ngắt lô
+      if (loHienTai.length > 0 && tongDoDaiHienTai + doDai > nguongKyTu) {
+        cacLo.push(loHienTai);
+        loHienTai = [doan];
+        tongDoDaiHienTai = doDai;
+      } else {
+        loHienTai.push(doan);
+        tongDoDaiHienTai += doDai;
+      }
+    }
+
+    if (loHienTai.length > 0) {
+      cacLo.push(loHienTai);
+    }
+    return cacLo;
+  }
+
+  /**
+   * Kiểm tra bảo toàn đầy đủ các ký hiệu giữ chỗ dạng ⟦C\d+⟧ giữa văn bản gốc và bản dịch (P3B-28.4).
+   */
+  public kiemTraGiuChoKyHieu(goc: string, dich: string): boolean {
+    if (!dich || !dich.trim()) return false;
+    const regex = /⟦C\d+⟧/g;
+    const placeholdersGoc = (goc.match(regex) || []).sort();
+    const placeholdersDich = (dich.match(regex) || []).sort();
+
+    if (placeholdersGoc.length !== placeholdersDich.length) return false;
+    return placeholdersGoc.every((val, idx) => val === placeholdersDich[idx]);
+  }
+
+  /**
+   * Tác vụ dịch README chạy nền non-blocking (P3B-05.3, P3B-05.4 & P3B-28.4).
    */
   public async kichHoatDichReadmeNen(
     maUngDung: string,
@@ -534,12 +579,13 @@ export class ReadmeTranslationService {
         moHinhDich: string;
       }> = [];
       let lastModelUsed = 'gemini-3.1-flash-lite';
+      const doanCanDichAI: typeof cauTruc.doan = [];
 
       for (const doan of cauTruc.doan) {
         if (!doan.canDich) continue;
         const maBamDoan = doan.maBam;
 
-        // 1. Kiểm tra Bảng 13: bo_nho_dich_chung (P3B-05.3)
+        // 1. Kiểm tra Bảng 13: bo_nho_dich_chung (P3B-05.3, giữ nguyên bản cũ theo maBam kể cả bản của Anti)
         const cacheDoan = await this.prisma.boNhoDichChung.findUnique({
           where: { maBam_ngonNgu: { maBam: maBamDoan, ngonNgu: 'vi' } },
         });
@@ -566,32 +612,79 @@ export class ReadmeTranslationService {
           this.logger.warn(`Bỏ qua cache README không đạt bất biến cho repo [${owner}/${repo}]`);
         }
 
-        // Nhà dịch chỉ nhận một mẩu chữ; code giữ nguyên Markdown và lắp bản dịch theo vị trí nguồn.
-        const ketQua = await this.translationRotationService.dichVanBan(doan.vanBanDaChe, {
-          context: doan.tieuDeMuc,
-        });
+        // Đoạn chưa có bản dịch trong cache -> đưa vào danh sách cần AI dịch
+        doanCanDichAI.push(doan);
+      }
 
-        if (!ketQua.thanhCong || ketQua.banDich === null) {
-          this.logger.warn(`Dịch đoạn README thất bại cho repo [${owner}/${repo}]`);
-          await this.prisma.banDichReadme.update({
-            where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
-            data: { trangThai: TrangThaiDichReadme.THAT_BAI, thoiGianDich: new Date() },
-          });
-          return false;
+      // 2. Gom lô các đoạn cần AI dịch thành các nhóm khoảng 2.500 ký tự (P3B-28.4)
+      if (doanCanDichAI.length > 0) {
+        const danhSachLo = this.gomLoDoanReadme(doanCanDichAI, 2500);
+
+        for (const lo of danhSachLo) {
+          const items = lo.map((d) => ({
+            id: String(d.stt),
+            text: d.vanBanDaChe,
+          }));
+
+          // Gọi dịch gom lô qua JSON (áp dụng cho cả repo mới và repo cập nhật)
+          let ketQuaBatch: import('./translation-rotation.service').KetQuaDichGomLoJson | null =
+            null;
+          try {
+            ketQuaBatch = await this.translationRotationService.dichGomLoJson(items, {
+              batchSize: items.length,
+              loai: 'readme',
+            });
+          } catch (errBatch) {
+            this.logger.warn(
+              `Dịch gom lô thất bại cho repo [${owner}/${repo}], chuyển sang xử lý từng đoạn: ${(errBatch as Error).message}`,
+            );
+          }
+
+          for (const doan of lo) {
+            const idStr = String(doan.stt);
+            let banDichDoan = ketQuaBatch?.ketQua?.[idStr] ?? null;
+
+            // Kiểm tra bảo toàn ký hiệu giữ chỗ từng đoạn trong lô (P3B-28.4)
+            if (banDichDoan && !this.kiemTraGiuChoKyHieu(doan.vanBanDaChe, banDichDoan)) {
+              this.logger.warn(
+                `Đoạn ${doan.stt} trong lô không bảo toàn ký hiệu giữ chỗ. Fallback dịch riêng lẻ.`,
+              );
+              banDichDoan = null;
+            }
+
+            // Nếu lô không trả về bản dịch cho đoạn này hoặc hỏng ký hiệu -> fallback dịch đơn lẻ
+            let modelUsed = ketQuaBatch?.model || ketQuaBatch?.provider || lastModelUsed;
+            if (!banDichDoan) {
+              const ketQuaDon = await this.translationRotationService.dichVanBan(doan.vanBanDaChe, {
+                context: doan.tieuDeMuc,
+              });
+
+              if (!ketQuaDon || !ketQuaDon.thanhCong || ketQuaDon.banDich === null) {
+                this.logger.warn(`Dịch đoạn README thất bại cho repo [${owner}/${repo}]`);
+                await this.prisma.banDichReadme.update({
+                  where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
+                  data: { trangThai: TrangThaiDichReadme.THAT_BAI, thoiGianDich: new Date() },
+                });
+                return false;
+              }
+
+              banDichDoan = ketQuaDon.banDich;
+              modelUsed = ketQuaDon.model || ketQuaDon.provider || lastModelUsed;
+            }
+
+            cacModelDung.add(modelUsed);
+            lastModelUsed = modelUsed;
+            banDichTheoDoan.set(doan.stt, banDichDoan);
+
+            // Ghi nhận để lưu vào bộ nhớ dịch chung sau khi hoàn tất
+            cacDoanChoLuu.push({
+              maBam: doan.maBam,
+              doanGoc: doan.vanBanGoc.trim(),
+              doanDich: banDichDoan,
+              moHinhDich: modelUsed,
+            });
+          }
         }
-
-        const modelUsed = ketQua.model || ketQua.provider || lastModelUsed;
-        cacModelDung.add(modelUsed);
-        lastModelUsed = modelUsed;
-        banDichTheoDoan.set(doan.stt, ketQua.banDich);
-
-        // Chỉ ghi bộ nhớ dịch sau khi README hoàn chỉnh vượt qua bộ kiểm bất biến.
-        cacDoanChoLuu.push({
-          maBam: maBamDoan,
-          doanGoc: doan.vanBanGoc.trim(),
-          doanDich: ketQua.banDich,
-          moHinhDich: modelUsed,
-        });
       }
 
       // Ghép bằng offset nguồn để mọi khối không dịch được giữ nguyên byte.

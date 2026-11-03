@@ -36,6 +36,7 @@ describe('ReadmeTranslationService', () => {
 
     mockRotationService = {
       dichVanBan: vi.fn(),
+      dichGomLoJson: vi.fn(),
     } as unknown as TranslationRotationService;
 
     mockCacheService = {
@@ -618,6 +619,153 @@ MIT License.`;
 
       const res = await service.yeuCauDichLaiReadme('test/app');
       expect(res.trangThai).toBe(TrangThaiDichReadme.DANG_DICH);
+    });
+  });
+
+  describe('P3B-28.4 Gom lô dịch README', () => {
+    it('gomLoDoanReadme gom các đoạn vào từng lô theo ngưỡng khoảng 2.500 ký tự', () => {
+      const doan1 = { vanBanDaChe: 'A'.repeat(1200), stt: 1 };
+      const doan2 = { vanBanDaChe: 'B'.repeat(1200), stt: 2 };
+      const doan3 = { vanBanDaChe: 'C'.repeat(500), stt: 3 }; // Tổng 1200 + 1200 + 500 = 2900 > 2500 -> ngắt lô
+      const doan4 = { vanBanDaChe: 'D'.repeat(800), stt: 4 };
+
+      const danhSachLo = service.gomLoDoanReadme([doan1, doan2, doan3, doan4], 2500);
+
+      expect(danhSachLo).toHaveLength(2);
+      expect(danhSachLo[0]).toEqual([doan1, doan2]); // 2400 ký tự <= 2500
+      expect(danhSachLo[1]).toEqual([doan3, doan4]); // 1300 ký tự
+    });
+
+    it('kiemTraGiuChoKyHieu phát hiện chính xác tính bảo toàn ký hiệu giữ chỗ', () => {
+      const goc = 'Cài đặt với ⟦C1⟧ và chạy ⟦C2⟧.';
+      const dichDung = 'Cài đặt bằng ⟦C1⟧ rồi chạy ⟦C2⟧.';
+      const dichThieu = 'Cài đặt bằng ⟦C1⟧.';
+      const dichSaiThuTu = 'Chạy ⟦C2⟧ rồi cài đặt ⟦C1⟧.'; // Cả 2 đều có C1 và C2
+      const dichMatKyHieu = 'Cài đặt bằng mã nguồn.';
+
+      expect(service.kiemTraGiuChoKyHieu(goc, dichDung)).toBe(true);
+      expect(service.kiemTraGiuChoKyHieu(goc, dichThieu)).toBe(false);
+      expect(service.kiemTraGiuChoKyHieu(goc, dichMatKyHieu)).toBe(false);
+      expect(service.kiemTraGiuChoKyHieu(goc, dichSaiThuTu)).toBe(true);
+    });
+
+    it('kichHoatDichReadmeNen gọi dichGomLoJson với loai = readme và gom các đoạn vào lô', async () => {
+      const banGoc = 'Hello `tool`\n\nWorld `library`';
+      const hash = service.tinhMaBam(banGoc);
+
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: true,
+        ketQua: {
+          '1': 'Xin chào ⟦C1⟧',
+          '2': 'Thế giới ⟦C1⟧',
+        },
+        thieuIds: [],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      expect(mockRotationService.dichGomLoJson).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: '1', text: expect.stringContaining('Hello') }),
+          expect.objectContaining({ id: '2', text: expect.stringContaining('World') }),
+        ]),
+        expect.objectContaining({ loai: 'readme' }),
+      );
+      // Khi gom lô thành công, không cần gọi dichVanBan lẻ
+      expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
+    });
+
+    it('fallback sang dichVanBan khi một đoạn trong lô bị lỗi ký hiệu giữ chỗ', async () => {
+      const banGoc = 'Hello `tool`';
+      const hash = service.tinhMaBam(banGoc);
+
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      // Batch JSON trả về thiếu ký hiệu ⟦C1⟧
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: true,
+        ketQua: {
+          '1': 'Xin chào', // Thiếu ⟦C1⟧
+        },
+        thieuIds: [],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      });
+
+      // Fallback dịch đơn lẻ thành công và giữ đủ ký hiệu
+      vi.mocked(mockRotationService.dichVanBan).mockResolvedValue({
+        thanhCong: true,
+        banDich: 'Xin chào ⟦C1⟧',
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        thoiGianMs: 60,
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      expect(mockRotationService.dichVanBan).toHaveBeenCalledTimes(1);
+    });
+
+    it('giữ nguyên đoạn cũ theo maBam từ boNhoDichChung và chỉ gọi gom lô AI cho đoạn mới (repo cập nhật)', async () => {
+      const banGoc = 'Unchanged text\n\nNew updated text';
+      const hash = service.tinhMaBam(banGoc);
+
+      // Đoạn 1 đã có trong cache
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique)
+        .mockResolvedValueOnce({
+          maBam: 'hash-doan-1',
+          ngonNgu: 'vi',
+          doanGoc: 'Unchanged text',
+          doanDich: 'Nội dung không đổi',
+          moHinhDich: 'gemini-3.1-flash-lite',
+          ngayTao: new Date(),
+        })
+        .mockResolvedValueOnce(null); // Đoạn 2 mới tinh chưa có cache
+
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: true,
+        ketQua: {
+          '2': 'Nội dung mới cập nhật',
+        },
+        thieuIds: [],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      // Chỉ gửi đoạn 2 đi dịch gom lô
+      expect(mockRotationService.dichGomLoJson).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: '2', text: expect.stringContaining('New updated text') })],
+        expect.objectContaining({ loai: 'readme' }),
+      );
     });
   });
 });

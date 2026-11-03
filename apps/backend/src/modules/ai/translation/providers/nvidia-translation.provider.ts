@@ -201,7 +201,7 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
    */
   public async translateBatchJson(
     items: Array<{ id: string; text: string }>,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; loai?: 'mo_ta' | 'readme' },
   ): Promise<import('../interfaces/translation-provider.interface').KetQuaDichBatchJson> {
     const startTime = Date.now();
     if (!this.isAvailable() || !this.apiKey) {
@@ -227,8 +227,16 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
     const timeoutMs = options?.timeoutMs ?? 45_000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo } =
-      await import('../prompts/translation.prompt');
+    const {
+      DICH_MO_TA_SYSTEM_PROMPT,
+      taoPromptDichGomLo,
+      DICH_README_BATCH_SYSTEM_PROMPT,
+      taoPromptDichGomLoReadme,
+    } = await import('../prompts/translation.prompt');
+
+    const isReadme = options?.loai === 'readme';
+    const systemPrompt = isReadme ? DICH_README_BATCH_SYSTEM_PROMPT : DICH_MO_TA_SYSTEM_PROMPT;
+    const userPrompt = isReadme ? taoPromptDichGomLoReadme(items) : taoPromptDichGomLo(items);
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -240,8 +248,8 @@ export class NvidiaTranslationProvider implements ITranslationProvider {
         body: JSON.stringify({
           model: this.modelName,
           messages: [
-            { role: 'system', content: DICH_MO_TA_SYSTEM_PROMPT },
-            { role: 'user', content: taoPromptDichGomLo(items) },
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
           ],
           temperature: 0.1,
           max_tokens: 4096,

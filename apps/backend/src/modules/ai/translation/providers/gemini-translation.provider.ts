@@ -215,7 +215,7 @@ export class GeminiTranslationProvider implements ITranslationProvider {
    */
   public async translateBatchJson(
     items: Array<{ id: string; text: string }>,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; loai?: 'mo_ta' | 'readme' },
   ): Promise<import('../interfaces/translation-provider.interface').KetQuaDichBatchJson> {
     const startTime = Date.now();
     if (!this.isAvailable() || !this.client) {
@@ -257,15 +257,24 @@ export class GeminiTranslationProvider implements ITranslationProvider {
     }
 
     const timeoutMs = options?.timeoutMs ?? 45_000;
-    const { DICH_MO_TA_SYSTEM_PROMPT, taoPromptDichGomLo } =
-      await import('../prompts/translation.prompt');
+    const {
+      DICH_MO_TA_SYSTEM_PROMPT,
+      taoPromptDichGomLo,
+      DICH_README_BATCH_SYSTEM_PROMPT,
+      taoPromptDichGomLoReadme,
+    } = await import('../prompts/translation.prompt');
+
+    // Phân biệt prompt gom lô theo loại: README Markdown (P3B-28.4) hay mô tả app (P3B-04)
+    const isReadme = options?.loai === 'readme';
+    const systemInstruction = isReadme ? DICH_README_BATCH_SYSTEM_PROMPT : DICH_MO_TA_SYSTEM_PROMPT;
+    const contents = isReadme ? taoPromptDichGomLoReadme(items) : taoPromptDichGomLo(items);
 
     try {
       const callPromise = this.client.models.generateContent({
         model: this.modelName,
-        contents: taoPromptDichGomLo(items),
+        contents,
         config: {
-          systemInstruction: DICH_MO_TA_SYSTEM_PROMPT,
+          systemInstruction,
           temperature: 0.1,
           responseMimeType: 'application/json',
           thinkingConfig: {
