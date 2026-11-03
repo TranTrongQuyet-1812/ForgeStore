@@ -21,6 +21,12 @@ export interface KetQuaGiuChoGemini {
   hetHanMucNgay?: boolean;
 }
 
+export interface ThongKeGeminiTheoNgay {
+  ngayPacific: string;
+  theoMoHinh: Record<string, number>;
+  soMucChoSangNgayMai: number;
+}
+
 const PACIFIC_DATE_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Los_Angeles',
   year: 'numeric',
@@ -189,6 +195,19 @@ export class LlmRateLimiterService {
       }
       return ketQua;
     }
+  }
+
+  async layThongKeGeminiTheoNgay(): Promise<ThongKeGeminiTheoNgay> {
+    const ngayPacific = this.layNgayPacific();
+    const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
+    const theoMoHinh: Record<string, number> = {};
+    for (const model of models) {
+      theoMoHinh[model] =
+        (await this.cacheService.get<number>(`fs:llm:daily:${model}:${ngayPacific}`)) ?? 0;
+    }
+    const soMucChoSangNgayMai =
+      (await this.cacheService.get<number>(`fs:ai:translation:queued-count:${ngayPacific}`)) ?? 0;
+    return { ngayPacific, theoMoHinh, soMucChoSangNgayMai };
   }
 
   /** Trả khóa ngày theo giờ Thái Bình Dương để hũ tự đổi đúng lúc 00:00 địa phương. */

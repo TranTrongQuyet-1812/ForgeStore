@@ -121,6 +121,24 @@ describe('LlmRateLimiterService (AI1)', () => {
     );
   });
 
+  it('đọc tổng lượt dùng theo model và số README đã xếp hàng hôm nay', async () => {
+    const ngay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(
+      new Date(),
+    );
+    memoryStore.set(`fs:llm:daily:gemini-3.1-flash-lite:${ngay}`, 7);
+    memoryStore.set(`fs:llm:daily:gemini-3.5-flash-lite:${ngay}`, 9);
+    memoryStore.set(`fs:ai:translation:queued-count:${ngay}`, 2);
+
+    await expect(service.layThongKeGeminiTheoNgay()).resolves.toEqual({
+      ngayPacific: ngay,
+      theoMoHinh: {
+        'gemini-3.1-flash-lite': 7,
+        'gemini-3.5-flash-lite': 9,
+      },
+      soMucChoSangNgayMai: 2,
+    });
+  });
+
   it('giãn hai lượt liên tiếp của cùng model ít nhất 4 giây', async () => {
     vi.useFakeTimers();
     try {

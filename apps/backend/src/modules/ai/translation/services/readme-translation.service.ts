@@ -823,6 +823,16 @@ export class ReadmeTranslationService {
       { readmeSha, retryAt: Date.now() + ttl * 1000 },
       ttl,
     );
+    const ngayPacific = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const khoaHang = `fs:ai:translation:queued:${ngayPacific}:${maUngDung}`;
+    if (await this.cacheService.setNx(khoaHang, 172800)) {
+      await this.cacheService.tangSo(`fs:ai:translation:queued-count:${ngayPacific}`, 1, 172800);
+    }
   }
 
   private async luuDoanDichThanhCong(
