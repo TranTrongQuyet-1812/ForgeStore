@@ -103,4 +103,69 @@ describe('TranslationRotationService', () => {
     const result = await service.dichVanBan('text');
     expect(result.banDich).toBe('bản dịch');
   });
+
+  it('che và khôi phục mã inline, URL đúng sau khi model còn lại dịch thành công', async () => {
+    vi.mocked(gemini31.translate).mockResolvedValue({
+      text: null,
+      lyDoLoi: 'ai_error',
+      provider: 'gemini',
+      model: gemini31.modelName,
+    });
+    vi.mocked(gemini35.translate).mockImplementation(async (masked) => {
+      expect(masked).toContain('⟦C1⟧');
+      expect(masked).toContain('⟦C2⟧');
+      expect(masked).not.toContain('git status');
+      return {
+        text: 'Xem ⟦C1⟧ tại ⟦C2⟧',
+        lyDoLoi: null,
+        provider: 'gemini',
+        model: gemini35.modelName,
+      };
+    });
+
+    const result = await service.dichVanBan('Run `git status` at https://github.com/test');
+    expect(result.thanhCong).toBe(true);
+    expect(result.banDich).toBe('Xem `git status` tại https://github.com/test');
+  });
+
+  it('trả null khi cả hai model lỗi, không lấy nguyên văn làm bản dịch', async () => {
+    for (const provider of [gemini31, gemini35]) {
+      vi.mocked(provider.translate).mockResolvedValue({
+        text: null,
+        lyDoLoi: 'ai_error',
+        provider: 'gemini',
+        model: provider.modelName,
+      });
+    }
+    const result = await service.dichVanBan('Original English text');
+    expect(result.thanhCong).toBe(false);
+    expect(result.banDich).toBeNull();
+  });
+
+  it('chia batch theo kích thước, giữ toàn bộ kết quả từ hai model', async () => {
+    vi.mocked(gemini31.translateBatchJson!).mockResolvedValue({
+      data: { a: 'Bản dịch A', b: 'Bản dịch B' },
+      lyDoLoi: null,
+      provider: 'gemini',
+      model: gemini31.modelName,
+    });
+    vi.mocked(gemini35.translateBatchJson!).mockResolvedValue({
+      data: { c: 'Bản dịch C' },
+      lyDoLoi: null,
+      provider: 'gemini',
+      model: gemini35.modelName,
+    });
+    const result = await service.dichGomLoJson(
+      [
+        { id: 'a', text: 'Text A' },
+        { id: 'b', text: 'Text B' },
+        { id: 'c', text: 'Text C' },
+      ],
+      { batchSize: 2 },
+    );
+    expect(result.thanhCong).toBe(true);
+    expect(result.ketQua).toEqual({ a: 'Bản dịch A', b: 'Bản dịch B', c: 'Bản dịch C' });
+    expect(gemini31.translateBatchJson).toHaveBeenCalledTimes(1);
+    expect(gemini35.translateBatchJson).toHaveBeenCalledTimes(1);
+  });
 });

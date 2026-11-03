@@ -156,4 +156,19 @@ describe('LlmRateLimiterService (AI1)', () => {
       vi.useRealTimers();
     }
   });
+
+  it('đưa lượt chờ qua nửa đêm Pacific vào bộ đếm của ngày mới', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-04T07:59:58.000Z'));
+      await service.layQuyenGemini('gemini-3.1-flash-lite');
+      const lanThuHai = service.layQuyenGemini('gemini-3.1-flash-lite');
+      await vi.advanceTimersByTimeAsync(4000);
+      await expect(lanThuHai).resolves.toMatchObject({ chapNhan: true, soDaDung: 1 });
+      expect(memoryStore.get('fs:llm:daily:gemini-3.1-flash-lite:2026-11-03')).toBe(1);
+      expect(memoryStore.get('fs:llm:daily:gemini-3.1-flash-lite:2026-11-04')).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

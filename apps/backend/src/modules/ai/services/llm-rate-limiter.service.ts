@@ -150,12 +150,12 @@ export class LlmRateLimiterService {
    * Giữ hũ riêng cho từng model Gemini, chặn ở 500 yêu cầu/ngày và cách nhau ít nhất 4 giây.
    */
   async layQuyenGemini(model: string): Promise<KetQuaGiuChoGemini> {
-    const ngay = this.layNgayPacific();
-    const khoaDem = `fs:llm:daily:${model}:${ngay}`;
-    const khoaCuoi = `fs:llm:last-request:${model}`;
-    const khoa = `fs:lock:llm:gemini:${model}`;
-
     while (true) {
+      // Tính lại ngày sau mỗi lần chờ để lượt qua nửa đêm vào đúng hũ mới.
+      const ngay = this.layNgayPacific();
+      const khoaDem = `fs:llm:daily:${model}:${ngay}`;
+      const khoaCuoi = `fs:llm:last-request:${model}`;
+      const khoa = `fs:lock:llm:gemini:${model}`;
       let ketQua: {
         chapNhan: boolean;
         soDaDung: number;
