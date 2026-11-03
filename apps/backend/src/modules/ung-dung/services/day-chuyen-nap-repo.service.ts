@@ -570,6 +570,7 @@ export class DayChuyenNapRepoService {
     // 2. Bản dịch đã cũ (DA_CU)
     // 3. Bản dịch thất bại (THAT_BAI) NHƯNG thời gian dịch phải trước ít nhất 6 tiếng
     const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const staleTranslationBefore = new Date(Date.now() - 10 * 60 * 1000);
     const appsToTranslate = await this.prisma.ungDung.findMany({
       where: {
         trangThai: 'HOAT_DONG',
@@ -592,15 +593,27 @@ export class DayChuyenNapRepoService {
               },
             },
           },
+          {
+            danhSachBanDichReadme: {
+              some: {
+                ngonNgu: 'vi',
+                trangThai: TrangThaiDichReadme.DANG_DICH,
+                thoiGianDich: { lte: staleTranslationBefore },
+              },
+            },
+          },
         ],
       },
       orderBy: [{ soSaoGithub: 'desc' }, { diemThinhHanh: 'desc' }],
-      take: Math.min(remainingBudget, 5), // Tối đa 5 README mỗi lần chạy nền để không làm nghẽn
+      // Đọc thêm ứng viên vì Redis có thể đang hoãn các README hết quota đến sau nửa đêm.
+      take: Math.min(Math.max(Math.min(remainingBudget, 5) * 20, 100), 1000),
     });
 
     let daDichReadme = 0;
     for (const app of appsToTranslate) {
+      if (daDichReadme >= Math.min(remainingBudget, 5)) break;
       try {
+        if (await this.readmeTranslationService.dangChoDenNgayMai(app.maUngDung)) continue;
         const res = await this.readmeTranslationService.layHoacKichHoatDichReadme(app.maUngDung);
         // Chốt chặn 4: Chỉ trừ ngân sách khi thực sự kích hoạt tác vụ dịch nền (res.trangThai !== THAT_BAI)
         if (res && res.trangThai !== TrangThaiDichReadme.THAT_BAI) {

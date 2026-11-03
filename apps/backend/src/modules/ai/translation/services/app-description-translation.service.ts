@@ -51,7 +51,7 @@ export class AppDescriptionTranslationService {
       },
     });
 
-    const appsCanDich = danhSachApps.filter((app) => {
+    const appsCanDichBanDau = danhSachApps.filter((app) => {
       const text = app.moTaGocTiengAnh?.trim();
       if (!text) return false;
       if (forceAll) return true;
@@ -60,14 +60,20 @@ export class AppDescriptionTranslationService {
       return app.maBamMoTa !== hashHienTai;
     });
 
+    const appsCanDich = await this.locAppDangCho(appsCanDichBanDau);
+    const soAppChoNgayMai = appsCanDichBanDau.length - appsCanDich.length;
+
     if (appsCanDich.length === 0) {
-      this.logger.log('Tất cả mô tả ứng dụng đều đã được dịch mới nhất. Không cần dịch thêm.');
+      const thongBao = soAppChoNgayMai
+        ? `Còn ${soAppChoNgayMai} mô tả đang chờ sang ngày mai.`
+        : 'Tất cả mô tả ứng dụng đều đã được dịch mới nhất. Không cần dịch thêm.';
+      this.logger.log(thongBao);
       return {
         tongSoQuet: danhSachApps.length,
         soAppCanDich: 0,
         dichThanhCong: 0,
         dichThatBai: 0,
-        soAppChoNgayMai: 0,
+        soAppChoNgayMai,
         thieuIds: [],
       };
     }
@@ -109,7 +115,11 @@ export class AppDescriptionTranslationService {
 
     const idsChoNgayMai = ketQuaBatch.choNgayMai ? ketQuaBatch.thieuIds : [];
     if (idsChoNgayMai.length > 0) {
-      await this.translationRotationService.ghiNhanMucChoNgayMai(idsChoNgayMai);
+      const idsHangCho = appsCanDich
+        .filter((app) => idsChoNgayMai.includes(app.maUngDung))
+        .map((app) => `${app.maUngDung}:mo_ta`);
+      await this.ghiNhanMoTaChoNgayMai(appsCanDich, idsChoNgayMai, ketQuaBatch.retryAfterSec ?? 0);
+      await this.translationRotationService.ghiNhanMucChoNgayMai(idsHangCho);
       await Promise.all(
         appsCanDich
           .filter((app) => idsChoNgayMai.includes(app.maUngDung))
@@ -140,8 +150,53 @@ export class AppDescriptionTranslationService {
       soAppCanDich: appsCanDich.length,
       dichThanhCong,
       dichThatBai: ketQuaBatch.thieuIds.length - idsChoNgayMai.length,
-      soAppChoNgayMai: idsChoNgayMai.length,
+      soAppChoNgayMai: soAppChoNgayMai + idsChoNgayMai.length,
       thieuIds: ketQuaBatch.thieuIds.filter((id) => !idsChoNgayMai.includes(id)),
     };
+  }
+
+  private async locAppDangCho<
+    T extends {
+      maUngDung: string;
+      moTaGocTiengAnh: string | null;
+    },
+  >(apps: T[]): Promise<T[]> {
+    const ketQua = await Promise.all(
+      apps.map(async (app) => ({ app, cho: await this.dangChoMoTa(app) })),
+    );
+    return ketQua.filter(({ cho }) => !cho).map(({ app }) => app);
+  }
+
+  private async dangChoMoTa(app: { maUngDung: string; moTaGocTiengAnh: string | null }) {
+    const khoa = `fs:ai:translation:deferred:mo_ta:${app.maUngDung}`;
+    const mucCho = await this.cacheService.lay<{ maBam: string; retryAt: number }>(khoa);
+    if (!mucCho) return false;
+    const maBamHienTai = this.tinhMaBamMoTa(app.moTaGocTiengAnh?.trim() ?? '');
+    if (mucCho.maBam === maBamHienTai && mucCho.retryAt > Date.now()) return true;
+    await this.cacheService.xoa(khoa);
+    return false;
+  }
+
+  private async ghiNhanMoTaChoNgayMai(
+    apps: Array<{ maUngDung: string; moTaGocTiengAnh: string | null }>,
+    idsChoNgayMai: string[],
+    retryAfterSec: number,
+  ): Promise<void> {
+    const ttl = Math.max(60, retryAfterSec + 300);
+    const appTheoId = new Map(apps.map((app) => [app.maUngDung, app]));
+    await Promise.all(
+      idsChoNgayMai.map(async (id) => {
+        const app = appTheoId.get(id);
+        if (!app?.moTaGocTiengAnh) return;
+        await this.cacheService.luu(
+          `fs:ai:translation:deferred:mo_ta:${id}`,
+          {
+            maBam: this.tinhMaBamMoTa(app.moTaGocTiengAnh.trim()),
+            retryAt: Date.now() + ttl * 1000,
+          },
+          ttl,
+        );
+      }),
+    );
   }
 }

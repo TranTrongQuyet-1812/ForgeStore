@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DayChuyenNapRepoService, DANH_SACH_SEED_REPOS } from './day-chuyen-nap-repo.service';
-import { TrangThaiUngVienRepo, LyDoLoaiUngVien } from '@prisma/client';
+import { TrangThaiUngVienRepo, LyDoLoaiUngVien, TrangThaiDichReadme } from '@prisma/client';
 
 describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
   let service: DayChuyenNapRepoService;
@@ -47,6 +47,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
   const mockReadmeTranslationService = {
     layHoacKichHoatDichReadme: vi.fn(),
+    dangChoDenNgayMai: vi.fn().mockResolvedValue(false),
   };
 
   const mockConfig = {
@@ -529,6 +530,45 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
       expect(res.daDichReadme).toBe(0); // Không trừ ngân sách!
       expect(res.nganSachConLai).toBe(40);
+    });
+
+    it('bỏ README đang hoãn và tiếp tục tới ứng viên kế tiếp trong job nền', async () => {
+      mockAppDescriptionTranslationService.dichMoTaCacApp.mockResolvedValueOnce({
+        dichThanhCong: 0,
+        dichThatBai: 0,
+      });
+      mockCacheService.lay.mockResolvedValueOnce(0);
+      mockPrisma.ungDung.findMany.mockResolvedValueOnce([
+        { maUngDung: 'app-queued', tenRepoDayDu: 'app/queued' },
+        { maUngDung: 'app-ready', tenRepoDayDu: 'app/ready' },
+      ]);
+      mockReadmeTranslationService.dangChoDenNgayMai
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+      mockReadmeTranslationService.layHoacKichHoatDichReadme.mockResolvedValueOnce({
+        trangThai: 'DANG_DICH',
+      });
+
+      const result = await service.dichNenTheoNganSachNgay(50, true);
+
+      expect(mockPrisma.ungDung.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({
+                danhSachBanDichReadme: expect.objectContaining({
+                  some: expect.objectContaining({ trangThai: TrangThaiDichReadme.DANG_DICH }),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      );
+      expect(mockReadmeTranslationService.layHoacKichHoatDichReadme).toHaveBeenCalledTimes(1);
+      expect(mockReadmeTranslationService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
+        'app-ready',
+      );
+      expect(result.daDichReadme).toBe(1);
     });
 
     it('dừng dịch README nếu đã chạm trần ngân sách hôm nay', async () => {

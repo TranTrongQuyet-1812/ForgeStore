@@ -717,7 +717,7 @@ MIT License.`;
         expect.objectContaining({ readmeSha: hash, retryAt: expect.any(Number) }),
         3900,
       );
-      expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-uuid']);
+      expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-uuid:readme']);
       expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: expect.any(Date) },
@@ -810,6 +810,21 @@ MIT License.`;
         [expect.objectContaining({ id: '2', text: expect.stringContaining('New updated text') })],
         expect.objectContaining({ loai: 'readme' }),
       );
+    });
+
+    it('nhận biết README đang hoãn và xóa khóa sau khi tới giờ thử lại', async () => {
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
+        readmeSha: 'hash',
+        retryAt: Date.now() + 60_000,
+      } as never);
+      await expect(service.dangChoDenNgayMai('app-uuid')).resolves.toBe(true);
+
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
+        readmeSha: 'hash',
+        retryAt: Date.now() - 1,
+      } as never);
+      await expect(service.dangChoDenNgayMai('app-uuid')).resolves.toBe(false);
+      expect(mockCacheService.xoa).toHaveBeenCalledWith('fs:ai:translation:deferred:app-uuid');
     });
   });
 });

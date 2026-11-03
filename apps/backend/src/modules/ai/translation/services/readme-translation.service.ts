@@ -506,6 +506,16 @@ export class ReadmeTranslationService {
     };
   }
 
+  /** Báo để job nền bỏ qua README đang được hoãn, tránh tốn ngân sách trước giờ hẹn. */
+  public async dangChoDenNgayMai(maUngDung: string): Promise<boolean> {
+    const khoa = `fs:ai:translation:deferred:${maUngDung}`;
+    const mucCho = await this.cacheService.lay<{ readmeSha: string; retryAt: number }>(khoa);
+    if (!mucCho) return false;
+    if (mucCho.retryAt > Date.now()) return true;
+    await this.cacheService.xoa(khoa);
+    return false;
+  }
+
   /**
    * Gom nhiều phân đoạn README vào các lô khoảng 2.500 ký tự (P3B-28.4).
    * Giúp giảm từ ~94 yêu cầu xuống còn ~4 yêu cầu cho README mới, ~1 yêu cầu khi cập nhật.
@@ -823,7 +833,7 @@ export class ReadmeTranslationService {
       { readmeSha, retryAt: Date.now() + ttl * 1000 },
       ttl,
     );
-    await this.translationRotationService.ghiNhanMucChoNgayMai([maUngDung]);
+    await this.translationRotationService.ghiNhanMucChoNgayMai([`${maUngDung}:readme`]);
   }
 
   private async luuDoanDichThanhCong(

@@ -24,6 +24,9 @@ describe('AppDescriptionTranslationService', () => {
     } as unknown as TranslationRotationService;
 
     mockCacheService = {
+      lay: vi.fn().mockResolvedValue(null),
+      luu: vi.fn().mockResolvedValue(true),
+      xoa: vi.fn().mockResolvedValue(true),
       xoaTheoPrefix: vi.fn().mockResolvedValue(1),
     } as unknown as CacheService;
 
@@ -228,7 +231,10 @@ describe('AppDescriptionTranslationService', () => {
 
     expect(result.soAppChoNgayMai).toBe(2);
     expect(result.dichThatBai).toBe(0);
-    expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-1', 'app-2']);
+    expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith([
+      'app-1:mo_ta',
+      'app-2:mo_ta',
+    ]);
     expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
       where: { maUngDung: 'app-1' },
       data: { moTaVi: null, maBamMoTa: null },
@@ -237,5 +243,36 @@ describe('AppDescriptionTranslationService', () => {
       where: { maUngDung: 'app-2' },
       data: { moTaVi: null, maBamMoTa: null },
     });
+    expect(mockCacheService.luu).toHaveBeenCalledWith(
+      'fs:ai:translation:deferred:mo_ta:app-1',
+      expect.objectContaining({ maBam: expect.any(String), retryAt: expect.any(Number) }),
+      expect.any(Number),
+    );
+    expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith([
+      'app-1:mo_ta',
+      'app-2:mo_ta',
+    ]);
+  });
+
+  it('không gọi nhà dịch lại cho mô tả đang được hoãn đến ngày mai', async () => {
+    const text = 'Queued description';
+    vi.mocked(mockPrisma.ungDung.findMany).mockResolvedValue([
+      {
+        maUngDung: 'app-queued',
+        tenRepoDayDu: 'owner/queued',
+        moTaGocTiengAnh: text,
+        moTaVi: null,
+        maBamMoTa: null,
+      },
+    ] as unknown as ReturnType<typeof mockPrisma.ungDung.findMany>);
+    vi.mocked(mockCacheService.lay).mockResolvedValue({
+      maBam: service.tinhMaBamMoTa(text),
+      retryAt: Date.now() + 60_000,
+    } as never);
+
+    const result = await service.dichMoTaCacApp();
+
+    expect(result.soAppChoNgayMai).toBe(1);
+    expect(mockRotationService.dichGomLoJson).not.toHaveBeenCalled();
   });
 });
