@@ -20,6 +20,7 @@ describe('AppDescriptionTranslationService', () => {
 
     mockRotationService = {
       dichGomLoJson: vi.fn(),
+      ghiNhanMucChoNgayMai: vi.fn().mockResolvedValue(undefined),
     } as unknown as TranslationRotationService;
 
     mockCacheService = {
@@ -190,5 +191,51 @@ describe('AppDescriptionTranslationService', () => {
 
     expect(res.soAppCanDich).toBe(1);
     expect(res.dichThanhCong).toBe(1);
+  });
+
+  it('giữ mô tả tiếng Anh và ghi nhận hàng chờ khi hết cả hai hũ Gemini', async () => {
+    const apps = [
+      {
+        maUngDung: 'app-1',
+        tenRepoDayDu: 'owner/one',
+        moTaGocTiengAnh: 'First description',
+        moTaVi: 'Bản dịch cũ',
+        maBamMoTa: 'old-hash',
+      },
+      {
+        maUngDung: 'app-2',
+        tenRepoDayDu: 'owner/two',
+        moTaGocTiengAnh: 'Second description',
+        moTaVi: null,
+        maBamMoTa: null,
+      },
+    ];
+    vi.mocked(mockPrisma.ungDung.findMany).mockResolvedValue(
+      apps as unknown as ReturnType<typeof mockPrisma.ungDung.findMany>,
+    );
+    vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+      thanhCong: false,
+      ketQua: {},
+      thieuIds: ['app-1', 'app-2'],
+      provider: null,
+      model: null,
+      chiTietLoi: [],
+      choNgayMai: true,
+      retryAfterSec: 3600,
+    });
+
+    const result = await service.dichMoTaCacApp();
+
+    expect(result.soAppChoNgayMai).toBe(2);
+    expect(result.dichThatBai).toBe(0);
+    expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-1', 'app-2']);
+    expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'app-1' },
+      data: { moTaVi: null, maBamMoTa: null },
+    });
+    expect(mockPrisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'app-2' },
+      data: { moTaVi: null, maBamMoTa: null },
+    });
   });
 });

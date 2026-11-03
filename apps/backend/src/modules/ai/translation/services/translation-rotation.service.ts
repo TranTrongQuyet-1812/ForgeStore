@@ -95,6 +95,21 @@ export class TranslationRotationService {
     return provider.providerName === 'gemini' ? provider.modelName : provider.providerName;
   }
 
+  async ghiNhanMucChoNgayMai(ids: string[]): Promise<void> {
+    const ngay = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    for (const id of new Set(ids)) {
+      const khoa = `fs:ai:translation:queued:${ngay}:${id}`;
+      if (await this.cacheService.setNx(khoa, 172800)) {
+        await this.cacheService.tangSo(`fs:ai:translation:queued-count:${ngay}`, 1, 172800);
+      }
+    }
+  }
+
   /**
    * Khóa tạm một nhà cung cấp vào Redis/RAM trong khoảng thời gian quy định khi gặp rate limit (429).
    */

@@ -9,6 +9,7 @@ export interface ThongKeDichMoTa {
   soAppCanDich: number;
   dichThanhCong: number;
   dichThatBai: number;
+  soAppChoNgayMai: number;
   thieuIds: string[];
 }
 
@@ -66,6 +67,7 @@ export class AppDescriptionTranslationService {
         soAppCanDich: 0,
         dichThanhCong: 0,
         dichThatBai: 0,
+        soAppChoNgayMai: 0,
         thieuIds: [],
       };
     }
@@ -105,25 +107,41 @@ export class AppDescriptionTranslationService {
 
     await Promise.all(danhSachCapNhat);
 
+    const idsChoNgayMai = ketQuaBatch.choNgayMai ? ketQuaBatch.thieuIds : [];
+    if (idsChoNgayMai.length > 0) {
+      await this.translationRotationService.ghiNhanMucChoNgayMai(idsChoNgayMai);
+      await Promise.all(
+        appsCanDich
+          .filter((app) => idsChoNgayMai.includes(app.maUngDung))
+          .map((app) =>
+            this.prisma.ungDung.update({
+              where: { maUngDung: app.maUngDung },
+              data: { moTaVi: null, maBamMoTa: null },
+            }),
+          ),
+      );
+    }
+
     // Xóa cache danh sách và cache chi tiết của các app vừa dịch
     await this.cacheService.xoaTheoPrefix('fs:apps:list:');
     for (const app of appsCanDich) {
-      if (ketQuaBatch.ketQua[app.maUngDung]) {
+      if (ketQuaBatch.ketQua[app.maUngDung] || idsChoNgayMai.includes(app.maUngDung)) {
         await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${app.maUngDung}`);
         await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${app.tenRepoDayDu.toLowerCase()}`);
       }
     }
 
     this.logger.log(
-      `Hoàn thành dịch mô tả kho ứng dụng: ${dichThanhCong}/${appsCanDich.length} thành công, ${ketQuaBatch.thieuIds.length} thất bại.`,
+      `Hoàn thành dịch mô tả kho ứng dụng: ${dichThanhCong}/${appsCanDich.length} thành công, ${idsChoNgayMai.length} đang chờ sang ngày mai, ${ketQuaBatch.thieuIds.length - idsChoNgayMai.length} thất bại.`,
     );
 
     return {
       tongSoQuet: danhSachApps.length,
       soAppCanDich: appsCanDich.length,
       dichThanhCong,
-      dichThatBai: ketQuaBatch.thieuIds.length,
-      thieuIds: ketQuaBatch.thieuIds,
+      dichThatBai: ketQuaBatch.thieuIds.length - idsChoNgayMai.length,
+      soAppChoNgayMai: idsChoNgayMai.length,
+      thieuIds: ketQuaBatch.thieuIds.filter((id) => !idsChoNgayMai.includes(id)),
     };
   }
 }

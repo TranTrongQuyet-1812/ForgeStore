@@ -41,6 +41,11 @@ describe('TranslationRotationService', () => {
         cacheStore.set(key, value);
         return value;
       }),
+      setNx: vi.fn(async (key: string) => {
+        if (cacheStore.has(key)) return false;
+        cacheStore.set(key, true);
+        return true;
+      }),
     } as unknown as CacheService;
     service = new TranslationRotationService(gemini31, gemini35, cache);
   });
@@ -50,6 +55,16 @@ describe('TranslationRotationService', () => {
       'gemini-3.1-flash-lite',
       'gemini-3.5-flash-lite',
     ]);
+  });
+
+  it('đếm duy nhất từng mục được xếp sang ngày mai', async () => {
+    await service.ghiNhanMucChoNgayMai(['app-1', 'app-1', 'app-2']);
+    expect(cache.tangSo).toHaveBeenCalledTimes(2);
+    expect(cache.tangSo).toHaveBeenCalledWith(
+      expect.stringMatching(/^fs:ai:translation:queued-count:\d{4}-\d{2}-\d{2}$/),
+      1,
+      172800,
+    );
   });
 
   it('xoay luân phiên giữa hai model và dùng model còn lại khi model đầu lỗi', async () => {

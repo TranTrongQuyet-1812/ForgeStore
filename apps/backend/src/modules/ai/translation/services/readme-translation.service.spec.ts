@@ -37,6 +37,7 @@ describe('ReadmeTranslationService', () => {
     mockRotationService = {
       dichVanBan: vi.fn(),
       dichGomLoJson: vi.fn(),
+      ghiNhanMucChoNgayMai: vi.fn().mockResolvedValue(undefined),
     } as unknown as TranslationRotationService;
 
     mockCacheService = {
@@ -716,15 +717,7 @@ MIT License.`;
         expect.objectContaining({ readmeSha: hash, retryAt: expect.any(Number) }),
         3900,
       );
-      expect(mockCacheService.setNx).toHaveBeenCalledWith(
-        expect.stringMatching(/^fs:ai:translation:queued:\d{4}-\d{2}-\d{2}:app-uuid$/),
-        172800,
-      );
-      expect(mockCacheService.tangSo).toHaveBeenCalledWith(
-        expect.stringMatching(/^fs:ai:translation:queued-count:\d{4}-\d{2}-\d{2}$/),
-        1,
-        172800,
-      );
+      expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-uuid']);
       expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { trangThai: TrangThaiDichReadme.DANG_DICH, thoiGianDich: expect.any(Date) },
