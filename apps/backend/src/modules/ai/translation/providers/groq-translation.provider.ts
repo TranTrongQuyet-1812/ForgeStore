@@ -10,6 +10,7 @@ import { BAN_DICH_SYSTEM_PROMPT, taoPromptDich } from '../prompts/translation.pr
 import { StructureValidator } from '../tien-ich/structure-validator.util';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../tien-ich/batch-translation.util';
+import { goiFetchCoTimeout } from '../tien-ich/fetch-co-timeout.util';
 
 @Injectable()
 export class GroqTranslationProvider implements ITranslationProvider {
@@ -44,25 +45,30 @@ export class GroqTranslationProvider implements ITranslationProvider {
 
   public async translateSearchJson(prompt: string, systemPrompt: string): Promise<string | null> {
     if (!this.apiKey) return null;
-    const response = await fetch(this.apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.modelName,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.1,
-        reasoning_effort: 'none',
-        response_format: { type: 'json_object' },
-      }),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    return data.choices?.[0]?.message?.content ?? null;
+    return goiFetchCoTimeout(
+      this.apiUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.1,
+          reasoning_effort: 'none',
+          response_format: { type: 'json_object' },
+        }),
+      },
+      async (response) => {
+        if (!response.ok) return null;
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        return data.choices?.[0]?.message?.content ?? null;
+      },
+    );
   }
 
   public async translate(

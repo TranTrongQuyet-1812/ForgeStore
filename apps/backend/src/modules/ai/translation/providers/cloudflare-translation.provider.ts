@@ -8,6 +8,7 @@ import {
   TranslationProviderOptions,
 } from '../interfaces/translation-provider.interface';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
+import { goiFetchCoTimeout } from '../tien-ich/fetch-co-timeout.util';
 
 interface CloudflareWorkerResponse {
   success?: boolean;
@@ -58,19 +59,24 @@ export class CloudflareTranslationProvider implements ITranslationProvider {
 
   public async translateSearchJson(prompt: string, systemPrompt: string): Promise<string | null> {
     if (!this.workerUrl || !this.secret) return null;
-    const response = await fetch(this.workerUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-ForgeStore-Secret': this.secret },
-      body: JSON.stringify({
-        text: prompt,
-        context: systemPrompt,
-        model: this.modelName,
-        response_format: 'json',
-      }),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as CloudflareWorkerResponse;
-    return data.translation ?? null;
+    return goiFetchCoTimeout(
+      this.workerUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-ForgeStore-Secret': this.secret },
+        body: JSON.stringify({
+          text: prompt,
+          context: systemPrompt,
+          model: this.modelName,
+          response_format: 'json',
+        }),
+      },
+      async (response) => {
+        if (!response.ok) return null;
+        const data = (await response.json()) as CloudflareWorkerResponse;
+        return data.translation ?? null;
+      },
+    );
   }
 
   public async translate(
