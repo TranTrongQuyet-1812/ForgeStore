@@ -254,6 +254,15 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
     });
   });
 
+  it('sinh lại vector cũ: truy vấn lấy cả dòng cập nhật trước mốc (P3B-09.1)', async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+    const moc = new Date('2026-11-04T00:00:00Z');
+    await service.boSungVectorConThieu(MO_HINH_EMBEDDING[0], 10, false, moc);
+    const cauLenh = JSON.stringify(mockPrisma.$queryRaw.mock.calls[0]);
+    expect(cauLenh).toContain('ngay_cap_nhat');
+    expect(cauLenh).toContain('2026-11-04T00:00:00.000Z');
+  });
+
   describe('locTheoNguongDoGiong (P3B-09.4)', () => {
     const r = (khoangCach: number) => ({ khoangCach });
 

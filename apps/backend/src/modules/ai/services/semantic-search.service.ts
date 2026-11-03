@@ -68,12 +68,13 @@ export const MO_HINH_EMBEDDING = [
     khoaRpm: 'gemini_embedding',
     nguong: 0.42,
   },
-  // shortcut: ngưỡng Embedding 2 tạm bằng Embedding 1; đo lại khi cột 2 đã sinh đủ vector (P3B-20.7).
+  // Đo 04/11/2026 trên 838 app: câu đúng có kết quả tốt nhất ≤ 0,348, câu không liên quan từ 0,374 trở lên.
+  // shortcut: mẫu chỉ 11 câu, đo lại khi Store lớn (P3B-20.7).
   {
     model: 'gemini-embedding-2',
     cot: 'vector_ngu_nghia_v2',
     khoaRpm: 'gemini_embedding_2',
-    nguong: 0.42,
+    nguong: 0.36,
   },
 ] as const;
 export type MoHinhEmbedding = (typeof MO_HINH_EMBEDDING)[number];
@@ -224,13 +225,19 @@ export class SemanticSearchService {
   /**
    * P3B-28.3: sinh vector cho các app đã phân tích còn thiếu cột của mô hình này.
    * `ghi = false` chỉ đếm, không gọi AI. Dừng ngay khi hết hũ ngày để hôm sau chạy tiếp.
+   * `truoc`: sinh lại cả vector cũ cập nhật trước mốc này (dùng khi đổi cách dựng văn bản, P3B-09.1);
+   * app đã sinh lại sau mốc được bỏ qua nên chạy tiếp khi bị ngắt không tốn lượt lần nữa.
    */
   async boSungVectorConThieu(
     moHinh: MoHinhEmbedding,
     toiDa: number,
     ghi: boolean,
+    truoc?: Date,
   ): Promise<{ conThieu: number; daGhi: number; loi: number }> {
     const cot = Prisma.raw(`pa."${moHinh.cot}"`);
+    const canSinh = truoc
+      ? Prisma.sql`(${cot} IS NULL OR pa."ngay_cap_nhat" < ${truoc})`
+      : Prisma.sql`${cot} IS NULL`;
     const dong = await this.prisma.$queryRaw<
       Array<{
         maPhanTich: string;
@@ -244,7 +251,7 @@ export class SemanticSearchService {
              u."danh_sach_chu_de" AS "chuDe", u."danh_muc_chinh" AS "danhMuc",
              COALESCE(NULLIF(u."mo_ta_vi", ''), u."mo_ta_goc_tieng_anh") AS "moTa"
       FROM "phan_tich_ai" pa JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
-      WHERE ${cot} IS NULL
+      WHERE ${canSinh}
       ORDER BY u."so_sao_github" DESC
     `;
     const ketQua = { conThieu: dong.length, daGhi: 0, loi: 0 };
