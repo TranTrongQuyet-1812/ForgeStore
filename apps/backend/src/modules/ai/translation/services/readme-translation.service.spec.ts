@@ -895,6 +895,53 @@ MIT License.`;
       );
     });
 
+    it('chạm trần dịch lẻ lần thứ ba trong ngày thì hoãn README sang hôm sau', async () => {
+      const banGoc = Array.from(
+        { length: 7 },
+        (_, index) => `## Heading ${index + 1}\nSource paragraph ${index + 1}`,
+      ).join('\n\n');
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockCacheService.tangSo).mockResolvedValueOnce(3);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: false,
+        ketQua: {},
+        thieuIds: ['1', '2', '3', '4', '5', '6', '7'],
+        provider: null,
+        model: null,
+        chiTietLoi: [],
+      });
+      vi.mocked(mockRotationService.dichVanBan).mockImplementation(async (text) => ({
+        thanhCong: true,
+        banDich: text.replace('Source paragraph', 'Đoạn dịch'),
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        thoiGianMs: 60,
+        chiTietLoi: [],
+      }));
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(false);
+      expect(mockCacheService.tangSo).toHaveBeenCalledWith(
+        'fs:ai:translation:cap-hit:app-uuid',
+        1,
+        86400,
+      );
+      expect(mockCacheService.luu).toHaveBeenCalledWith(
+        'fs:ai:translation:deferred:app-uuid',
+        expect.objectContaining({ readmeSha: hash }),
+        86700,
+      );
+      expect(mockRotationService.ghiNhanMucChoNgayMai).toHaveBeenCalledWith(['app-uuid:readme']);
+    });
+
     it('giữ nguyên đoạn cũ theo maBam từ boNhoDichChung và chỉ gọi gom lô AI cho đoạn mới (repo cập nhật)', async () => {
       const banGoc = 'Unchanged text\n\nNew updated text';
       const hash = service.tinhMaBam(banGoc);

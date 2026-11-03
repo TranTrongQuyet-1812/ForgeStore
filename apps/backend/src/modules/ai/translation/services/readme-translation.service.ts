@@ -22,6 +22,8 @@ export class ReadmeTranslationService {
   private readonly dangDichSet = new Set<string>();
   // Giới hạn fallback để một README lỗi gom lô không tiêu thụ quá nhiều yêu cầu dịch lẻ.
   private readonly SO_LAN_DICH_LE_TOI_DA_MOI_README = 5;
+  // README chạm trần nhiều lần trong ngày thường có đoạn không bao giờ qua kiểm cấu trúc; hoãn sang hôm sau để không đốt hũ Gemini.
+  private readonly SO_LAN_CHAM_TRAN_TOI_DA_MOI_NGAY = 3;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -756,10 +758,7 @@ export class ReadmeTranslationService {
             }
             if (!banDichDoan) {
               if (soLanDichLe >= this.SO_LAN_DICH_LE_TOI_DA_MOI_README) {
-                this.logger.warn(
-                  `README [${owner}/${repo}] đã chạm giới hạn ${this.SO_LAN_DICH_LE_TOI_DA_MOI_README} lượt dịch lẻ, xếp hàng thử lại.`,
-                );
-                await this.tamDungDichReadme(maUngDung, readmeSha, 0, cacDoanChoLuu, false);
+                await this.xepLaiKhiChamTran(maUngDung, owner, repo, readmeSha, cacDoanChoLuu);
                 return false;
               }
               soLanDichLe++;
@@ -915,6 +914,33 @@ export class ReadmeTranslationService {
       `fs:ai:translation:deferred:${maUngDung}`,
       { readmeSha, retryAt: Date.now() + ttl * 1000 },
       ttl,
+    );
+  }
+
+  /** Chạm trần dịch lẻ: thử lại sau 5 phút, nhưng quá số lần cho phép trong ngày thì hoãn sang hôm sau. */
+  private async xepLaiKhiChamTran(
+    maUngDung: string,
+    owner: string,
+    repo: string,
+    readmeSha: string,
+    cacDoanChoLuu: Array<{ maBam: string; doanGoc: string; doanDich: string; moHinhDich: string }>,
+  ): Promise<void> {
+    const soLanChamTran = await this.cacheService.tangSo(
+      `fs:ai:translation:cap-hit:${maUngDung}`,
+      1,
+      86400,
+    );
+    const hoanSangMai = soLanChamTran >= this.SO_LAN_CHAM_TRAN_TOI_DA_MOI_NGAY;
+    this.logger.warn(
+      `README [${owner}/${repo}] chạm giới hạn ${this.SO_LAN_DICH_LE_TOI_DA_MOI_README} lượt dịch lẻ (lần ${soLanChamTran} trong ngày), ${hoanSangMai ? 'hoãn sang hôm sau' : 'xếp hàng thử lại'}.`,
+    );
+    // shortcut: hoãn đúng 24 giờ thay vì đến nửa đêm Thái Bình Dương, đủ để không lặp trong ngày.
+    await this.tamDungDichReadme(
+      maUngDung,
+      readmeSha,
+      hoanSangMai ? 86400 : 0,
+      cacDoanChoLuu,
+      hoanSangMai,
     );
   }
 
