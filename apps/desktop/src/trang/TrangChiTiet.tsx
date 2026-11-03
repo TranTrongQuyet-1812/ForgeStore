@@ -421,6 +421,8 @@ export const TrangChiTiet: React.FC = () => {
     staleTime: 2 * 60 * 1000,
     refetchInterval: (query) => {
       const data = query.state.data;
+      // README đang xếp sang ngày mai thì không có gì để chờ, khỏi hỏi lại mỗi 3 giây.
+      if (data?.choNgayMai) return false;
       if (
         data &&
         (data.trangThai === 'DANG_DICH' ||
@@ -1319,6 +1321,24 @@ export const TrangChiTiet: React.FC = () => {
                     owner={appDetail?.chuSoHuu}
                     repo={appDetail?.tenKhoChua}
                   />
+                </div>
+              ) : readmeData?.choNgayMai ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-surface-elevated border border-border text-xs text-secondary">
+                    <AlertCircle className="w-4 h-4 text-warning shrink-0" />
+                    <span>
+                      Bản dịch tiếng Việt sẽ có vào ngày mai. Hiện đang xem bản gốc tiếng Anh.
+                    </span>
+                  </div>
+                  {readmeData.banGoc && (
+                    <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      <XemMarkdown
+                        content={readmeData.banGoc}
+                        owner={appDetail?.chuSoHuu}
+                        repo={appDetail?.tenKhoChua}
+                      />
+                    </div>
+                  )}
                 </div>
               ) : readmeData?.trangThai === 'THAT_BAI' || isPollTimedOut ? (
                 <div className="flex flex-col gap-3">

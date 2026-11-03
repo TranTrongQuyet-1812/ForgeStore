@@ -194,6 +194,30 @@ MIT License.`;
       expect(mockGithub.layReadme).not.toHaveBeenCalled();
     });
 
+    it('README đang hoãn sang ngày mai: trả bản gốc kèm cờ choNgayMai, không gọi nhà dịch', async () => {
+      const banGoc = '# Deferred App';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.ungDung.findFirst).mockResolvedValue({
+        maUngDung: 'app-uuid',
+        tenRepoDayDu: 'org/deferred',
+        chuSoHuu: 'org',
+        tenKhoChua: 'deferred',
+        readmeSha: hash,
+      } as unknown as ReturnType<typeof mockPrisma.ungDung.findFirst>);
+      vi.mocked(mockCacheService.lay).mockImplementation((async (khoa: string) =>
+        khoa === 'fs:ai:translation:deferred:app-uuid'
+          ? { readmeSha: hash, retryAt: Date.now() + 60_000 }
+          : banGoc) as never);
+
+      const res = await service.layHoacKichHoatDichReadme('org/deferred');
+
+      expect(res.choNgayMai).toBe(true);
+      expect(res.trangThai).toBe(TrangThaiDichReadme.DANG_DICH);
+      expect(res.banDich).toBeNull();
+      expect(res.banGoc).toBe(banGoc);
+      expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
+    });
+
     it('Lỗi 4: phát hiện stale lock khi DANG_DICH quá 10 phút và tự động kích hoạt dịch lại', async () => {
       const banGoc = '# Stale App';
       const hash = service.tinhMaBam(banGoc);

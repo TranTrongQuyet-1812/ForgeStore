@@ -50,4 +50,6 @@ export interface ChiTietReadmeResponseDto {
   trangThai: TrangThaiDichReadme | 'CHUA_DICH';
   moHinhDich?: string | null;
   readmeSha?: string | null;
+  // Hôm nay đã hết lượt dịch, bản dịch được xếp sang ngày mai: giao diện hiện bản gốc, không chờ và không thử lại.
+  choNgayMai?: boolean;
 }

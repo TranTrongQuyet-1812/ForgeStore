@@ -376,6 +376,7 @@ export class ReadmeTranslationService {
         trangThai: TrangThaiDichReadme.DANG_DICH,
         moHinhDich: banDichDb?.moHinhDich || null,
         readmeSha: hashGoc,
+        choNgayMai: true,
       };
     }
     if (mucCho && mucCho.retryAt <= Date.now()) await this.cacheService.xoa(khoaChoNgayMai);
