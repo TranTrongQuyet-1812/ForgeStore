@@ -812,18 +812,28 @@ MIT License.`;
       );
     });
 
-    it('nhận biết README đang hoãn và xóa khóa sau khi tới giờ thử lại', async () => {
+    it('giữ hoãn khi README chưa đổi và bỏ hoãn ngay khi README đã đổi', async () => {
+      const readmeGoc = '# Original';
       vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
-        readmeSha: 'hash',
+        readmeSha: service.tinhMaBam(readmeGoc),
         retryAt: Date.now() + 60_000,
       } as never);
-      await expect(service.dangChoDenNgayMai('app-uuid')).resolves.toBe(true);
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce(readmeGoc);
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(true);
+
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
+        readmeSha: service.tinhMaBam(readmeGoc),
+        retryAt: Date.now() + 60_000,
+      } as never);
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce('# Updated');
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(false);
+      expect(mockCacheService.xoa).toHaveBeenCalledWith('fs:ai:translation:deferred:app-uuid');
 
       vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
         readmeSha: 'hash',
         retryAt: Date.now() - 1,
       } as never);
-      await expect(service.dangChoDenNgayMai('app-uuid')).resolves.toBe(false);
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(false);
       expect(mockCacheService.xoa).toHaveBeenCalledWith('fs:ai:translation:deferred:app-uuid');
     });
   });

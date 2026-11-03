@@ -507,13 +507,34 @@ export class ReadmeTranslationService {
   }
 
   /** Báo để job nền bỏ qua README đang được hoãn, tránh tốn ngân sách trước giờ hẹn. */
-  public async dangChoDenNgayMai(maUngDung: string): Promise<boolean> {
+  public async dangChoDenNgayMai(maUngDung: string, owner: string, repo: string): Promise<boolean> {
     const khoa = `fs:ai:translation:deferred:${maUngDung}`;
     const mucCho = await this.cacheService.lay<{ readmeSha: string; retryAt: number }>(khoa);
     if (!mucCho) return false;
-    if (mucCho.retryAt > Date.now()) return true;
+    if (mucCho.retryAt > Date.now() && (await this.readmeDangChoVanKhop(mucCho, owner, repo))) {
+      return true;
+    }
     await this.cacheService.xoa(khoa);
     return false;
+  }
+
+  private async readmeDangChoVanKhop(
+    mucCho: { readmeSha: string; retryAt: number },
+    owner: string,
+    repo: string,
+  ): Promise<boolean> {
+    const cacheKey = `fs:github:readme:${owner.toLowerCase()}:${repo.toLowerCase()}`;
+    try {
+      let banGoc = await this.cacheService.lay<string>(cacheKey);
+      if (banGoc === null) {
+        banGoc = (await this.githubService.layReadme(owner, repo)) || '';
+        await this.cacheService.luu(cacheKey, banGoc, 1800);
+      }
+      return this.tinhMaBam(banGoc) === mucCho.readmeSha;
+    } catch {
+      // Giữ lượt hoãn nếu GitHub tạm lỗi, tránh biến lỗi mạng thành lệnh dịch sớm.
+      return true;
+    }
   }
 
   /**

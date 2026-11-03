@@ -539,8 +539,18 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
       });
       mockCacheService.lay.mockResolvedValueOnce(0);
       mockPrisma.ungDung.findMany.mockResolvedValueOnce([
-        { maUngDung: 'app-queued', tenRepoDayDu: 'app/queued' },
-        { maUngDung: 'app-ready', tenRepoDayDu: 'app/ready' },
+        {
+          maUngDung: 'app-queued',
+          tenRepoDayDu: 'app/queued',
+          chuSoHuu: 'app',
+          tenKhoChua: 'queued',
+        },
+        {
+          maUngDung: 'app-ready',
+          tenRepoDayDu: 'app/ready',
+          chuSoHuu: 'app',
+          tenKhoChua: 'ready',
+        },
       ]);
       mockReadmeTranslationService.dangChoDenNgayMai
         .mockResolvedValueOnce(true)
@@ -567,6 +577,12 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
       expect(mockReadmeTranslationService.layHoacKichHoatDichReadme).toHaveBeenCalledTimes(1);
       expect(mockReadmeTranslationService.layHoacKichHoatDichReadme).toHaveBeenCalledWith(
         'app-ready',
+      );
+      expect(mockReadmeTranslationService.dangChoDenNgayMai).toHaveBeenNthCalledWith(
+        2,
+        'app-ready',
+        'app',
+        'ready',
       );
       expect(result.daDichReadme).toBe(1);
     });

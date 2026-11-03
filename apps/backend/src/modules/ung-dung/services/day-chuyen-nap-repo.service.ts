@@ -613,7 +613,15 @@ export class DayChuyenNapRepoService {
     for (const app of appsToTranslate) {
       if (daDichReadme >= Math.min(remainingBudget, 5)) break;
       try {
-        if (await this.readmeTranslationService.dangChoDenNgayMai(app.maUngDung)) continue;
+        if (
+          await this.readmeTranslationService.dangChoDenNgayMai(
+            app.maUngDung,
+            app.chuSoHuu,
+            app.tenKhoChua,
+          )
+        ) {
+          continue;
+        }
         const res = await this.readmeTranslationService.layHoacKichHoatDichReadme(app.maUngDung);
         // Chốt chặn 4: Chỉ trừ ngân sách khi thực sự kích hoạt tác vụ dịch nền (res.trangThai !== THAT_BAI)
         if (res && res.trangThai !== TrangThaiDichReadme.THAT_BAI) {
