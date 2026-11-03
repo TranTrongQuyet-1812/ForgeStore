@@ -533,4 +533,25 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     const card = service.anhXaChiTietSangTheUngDung(detailDto);
     expect(card.moTaNgan).toBe('Mô tả tiếng Việt được dịch từ gom lô JSON');
   });
+
+  it('hiện mô tả gốc khi bản dịch cũ đang chờ dịch lại', () => {
+    const card = service.anhXaDtoSangTheUngDung({
+      maUngDung: 'app-stale-translation',
+      daLuuTru: false,
+      tenRepoDayDu: 'sample/stale',
+      chuSoHuu: 'sample',
+      tenKhoChua: 'stale',
+      duongDanGithub: 'https://github.com/sample/stale',
+      soSaoGithub: 100,
+      danhMucChinh: 'Tiện ích hệ thống',
+      nenTangHoTro: 'WINDOWS',
+      duocNoiBat: false,
+      daXacMinh: false,
+      moTaGocTiengAnh: 'Current source description',
+      moTaVi: null,
+      khauHieuTiengViet: 'Old translated description',
+    });
+
+    expect(card.moTaNgan).toBe('Current source description');
+  });
 });

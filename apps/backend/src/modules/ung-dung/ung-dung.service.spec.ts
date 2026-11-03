@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'crypto';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DinhDangTep, KienTrucChip, NenTangHoTro } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -738,6 +739,9 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         ngayTao: new Date(),
         moTaGocTiengAnh: 'A very cool tool originally in English',
         moTaVi: 'Công cụ tuyệt vời đã được dịch tiếng Việt chuẩn xác',
+        maBamMoTa: createHash('sha256')
+          .update('A very cool tool originally in English')
+          .digest('hex'),
         phanTichAI: {
           maPhanTich: 'analysis-1',
           maUngDung: 'uuid-translated',
@@ -763,6 +767,13 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.phanTichAi?.khauHieuTiengViet).toBe(
         'Công cụ tuyệt vời đã được dịch tiếng Việt chuẩn xác',
       );
+
+      mockApp.maBamMoTa = createHash('sha256').update('A newer source description').digest('hex');
+      mockCacheService.lay.mockResolvedValue(null);
+      const staleRes = await service.layChiTietApp('uuid-translated');
+      expect(staleRes.moTaVi).toBeNull();
+      expect(staleRes.khauHieuTiengViet).toBe('A very cool tool originally in English');
+      expect(staleRes.phanTichAi?.khauHieuTiengViet).toBe('A very cool tool originally in English');
     });
   });
 

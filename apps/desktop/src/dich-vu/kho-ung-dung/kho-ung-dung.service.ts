@@ -147,6 +147,7 @@ export class KhoUngDungService {
       tacGia: dto.chuSoHuu,
       moTaNgan:
         dto.moTaVi ||
+        dto.moTaGocTiengAnh ||
         dto.khauHieuTiengViet ||
         'Ứng dụng mã nguồn mở chất lượng cao được đồng bộ trực tiếp từ GitHub.',
       iconUrl: dto.duongDanIcon,
@@ -172,6 +173,7 @@ export class KhoUngDungService {
       ...base,
       moTaNgan:
         dto.moTaVi ||
+        dto.moTaGocTiengAnh ||
         dto.phanTichAi?.khauHieuTiengViet ||
         dto.khauHieuTiengViet ||
         dto.moTaGocTiengAnh ||

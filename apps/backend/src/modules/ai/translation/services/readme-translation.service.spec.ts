@@ -944,23 +944,105 @@ MIT License.`;
         readmeSha: service.tinhMaBam(readmeGoc),
         retryAt: Date.now() + 60_000,
       } as never);
-      vi.mocked(mockCacheService.lay).mockResolvedValueOnce(readmeGoc);
-      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(true);
+      vi.mocked(mockGithub.layReadme).mockResolvedValueOnce(readmeGoc);
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toEqual({
+        dangCho: true,
+        daGoiGitHub: true,
+      });
 
       vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
         readmeSha: service.tinhMaBam(readmeGoc),
         retryAt: Date.now() + 60_000,
       } as never);
-      vi.mocked(mockCacheService.lay).mockResolvedValueOnce('# Updated');
-      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(false);
+      vi.mocked(mockGithub.layReadme).mockResolvedValueOnce('# Updated');
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toEqual({
+        dangCho: false,
+        daGoiGitHub: true,
+      });
       expect(mockCacheService.xoa).toHaveBeenCalledWith('fs:ai:translation:deferred:app-uuid');
 
       vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
         readmeSha: 'hash',
         retryAt: Date.now() - 1,
       } as never);
-      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toBe(false);
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo')).resolves.toEqual({
+        dangCho: false,
+        daGoiGitHub: false,
+      });
       expect(mockCacheService.xoa).toHaveBeenCalledWith('fs:ai:translation:deferred:app-uuid');
+    });
+
+    it('giữ lượt hoãn mà không gọi GitHub khi job đã hết ngân sách kiểm tra', async () => {
+      vi.mocked(mockCacheService.lay).mockResolvedValueOnce({
+        readmeSha: 'unchanged',
+        retryAt: Date.now() + 60_000,
+      } as never);
+      await expect(service.dangChoDenNgayMai('app-uuid', 'owner', 'repo', false)).resolves.toEqual({
+        dangCho: true,
+        daGoiGitHub: false,
+      });
+      expect(mockGithub.layReadme).not.toHaveBeenCalled();
+    });
+
+    it('lưu các đoạn batch hợp lệ trước khi dừng vì quota ở đoạn còn thiếu', async () => {
+      const banGoc = '## First\nFirst source\n\n## Second\nSecond source';
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockImplementation(async (items) => ({
+        thanhCong: false,
+        ketQua: { [items[0].id]: items[0].text },
+        thieuIds: [items[1].id],
+        choNgayMai: true,
+        retryAfterSec: 60,
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      }));
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        service.tinhMaBam(banGoc),
+      );
+
+      expect(success).toBe(false);
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('lưu các đoạn batch hợp lệ trước khi dừng vì fallback dịch lẻ thất bại', async () => {
+      const banGoc = '## First\nFirst source\n\n## Second\nSecond source';
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockImplementation(async (items) => ({
+        thanhCong: false,
+        ketQua: { [items[0].id]: items[0].text },
+        thieuIds: [items[1].id],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      }));
+      vi.mocked(mockRotationService.dichVanBan).mockResolvedValue({
+        thanhCong: false,
+        banDich: null,
+        provider: null,
+        model: null,
+        thoiGianMs: 0,
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        service.tinhMaBam(banGoc),
+      );
+
+      expect(success).toBe(false);
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ trangThai: 'THAT_BAI' }) }),
+      );
     });
   });
 });

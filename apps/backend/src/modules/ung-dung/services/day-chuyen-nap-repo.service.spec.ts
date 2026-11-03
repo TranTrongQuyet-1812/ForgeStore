@@ -47,7 +47,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
 
   const mockReadmeTranslationService = {
     layHoacKichHoatDichReadme: vi.fn(),
-    dangChoDenNgayMai: vi.fn().mockResolvedValue(false),
+    dangChoDenNgayMai: vi.fn().mockResolvedValue({ dangCho: false, daGoiGitHub: false }),
   };
 
   const mockConfig = {
@@ -553,8 +553,8 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
         },
       ]);
       mockReadmeTranslationService.dangChoDenNgayMai
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(false);
+        .mockResolvedValueOnce({ dangCho: true, daGoiGitHub: false })
+        .mockResolvedValueOnce({ dangCho: false, daGoiGitHub: false });
       mockReadmeTranslationService.layHoacKichHoatDichReadme.mockResolvedValueOnce({
         trangThai: 'DANG_DICH',
       });
@@ -583,8 +583,38 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
         'app-ready',
         'app',
         'ready',
+        true,
       );
       expect(result.daDichReadme).toBe(1);
+    });
+
+    it('giới hạn tối đa năm lượt kiểm tra README hoãn trên GitHub mỗi chu kỳ job', async () => {
+      mockAppDescriptionTranslationService.dichMoTaCacApp.mockResolvedValueOnce({
+        dichThanhCong: 0,
+        dichThatBai: 0,
+      });
+      mockCacheService.lay.mockResolvedValueOnce(0);
+      mockPrisma.ungDung.findMany.mockResolvedValueOnce(
+        Array.from({ length: 7 }, (_, index) => ({
+          maUngDung: `app-${index}`,
+          tenRepoDayDu: `owner/repo-${index}`,
+          chuSoHuu: 'owner',
+          tenKhoChua: `repo-${index}`,
+        })),
+      );
+      mockReadmeTranslationService.dangChoDenNgayMai.mockImplementation(
+        async (_id, _owner, _repo, choPhepGitHub) => ({
+          dangCho: true,
+          daGoiGitHub: Boolean(choPhepGitHub),
+        }),
+      );
+
+      await service.dichNenTheoNganSachNgay(50, true);
+
+      expect(mockReadmeTranslationService.dangChoDenNgayMai).toHaveBeenCalledTimes(7);
+      expect(
+        mockReadmeTranslationService.dangChoDenNgayMai.mock.calls.map((call) => call[3]),
+      ).toEqual([true, true, true, true, true, false, false]);
     });
 
     it('dừng dịch README nếu đã chạm trần ngân sách hôm nay', async () => {

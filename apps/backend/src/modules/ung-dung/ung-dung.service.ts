@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { createHash } from 'crypto';
 import {
   DinhDangTep,
   KienTrucChip,
@@ -145,6 +146,26 @@ export class UngDungService {
 
   // ARCH-02: Single-Flight in-flight map ngăn chặn bão request AI phân tích đồng thời
   private readonly inFlightPhanTichMap = new Map<string, Promise<void>>();
+
+  private layMoTaViHienTai(app: {
+    moTaVi?: string | null;
+    moTaGocTiengAnh?: string | null;
+    maBamMoTa?: string | null;
+  }): string | null {
+    if (!app.moTaVi) return null;
+    if (!app.moTaGocTiengAnh || !app.maBamMoTa) return app.moTaVi;
+    const maBamNguon = createHash('sha256').update(app.moTaGocTiengAnh.trim()).digest('hex');
+    // Giữ bản dịch cũ trong DB để có thể đối chiếu, nhưng không hiển thị khi nguồn đã đổi.
+    return maBamNguon === app.maBamMoTa ? app.moTaVi : null;
+  }
+
+  private layKhauHieuHienThi(
+    app: { moTaGocTiengAnh?: string | null; maBamMoTa?: string | null },
+    khauHieuCu?: string | null,
+  ): string | null {
+    if (app.maBamMoTa && app.moTaGocTiengAnh) return app.moTaGocTiengAnh;
+    return khauHieuCu || app.moTaGocTiengAnh || null;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -863,14 +884,17 @@ export class UngDungService {
         daXacMinh: app.daXacMinh,
         daLuuTru: Boolean(app.daLuuTru),
         tenGoiAndroid: app.tenGoiAndroid,
-        khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
+        khauHieuTiengViet:
+          this.layMoTaViHienTai(app) ||
+          this.layKhauHieuHienThi(app, app.phanTichAI?.khauHieuTiengViet),
         diemUyTin: app.phanTichAI?.diemUyTin ?? null,
         mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
         phienBanMoiNhat,
         dinhDangCoSan,
         kienTrucCoSan,
         loaiGiayPhep: app.loaiGiayPhep || null,
-        moTaVi: app.moTaVi || null,
+        moTaGocTiengAnh: app.moTaGocTiengAnh || null,
+        moTaVi: this.layMoTaViHienTai(app),
         maBamMoTa: app.maBamMoTa || null,
         ngayCapNhat: app.dongBoLanCuoi.toISOString(),
       };
@@ -1035,9 +1059,11 @@ export class UngDungService {
       dongBoLanCuoi: app.dongBoLanCuoi.toISOString(),
       ngayTao: app.ngayTao.toISOString(),
       moTaGocTiengAnh: app.moTaGocTiengAnh,
-      moTaVi: app.moTaVi || null,
+      moTaVi: this.layMoTaViHienTai(app),
       maBamMoTa: app.maBamMoTa || null,
-      khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
+      khauHieuTiengViet:
+        this.layMoTaViHienTai(app) ||
+        this.layKhauHieuHienThi(app, app.phanTichAI?.khauHieuTiengViet),
       diemUyTin: app.phanTichAI?.diemUyTin ?? null,
       mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
       phienBanMoiNhat,
@@ -1046,7 +1072,10 @@ export class UngDungService {
         ? {
             maPhanTich: app.phanTichAI.maPhanTich,
             maUngDung: app.phanTichAI.maUngDung,
-            khauHieuTiengViet: app.moTaVi || app.phanTichAI.khauHieuTiengViet,
+            khauHieuTiengViet:
+              this.layMoTaViHienTai(app) ||
+              this.layKhauHieuHienThi(app, app.phanTichAI.khauHieuTiengViet) ||
+              app.phanTichAI.khauHieuTiengViet,
             tomTatTinhNangVi: app.phanTichAI.tomTatTinhNangVi,
             diemUyTin: app.phanTichAI.diemUyTin,
             mucDoAnToan: app.phanTichAI.mucDoAnToan,
@@ -1518,7 +1547,7 @@ export class UngDungService {
 
           // 2. Khẩu hiệu tiếng Việt (D-17 & P3B-02.6: lấy từ mô tả tiếng Việt đã dịch, fallback mô tả gốc hoặc tên app)
           const khauHieuTiengViet =
-            app.moTaVi ||
+            this.layMoTaViHienTai(app) ||
             (app.moTaGocTiengAnh && app.moTaGocTiengAnh.length > 80
               ? `${app.moTaGocTiengAnh.slice(0, 77)}...`
               : app.moTaGocTiengAnh) ||
@@ -1803,7 +1832,11 @@ export class UngDungService {
           daXacMinh: app.daXacMinh,
           daLuuTru: Boolean(app.daLuuTru),
           tenGoiAndroid: app.tenGoiAndroid,
-          khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
+          moTaGocTiengAnh: app.moTaGocTiengAnh || null,
+          moTaVi: this.layMoTaViHienTai(app),
+          khauHieuTiengViet:
+            this.layMoTaViHienTai(app) ||
+            this.layKhauHieuHienThi(app, app.phanTichAI?.khauHieuTiengViet),
           diemUyTin: app.phanTichAI?.diemUyTin ?? null,
           mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
           phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
@@ -1906,7 +1939,11 @@ export class UngDungService {
             daXacMinh: app.daXacMinh,
             daLuuTru: Boolean(app.daLuuTru),
             tenGoiAndroid: app.tenGoiAndroid,
-            khauHieuTiengViet: app.moTaVi || app.phanTichAI?.khauHieuTiengViet || null,
+            moTaGocTiengAnh: app.moTaGocTiengAnh || null,
+            moTaVi: this.layMoTaViHienTai(app),
+            khauHieuTiengViet:
+              this.layMoTaViHienTai(app) ||
+              this.layKhauHieuHienThi(app, app.phanTichAI?.khauHieuTiengViet),
             diemUyTin: app.phanTichAI?.diemUyTin ?? null,
             mucDoAnToan: app.phanTichAI?.mucDoAnToan || null,
             phienBanMoiNhat: banMoiNhat?.tenPhienBan || null,
@@ -2011,7 +2048,10 @@ export class UngDungService {
           duocNoiBat: false,
           daXacMinh: m.daXacMinh, // Giá trị thật từ DB (AI2)
           daLuuTru: Boolean(m.daLuuTru),
-          khauHieuTiengViet: m.khauHieuTiengViet,
+          moTaGocTiengAnh: m.moTaGocTiengAnh || null,
+          moTaVi: this.layMoTaViHienTai(m),
+          khauHieuTiengViet:
+            this.layMoTaViHienTai(m) || this.layKhauHieuHienThi(m, m.khauHieuTiengViet),
           diemUyTin: m.diemUyTin,
           mucDoAnToan: (m.mucDoAnToan as MucDoUyTin) || null,
           ngayCapNhat: m.ngayCapNhat

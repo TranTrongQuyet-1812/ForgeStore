@@ -104,6 +104,7 @@ export interface UngDungTomTatDto {
   chuaThamDinh?: boolean; // Cờ đánh dấu repo từ GitHub chưa thẩm định vào Store
 
   // Bản dịch mô tả & tính sẵn (D-17, D-19)
+  moTaGocTiengAnh?: string | null;
   moTaVi?: string | null;
   maBamMoTa?: string | null;
   diemThinhHanh?: number;

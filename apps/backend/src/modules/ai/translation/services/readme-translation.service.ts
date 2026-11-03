@@ -510,33 +510,40 @@ export class ReadmeTranslationService {
   }
 
   /** Báo để job nền bỏ qua README đang được hoãn, tránh tốn ngân sách trước giờ hẹn. */
-  public async dangChoDenNgayMai(maUngDung: string, owner: string, repo: string): Promise<boolean> {
+  public async dangChoDenNgayMai(
+    maUngDung: string,
+    owner: string,
+    repo: string,
+    choPhepGoiGitHub = true,
+  ): Promise<{ dangCho: boolean; daGoiGitHub: boolean }> {
     const khoa = `fs:ai:translation:deferred:${maUngDung}`;
     const mucCho = await this.cacheService.lay<{ readmeSha: string; retryAt: number }>(khoa);
-    if (!mucCho) return false;
-    if (mucCho.retryAt > Date.now() && (await this.readmeDangChoVanKhop(mucCho, owner, repo))) {
-      return true;
+    if (!mucCho) return { dangCho: false, daGoiGitHub: false };
+    if (mucCho.retryAt <= Date.now()) {
+      await this.cacheService.xoa(khoa);
+      return { dangCho: false, daGoiGitHub: false };
     }
+    if (!choPhepGoiGitHub) return { dangCho: true, daGoiGitHub: false };
+    const vanKhop = await this.readmeDangChoVanKhop(mucCho, owner, repo);
+    if (vanKhop.dangCho) return { dangCho: true, daGoiGitHub: vanKhop.daGoiGitHub };
     await this.cacheService.xoa(khoa);
-    return false;
+    return { dangCho: false, daGoiGitHub: vanKhop.daGoiGitHub };
   }
 
   private async readmeDangChoVanKhop(
     mucCho: { readmeSha: string; retryAt: number },
     owner: string,
     repo: string,
-  ): Promise<boolean> {
+  ): Promise<{ dangCho: boolean; daGoiGitHub: boolean }> {
     const cacheKey = `fs:github:readme:${owner.toLowerCase()}:${repo.toLowerCase()}`;
     try {
-      let banGoc = await this.cacheService.lay<string>(cacheKey);
-      if (banGoc === null) {
-        banGoc = (await this.githubService.layReadme(owner, repo)) || '';
-        await this.cacheService.luu(cacheKey, banGoc, 1800);
-      }
-      return this.tinhMaBam(banGoc) === mucCho.readmeSha;
+      // Đọc lại qua GithubService để ETag vẫn phát hiện được README đã đổi khi cache Redis còn trống.
+      const banGoc = (await this.githubService.layReadme(owner, repo)) || '';
+      await this.cacheService.luu(cacheKey, banGoc, 1800);
+      return { dangCho: this.tinhMaBam(banGoc) === mucCho.readmeSha, daGoiGitHub: true };
     } catch {
       // Giữ lượt hoãn nếu GitHub tạm lỗi, tránh biến lỗi mạng thành lệnh dịch sớm.
-      return true;
+      return { dangCho: true, daGoiGitHub: true };
     }
   }
 
@@ -588,6 +595,23 @@ export class ReadmeTranslationService {
   private chuanHoaKyHieuGiuCho(text: string): string {
     // Một số model đổi ngoặc ký hiệu; chuẩn hóa trước khi ghép để khôi phục đúng khung gốc.
     return text.replace(/\[C(\d+)\]/g, '⟦C$1⟧');
+  }
+
+  private layBanDichGomLoHopLe(
+    doan: { stt: number; vanBanDaChe: string },
+    banDichTho: string | null,
+    owner: string,
+    repo: string,
+  ): string | null {
+    if (!banDichTho) return null;
+    let banDich = StructureValidator.cleanOutput(banDichTho, doan.vanBanDaChe);
+    banDich = this.chuanHoaKyHieuGiuCho(banDich);
+    const loi = StructureValidator.findStructureProblem(doan.vanBanDaChe, banDich);
+    if (!loi && this.kiemTraGiuChoKyHieu(doan.vanBanDaChe, banDich)) return banDich;
+    this.logger.warn(
+      `Đoạn ${doan.stt} trong lô lỗi cấu trúc (${loi || 'placeholders_changed'}). Fallback dịch riêng lẻ cho [${owner}/${repo}].`,
+    );
+    return null;
   }
 
   /**
@@ -697,24 +721,27 @@ export class ReadmeTranslationService {
             );
           }
 
+          const banDichGomLoHopLe = new Map<number, string>();
           for (const doan of lo) {
-            const idStr = String(doan.stt);
-            let banDichDoan = ketQuaBatch?.ketQua?.[idStr] ?? null;
+            const banDich = this.layBanDichGomLoHopLe(
+              doan,
+              ketQuaBatch?.ketQua?.[String(doan.stt)] ?? null,
+              owner,
+              repo,
+            );
+            if (!banDich) continue;
+            banDichGomLoHopLe.set(doan.stt, banDich);
+            cacDoanChoLuu.push({
+              maBam: doan.maBam,
+              doanGoc: doan.vanBanGoc.trim(),
+              doanDich: banDich,
+              moHinhDich: ketQuaBatch?.model || ketQuaBatch?.provider || lastModelUsed,
+            });
+          }
 
-            if (banDichDoan) {
-              banDichDoan = StructureValidator.cleanOutput(banDichDoan, doan.vanBanDaChe);
-              banDichDoan = this.chuanHoaKyHieuGiuCho(banDichDoan);
-              const loiCauTruc = StructureValidator.findStructureProblem(
-                doan.vanBanDaChe,
-                banDichDoan,
-              );
-              if (loiCauTruc || !this.kiemTraGiuChoKyHieu(doan.vanBanDaChe, banDichDoan)) {
-                this.logger.warn(
-                  `Đoạn ${doan.stt} trong lô lỗi cấu trúc (${loiCauTruc || 'placeholders_changed'}). Fallback dịch riêng lẻ.`,
-                );
-                banDichDoan = null;
-              }
-            }
+          for (const doan of lo) {
+            let banDichDoan = banDichGomLoHopLe.get(doan.stt) ?? null;
+            const laBanDichGomLo = Boolean(banDichDoan);
 
             // Nếu lô không trả về bản dịch cho đoạn này hoặc hỏng ký hiệu -> fallback dịch đơn lẻ
             let modelUsed = ketQuaBatch?.model || ketQuaBatch?.provider || lastModelUsed;
@@ -752,6 +779,7 @@ export class ReadmeTranslationService {
 
               if (!ketQuaDon || !ketQuaDon.thanhCong || ketQuaDon.banDich === null) {
                 this.logger.warn(`Dịch đoạn README thất bại cho repo [${owner}/${repo}]`);
+                await this.luuDoanDichThanhCong(cacDoanChoLuu);
                 await this.prisma.banDichReadme.update({
                   where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
                   data: { trangThai: TrangThaiDichReadme.THAT_BAI, thoiGianDich: new Date() },
@@ -767,13 +795,14 @@ export class ReadmeTranslationService {
             lastModelUsed = modelUsed;
             banDichTheoDoan.set(doan.stt, banDichDoan);
 
-            // Ghi nhận để lưu vào bộ nhớ dịch chung sau khi hoàn tất
-            cacDoanChoLuu.push({
-              maBam: doan.maBam,
-              doanGoc: doan.vanBanGoc.trim(),
-              doanDich: banDichDoan,
-              moHinhDich: modelUsed,
-            });
+            if (!laBanDichGomLo) {
+              cacDoanChoLuu.push({
+                maBam: doan.maBam,
+                doanGoc: doan.vanBanGoc.trim(),
+                doanDich: banDichDoan,
+                moHinhDich: modelUsed,
+              });
+            }
           }
         }
       }
