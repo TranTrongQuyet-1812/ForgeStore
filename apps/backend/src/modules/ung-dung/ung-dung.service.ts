@@ -1691,10 +1691,9 @@ export class UngDungService {
           // 6. Sinh vector 768 chiều & lưu pgvector (P2-36), mỗi mô hình Embedding một cột (P3B-28.3)
           const textEmbed = this.semanticSearchService.chuanBiVanBanNhung({
             tenKhoChua: app.tenKhoChua,
-            slogan: khauHieuTiengViet,
-            tinhNang: app.danhSachChuDe || [],
-            topics: app.danhSachChuDe,
             moTa: app.moTaVi || app.moTaGocTiengAnh,
+            topics: app.danhSachChuDe,
+            danhMuc: app.danhMucChinh,
           });
           for (const moHinh of MO_HINH_EMBEDDING) {
             // Mô hình nào lỗi hay hết lượt thì cột đó để trống, lệnh `data-repo sinh-vector` bổ sung sau.

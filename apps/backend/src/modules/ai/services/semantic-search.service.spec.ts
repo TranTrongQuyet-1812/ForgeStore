@@ -70,20 +70,24 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
   });
 
   describe('chuanBiVanBanNhung (P2-36.1)', () => {
-    it('Ghép đầy đủ các trường: tên, slogan, tính năng, chủ đề, mô tả', () => {
+    it('Ghép tên, mô tả, chủ đề và danh mục (P3B-09.1)', () => {
       const text = service.chuanBiVanBanNhung({
         tenKhoChua: 'RustDesk',
-        slogan: 'Điều khiển máy tính từ xa mã nguồn mở',
-        tinhNang: ['Bảo mật đầu cuối', 'Độ trễ thấp', 'Hỗ trợ đa nền tảng'],
-        topics: ['remote-desktop', 'rust'],
         moTa: 'Phần mềm thay thế TeamViewer',
+        topics: ['remote-desktop', 'rust'],
+        danhMuc: 'Tiện ích hệ thống',
       });
 
-      expect(text).toContain('Ứng dụng: RustDesk');
-      expect(text).toContain('Khẩu hiệu: Điều khiển máy tính từ xa mã nguồn mở');
-      expect(text).toContain('Tính năng: Bảo mật đầu cuối; Độ trễ thấp; Hỗ trợ đa nền tảng');
-      expect(text).toContain('Chủ đề: remote-desktop, rust');
-      expect(text).toContain('Mô tả: Phần mềm thay thế TeamViewer');
+      expect(text).toBe(
+        [
+          'Ứng dụng: RustDesk',
+          'Mô tả: Phần mềm thay thế TeamViewer',
+          'Chủ đề: remote-desktop, rust',
+          'Danh mục: Tiện ích hệ thống',
+        ].join('\n'),
+      );
+      expect(text).not.toContain('Khẩu hiệu');
+      expect(text).not.toContain('Tính năng');
     });
 
     it('Xử lý an toàn khi các trường tùy chọn bị null hoặc undefined', () => {
@@ -224,9 +228,9 @@ describe('SemanticSearchService (P2-36 & AI1: Embedding Rate Limiting)', () => {
       const dong = (id: string) => ({
         maPhanTich: id,
         tenKhoChua: 'app',
-        khauHieu: null,
         chuDe: ['notes'],
         moTa: 'Ghi chú',
+        danhMuc: 'Năng suất',
       });
       mockPrisma.$queryRaw.mockResolvedValue([dong('a'), dong('b'), dong('c')]);
 

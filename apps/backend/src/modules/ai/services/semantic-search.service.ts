@@ -121,30 +121,19 @@ export class SemanticSearchService {
   }
 
   /**
-   * Chuẩn bị chuỗi văn bản để sinh vector embedding theo P2-36.1:
-   * "tên + slogan + tính năng + topics"
+   * Chuẩn bị chuỗi văn bản để sinh vector (P3B-09.1): tên + mô tả đã dịch + chủ đề + danh mục.
+   * Không dùng khẩu hiệu và "tính năng": cả hai chỉ lặp lại chủ đề và mô tả nên làm vector nhiễu.
    */
   chuanBiVanBanNhung(app: {
     tenKhoChua: string;
-    slogan?: string | null;
-    tinhNang?: string[];
-    topics?: string[];
     moTa?: string | null;
+    topics?: string[];
+    danhMuc?: string | null;
   }): string {
-    const parts: string[] = [];
-    parts.push(`Ứng dụng: ${app.tenKhoChua}`);
-    if (app.slogan?.trim()) {
-      parts.push(`Khẩu hiệu: ${app.slogan.trim()}`);
-    }
-    if (app.tinhNang && app.tinhNang.length > 0) {
-      parts.push(`Tính năng: ${app.tinhNang.join('; ')}`);
-    }
-    if (app.topics && app.topics.length > 0) {
-      parts.push(`Chủ đề: ${app.topics.join(', ')}`);
-    }
-    if (app.moTa?.trim()) {
-      parts.push(`Mô tả: ${app.moTa.trim()}`);
-    }
+    const parts: string[] = [`Ứng dụng: ${app.tenKhoChua}`];
+    if (app.moTa?.trim()) parts.push(`Mô tả: ${app.moTa.trim()}`);
+    if (app.topics && app.topics.length > 0) parts.push(`Chủ đề: ${app.topics.join(', ')}`);
+    if (app.danhMuc?.trim()) parts.push(`Danh mục: ${app.danhMuc.trim()}`);
     return parts.join('\n');
   }
 
@@ -246,13 +235,13 @@ export class SemanticSearchService {
       Array<{
         maPhanTich: string;
         tenKhoChua: string;
-        khauHieu: string | null;
         chuDe: string[];
         moTa: string | null;
+        danhMuc: string | null;
       }>
     >`
       SELECT pa."ma_phan_tich" AS "maPhanTich", u."ten_kho_chua" AS "tenKhoChua",
-             pa."khau_hieu_tieng_viet" AS "khauHieu", u."danh_sach_chu_de" AS "chuDe",
+             u."danh_sach_chu_de" AS "chuDe", u."danh_muc_chinh" AS "danhMuc",
              COALESCE(NULLIF(u."mo_ta_vi", ''), u."mo_ta_goc_tieng_anh") AS "moTa"
       FROM "phan_tich_ai" pa JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
       WHERE ${cot} IS NULL
@@ -265,10 +254,9 @@ export class SemanticSearchService {
       // Ghép văn bản giống hệt bước phân tích (ung-dung.service) để vector hai đường khớp nhau.
       const vanBan = this.chuanBiVanBanNhung({
         tenKhoChua: app.tenKhoChua,
-        slogan: app.khauHieu,
-        tinhNang: app.chuDe,
-        topics: app.chuDe,
         moTa: app.moTa,
+        topics: app.chuDe,
+        danhMuc: app.danhMuc,
       });
       try {
         const vector = await this.sinhEmbedding(vanBan, moHinh);
