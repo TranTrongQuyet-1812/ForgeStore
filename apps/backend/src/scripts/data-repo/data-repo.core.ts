@@ -51,6 +51,29 @@ function conChuCanDich(daChe: string): boolean {
   return chu.length >= 3;
 }
 
+const TU_CAU_TIENG_ANH =
+  /\b(the|an?|to|and|or|is|are|for|with|in|on|from|by|this|that|you|your|we|our|it|be|can|will)\b/i;
+
+/**
+ * Đoạn chỉ gồm huy hiệu, nhãn liên kết hoặc thanh chọn ngôn ngữ (từ 3 ký hiệu che trở lên, giữa chúng
+ * chỉ là nhãn ngắn không có từ nối câu): không có câu để dịch nên giữ nguyên là đúng, không báo chua_dich.
+ * shortcut: dựa vào độ dài nhãn và từ nối tiếng Anh, câu ngắn không có từ nối sẽ lọt; nâng cấp nếu thấy đoạn bị bỏ sót.
+ */
+export function chiLaChuoiNhan(daChe: string): boolean {
+  if ((daChe.match(/⟦C\d+⟧/g) ?? []).length < 3) return false;
+  const nhan = daChe
+    .split(/⟦C\d+⟧/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return nhan.every(
+    (x) =>
+      x.length <= 30 &&
+      x.split(/\s+/).length <= 3 &&
+      !/[.!?]$/.test(x) &&
+      !TU_CAU_TIENG_ANH.test(x),
+  );
+}
+
 /** Bước XUẤT: README → các đoạn đã che, sẵn cho Anti dịch. */
 export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
   const doan: DoanChoDich[] = phanTichReadme(cao.readmeEn ?? '').doan.map((nut, i) => {
@@ -129,7 +152,12 @@ export function kiemTraDongDaDich(
       soDoanLoi++;
       return ketQua;
     }
-    if (c.canDich && viSach.trim() === c.vanBanDaChe.trim() && c.vanBanDaChe.length > 40) {
+    if (
+      c.canDich &&
+      viSach.trim() === c.vanBanDaChe.trim() &&
+      c.vanBanDaChe.length > 40 &&
+      !chiLaChuoiNhan(c.vanBanDaChe)
+    ) {
       ketQua.loi = 'chua_dich' satisfies LyDoLoiDong;
       soDoanLoi++;
       return ketQua;

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
+import {
+  chiLaChuoiNhan,
+  kiemTraDongDaDich,
+  phanDoan,
+  taoDongChoDich,
+  tinhMaBam,
+} from './data-repo.core';
 import type { BanGhiDaCao, DongDich } from './data-repo.types';
 
 const README = [
@@ -221,6 +227,28 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     const doi = dichGia(taoDongChoDich(cao));
     doi.doan[j] = { ...doi.doan[j], maBam: 'bi-doi' };
     expect(kiemTraDongDaDich(cao, doi, 'x').loi!.doan[j].loi).toBe('doan_bi_doi');
+  });
+
+  it('chuỗi nhãn (huy hiệu, thanh ngôn ngữ) không bị báo chua_dich, câu tiếng Anh thì vẫn bị', () => {
+    // mẫu thật từ lobehub, career-ops, ultralytics, nerd-fonts, tldr
+    expect(
+      chiLaChuoiNhan('⟦C1⟧github-release-shield⟦C2⟧github-release-link⟦C3⟧docker-size-shield⟦C4⟧'),
+    ).toBe(true);
+    expect(
+      chiLaChuoiNhan('⟦C1⟧English⟦C2⟧Español⟦C3⟧日本語⟦C4⟧Português (Brasil)⟦C5⟧한국어⟦C6⟧'),
+    ).toBe(true);
+    expect(chiLaChuoiNhan('Node.js⟦C1⟧Go⟦C2⟧Playwright⟦C3⟧Bubble Tea⟦C4⟧MIT')).toBe(true);
+    expect(
+      chiLaChuoiNhan('⟦C1⟧GitHub release⟦C2⟧Gitter⟦C3⟧Code of Conduct⟦C4⟧PRs Welcome⟦C5⟧'),
+    ).toBe(true);
+    // câu thật chưa dịch vẫn phải bị bắt
+    expect(
+      chiLaChuoiNhan('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),
+    ).toBe(false);
+    expect(chiLaChuoiNhan('Download the latest ⟦C1⟧release⟦C2⟧.')).toBe(false);
+    expect(
+      chiLaChuoiNhan('A fast screenshot tool, see ⟦C1⟧docs⟦C2⟧ for the details of usage'),
+    ).toBe(false);
   });
 
   it('mô tả thiếu hoặc quá dài bị chặn', () => {
