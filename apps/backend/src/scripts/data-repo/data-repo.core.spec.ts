@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chiLaChuoiNhan,
+  coCauTiengAnh,
   kiemTraDongDaDich,
   phanDoan,
   taoDongChoDich,
@@ -255,6 +256,29 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(
       chiLaChuoiNhan('A fast screenshot tool, see ⟦C1⟧docs⟦C2⟧ for the details of usage'),
     ).toBe(false);
+  });
+
+  it('phiên gõ lệnh, kết quả lệnh và tên riêng không bị coi là câu tiếng Anh, câu thật thì có', () => {
+    // mẫu thật từ rush, kubeinvaders, glances, react-markdown-editor-lite
+    expect(
+      coCauTiengAnh("$ seq 1 3 ⟦C1⟧ rush 'echo ⟦C2⟧' -k\n        1\n        2\n        3"),
+    ).toBe(false);
+    expect(coCauTiengAnh('$ for var in a b; do ⟦C1⟧\n        $   seq 1 3 ⟦C2⟧ rush -k')).toBe(
+      false,
+    );
+    expect(
+      coCauTiengAnh('real    0m1.010s\n        user    0m0.005s\n        sys     0m0.007s'),
+    ).toBe(false);
+    expect(coCauTiengAnh('⟦C1⟧ LILiS - Linux Day 2023 Benevento ⟦C2⟧')).toBe(false);
+    expect(coCauTiengAnh('DevNation RedHat Developer: ⟦C1⟧Twitter⟦C2⟧')).toBe(false);
+    expect(coCauTiengAnh('HarryChen0506 ⟦C1⟧github/HarryChen0506⟦C2⟧')).toBe(false);
+    expect(
+      coCauTiengAnh('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),
+    ).toBe(true);
+    expect(coCauTiengAnh('Download the latest ⟦C1⟧release⟦C2⟧.')).toBe(true);
+    expect(coCauTiengAnh('A fast screenshot tool, see ⟦C1⟧docs⟦C2⟧ for the details of usage')).toBe(
+      true,
+    );
   });
 
   it('mô tả thiếu hoặc quá dài bị chặn', () => {

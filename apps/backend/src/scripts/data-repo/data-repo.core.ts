@@ -76,6 +76,26 @@ export function chiLaChuoiNhan(daChe: string): boolean {
   );
 }
 
+const TU_NOI_TIENG_ANH = new RegExp(`^${TU_CAU_TIENG_ANH.source.replace(/\\b/g, '')}$`, 'i');
+
+/**
+ * Đoạn có câu tiếng Anh thật: ba từ liền nhau trên một dòng, trong đó có một từ nối (the, to, for...).
+ * Phiên gõ lệnh (`$ ...`), kết quả lệnh, tên riêng và đường dẫn thì không có, giữ nguyên là đúng.
+ * shortcut: câu chỉ gồm từ ngắn lạ không có từ nối sẽ lọt; nâng cấp nếu thấy đoạn bị bỏ sót.
+ */
+export function coCauTiengAnh(daChe: string): boolean {
+  if (/^\s*\$\s/.test(daChe)) return false;
+  const viTri = /(?=(\b[A-Za-z]{2,}\b[ \t]+\b[A-Za-z]{2,}\b[ \t]+\b[A-Za-z]{2,}\b))/g;
+  return daChe
+    .replace(/⟦C\d+⟧/g, '|')
+    .split('\n')
+    .some((dong) =>
+      [...dong.matchAll(viTri)].some((m) =>
+        m[1]!.split(/\s+/).some((tu) => TU_NOI_TIENG_ANH.test(tu)),
+      ),
+    );
+}
+
 /** Bước XUẤT: README → các đoạn đã che, sẵn cho Anti dịch. */
 export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
   const doan: DoanChoDich[] = phanTichReadme(cao.readmeEn ?? '').doan.map((nut, i) => {
@@ -158,7 +178,8 @@ export function kiemTraDongDaDich(
       c.canDich &&
       viSach.trim() === c.vanBanDaChe.trim() &&
       c.vanBanDaChe.length > 40 &&
-      !chiLaChuoiNhan(c.vanBanDaChe)
+      !chiLaChuoiNhan(c.vanBanDaChe) &&
+      coCauTiengAnh(c.vanBanDaChe)
     ) {
       ketQua.loi = 'chua_dich' satisfies LyDoLoiDong;
       soDoanLoi++;
