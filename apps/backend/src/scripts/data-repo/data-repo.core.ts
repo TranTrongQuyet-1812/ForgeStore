@@ -60,6 +60,8 @@ const TU_CAU_TIENG_ANH =
  * shortcut: dựa vào độ dài nhãn và từ nối tiếng Anh, câu ngắn không có từ nối sẽ lọt; nâng cấp nếu thấy đoạn bị bỏ sót.
  */
 export function chiLaChuoiNhan(daChe: string): boolean {
+  // Đoạn chỉ gồm ký hiệu che, thực thể HTML (&nbsp;...) và khoảng trắng thì không có chữ nào để dịch
+  if (!/\p{L}/u.test(daChe.replace(/⟦C\d+⟧/g, ' ').replace(/&#?\w+;/g, ' '))) return true;
   if ((daChe.match(/⟦C\d+⟧/g) ?? []).length < 3) return false;
   const nhan = daChe
     .split(/⟦C\d+⟧/)

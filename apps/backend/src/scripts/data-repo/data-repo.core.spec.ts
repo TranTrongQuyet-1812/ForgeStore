@@ -241,6 +241,12 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(
       chiLaChuoiNhan('⟦C1⟧GitHub release⟦C2⟧Gitter⟦C3⟧Code of Conduct⟦C4⟧PRs Welcome⟦C5⟧'),
     ).toBe(true);
+    // đoạn chỉ có khoảng trắng HTML (amark/gun)
+    expect(
+      chiLaChuoiNhan(
+        '⟦C1⟧&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⟦C2⟧&nbsp;&nbsp;⟦C3⟧',
+      ),
+    ).toBe(true);
     // câu thật chưa dịch vẫn phải bị bắt
     expect(
       chiLaChuoiNhan('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),
