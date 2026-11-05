@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
+import { NhanDaCaiTrenMay } from '../thanh-phan/dung-chung/NhanDaCaiTrenMay';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
@@ -1599,6 +1600,10 @@ export const TrangChiTiet: React.FC = () => {
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-border text-muted">
                             Hệ điều hành: {layNhanHeDieuHanh(currentMethod.heDieuHanh)}
                           </span>
+                          <NhanDaCaiTrenMay
+                            trinhQuanLy={currentMethod.trinhQuanLy}
+                            tenGoi={currentMethod.tenGoi}
+                          />
                         </div>
                       </div>
 

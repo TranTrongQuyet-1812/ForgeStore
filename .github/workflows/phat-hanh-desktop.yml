@@ -1,0 +1,54 @@
+# P3B-14.3: tạo tag v* (ví dụ v0.2.0) thì build bộ cài NSIS trên máy Windows của GitHub
+# và đính tệp .exe vào GitHub Releases của tag đó. Không chạy ở các lần push thường.
+name: Phát hành bộ cài Desktop
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  nsis:
+    name: Build bộ cài NSIS và đăng lên Releases
+    runs-on: windows-latest
+    env:
+      # Địa chỉ API công khai của bản phát hành (không phải bí mật, cùng giá trị trong .env.example)
+      VITE_API_URL: https://api-forgestore.tranquyet.id.vn/api/v1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies (desktop)
+        run: pnpm install --frozen-lockfile --filter "@forgestore/desktop..."
+
+      - name: Build shared packages (types, ui-tokens)
+        run: pnpm build
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      # tauri build tự chạy beforeBuildCommand (vite build) rồi đóng gói NSIS theo tauri.conf.json
+      - name: Build bộ cài NSIS
+        run: pnpm --filter @forgestore/desktop tauri build --bundles nsis
+
+      - name: Đăng bộ cài lên GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          generate_release_notes: true
