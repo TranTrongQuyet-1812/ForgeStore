@@ -1469,6 +1469,7 @@ async function lenhDay(): Promise<void> {
   }
 
   if (!canKhoiTaoNestDay(ghi, suaBoNho)) {
+    const demDuDoan = { HOAT_DONG: 0, TUY_TEP_CAI: 0, KHONG_CO_BAN_CAO: 0 };
     for (const row of cho) {
       const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
       // Vẫn kiểm bản dịch có ký hiệu khi chạy thử để bắt lệch sớm, trước khi ghi thật.
@@ -1480,10 +1481,16 @@ async function lenhDay(): Promise<void> {
           kiemBanDich = `LỆCH: ${String(err).slice(0, 120)}`;
         }
       }
+      const duDoan = caoRow ? duDoanTrangThaiTuReadme(caoRow.readmeEn) : 'KHONG_CO_BAN_CAO';
+      demDuDoan[duDoan]++;
       console.info(
-        `[thử] ${row.repo}: trạng thái dự kiến ${duDoanTrangThaiTuReadme(caoRow?.readmeEn)} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,
+        `[thử] ${row.repo}: trạng thái dự kiến ${duDoan} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,
       );
     }
+    // P3B-25.6: tổng để Chủ xem trước số repo sẽ hiện chắc chắn và số phụ thuộc tệp cài, trước khi ghi thật.
+    console.info(
+      `Tổng chạy thử: ${demDuDoan.HOAT_DONG} chắc chắn hiện (có lệnh cài), ${demDuDoan.TUY_TEP_CAI} hiện nếu Release có tệp cài (không thì ẩn), ${demDuDoan.KHONG_CO_BAN_CAO} thiếu bản cào.`,
+    );
     return;
   }
 

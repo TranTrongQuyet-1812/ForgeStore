@@ -44,7 +44,7 @@ describe('do-boc-tach.core', () => {
     expect(duDoanTrangThaiTuReadme('## Install\n```sh\nnpm install -g tool\n```')).toBe(
       'HOAT_DONG',
     );
-    expect(duDoanTrangThaiTuReadme('# Library\nNo installer')).toBe('KHONG_CO_BAN_CAI');
+    expect(duDoanTrangThaiTuReadme('# Library\nNo installer')).toBe('TUY_TEP_CAI');
   });
 
   it('bỏ qua nhắc đến lệnh trong văn xuôi và thuộc tính HTML', () => {

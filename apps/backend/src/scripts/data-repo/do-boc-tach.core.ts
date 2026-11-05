@@ -93,8 +93,14 @@ export function doBocTach(danhSach: BanGhiDaCao[]): KetQuaDoBocTach {
   return ketQua;
 }
 
-/** Dự đoán trạng thái ứng dụng chỉ từ README đã cào, phục vụ chạy thử không kết nối GitHub. */
-export function duDoanTrangThaiTuReadme(readme: string | null | undefined): string {
+/**
+ * Dự đoán trạng thái ứng dụng từ README đã cào, phục vụ chạy thử không kết nối GitHub (P3B-25.6).
+ * Có lệnh cài hợp lệ thì chắc chắn hiện. Không có thì `dongBoRepo` quyết theo tệp cài của Release
+ * (có thì hiện, không thì ẩn), mà bản cào không có danh sách tệp, nên chỉ báo "tùy tệp cài".
+ */
+export type TrangThaiDuDoan = 'HOAT_DONG' | 'TUY_TEP_CAI';
+
+export function duDoanTrangThaiTuReadme(readme: string | null | undefined): TrangThaiDuDoan {
   const huongDan = trichXuatHuongDanCliBangQuyTac(readme || '');
-  return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
+  return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'TUY_TEP_CAI';
 }
