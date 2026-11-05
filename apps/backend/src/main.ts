@@ -1,15 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-
-// Polyfill BigInt để hỗ trợ tuần tự hóa JSON an toàn (tránh lỗi TypeError: Do not know how to serialize a BigInt)
-(BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
-  return this.toString();
-};
+import { cauHinhUngDung } from './cau-hinh-ung-dung';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -23,26 +17,8 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
-  // P2-04.1: Tiền tố chung /api/v1 cho mọi route (ngoại trừ root / chào mừng)
-  app.setGlobalPrefix('api/v1', { exclude: ['/'] });
-
-  // P2-04.2: ValidationPipe toàn cục
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
-
-  // P2-04.3: Exception Filter chuẩn hóa lỗi thống nhất
-  app.useGlobalFilters(new GlobalExceptionFilter());
-
-  // P2-04.6: Logging Interceptor gắn X-Request-Id
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  // P2-04.1 đến P2-04.6: tiền tố, ValidationPipe, bộ lọc lỗi, X-Request-Id (dùng chung với test e2e)
+  cauHinhUngDung(app);
 
   // P2-04.4: CORS cho phép Desktop (Tauri) và Landing page (kết hợp tĩnh và cấu hình động)
   const desktopOrigin = configService.get<string>('DESKTOP_ORIGIN', 'tauri://localhost');

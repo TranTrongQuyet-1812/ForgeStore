@@ -121,6 +121,65 @@ jobs:
             echo "✅ Verified: No migration drops idx_phan_tich_ai_vector."
           fi
 
+  e2e:
+    name: Test e2e backend (Postgres + Redis thật)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: forgestore_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/forgestore_e2e
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/forgestore_e2e
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: e2e-access-secret-chi-dung-cho-test-tren-ci-32
+      GITHUB_CLIENT_ID: e2e
+      GITHUB_CLIENT_SECRET: e2e
+      GITHUB_TOKEN: e2e
+      GEMINI_API_KEY: e2e
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      # Giống DB production: extension vector nằm trong schema "extensions" và có trong search_path
+      - name: Chuẩn bị DB e2e
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d forgestore_e2e -v ON_ERROR_STOP=1             -c 'CREATE SCHEMA IF NOT EXISTS extensions'             -c 'CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions'             -c 'ALTER DATABASE forgestore_e2e SET search_path TO public, extensions'
+          pnpm --filter @forgestore/backend exec prisma migrate deploy
+
+      - name: Chạy test e2e
+        run: pnpm --filter @forgestore/backend test:e2e
+
   docker:
     name: Build thử Docker image backend
     needs: changes
@@ -198,9 +257,10 @@ jobs:
       needs.changes.result == 'success' &&
       needs.guard.result == 'success' &&
       needs.lint-and-typecheck.result == 'success' &&
+      (needs.e2e.result == 'success' || needs.e2e.result == 'skipped') &&
       (needs.docker.result == 'success' || needs.docker.result == 'skipped') &&
       (needs.desktop.result == 'success' || needs.desktop.result == 'skipped')
-    needs: [changes, guard, lint-and-typecheck, docker, desktop]
+    needs: [changes, guard, lint-and-typecheck, e2e, docker, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
