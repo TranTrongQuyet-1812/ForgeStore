@@ -49,41 +49,45 @@ async function bootstrap() {
     exposedHeaders: ['Retry-After'],
   });
 
-  // P2-04.5: Swagger Documentation tại /api/docs
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('ForgeStore Central Backend API')
-    .setDescription(
-      'Hệ thống API của kho ứng dụng mã nguồn mở ForgeStore: lấy phần mềm từ GitHub Releases, chấm điểm uy tín bằng luật, dịch mô tả và README sang tiếng Việt.',
-    )
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'Authorization',
-        description: 'Nhập JWT Access Token (Bearer <token>)',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
-    .addTag('Health - Kiểm Tra Sức Khỏe', 'Kiểm tra trạng thái sẵn sàng của máy chủ, DB và Redis')
-    .build();
+  // P2-04.5: Swagger tại /api/docs chỉ bật ngoài production (Chủ chốt 05/11/2026: không mở công khai danh sách API)
+  if (nodeEnv !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('ForgeStore Central Backend API')
+      .setDescription(
+        'Hệ thống API của kho ứng dụng mã nguồn mở ForgeStore: lấy phần mềm từ GitHub Releases, chấm điểm uy tín bằng luật, dịch mô tả và README sang tiếng Việt.',
+      )
+      .setVersion('1.0.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'Authorization',
+          description: 'Nhập JWT Access Token (Bearer <token>)',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .addTag('Health - Kiểm Tra Sức Khỏe', 'Kiểm tra trạng thái sẵn sàng của máy chủ, DB và Redis')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document, {
-    customSiteTitle: 'ForgeStore API Documentation',
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-  });
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      customSiteTitle: 'ForgeStore API Documentation',
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+  }
 
   // Cho phép đóng kết nối gọn gàng khi nhận tín hiệu SIGTERM/SIGINT
   app.enableShutdownHooks();
 
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 Máy chủ Central Backend đang hoạt động tại: http://localhost:${port}/api/v1`);
-  logger.log(`📚 Tài liệu Swagger UI khả dụng tại: http://localhost:${port}/api/docs`);
+  if (nodeEnv !== 'production') {
+    logger.log(`📚 Tài liệu Swagger UI khả dụng tại: http://localhost:${port}/api/docs`);
+  }
   logger.log(`🌱 Môi trường thực thi: ${nodeEnv}`);
 }
 
