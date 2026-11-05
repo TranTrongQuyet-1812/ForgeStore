@@ -8,14 +8,26 @@ import { SuyGiamThinhHanhJob } from '../jobs/suy-giam-thinh-hanh.job';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { ReadmeTranslationService } from '../../ai/translation/services/readme-translation.service';
 import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
-import { phanLoaiTep } from '../tien-ich/phan-loai-tep.util';
 import {
   TrangThaiUngVienRepo,
   LyDoLoaiUngVien,
-  DinhDangTep,
   TrangThaiDichReadme,
+  UngVienRepo,
 } from '@prisma/client';
 import { coCachCaiCliHopLe } from '@forgestore/types';
+import {
+  danhGiaRelease,
+  locCucBo,
+  NGUONG_LOC_MAC_DINH,
+  NguongLoc,
+} from '../tien-ich/bo-loc-nap-repo.util';
+import {
+  chuyenLyDoLoc,
+  docKetQuaSangLoc,
+  DuLieuSangLoc,
+  SO_REPO_MOI_TRUY_VAN,
+  taoTruyVanSangLoc,
+} from '../tien-ich/sang-loc-graphql.util';
 
 export interface KetQuaNapLau {
   dangChay?: boolean;
@@ -33,6 +45,21 @@ export interface KetQuaDichNen {
   daDichMoTa: number;
   daDichReadme: number;
   nganSachConLai: number;
+}
+
+/** P3B-06.7: quá số lần lỗi tạm thời này thì chuyển ứng viên sang lỗi. */
+const SO_LAN_THU_TOI_DA = 3;
+/** P3B-07.6: số ngày trước khi xét lại ứng viên bị loại. */
+const SO_NGAY_XET_LAI = 30;
+
+function ketQuaRong(): KetQuaNapLau {
+  return {
+    soLuongUngVienQuet: 0,
+    soLuongDaNap: 0,
+    soLuongBiLoai: 0,
+    chiTietBiLoai: {},
+    rateLimitConLai: null,
+  };
 }
 
 export const DANH_SACH_SEED_REPOS: string[] = [
@@ -63,12 +90,12 @@ export const DANH_SACH_SEED_REPOS: string[] = [
  *
  * 6 Chốt chặn an toàn (đã hoàn thiện theo review của Claude):
  * 1. Không xóa ứng viên bị loại: Gán BI_LOAI kèm mã LyDoLoaiUngVien. Repo có lệnh CLI hợp lệ được nạp thẳng vào Store (D-30).
- * 2. Hạn mức GitHub: Dùng token, theo dõi x-ratelimit-remaining, dừng/chờ khi sắp hết (< 100 req).
+ * 2. Hạn mức GitHub: dừng khi core còn dưới INGESTION_GITHUB_MIN_REMAINING (mặc định 1.000) hoặc hết ngân sách giờ.
  *    Lỗi mạng / 403 / 429 tạm thời: Dừng lô và giữ CHO_SANG_LOC, không loại oan vĩnh viễn.
  * 3. Không tạo bão dịch: Nạp repo KHÔNG kích hoạt dịch ngay; dịch qua hàng đợi có giới hạn song song và ngân sách ngày.
  * 4. Chạy lại không sinh trùng: upsert theo tenRepoDayDu, khóa phân tán Redis an toàn qua withLock (SET NX PX kèm Lua script).
  * 5. Dữ liệu từ GitHub là không tin cậy: tên, mô tả, topics được giới hạn độ dài; kiểm tra giấy phép mã nguồn mở (GIAY_PHEP_KHONG_MO).
- * 6. Bật tắt được: Biến môi trường INGESTION_ENABLED khóa toàn diện cả nạp lẫn dịch nền định kỳ.
+ * 6. Bật tắt được: INGESTION_ENABLED là công tắc tổng, mỗi tầng (khám phá, sàng lọc, dịch) có công tắc riêng.
  */
 @Injectable()
 export class DayChuyenNapRepoService {
@@ -76,6 +103,7 @@ export class DayChuyenNapRepoService {
   public static readonly LOCK_KEY = 'fs:ingestion:lock';
   public static readonly LOCK_TTL_SECONDS = 900; // 15 phút
   public static readonly BUDGET_PREFIX = 'fs:ai:translation:budget:readme:';
+  public static readonly NGAN_SACH_GITHUB_PREFIX = 'fs:ingestion:github:';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -93,6 +121,16 @@ export class DayChuyenNapRepoService {
    */
   public isIngestionEnabled(): boolean {
     return this.config.get<boolean>('INGESTION_ENABLED', false);
+  }
+
+  /** P3B-06.9: một tầng chỉ chạy khi cả công tắc tổng và công tắc riêng của tầng đó cùng bật. */
+  public tangDuocBat(
+    congTac:
+      | 'INGESTION_DISCOVERY_ENABLED'
+      | 'INGESTION_SCREENING_ENABLED'
+      | 'INGESTION_TRANSLATION_ENABLED',
+  ): boolean {
+    return this.isIngestionEnabled() && this.config.get<boolean>(congTac, false);
   }
 
   /**
@@ -178,305 +216,280 @@ export class DayChuyenNapRepoService {
   }
 
   /**
-   * Pha 2 & Pha 3: Sàng lọc và Nạp theo lô nhỏ (P3B-06.2, P3B-06.3)
-   * Tuân thủ triệt để 6 chốt chặn của Claude.
+   * Pha 2 & Pha 3: Sàng lọc và Nạp theo lô nhỏ (P3B-06.3 đến 06.8).
+   * Chạy khi công tắc tổng và công tắc tầng sàng lọc cùng bật, hoặc khi quản trị viên ép chạy.
    */
   async sangLocVaNapLauNho(batchSize?: number, forceRun = false): Promise<KetQuaNapLau> {
-    const isEnabled = this.isIngestionEnabled();
     const configuredLimit = this.config.get<number>('INGESTION_BATCH_SIZE', 30);
     const rawLimit = batchSize ?? configuredLimit;
     const limit = Math.max(1, Math.min(100, Number.isInteger(rawLimit) ? rawLimit : 30));
 
-    // Chốt chặn 6: Biến môi trường bật/tắt dây chuyền nạp
-    if (!isEnabled && !forceRun) {
-      this.logger.log(
-        'Dây chuyền nạp repo đang tắt (INGESTION_ENABLED=false). Bỏ qua lượt chạy này.',
-      );
-      return {
-        daNhayQua: true,
-        lyDo: 'ingestion_disabled',
-        soLuongUngVienQuet: 0,
-        soLuongDaNap: 0,
-        soLuongBiLoai: 0,
-        chiTietBiLoai: {},
-        rateLimitConLai: null,
-      };
+    if (!this.tangDuocBat('INGESTION_SCREENING_ENABLED') && !forceRun) {
+      this.logger.log('Tầng sàng lọc và nạp đang tắt. Bỏ qua lượt chạy này.');
+      return { ...ketQuaRong(), daNhayQua: true, lyDo: 'ingestion_disabled' };
     }
 
-    // Chốt chặn 3: Khóa phân tán Redis an toàn qua withLock (SET NX PX kèm Lua script)
+    // Khóa phân tán Redis: hai tiến trình không sàng lọc cùng một hàng chờ
     try {
       return await this.cacheService.withLock<KetQuaNapLau>(
         DayChuyenNapRepoService.LOCK_KEY,
         DayChuyenNapRepoService.LOCK_TTL_SECONDS * 1000,
-        async () => {
-          return await this.thucThiSangLocVaNap(limit);
-        },
+        () => this.thucThiSangLocVaNap(limit),
       );
     } catch (err) {
       if ((err as Error).message?.includes('đang bị khóa')) {
         this.logger.warn('Dây chuyền nạp repo đang có một tiến trình khác chạy, bỏ qua lần này.');
-        return {
-          dangChay: true,
-          lyDo: 'job_locked',
-          soLuongUngVienQuet: 0,
-          soLuongDaNap: 0,
-          soLuongBiLoai: 0,
-          chiTietBiLoai: {},
-          rateLimitConLai: null,
-        };
+        return { ...ketQuaRong(), dangChay: true, lyDo: 'job_locked' };
       }
       throw err;
     }
   }
 
   /**
-   * Thực thi nội dung sàng lọc và nạp bên trong khóa phân tán
+   * Sàng lọc từng nhóm 20 ứng viên bằng một yêu cầu GraphQL rồi phân loại bằng bộ lọc dùng chung.
+   * Lỗi tạm thời (hạn mức, mạng) thì dừng lô và tăng số lần thử, không loại oan.
    */
   private async thucThiSangLocVaNap(limit: number): Promise<KetQuaNapLau> {
-    let soLuongUngVienQuet = 0;
-    let soLuongDaNap = 0;
-    let soLuongBiLoai = 0;
-    const chiTietBiLoai: Record<string, number> = {};
+    const ketQua = ketQuaRong();
+    const lyDoDung = await this.lyDoPhaiDung();
+    if (lyDoDung) return this.ketThucLo({ ...ketQua, dungDoRateLimit: true, lyDo: lyDoDung });
 
-    // Chốt chặn 2: Kiểm tra hạn mức GitHub trước khi bắt đầu
-    const initialRateLimit = this.githubService.getRateLimitInfo();
-    if (initialRateLimit.remaining !== null && initialRateLimit.remaining < 100) {
-      this.logger.warn(
-        `Hạn mức GitHub API sắp hết (còn ${initialRateLimit.remaining}/5000). Dừng nạp ngay để bảo vệ token.`,
-      );
-      return {
-        dungDoRateLimit: true,
-        lyDo: 'github_rate_limited',
-        soLuongUngVienQuet: 0,
-        soLuongDaNap: 0,
-        soLuongBiLoai: 0,
-        chiTietBiLoai: {},
-        rateLimitConLai: initialRateLimit.remaining,
-      };
-    }
-
-    // Lấy lô ứng viên đang chờ sàng lọc
-    const candidates = await this.prisma.ungVienRepo.findMany({
+    await this.xetLaiUngVienBiLoai();
+    const ungVien = await this.prisma.ungVienRepo.findMany({
       where: { trangThai: TrangThaiUngVienRepo.CHO_SANG_LOC },
-      orderBy: { ngayTao: 'asc' },
+      orderBy: [{ doUuTien: 'asc' }, { ngayTao: 'asc' }],
       take: limit,
     });
+    this.logger.log(`[Dây Chuyền Nạp] Bắt đầu sàng lọc lô ${ungVien.length} repo ứng viên...`);
 
-    this.logger.log(`[Dây Chuyền Nạp] Bắt đầu sàng lọc lô ${candidates.length} repo ứng viên...`);
-
-    // Xử lý tuần tự từng repo (chốt chặn của Claude: không Promise.all cả trăm repo)
-    for (const candidate of candidates) {
-      soLuongUngVienQuet++;
-
-      // Kiểm tra lại hạn mức GitHub giữa các repo
-      const currentRateLimit = this.githubService.getRateLimitInfo();
-      if (currentRateLimit.remaining !== null && currentRateLimit.remaining < 100) {
-        this.logger.warn(
-          `Hạn mức GitHub API chạm ngưỡng tối thiểu (còn ${currentRateLimit.remaining}). Tạm dừng lô nạp.`,
-        );
+    for (let i = 0; i < ungVien.length; i += SO_REPO_MOI_TRUY_VAN) {
+      const nhom = ungVien.slice(i, i + SO_REPO_MOI_TRUY_VAN);
+      const lyDo = await this.lyDoPhaiDung();
+      if (lyDo) {
+        ketQua.lyDo = lyDo;
         break;
       }
+      const duLieu = await this.sangLocNhom(nhom);
+      if (!duLieu) break;
+      if (await this.xuLyNhom(nhom, duLieu, ketQua)) break;
+    }
+    return this.ketThucLo(ketQua);
+  }
 
-      const [owner, repo] = candidate.tenRepoDayDu.split('/');
-      if (!owner || !repo) {
-        await this.loaiUngVien(
-          candidate.maUngVien,
-          LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
-          chiTietBiLoai,
-        );
-        soLuongBiLoai++;
-        continue;
+  /** Một yêu cầu GraphQL cho cả nhóm; lỗi thì tăng số lần thử của cả nhóm và trả null để dừng lô. */
+  private async sangLocNhom(
+    nhom: UngVienRepo[],
+  ): Promise<Map<string, DuLieuSangLoc | null> | null> {
+    const ten = nhom.map((u) => u.tenRepoDayDu);
+    try {
+      await this.dungNganSachGithub(1);
+      const data = await this.githubService.graphql<Record<string, never>>(taoTruyVanSangLoc(ten));
+      return docKetQuaSangLoc(data, ten);
+    } catch (err) {
+      this.logger.warn(
+        `Sàng lọc GraphQL lỗi, giữ chờ và tăng số lần thử cho ${nhom.length} repo: ${String(err)}`,
+      );
+      for (const u of nhom) await this.tangSoLanThu(u);
+      return null;
+    }
+  }
+
+  /** Trả true khi phải dừng cả lô (lỗi tạm thời hoặc chạm trần số app). */
+  private async xuLyNhom(
+    nhom: UngVienRepo[],
+    duLieu: Map<string, DuLieuSangLoc | null>,
+    ketQua: KetQuaNapLau,
+  ): Promise<boolean> {
+    for (const uv of nhom) {
+      if (await this.datTranSoApp()) {
+        ketQua.lyDo = 'dat_tran_so_app';
+        return true;
       }
+      ketQua.soLuongUngVienQuet++;
+      const du = duLieu.get(uv.tenRepoDayDu.toLowerCase()) ?? null;
+      const kq = await this.xuLyMotUngVien(uv, du, ketQua.chiTietBiLoai);
+      if (kq === 'DA_NAP') ketQua.soLuongDaNap++;
+      if (kq === 'BI_LOAI') ketQua.soLuongBiLoai++;
+      if (kq === 'DUNG_LO') return true;
+    }
+    return false;
+  }
 
-      // --- BƯỚC 1: SÀNG LỌC (KHÔNG DÙNG AI) ---
-      let repoData;
-      try {
-        repoData = await this.githubService.layRepo(owner, repo);
-      } catch (err) {
-        this.logger.warn(`Lỗi khi lấy thông tin repo [${candidate.tenRepoDayDu}]: ${err}`);
-        // Chốt chặn 2 của Claude: Lỗi tạm thời (hết hạn mức/rớt mạng) -> Dừng lô ngay và giữ CHO_SANG_LOC
-        if (this.laLoiTamThoi(err)) {
-          this.logger.warn(
-            `Phát hiện lỗi tạm thời/rate limit khi lấy repo [${candidate.tenRepoDayDu}]. Giữ nguyên CHO_SANG_LOC và tạm dừng lô.`,
-          );
-          break;
-        }
-        await this.loaiUngVien(
-          candidate.maUngVien,
-          LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
-          chiTietBiLoai,
-        );
-        soLuongBiLoai++;
-        continue;
+  /** Bộ lọc dùng chung (P3B-06.3) rồi nạp; không có tệp cài thì xét lệnh cài trong README (D-30). */
+  private async xuLyMotUngVien(
+    uv: UngVienRepo,
+    du: DuLieuSangLoc | null,
+    chiTietBiLoai: Record<string, number>,
+  ): Promise<'DA_NAP' | 'BI_LOAI' | 'DUNG_LO' | 'BO_QUA'> {
+    // Repo không còn (xóa, chuyển riêng tư) thì GraphQL trả null
+    if (!du) return this.loaiUngVien(uv.maUngVien, LyDoLoaiUngVien.LOI_KHI_SANG_LOC, chiTietBiLoai);
+    const now = new Date();
+    const nguong = this.layNguongLoc();
+    const cucBo = locCucBo(du.repo, now, nguong);
+    if (!cucBo.dat) return this.loaiUngVien(uv.maUngVien, chuyenLyDoLoc(cucBo.lyDo), chiTietBiLoai);
+    if (await this.daCoTrongKho(du.repo.full_name)) {
+      await this.datTrangThai(uv.maUngVien, TrangThaiUngVienRepo.DA_NAP);
+      return 'BO_QUA';
+    }
+    const release = danhGiaRelease(du.releases, now, nguong);
+    if (!release.dat) {
+      const khongCoTepCai =
+        release.lyDo === 'KHONG_CO_BAN_PHAT_HANH' || release.lyDo === 'KHONG_CO_FILE_CAI';
+      if (!khongCoTepCai) {
+        return this.loaiUngVien(uv.maUngVien, chuyenLyDoLoc(release.lyDo), chiTietBiLoai);
       }
-
-      // Loại nếu repo đã archived (Đã lưu trữ)
-      if (repoData.archived) {
-        await this.loaiUngVien(candidate.maUngVien, LyDoLoaiUngVien.DA_LUU_TRU, chiTietBiLoai);
-        soLuongBiLoai++;
-        continue;
+      const [owner = '', repo = ''] = du.repo.full_name.split('/');
+      await this.dungNganSachGithub(1);
+      const cli = await this.kiemTraCoHuongDanCli(owner, repo, du.repo.full_name);
+      if (cli === 'LOI_TAM_THOI') {
+        this.ghiLogTamDungLoLoiReadme(du.repo.full_name);
+        await this.tangSoLanThu(uv);
+        return 'DUNG_LO';
       }
-
-      // Chốt chặn 5 của Claude: Kiểm tra Giấy phép mã nguồn mở (Open Source License)
-      if (
-        !repoData.license ||
-        !repoData.license.key ||
-        repoData.license.key.toLowerCase() === 'other'
-      ) {
-        await this.loaiUngVien(
-          candidate.maUngVien,
-          LyDoLoaiUngVien.GIAY_PHEP_KHONG_MO,
-          chiTietBiLoai,
-        );
-        soLuongBiLoai++;
-        continue;
-      }
-
-      // Lấy release mới nhất để kiểm tra bộ cài
-      let latestRelease;
-      try {
-        latestRelease = await this.githubService.layReleaseMoiNhat(owner, repo);
-      } catch (err) {
-        this.logger.warn(`Lỗi khi lấy release mới nhất [${candidate.tenRepoDayDu}]: ${err}`);
-        if (this.laLoiTamThoi(err)) {
-          this.logger.warn(
-            `Phát hiện lỗi tạm thời/rate limit khi lấy release [${candidate.tenRepoDayDu}]. Giữ nguyên CHO_SANG_LOC và tạm dừng lô.`,
-          );
-          break;
-        }
-        await this.loaiUngVien(
-          candidate.maUngVien,
-          LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
-          chiTietBiLoai,
-        );
-        soLuongBiLoai++;
-        continue;
-      }
-
-      // Không có bản phát hành nào
-      if (!latestRelease || !latestRelease.assets || latestRelease.assets.length === 0) {
-        // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
-        const ketQuaCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
-
-        // Lỗi tạm thời khi lấy README: không được loại oan repo chỉ cài bằng lệnh (D-30)
-        if (ketQuaCli === 'LOI_TAM_THOI') {
-          this.ghiLogTamDungLoLoiReadme(candidate.tenRepoDayDu);
-          break;
-        }
-
-        if (ketQuaCli === 'KHONG') {
-          await this.loaiUngVien(
-            candidate.maUngVien,
-            LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH,
-            chiTietBiLoai,
-          );
-          soLuongBiLoai++;
-          continue;
-        }
-
-        this.logger.log(
-          `[CLI Ingestion] Repo [${candidate.tenRepoDayDu}] không có bản phát hành nhưng có lệnh cài CLI hợp lệ, cho phép nạp đầy đủ (D-30).`,
-        );
-      } else {
-        // Kiểm tra xem có file cài đặt cho Windows hoặc Android không
-        let hasInstallableAsset = false;
-        for (const asset of latestRelease.assets) {
-          const kq = phanLoaiTep(asset.name);
-          if (
-            !kq.boQua &&
-            (kq.dinhDang === DinhDangTep.EXE ||
-              kq.dinhDang === DinhDangTep.MSI ||
-              kq.dinhDang === DinhDangTep.ZIP_PORTABLE ||
-              kq.dinhDang === DinhDangTep.APK)
-          ) {
-            hasInstallableAsset = true;
-            break;
-          }
-        }
-
-        if (!hasInstallableAsset) {
-          // P3B-25.5 (D-30): Kiểm tra xem có hướng dẫn cài đặt CLI hợp lệ trong README không
-          const ketQuaCli = await this.kiemTraCoHuongDanCli(owner, repo, candidate.tenRepoDayDu);
-
-          // Lỗi tạm thời khi lấy README: không được loại oan repo chỉ cài bằng lệnh (D-30)
-          if (ketQuaCli === 'LOI_TAM_THOI') {
-            this.ghiLogTamDungLoLoiReadme(candidate.tenRepoDayDu);
-            break;
-          }
-
-          if (ketQuaCli === 'KHONG') {
-            await this.loaiUngVien(
-              candidate.maUngVien,
-              LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
-              chiTietBiLoai,
-            );
-            soLuongBiLoai++;
-            continue;
-          }
-
-          this.logger.log(
-            `[CLI Ingestion] Repo [${candidate.tenRepoDayDu}] không có file cài Windows/Android nhưng có lệnh cài CLI hợp lệ, cho phép nạp đầy đủ (D-30).`,
-          );
-        }
-      }
-
-      // --- BƯỚC 2: NẠP ĐẦY ĐỦ (FULL INGESTION) ---
-      try {
-        // Nạp vào bảng ung_dung qua dongBoRepo (đã có bộ chấm điểm, phân loại file)
-        await this.appsService.dongBoRepo(owner, repo);
-
-        // Cập nhật ứng viên thành ĐÃ NẠP
-        await this.prisma.ungVienRepo.update({
-          where: { maUngVien: candidate.maUngVien },
-          data: {
-            trangThai: TrangThaiUngVienRepo.DA_NAP,
-            lyDoLoai: null,
-          },
-        });
-
-        soLuongDaNap++;
-        this.logger.log(`✅ [Nạp Thành Công] ${candidate.tenRepoDayDu}`);
-      } catch (err) {
-        this.logger.error(`Lỗi khi nạp đầy đủ repo [${candidate.tenRepoDayDu}]:`, err);
-        if (this.laLoiTamThoi(err)) {
-          this.logger.warn(
-            `Phát hiện lỗi tạm thời/rate limit khi nạp [${candidate.tenRepoDayDu}]. Giữ nguyên CHO_SANG_LOC và tạm dừng lô.`,
-          );
-          break;
-        }
-        await this.loaiUngVien(
-          candidate.maUngVien,
-          LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
-          chiTietBiLoai,
-        );
-        soLuongBiLoai++;
+      if (cli === 'KHONG') {
+        return this.loaiUngVien(uv.maUngVien, chuyenLyDoLoc(release.lyDo), chiTietBiLoai);
       }
     }
+    return this.napDayDu(uv, du.repo.full_name, chiTietBiLoai);
+  }
 
-    // Chốt chặn Claude: Tính lại điểm Thịnh hành MỘT LẦN sau mỗi lô, không tính sau từng repo!
-    if (soLuongDaNap > 0) {
-      this.logger.log('Tính lại điểm Thịnh hành cho toàn bộ ứng dụng sau lô nạp...');
+  /** Nạp đầy đủ qua `dongBoRepo` bằng tên chuẩn GitHub trả về (repo đổi tên vẫn lưu đúng tên mới). */
+  private async napDayDu(
+    uv: UngVienRepo,
+    tenChuan: string,
+    chiTietBiLoai: Record<string, number>,
+  ): Promise<'DA_NAP' | 'BI_LOAI' | 'DUNG_LO'> {
+    const [owner = '', repo = ''] = tenChuan.split('/');
+    try {
+      // dongBoRepo gọi khoảng 5 yêu cầu GitHub (repo, release, README, người đóng góp...)
+      await this.dungNganSachGithub(5);
+      await this.appsService.dongBoRepo(owner, repo);
+      await this.datTrangThai(uv.maUngVien, TrangThaiUngVienRepo.DA_NAP);
+      this.logger.log(`✅ [Nạp Thành Công] ${tenChuan}`);
+      return 'DA_NAP';
+    } catch (err) {
+      this.logger.error(`Lỗi khi nạp đầy đủ repo [${tenChuan}]:`, err);
+      if (this.laLoiTamThoi(err)) {
+        await this.tangSoLanThu(uv);
+        return 'DUNG_LO';
+      }
+      return this.loaiUngVien(uv.maUngVien, LyDoLoaiUngVien.LOI_KHI_SANG_LOC, chiTietBiLoai);
+    }
+  }
+
+  /** Tính lại Thịnh hành một lần sau lô (không tính sau từng repo), ghi log tổng kết. */
+  private async ketThucLo(ketQua: KetQuaNapLau): Promise<KetQuaNapLau> {
+    if (ketQua.soLuongDaNap > 0) {
       try {
         await this.trendingDecayJob.capNhatDiemThinhHanhToanBo();
       } catch (err) {
         this.logger.error('Lỗi khi tính lại điểm Thịnh hành sau lô nạp:', err);
       }
     }
-
-    const finalRateLimit = this.githubService.getRateLimitInfo();
+    const rate = this.githubService.getRateLimitInfo();
+    ketQua.rateLimitConLai = rate.remaining;
     this.logger.log(
-      `🏁 [Lô Nạp Hoàn Tất] Đã quét: ${soLuongUngVienQuet}, Đã nạp: ${soLuongDaNap}, Bị loại: ${soLuongBiLoai}. Quota GitHub: ${
-        finalRateLimit.remaining ?? 'N/A'
-      }/${finalRateLimit.limit ?? 'N/A'}`,
+      `🏁 [Lô Nạp Hoàn Tất] Đã quét: ${ketQua.soLuongUngVienQuet}, Đã nạp: ${ketQua.soLuongDaNap}, Bị loại: ${ketQua.soLuongBiLoai}${ketQua.lyDo ? `, dừng vì ${ketQua.lyDo}` : ''}. Quota GitHub: ${rate.remaining ?? 'N/A'}/${rate.limit ?? 'N/A'}`,
     );
+    return ketQua;
+  }
 
+  /**
+   * P3B-06.8: dừng khi hạn mức core còn dưới ngưỡng (token dùng chung với người dùng mở trang và job quét)
+   * hoặc đã dùng hết ngân sách yêu cầu của giờ này.
+   */
+  private async lyDoPhaiDung(): Promise<string | undefined> {
+    const conLai = this.githubService.getRateLimitInfo().remaining;
+    const nguong = this.config.get<number>('INGESTION_GITHUB_MIN_REMAINING', 1000);
+    if (conLai !== null && conLai < nguong) {
+      this.logger.warn(`Hạn mức GitHub còn ${conLai} (< ${nguong}). Dừng nạp để bảo vệ token.`);
+      return 'github_rate_limited';
+    }
+    const daDung = (await this.cacheService.lay<number>(this.khoaNganSachGio())) ?? 0;
+    if (daDung >= this.config.get<number>('INGESTION_GITHUB_BUDGET_PER_HOUR', 2000)) {
+      return 'het_ngan_sach_gio';
+    }
+    return undefined;
+  }
+
+  private khoaNganSachGio(): string {
+    return `${DayChuyenNapRepoService.NGAN_SACH_GITHUB_PREFIX}${new Date().toISOString().slice(0, 13)}`;
+  }
+
+  /** Cộng số yêu cầu GitHub tầng nạp đã dùng trong giờ (P3B-06.8, cũng là số liệu cho P3B-21). */
+  public async dungNganSachGithub(soYeuCau: number): Promise<void> {
+    await this.cacheService.tangSo(this.khoaNganSachGio(), soYeuCau, 7200);
+  }
+
+  /** P3B-06.3 lọc 11: trần tổng số app trong kho. */
+  private async datTranSoApp(): Promise<boolean> {
+    const tran = this.config.get<number>('INGESTION_MAX_APPS', 10000);
+    return (await this.prisma.ungDung.count()) >= tran;
+  }
+
+  private async daCoTrongKho(tenRepo: string): Promise<boolean> {
+    const app = await this.prisma.ungDung.findFirst({
+      where: { tenRepoDayDu: { equals: tenRepo, mode: 'insensitive' } },
+      select: { maUngDung: true },
+    });
+    return Boolean(app);
+  }
+
+  /** Ngưỡng lọc lấy từ biến môi trường, dùng chung cho tầng khám phá và tầng sàng lọc. */
+  public layNguongLoc(): NguongLoc {
     return {
-      soLuongUngVienQuet,
-      soLuongDaNap,
-      soLuongBiLoai,
-      chiTietBiLoai,
-      rateLimitConLai: finalRateLimit.remaining,
+      ...NGUONG_LOC_MAC_DINH,
+      minStars: this.config.get<number>('INGESTION_MIN_STARS', NGUONG_LOC_MAC_DINH.minStars),
+      maxPushThang: this.config.get<number>(
+        'INGESTION_MAX_PUSH_AGE_MONTHS',
+        NGUONG_LOC_MAC_DINH.maxPushThang,
+      ),
+      maxReleaseThang: this.config.get<number>(
+        'INGESTION_MAX_RELEASE_AGE_MONTHS',
+        NGUONG_LOC_MAC_DINH.maxReleaseThang,
+      ),
     };
+  }
+
+  /**
+   * P3B-06.7: lỗi tạm thời không loại oan, nhưng quá 3 lần thì chuyển sang lỗi để ứng viên này
+   * không nằm mãi ở đầu hàng chờ.
+   */
+  private async tangSoLanThu(uv: UngVienRepo): Promise<void> {
+    if (uv.soLanThu + 1 > SO_LAN_THU_TOI_DA) {
+      await this.loaiUngVien(uv.maUngVien, LyDoLoaiUngVien.LOI_KHI_SANG_LOC, {});
+      return;
+    }
+    await this.prisma.ungVienRepo.update({
+      where: { maUngVien: uv.maUngVien },
+      data: { soLanThu: { increment: 1 } },
+    });
+  }
+
+  /**
+   * P3B-07.6: repo bị loại được xét lại sau 30 ngày (có thể đã ra bản cài hoặc thêm sao).
+   * Không xét lại repo trong danh sách chặn hay là fork vì không tự đổi được.
+   */
+  private async xetLaiUngVienBiLoai(): Promise<number> {
+    const kq = await this.prisma.ungVienRepo.updateMany({
+      where: {
+        trangThai: TrangThaiUngVienRepo.BI_LOAI,
+        ngayCapNhat: { lt: new Date(Date.now() - SO_NGAY_XET_LAI * 86400000) },
+        lyDoLoai: { notIn: [LyDoLoaiUngVien.TRONG_DANH_SACH_CHAN, LyDoLoaiUngVien.LA_FORK] },
+      },
+      data: { trangThai: TrangThaiUngVienRepo.CHO_SANG_LOC, lyDoLoai: null, soLanThu: 0 },
+    });
+    if (kq.count > 0) {
+      this.logger.log(`[Xét lại] ${kq.count} ứng viên bị loại quá 30 ngày được đưa lại hàng chờ.`);
+    }
+    return kq.count;
+  }
+
+  private async datTrangThai(maUngVien: string, trangThai: TrangThaiUngVienRepo): Promise<void> {
+    await this.prisma.ungVienRepo.update({
+      where: { maUngVien },
+      data: { trangThai, lyDoLoai: null },
+    });
   }
 
   /**
@@ -486,7 +499,7 @@ export class DayChuyenNapRepoService {
     maUngVien: string,
     lyDoLoai: LyDoLoaiUngVien,
     chiTietBiLoai: Record<string, number>,
-  ): Promise<void> {
+  ): Promise<'BI_LOAI'> {
     await this.prisma.ungVienRepo.update({
       where: { maUngVien },
       data: {
@@ -495,6 +508,7 @@ export class DayChuyenNapRepoService {
       },
     });
     chiTietBiLoai[lyDoLoai] = (chiTietBiLoai[lyDoLoai] || 0) + 1;
+    return 'BI_LOAI';
   }
 
   /**
@@ -537,10 +551,9 @@ export class DayChuyenNapRepoService {
     maxReadmeBudget?: number,
     forceRun = false,
   ): Promise<KetQuaDichNen> {
-    // Chốt chặn 1: Kiểm tra công tắc kích hoạt trước khi gọi bất kỳ dịch vụ AI nào
-    const isEnabled = this.isIngestionEnabled();
-    if (!isEnabled && !forceRun) {
-      this.logger.log('Dịch nền đang tắt (INGESTION_ENABLED=false). Bỏ qua lượt chạy này.');
+    // Chốt chặn 1: Kiểm tra công tắc kích hoạt trước khi gọi bất kỳ dịch vụ AI nào (P3B-06.12)
+    if (!this.tangDuocBat('INGESTION_TRANSLATION_ENABLED') && !forceRun) {
+      this.logger.log('Tầng dịch nền đang tắt. Bỏ qua lượt chạy này.');
       return { daDichMoTa: 0, daDichReadme: 0, nganSachConLai: 0 };
     }
 

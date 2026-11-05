@@ -15,6 +15,13 @@ import {
   GithubSearchResult,
 } from './github.constants';
 
+export interface KetQuaHoiCoDieuKien<T> {
+  trangThai: 200 | 304 | 404;
+  duLieu?: T;
+  etag?: string | null;
+  urlCuoi?: string;
+}
+
 @Injectable()
 export class GithubService {
   private readonly logger = new Logger(GithubService.name);
@@ -111,17 +118,97 @@ export class GithubService {
   }
 
   /**
+   * Hỏi GitHub có điều kiện bằng ETag do người gọi giữ (P3B-07.8: ETag lưu ở DB, không ở Redis).
+   * 304 không trừ hạn mức. Theo chuyển hướng: repo đổi tên thì `urlCuoi` khác đường dẫn đã hỏi.
+   */
+  async hoiCoDieuKien<T>(endpoint: string, etag?: string | null): Promise<KetQuaHoiCoDieuKien<T>> {
+    const headers = this.taoHeaders();
+    if (etag) headers['If-None-Match'] = etag;
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers,
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err: unknown) {
+      throw new HttpException(
+        `Không thể kết nối GitHub API: ${String(err)}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    this.capNhatRateLimitHeaders(response.headers);
+    if (response.status === HttpStatus.NOT_MODIFIED) return { trangThai: 304 };
+    if (response.status === HttpStatus.NOT_FOUND) return { trangThai: 404 };
+    if (
+      response.status === HttpStatus.FORBIDDEN ||
+      response.status === HttpStatus.TOO_MANY_REQUESTS
+    ) {
+      throw new HttpException('Đã vượt hạn mức GitHub API.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (!response.ok) {
+      throw new HttpException(`GitHub trả mã lỗi ${response.status}.`, response.status);
+    }
+    return {
+      trangThai: 200,
+      duLieu: (await response.json()) as T,
+      etag: response.headers.get('etag'),
+      urlCuoi: response.url,
+    };
+  }
+
+  /**
+   * Gọi GitHub GraphQL (P3B-06.5: sàng lọc 20–25 repo trong một yêu cầu). Hạn mức GraphQL tính riêng
+   * theo điểm nên không cập nhật bộ đếm "core".
+   */
+  async graphql<T>(query: string): Promise<T> {
+    const response = await fetch(`${this.baseUrl}/graphql`, {
+      method: 'POST',
+      headers: { ...this.taoHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(30000),
+    }).catch((err: unknown) => {
+      throw new HttpException(
+        `Không thể kết nối GitHub GraphQL: ${String(err)}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    });
+    if (
+      response.status === HttpStatus.FORBIDDEN ||
+      response.status === HttpStatus.TOO_MANY_REQUESTS
+    ) {
+      throw new HttpException('Đã vượt hạn mức GitHub GraphQL.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (!response.ok) {
+      throw new HttpException(`GitHub GraphQL trả mã lỗi ${response.status}.`, response.status);
+    }
+    const body = (await response.json()) as { data?: T; errors?: Array<{ type?: string }> };
+    if (body.errors?.some((e) => e.type === 'RATE_LIMITED')) {
+      throw new HttpException('Đã vượt hạn mức GitHub GraphQL.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    // Repo không tồn tại trả lỗi NOT_FOUND cho đúng bí danh đó, các repo khác vẫn có dữ liệu.
+    if (!body.data)
+      throw new HttpException('GitHub GraphQL không trả dữ liệu.', HttpStatus.BAD_GATEWAY);
+    return body.data;
+  }
+
+  /**
    * Tìm kiếm Repository với hàng đợi chống vi phạm rate limit (30 req/min).
    * Đảm bảo khoảng cách tối thiểu 2.000ms giữa 2 lần gọi liên tiếp.
    */
-  async timKiemRepo(query: string, perPage = 20, page = 1): Promise<GithubSearchResult> {
+  async timKiemRepo(
+    query: string,
+    perPage = 20,
+    page = 1,
+    sapXep?: 'stars' | 'updated',
+  ): Promise<GithubSearchResult> {
     if (!query || !query.trim()) {
       throw new BadRequestException('Từ khóa tìm kiếm không được để trống.');
     }
 
     // Đẩy tác vụ vào hàng đợi tuần tự
     const ketQua = await this.enqueueSearch(async () => {
-      const endpoint = `/search/repositories?q=${encodeURIComponent(query.trim())}&per_page=${perPage}&page=${page}`;
+      const thuTu = sapXep ? `&sort=${sapXep}&order=desc` : '';
+      const endpoint = `/search/repositories?q=${encodeURIComponent(query.trim())}&per_page=${perPage}&page=${page}${thuTu}`;
       return this.yeuCauGithub<GithubSearchResult>(endpoint);
     });
 
@@ -314,6 +401,10 @@ export class GithubService {
    * Cảnh báo khi hạn mức còn dưới 10%.
    */
   private capNhatRateLimitHeaders(headers: Headers): void {
+    // Chỉ theo dõi hạn mức "core" (5.000/giờ). Search có hạn mức riêng 30/phút: trước đây ghi đè
+    // làm `remaining` tụt còn khoảng 29 sau mỗi lần tìm, khiến dây chuyền nạp dừng oan.
+    const resource = headers.get('x-ratelimit-resource');
+    if (resource && resource !== 'core') return;
     const remainingHeader = headers.get('x-ratelimit-remaining');
     const limitHeader = headers.get('x-ratelimit-limit');
     const resetHeader = headers.get('x-ratelimit-reset');

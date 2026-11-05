@@ -6,6 +6,9 @@ import { VaiTro } from '@prisma/client';
 import { UngDungService } from '../ung-dung.service';
 import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { DayChuyenNapRepoService } from '../services/day-chuyen-nap-repo.service';
+import { KhamPhaRepoService } from '../services/kham-pha-repo.service';
+import { TheoDoiThayDoiService } from '../services/theo-doi-thay-doi.service';
+import { ThongKeNapRepoService } from '../services/thong-ke-nap-repo.service';
 import { LlmRateLimiterService } from '../../ai/services/llm-rate-limiter.service';
 import { VaiTroYeuCau } from '../../../common/decorators/vai-tro.decorator';
 
@@ -24,6 +27,15 @@ export class IngestionDiscoverDto {
   @IsArray({ message: 'repos phải là một mảng chuỗi' })
   @IsString({ each: true, message: 'Mỗi phần tử phải là chuỗi owner/repo' })
   repos?: string[];
+}
+
+export class TheoDoiRunDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'soApp phải là số nguyên' })
+  @Min(1, { message: 'soApp tối thiểu là 1' })
+  @Max(500, { message: 'soApp tối đa là 500' })
+  soApp?: number;
 }
 
 export class IngestionRunDto {
@@ -48,6 +60,9 @@ export class AiQuanTriController {
     private readonly appDescriptionTranslationService: AppDescriptionTranslationService,
     private readonly repoIngestionPipelineService: DayChuyenNapRepoService,
     private readonly llmRateLimiterService: LlmRateLimiterService,
+    private readonly khamPhaRepoService: KhamPhaRepoService,
+    private readonly theoDoiThayDoiService: TheoDoiThayDoiService,
+    private readonly thongKeNapRepoService: ThongKeNapRepoService,
   ) {}
 
   @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
@@ -116,5 +131,37 @@ export class AiQuanTriController {
       Boolean(body?.forceRun),
     );
     return { ketQuaNap, ketQuaDich };
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Post('nap-repo/kham-pha-tu-dong')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Chạy một lượt khám phá Trending và Search ngay, bỏ qua công tắc (P3B-06.1, 06.2)',
+  })
+  async khamPhaTuDong() {
+    return this.khamPhaRepoService.khamPhaTuDong(true);
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Post('theo-doi/chay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Chạy một lượt theo dõi thay đổi bằng ETag ngay, bỏ qua công tắc (P3B-07)',
+  })
+  async chayTheoDoi(@Body() body?: TheoDoiRunDto) {
+    return this.theoDoiThayDoiService.quetMotLuot(body?.soApp, true);
+  }
+
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
+  @Get('nap-repo/suc-khoe')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Bảng sức khỏe nạp và theo dõi: công tắc, hạn mức GitHub, hàng chờ, tỷ lệ 304, bản dịch (P3B-06.11, P3B-21.3)',
+  })
+  @ApiResponse({ status: 403, description: 'Không có quyền quản trị viên' })
+  async laySucKhoeNapRepo() {
+    return this.thongKeNapRepoService.laySucKhoe();
   }
 }

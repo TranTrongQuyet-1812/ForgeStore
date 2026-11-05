@@ -286,4 +286,78 @@ describe('GithubService (P2-20)', () => {
       expect(result.items[0].name).toBe('vlc');
     });
   });
+
+  describe('Hạn mức, hỏi có điều kiện và GraphQL (P3B-06, P3B-07)', () => {
+    const traVe = (status: number, headers: Record<string, string> = {}, body: unknown = {}) =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        url: 'https://api.github.com/repos/moi/ten',
+        headers: new Headers(headers),
+        json: async () => body,
+      }) as unknown as Response;
+
+    it('chỉ theo dõi hạn mức core: phản hồi Search không ghi đè số lượt còn lại', async () => {
+      mockCacheService.lay.mockResolvedValue(null);
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          traVe(200, {
+            'x-ratelimit-resource': 'core',
+            'x-ratelimit-remaining': '4800',
+            'x-ratelimit-limit': '5000',
+          }),
+        )
+        .mockResolvedValueOnce(
+          traVe(
+            200,
+            {
+              'x-ratelimit-resource': 'search',
+              'x-ratelimit-remaining': '29',
+              'x-ratelimit-limit': '30',
+            },
+            { items: [] },
+          ),
+        );
+      await service.layRepo('a', 'b');
+      await service.timKiemRepo('stars:>1000');
+      expect(service.getRateLimitInfo().remaining).toBe(4800);
+    });
+
+    it('hoiCoDieuKien gửi ETag của DB, 304 thì không có dữ liệu, 200 thì trả ETag mới và URL cuối', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce(traVe(304));
+      expect(await service.hoiCoDieuKien('/repos/a/b', '"e1"')).toEqual({ trangThai: 304 });
+      const goi = (global.fetch as MockFn).mock.calls[0]![1] as { headers: Record<string, string> };
+      expect(goi.headers['If-None-Match']).toBe('"e1"');
+
+      global.fetch = vi.fn().mockResolvedValueOnce(traVe(200, { etag: '"e2"' }, { id: 1 }));
+      expect(await service.hoiCoDieuKien('/repos/a/b', '"e1"')).toEqual({
+        trangThai: 200,
+        duLieu: { id: 1 },
+        etag: '"e2"',
+        urlCuoi: 'https://api.github.com/repos/moi/ten',
+      });
+
+      global.fetch = vi.fn().mockResolvedValueOnce(traVe(404));
+      expect((await service.hoiCoDieuKien('/repos/a/b')).trangThai).toBe(404);
+
+      global.fetch = vi.fn().mockResolvedValueOnce(traVe(429));
+      await expect(service.hoiCoDieuKien('/repos/a/b')).rejects.toBeInstanceOf(HttpException);
+    });
+
+    it('graphql trả data, báo lỗi hạn mức khi GitHub trả RATE_LIMITED', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(traVe(200, {}, { data: { r0: { stargazerCount: 5 } } }));
+      expect(
+        await service.graphql('{ r0: repository(owner:"a", name:"b") { stargazerCount } }'),
+      ).toEqual({
+        r0: { stargazerCount: 5 },
+      });
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(traVe(200, {}, { errors: [{ type: 'RATE_LIMITED' }] }));
+      await expect(service.graphql('{ x }')).rejects.toBeInstanceOf(HttpException);
+    });
+  });
 });

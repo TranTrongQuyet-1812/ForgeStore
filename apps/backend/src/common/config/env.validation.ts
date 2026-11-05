@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+/** Công tắc bật/tắt đọc từ chuỗi môi trường ("true", "1"...), mặc định tắt. */
+function congTac() {
+  return z
+    .preprocess(
+      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
+      z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]),
+    )
+    .default(false)
+    .transform((v) => v === true || v === 'true' || v === '1');
+}
+
 export const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -64,15 +75,25 @@ export const envSchema = z.object({
   LANDING_ORIGIN: z.string().default('http://localhost:3000'),
 
   // Dây chuyền nạp Repo & Hàng đợi dịch (P3B-06 & P3B-05.4)
-  INGESTION_ENABLED: z
-    .preprocess(
-      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
-      z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]),
-    )
-    .default(false)
-    .transform((v) => v === true || v === 'true' || v === '1'),
+  INGESTION_ENABLED: congTac(),
+  // P3B-06.9: công tắc riêng từng tầng; tầng chỉ chạy khi cả công tắc tổng lẫn công tắc riêng bật
+  INGESTION_DISCOVERY_ENABLED: congTac(),
+  INGESTION_SCREENING_ENABLED: congTac(),
+  INGESTION_TRANSLATION_ENABLED: congTac(),
+  // P3B-21.2: quét thay đổi (P3B-07) có công tắc riêng, không phụ thuộc công tắc tổng
+  INGESTION_WATCH_ENABLED: congTac(),
   INGESTION_BATCH_SIZE: z.coerce.number().default(30),
   INGESTION_DAILY_README_BUDGET: z.coerce.number().default(50),
+  // P3B-06.3: ngưỡng của bộ lọc dùng chung và trần tổng số app
+  INGESTION_MIN_STARS: z.coerce.number().default(1000),
+  INGESTION_MAX_PUSH_AGE_MONTHS: z.coerce.number().default(24),
+  INGESTION_MAX_RELEASE_AGE_MONTHS: z.coerce.number().default(36),
+  INGESTION_MAX_APPS: z.coerce.number().default(10000),
+  // P3B-06.8: ngân sách yêu cầu GitHub mỗi giờ cho nạp, và mức hạn mức core còn lại thì dừng
+  INGESTION_GITHUB_BUDGET_PER_HOUR: z.coerce.number().default(2000),
+  INGESTION_GITHUB_MIN_REMAINING: z.coerce.number().default(1000),
+  // P3B-07: số app quét thay đổi mỗi lượt (10 phút một lượt)
+  WATCH_BATCH_SIZE: z.coerce.number().default(100),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

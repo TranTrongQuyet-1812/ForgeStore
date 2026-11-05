@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DayChuyenNapRepoService } from '../services/day-chuyen-nap-repo.service';
+import { KhamPhaRepoService } from '../services/kham-pha-repo.service';
 
 @Injectable()
 export class NapRepoJob {
   private readonly logger = new Logger(NapRepoJob.name);
 
-  constructor(private readonly pipelineService: DayChuyenNapRepoService) {}
+  constructor(
+    private readonly pipelineService: DayChuyenNapRepoService,
+    private readonly khamPhaRepoService: KhamPhaRepoService,
+  ) {}
 
   /**
    * Tác vụ định kỳ mỗi giờ: chạy dây chuyền nạp lô nhỏ và dịch nền (P3B-06 & P3B-05.4)
@@ -48,8 +52,8 @@ export class NapRepoJob {
       };
     }
 
-    // 1. Tự động nạp danh sách hạt giống nếu kho ứng viên còn ít
-    await this.pipelineService.khamPhaUngVien();
+    // 1. Khám phá ứng viên từ Trending và Search (tầng có công tắc riêng, P3B-06.1, 06.9)
+    await this.khamPhaRepoService.khamPhaTuDong(force);
 
     // 2. Sàng lọc và nạp một lô nhỏ
     const ketQuaNap = await this.pipelineService.sangLocVaNapLauNho(undefined, force);

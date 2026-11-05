@@ -82,6 +82,11 @@ enum LyDoLoaiUngVien {
   DA_LUU_TRU
   GIAY_PHEP_KHONG_MO
   LOI_KHI_SANG_LOC
+  // P3B-06.4: mã của bộ lọc dùng chung (bo-loc-nap-repo.util). Không có GIAY_PHEP_CAN_DUYET vì D-36 bỏ duyệt tay giấy phép.
+  IT_SAO
+  LA_FORK
+  KHONG_CON_CAP_NHAT
+  TRONG_DANH_SACH_CHAN
 }
 
 // =============================================================
@@ -441,10 +446,15 @@ model UngVienRepo {
   nguonKhamPha      String               @map("nguon_kham_pha")
   trangThai         TrangThaiUngVienRepo @default(CHO_SANG_LOC) @map("trang_thai")
   lyDoLoai          LyDoLoaiUngVien?     @map("ly_do_loai")
+  // P3B-06.1: 1 = Trending, 2 = nhiều sao, 3 = đáng chú ý; hàng chờ lấy số nhỏ trước
+  doUuTien          Int                  @default(2) @map("do_uu_tien")
+  // P3B-06.7: số lần gặp lỗi tạm thời; quá 3 lần mới chuyển sang lỗi để không chặn đầu hàng chờ
+  soLanThu          Int                  @default(0) @map("so_lan_thu")
   ngayTao           DateTime             @default(now()) @map("ngay_tao")
   ngayCapNhat       DateTime             @updatedAt @map("ngay_cap_nhat")
 
   @@index([trangThai, ngayTao(sort: Asc)])
+  @@index([trangThai, doUuTien, ngayTao(sort: Asc)])
   @@map("ung_vien_repo")
 }
 

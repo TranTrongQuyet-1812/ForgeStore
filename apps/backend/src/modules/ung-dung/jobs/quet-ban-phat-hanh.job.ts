@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -25,6 +26,7 @@ export class QuetBanPhatHanhJob {
     private readonly githubService: GithubService,
     private readonly appsService: UngDungService,
     private readonly cacheService: CacheService,
+    @Optional() private readonly config?: ConfigService,
   ) {}
 
   /**
@@ -33,6 +35,8 @@ export class QuetBanPhatHanhJob {
    */
   @Cron(CronExpression.EVERY_2_HOURS)
   async handleCron(): Promise<void> {
+    // P3B-07.1: khi bật bộ theo dõi thay đổi bằng ETag thì job cũ đứng ngoài để không quét trùng
+    if (this.config?.get<boolean>('INGESTION_WATCH_ENABLED', false)) return;
     this.logger.log('Bắt đầu chu kỳ quét Release định kỳ...');
     await this.scanReleases(10);
   }

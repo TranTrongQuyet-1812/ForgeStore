@@ -57,6 +57,7 @@ import {
 } from './hop-nhat.core';
 import { ghepBanDichDaNhap, taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
 import { doBocTach, duDoanTrangThaiTuReadme } from './do-boc-tach.core';
+import { DAI_SAO, CHU_DE_KHAM_PHA } from '../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util';
 import {
   chayKiemTuoi,
   layChuaXuLy,
@@ -1687,56 +1688,6 @@ async function lenhHoanTac(): Promise<void> {
 }
 
 // ---------------------------------------------------------------- KHÁM PHÁ
-/** Dải sao, quét từ cao xuống thấp (ưu tiên repo nhiều sao, P3B-06.1). Mỗi truy vấn Search tối đa 1.000 kết quả nên chia dải. */
-const DAI_SAO = ['>=20000', '5000..19999', '2000..4999', '1000..1999'];
-
-/** Chủ đề (topic) dùng để tìm repo ứng dụng; '' là không lọc chủ đề. */
-const CHU_DE_KHAM_PHA = [
-  '',
-  'topic:windows',
-  'topic:desktop-app',
-  'topic:electron',
-  'topic:tauri',
-  'topic:productivity',
-  'topic:cross-platform',
-  'topic:gui',
-  'topic:utility',
-  'topic:qt',
-  'topic:wpf',
-  'topic:dotnet',
-  'topic:flutter',
-  'topic:gtk',
-  'topic:cli',
-  'topic:terminal',
-  'topic:editor',
-  'topic:media-player',
-  'topic:video',
-  'topic:audio',
-  'topic:music',
-  'topic:file-manager',
-  'topic:downloader',
-  'topic:backup',
-  'topic:password-manager',
-  'topic:security',
-  'topic:vpn',
-  'topic:proxy',
-  'topic:network',
-  'topic:screen-recorder',
-  'topic:screenshot',
-  'topic:ocr',
-  'topic:note-taking',
-  'topic:markdown',
-  'topic:launcher',
-  'topic:clipboard',
-  'topic:emulator',
-  'topic:game',
-  'topic:torrent',
-  'topic:ide',
-  'topic:database',
-  'topic:git',
-  'topic:developer-tools',
-  'topic:system-tools',
-];
 
 /** Lấy README thô của repo qua GitHub API (giải mã base64, giống GithubService.layReadme). */
 async function layReadmeGithub(

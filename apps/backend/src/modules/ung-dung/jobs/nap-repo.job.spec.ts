@@ -10,15 +10,16 @@ describe('NapRepoJob (P3B-06 & P3B-05.4)', () => {
     sangLocVaNapLauNho: vi.fn(),
     dichNenTheoNganSachNgay: vi.fn(),
   };
+  const mockKhamPha = { khamPhaTuDong: vi.fn() };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockPipelineService.isIngestionEnabled.mockReturnValue(true);
-    job = new NapRepoJob(mockPipelineService as any);
+    job = new NapRepoJob(mockPipelineService as never, mockKhamPha as never);
   });
 
   it('handleCron kích hoạt chayChuKyDinhKy khi INGESTION_ENABLED = true', async () => {
-    mockPipelineService.khamPhaUngVien.mockResolvedValueOnce({ daThem: 2, daBoQua: 18 });
+    mockKhamPha.khamPhaTuDong.mockResolvedValueOnce({ trending: 2, nhieuSao: 0, dangChuY: 0 });
     mockPipelineService.sangLocVaNapLauNho.mockResolvedValueOnce({
       soLuongUngVienQuet: 10,
       soLuongDaNap: 2,
@@ -32,7 +33,8 @@ describe('NapRepoJob (P3B-06 & P3B-05.4)', () => {
 
     const res = await job.chayChuKyDinhKy();
 
-    expect(mockPipelineService.khamPhaUngVien).toHaveBeenCalledTimes(1);
+    // P3B-06.1: khám phá tự động thay cho nạp danh sách hạt giống
+    expect(mockKhamPha.khamPhaTuDong).toHaveBeenCalledWith(false);
     expect(mockPipelineService.sangLocVaNapLauNho).toHaveBeenCalledWith(undefined, false);
     expect(mockPipelineService.dichNenTheoNganSachNgay).toHaveBeenCalledWith(undefined, false);
     expect(res.ketQuaNap.soLuongDaNap).toBe(2);
@@ -46,7 +48,7 @@ describe('NapRepoJob (P3B-06 & P3B-05.4)', () => {
 
     expect(res.ketQuaNap.daNhayQua).toBe(true);
     expect(res.ketQuaNap.lyDo).toBe('ingestion_disabled');
-    expect(mockPipelineService.khamPhaUngVien).not.toHaveBeenCalled();
+    expect(mockKhamPha.khamPhaTuDong).not.toHaveBeenCalled();
     expect(mockPipelineService.sangLocVaNapLauNho).not.toHaveBeenCalled();
     expect(mockPipelineService.dichNenTheoNganSachNgay).not.toHaveBeenCalled();
   });

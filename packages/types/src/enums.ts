@@ -88,6 +88,10 @@ export const LyDoLoaiUngVien = {
   DA_LUU_TRU: 'DA_LUU_TRU',
   GIAY_PHEP_KHONG_MO: 'GIAY_PHEP_KHONG_MO',
   LOI_KHI_SANG_LOC: 'LOI_KHI_SANG_LOC',
+  IT_SAO: 'IT_SAO',
+  LA_FORK: 'LA_FORK',
+  KHONG_CON_CAP_NHAT: 'KHONG_CON_CAP_NHAT',
+  TRONG_DANH_SACH_CHAN: 'TRONG_DANH_SACH_CHAN',
 } as const;
 export type LyDoLoaiUngVien = (typeof LyDoLoaiUngVien)[keyof typeof LyDoLoaiUngVien];
 

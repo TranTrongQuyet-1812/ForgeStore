@@ -15,6 +15,10 @@ import { SuyGiamThinhHanhJob } from './jobs/suy-giam-thinh-hanh.job';
 import { DayChuyenNapRepoService } from './services/day-chuyen-nap-repo.service';
 import { NapRepoJob } from './jobs/nap-repo.job';
 import { KiemNhatQuanHienThiJob } from './jobs/kiem-nhat-quan-hien-thi.job';
+import { KhamPhaRepoService } from './services/kham-pha-repo.service';
+import { TheoDoiThayDoiService } from './services/theo-doi-thay-doi.service';
+import { TheoDoiThayDoiJob } from './jobs/theo-doi-thay-doi.job';
+import { ThongKeNapRepoService } from './services/thong-ke-nap-repo.service';
 
 @Module({
   imports: [PrismaModule, RedisModule, GithubModule, AiModule, YeuThichModule],
@@ -32,6 +36,10 @@ import { KiemNhatQuanHienThiJob } from './jobs/kiem-nhat-quan-hien-thi.job';
     DayChuyenNapRepoService,
     NapRepoJob,
     KiemNhatQuanHienThiJob,
+    KhamPhaRepoService,
+    TheoDoiThayDoiService,
+    TheoDoiThayDoiJob,
+    ThongKeNapRepoService,
   ],
   exports: [
     UngDungService,

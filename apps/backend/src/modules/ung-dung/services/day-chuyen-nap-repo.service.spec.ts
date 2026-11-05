@@ -11,10 +11,13 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
     ungDung: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      count: vi.fn(),
     },
   };
 
@@ -23,6 +26,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
     layRepo: vi.fn(),
     layReleaseMoiNhat: vi.fn(),
     layReadme: vi.fn(),
+    graphql: vi.fn(),
   };
 
   const mockCacheService = {
@@ -30,6 +34,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
     lay: vi.fn(),
     luu: vi.fn(),
     xoa: vi.fn(),
+    tangSo: vi.fn(),
     withLock: vi.fn().mockImplementation((key, ttl, action) => action()),
   };
 
@@ -59,6 +64,7 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
     mockCacheService.withLock.mockImplementation((key, ttl, action) => action());
     mockConfig.get.mockImplementation((key: string, defaultVal: unknown) => {
       if (key === 'INGESTION_ENABLED') return true;
+      if (key.startsWith('INGESTION_') && key.endsWith('_ENABLED')) return true;
       if (key === 'INGESTION_BATCH_SIZE') return 30;
       if (key === 'INGESTION_DAILY_README_BUDGET') return 50;
       return defaultVal;
@@ -127,355 +133,211 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
     });
   });
 
-  describe('sangLocVaNapLauNho (P3B-06.2, 06.3 & 6 Chốt Chặn)', () => {
-    it('Chốt chặn 6: bỏ qua nếu INGESTION_ENABLED = false và không forceRun', async () => {
-      mockConfig.get.mockReturnValueOnce(false); // Tắt tính năng nạp tự động (INGESTION_ENABLED = false)
+  describe('sangLocVaNapLauNho (P3B-06.3 đến 06.8, sàng lọc bằng GraphQL)', () => {
+    const now = new Date();
+    const ngayTruoc = (n: number) => new Date(now.getTime() - n * 86400000).toISOString();
+    const uv = (ten: string, soLanThu = 0) => ({
+      maUngVien: `uv-${ten}`,
+      tenRepoDayDu: ten,
+      soLanThu,
+      trangThai: TrangThaiUngVienRepo.CHO_SANG_LOC,
+    });
+    /** Một repo GraphQL đạt mọi lọc cục bộ; ghi đè từng trường cho từng ca. */
+    const repoGql = (ten: string, ghiDe: Record<string, unknown> = {}) => ({
+      nameWithOwner: ten,
+      name: ten.split('/')[1],
+      description: 'A desktop app',
+      stargazerCount: 5000,
+      isFork: false,
+      isArchived: false,
+      pushedAt: ngayTruoc(10),
+      licenseInfo: { spdxId: 'MIT' },
+      repositoryTopics: { nodes: [] },
+      latestRelease: {
+        tagName: 'v1.0.0',
+        publishedAt: ngayTruoc(20),
+        isPrerelease: false,
+        isDraft: false,
+        releaseAssets: { nodes: [{ name: 'app-setup-x64.exe' }] },
+      },
+      ...ghiDe,
+    });
+    const datHangCho = (...ds: ReturnType<typeof uv>[]) =>
+      mockPrisma.ungVienRepo.findMany.mockResolvedValue(ds);
+    const lyDoCuaUngVien = (ma: string) =>
+      mockPrisma.ungVienRepo.update.mock.calls.find((c) => c[0].where.maUngVien === ma)?.[0].data;
 
+    beforeEach(() => {
+      mockGithubService.getRateLimitInfo.mockReturnValue({
+        remaining: 4500,
+        limit: 5000,
+        reset: 0,
+      });
+      mockCacheService.lay.mockResolvedValue(0);
+      mockPrisma.ungDung.count.mockResolvedValue(800);
+      mockPrisma.ungDung.findFirst.mockResolvedValue(null);
+      mockPrisma.ungVienRepo.updateMany.mockResolvedValue({ count: 0 });
+    });
+
+    it('bỏ qua khi tầng sàng lọc tắt (dù công tắc tổng bật) và không forceRun', async () => {
+      mockConfig.get.mockImplementation((key: string, d: unknown) =>
+        key === 'INGESTION_SCREENING_ENABLED' ? false : key === 'INGESTION_ENABLED' ? true : d,
+      );
       const res = await service.sangLocVaNapLauNho(30, false);
-
-      expect(res.daNhayQua).toBe(true);
-      expect(res.lyDo).toBe('ingestion_disabled');
+      expect(res).toMatchObject({ daNhayQua: true, lyDo: 'ingestion_disabled' });
       expect(mockCacheService.withLock).not.toHaveBeenCalled();
     });
 
-    it('Chốt chặn 4: bỏ qua nếu job đang bị khóa trên Redis (fs:ingestion:lock)', async () => {
+    it('bỏ qua nếu job đang bị khóa trên Redis (fs:ingestion:lock)', async () => {
       mockCacheService.withLock.mockRejectedValueOnce(
         new Error('Tài nguyên [fs:ingestion:lock] đang bị khóa bởi tiến trình khác.'),
       );
-
       const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.dangChay).toBe(true);
-      expect(res.lyDo).toBe('job_locked');
+      expect(res).toMatchObject({ dangChay: true, lyDo: 'job_locked' });
       expect(mockPrisma.ungVienRepo.findMany).not.toHaveBeenCalled();
     });
 
-    it('Chốt chặn 2: ngắt ngay nếu hạn mức GitHub API sắp hết (< 100 req)', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 45,
-        limit: 5000,
-        reset: 123456,
+    it('P3B-06.8: dừng khi hạn mức core còn dưới 1.000 hoặc đã hết ngân sách giờ', async () => {
+      mockGithubService.getRateLimitInfo.mockReturnValue({ remaining: 900, limit: 5000, reset: 0 });
+      expect(await service.sangLocVaNapLauNho(30, true)).toMatchObject({
+        dungDoRateLimit: true,
+        lyDo: 'github_rate_limited',
       });
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.dungDoRateLimit).toBe(true);
-      expect(res.rateLimitConLai).toBe(45);
+      mockGithubService.getRateLimitInfo.mockReturnValue({
+        remaining: 4500,
+        limit: 5000,
+        reset: 0,
+      });
+      mockCacheService.lay.mockResolvedValue(2000);
+      expect(await service.sangLocVaNapLauNho(30, true)).toMatchObject({
+        lyDo: 'het_ngan_sach_gio',
+      });
       expect(mockPrisma.ungVienRepo.findMany).not.toHaveBeenCalled();
     });
 
-    it('Chốt chặn 1: loại repo archived gán DA_LUU_TRU, không xóa dòng', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-1', tenRepoDayDu: 'archived/project' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: true,
-        license: { key: 'mit' },
-      });
+    it('lấy hàng chờ theo độ ưu tiên rồi ngày tạo, và xét lại ứng viên bị loại quá 30 ngày', async () => {
+      datHangCho();
+      await service.sangLocVaNapLauNho(30, true);
+      expect(mockPrisma.ungVienRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ doUuTien: 'asc' }, { ngayTao: 'asc' }] }),
+      );
+      const xetLai = mockPrisma.ungVienRepo.updateMany.mock.calls[0]![0];
+      expect(xetLai.data).toEqual({ trangThai: 'CHO_SANG_LOC', lyDoLoai: null, soLanThu: 0 });
+      expect(xetLai.where.lyDoLoai.notIn).toEqual(['TRONG_DANH_SACH_CHAN', 'LA_FORK']);
+    });
 
+    it('một yêu cầu GraphQL cho cả nhóm; phân loại bằng bộ lọc dùng chung, không xóa dòng', async () => {
+      datHangCho(
+        uv('a/luu-tru'),
+        uv('b/fork'),
+        uv('c/khong-gp'),
+        uv('d/crack-tool'),
+        uv('e/da-xoa'),
+      );
+      mockGithubService.graphql.mockResolvedValue({
+        r0: repoGql('a/luu-tru', { isArchived: true }),
+        r1: repoGql('b/fork', { isFork: true }),
+        r2: repoGql('c/khong-gp', { licenseInfo: null }),
+        r3: repoGql('d/crack-tool'),
+        r4: null,
+      });
       const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.DA_LUU_TRU]).toBe(1);
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-1' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.DA_LUU_TRU,
-        },
+      expect(mockGithubService.graphql).toHaveBeenCalledTimes(1);
+      expect(res.chiTietBiLoai).toEqual({
+        DA_LUU_TRU: 1,
+        LA_FORK: 1,
+        GIAY_PHEP_KHONG_MO: 1,
+        TRONG_DANH_SACH_CHAN: 1,
+        LOI_KHI_SANG_LOC: 1,
       });
       expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
     });
 
-    it('Chốt chặn 5: loại repo không có giấy phép mã nguồn mở gán GIAY_PHEP_KHONG_MO', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
+    it('D-36: nhận giấy phép NOASSERTION/other; nạp bằng tên chuẩn GitHub và tính Thịnh hành một lần', async () => {
+      datHangCho(uv('cu/ten-cu'), uv('f/khac'));
+      mockGithubService.graphql.mockResolvedValue({
+        r0: repoGql('moi/ten-moi'),
+        r1: repoGql('f/khac', { licenseInfo: { spdxId: 'NOASSERTION' } }),
       });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-no-lic', tenRepoDayDu: 'closed/app' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: null, // Không có license
-      });
-
       const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.GIAY_PHEP_KHONG_MO]).toBe(1);
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-no-lic' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.GIAY_PHEP_KHONG_MO,
-        },
-      });
-    });
-
-    it('Chốt chặn 2: lỗi rate limit hoặc rớt mạng giữa lô -> giữ CHO_SANG_LOC và dừng lô ngay', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-err', tenRepoDayDu: 'busy/app' },
-        { maUngVien: 'uv-next', tenRepoDayDu: 'next/app' },
-      ]);
-      // Ném lỗi 429 rate limit
-      mockGithubService.layRepo.mockRejectedValueOnce({
-        status: 429,
-        message: 'Rate limit exceeded',
-      });
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      // Không loại ứng viên, không gọi update BI_LOAI
-      expect(res.soLuongBiLoai).toBe(0);
-      expect(res.soLuongDaNap).toBe(0);
-      expect(mockPrisma.ungVienRepo.update).not.toHaveBeenCalled();
-    });
-
-    it('P3B-25.5 (D-30): nạp đầy đủ repo chỉ có lệnh cài CLI thay vì loại bỏ', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-cli', tenRepoDayDu: 'cli-tool/fzf' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'mit' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce({
-        tag_name: 'v1.0.0',
-        assets: [{ name: 'source.tar.gz' }],
-      });
-      mockGithubService.layReadme.mockResolvedValueOnce(
-        '# Installation\nRun `winget install fzf` or `scoop install fzf`',
-      );
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(0);
-      expect(res.soLuongDaNap).toBe(1);
-      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('cli-tool', 'fzf');
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-cli' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.DA_NAP,
-          lyDoLoai: null,
-        },
-      });
-    });
-
-    it('P3B-25.5 (D-30): nạp đầy đủ repo không có bản phát hành nhưng có lệnh cài CLI trong README', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-no-rel-cli', tenRepoDayDu: 'npm-pkg/serve' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'mit' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(null);
-      mockGithubService.layReadme.mockResolvedValueOnce(
-        '# Installation\n```bash\nnpm install -g serve\n```',
-      );
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(0);
-      expect(res.soLuongDaNap).toBe(1);
-      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('npm-pkg', 'serve');
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-no-rel-cli' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.DA_NAP,
-          lyDoLoai: null,
-        },
-      });
-    });
-
-    it('P3B-25.5 (D-30): loại repo không có bản phát hành và không có lệnh CLI gán KHONG_CO_BAN_PHAT_HANH', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-no-rel-no-cli', tenRepoDayDu: 'docs/guide' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'mit' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(null);
-      mockGithubService.layReadme.mockResolvedValueOnce('# Just Documentation');
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH]).toBe(1);
-      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-no-rel-no-cli' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.KHONG_CO_BAN_PHAT_HANH,
-        },
-      });
-    });
-
-    it.each([
-      ['không có bản phát hành', null],
-      ['có bản phát hành nhưng không có file cài', { tag_name: 'v1', assets: [{ name: 'a.txt' }] }],
-    ])(
-      'P3B-25.5 (D-30): lỗi rate limit khi lấy README (%s) -> giữ CHO_SANG_LOC, dừng lô, không loại oan',
-      async (_moTa, release) => {
-        mockGithubService.getRateLimitInfo.mockReturnValue({
-          remaining: 4500,
-          limit: 5000,
-          reset: 123456,
-        });
-        mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-          { maUngVien: 'uv-readme-429', tenRepoDayDu: 'cli-tool/busy' },
-          { maUngVien: 'uv-sau', tenRepoDayDu: 'cli-tool/sau' },
-        ]);
-        mockGithubService.layRepo.mockResolvedValueOnce({
-          archived: false,
-          license: { key: 'mit' },
-        });
-        mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce(release);
-        mockGithubService.layReadme.mockRejectedValueOnce({
-          status: 429,
-          message: 'Rate limit exceeded',
-        });
-
-        const res = await service.sangLocVaNapLauNho(30, true);
-
-        expect(res.soLuongBiLoai).toBe(0);
-        expect(res.soLuongDaNap).toBe(0);
-        expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
-        expect(mockPrisma.ungVienRepo.update).not.toHaveBeenCalled();
-        // Dừng lô: ứng viên phía sau không bị đụng tới
-        expect(mockGithubService.layRepo).toHaveBeenCalledTimes(1);
-      },
-    );
-
-    it('Chốt chặn 1: loại repo không có bộ cài và không có CLI gán KHONG_CO_FILE_CAI', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-no-file', tenRepoDayDu: 'library/utils' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'apache-2.0' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce({
-        tag_name: 'v1.0.0',
-        assets: [{ name: 'changelog.txt' }],
-      });
-      mockGithubService.layReadme.mockResolvedValueOnce('# Pure Library with no CLI or binaries');
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.KHONG_CO_FILE_CAI]).toBe(1);
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-no-file' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
-        },
-      });
-    });
-
-    it('Chốt chặn 1: loại repo chỉ có lệnh dev (pip install -r requirements.txt) gán KHONG_CO_FILE_CAI, không gán CHI_CO_CAI_CLI (D-23)', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-dev-only', tenRepoDayDu: 'dev/python-lib' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'mit' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce({
-        tag_name: 'v1.0.0',
-        assets: [{ name: 'source.tar.gz' }],
-      });
-      mockGithubService.layReadme.mockResolvedValueOnce(
-        '# Dev Guide\n## Development\npip install -r requirements.txt\npython main.py',
-      );
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongBiLoai).toBe(1);
-      expect(res.chiTietBiLoai[LyDoLoaiUngVien.KHONG_CO_FILE_CAI]).toBe(1);
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-dev-only' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.BI_LOAI,
-          lyDoLoai: LyDoLoaiUngVien.KHONG_CO_FILE_CAI,
-        },
-      });
-      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
-    });
-
-    it('nạp thành công repo có file cài đặt Windows và tính lại Thịnh hành 1 lần', async () => {
-      mockGithubService.getRateLimitInfo.mockReturnValue({
-        remaining: 4500,
-        limit: 5000,
-        reset: 123456,
-      });
-      mockPrisma.ungVienRepo.findMany.mockResolvedValueOnce([
-        { maUngVien: 'uv-ok', tenRepoDayDu: 'rustdesk/rustdesk' },
-      ]);
-      mockGithubService.layRepo.mockResolvedValueOnce({
-        archived: false,
-        license: { key: 'gpl-3.0' },
-      });
-      mockGithubService.layReleaseMoiNhat.mockResolvedValueOnce({
-        tag_name: '1.2.3',
-        assets: [{ name: 'rustdesk-1.2.3-x86_64.exe' }],
-      });
-      mockAppsService.dongBoRepo.mockResolvedValueOnce({ maUngDung: 'app-rustdesk' });
-      mockTrendingDecayJob.capNhatDiemThinhHanhToanBo.mockResolvedValueOnce({ soLuongCapNhat: 1 });
-
-      const res = await service.sangLocVaNapLauNho(30, true);
-
-      expect(res.soLuongDaNap).toBe(1);
-      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('rustdesk', 'rustdesk');
-      expect(mockPrisma.ungVienRepo.update).toHaveBeenCalledWith({
-        where: { maUngVien: 'uv-ok' },
-        data: {
-          trangThai: TrangThaiUngVienRepo.DA_NAP,
-          lyDoLoai: null,
-        },
-      });
-      // Tính lại điểm Thịnh hành MỘT LẦN sau lô
+      expect(res.soLuongDaNap).toBe(2);
+      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('moi', 'ten-moi');
+      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('f', 'khac');
+      expect(lyDoCuaUngVien('uv-cu/ten-cu')).toEqual({ trangThai: 'DA_NAP', lyDoLoai: null });
       expect(mockTrendingDecayJob.capNhatDiemThinhHanhToanBo).toHaveBeenCalledTimes(1);
+    });
+
+    it('D-30: không có tệp cài thì xét README; có lệnh cài thì nạp, không có thì loại đúng mã', async () => {
+      datHangCho(uv('g/cli'), uv('h/khong-file'), uv('i/khong-ban'), uv('k/release-cu'));
+      mockGithubService.graphql.mockResolvedValue({
+        r0: repoGql('g/cli', { latestRelease: null }),
+        r1: repoGql('h/khong-file', {
+          latestRelease: {
+            ...repoGql('x/y').latestRelease,
+            releaseAssets: { nodes: [{ name: 'src.tar.gz' }] },
+          },
+        }),
+        r2: repoGql('i/khong-ban', { latestRelease: null }),
+        r3: repoGql('k/release-cu', {
+          latestRelease: { ...repoGql('x/y').latestRelease, publishedAt: ngayTruoc(1200) },
+        }),
+      });
+      mockGithubService.layReadme.mockImplementation(async (owner: string) =>
+        owner === 'g'
+          ? '## Install\n```sh\nnpm install -g cli\n```'
+          : '# Chỉ là thư viện\n```sh\npip install -r requirements.txt\n```',
+      );
+      const res = await service.sangLocVaNapLauNho(30, true);
+      expect(mockAppsService.dongBoRepo).toHaveBeenCalledWith('g', 'cli');
+      expect(res.chiTietBiLoai).toEqual({
+        KHONG_CO_FILE_CAI: 1,
+        KHONG_CO_BAN_PHAT_HANH: 1,
+        KHONG_CON_CAP_NHAT: 1,
+      });
+    });
+
+    it('P3B-06.7: lỗi tạm thời khi lấy README thì giữ chờ, tăng số lần thử và dừng lô', async () => {
+      datHangCho(uv('l/tam-thoi'), uv('m/sau'));
+      mockGithubService.graphql.mockResolvedValue({
+        r0: repoGql('l/tam-thoi', { latestRelease: null }),
+        r1: repoGql('m/sau'),
+      });
+      mockGithubService.layReadme.mockRejectedValue(
+        Object.assign(new Error('rate limit'), { status: 429 }),
+      );
+      const res = await service.sangLocVaNapLauNho(30, true);
+      expect(lyDoCuaUngVien('uv-l/tam-thoi')).toEqual({ soLanThu: { increment: 1 } });
+      expect(res.soLuongBiLoai).toBe(0);
+      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
+    });
+
+    it('P3B-06.7: quá 3 lần lỗi tạm thời thì chuyển sang LOI_KHI_SANG_LOC để không chặn đầu hàng chờ', async () => {
+      datHangCho(uv('n/lo-gql', 3));
+      mockGithubService.graphql.mockRejectedValue(new Error('fetch failed'));
+      await service.sangLocVaNapLauNho(30, true);
+      expect(lyDoCuaUngVien('uv-n/lo-gql')).toEqual({
+        trangThai: 'BI_LOAI',
+        lyDoLoai: LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
+      });
+    });
+
+    it('bỏ qua repo đã có trong kho (vd. tên cũ của app đã nạp) mà không đồng bộ lại', async () => {
+      datHangCho(uv('o/da-co'));
+      mockGithubService.graphql.mockResolvedValue({ r0: repoGql('o/da-co') });
+      mockPrisma.ungDung.findFirst.mockResolvedValue({ maUngDung: 'app-o' });
+      const res = await service.sangLocVaNapLauNho(30, true);
+      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
+      expect(res.soLuongDaNap).toBe(0);
+      expect(lyDoCuaUngVien('uv-o/da-co')).toEqual({ trangThai: 'DA_NAP', lyDoLoai: null });
+    });
+
+    it('P3B-06.3 lọc 11: dừng khi kho đã chạm trần INGESTION_MAX_APPS', async () => {
+      datHangCho(uv('p/moi'));
+      mockGithubService.graphql.mockResolvedValue({ r0: repoGql('p/moi') });
+      mockPrisma.ungDung.count.mockResolvedValue(10000);
+      const res = await service.sangLocVaNapLauNho(30, true);
+      expect(res.lyDo).toBe('dat_tran_so_app');
+      expect(mockAppsService.dongBoRepo).not.toHaveBeenCalled();
     });
   });
 
