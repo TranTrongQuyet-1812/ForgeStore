@@ -106,7 +106,7 @@ export const HopThoaiXacThuc: React.FC = () => {
         <div className="w-12 h-12 rounded-2xl bg-surface border border-border flex items-center justify-center p-2 mx-auto mb-4 shrink-0 shadow-md shadow-black/10 dark:shadow-black/40">
           <img
             src="/logo.png"
-            alt="ForgeStore Logo"
+            alt="Biểu tượng ForgeStore"
             className="w-full h-full object-contain drop-shadow pointer-events-none"
           />
         </div>

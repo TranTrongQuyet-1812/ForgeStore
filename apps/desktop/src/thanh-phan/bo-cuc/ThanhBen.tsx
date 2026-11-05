@@ -52,7 +52,7 @@ export const ThanhBen: React.FC = () => {
           <div className="w-11 h-11 rounded-2xl bg-surface-elevated border border-border flex items-center justify-center p-2 shadow-md shadow-black/5 dark:shadow-black/40 group-hover:border-accent-forge/40 group-hover:shadow-[0_0_14px_rgba(249,115,22,0.2)] transition-all duration-200 shrink-0">
             <img
               src="/logo.png"
-              alt="ForgeStore Logo"
+              alt="Biểu tượng ForgeStore"
               className="w-full h-full object-contain drop-shadow"
             />
           </div>

@@ -13,6 +13,8 @@ import {
   Sparkles,
   ArrowRight,
   PackageOpen,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
@@ -80,7 +82,12 @@ export const TrangDanhMuc: React.FC = () => {
   const { openCategory } = useDieuHuongStore();
 
   // Nạp danh mục động từ Backend có app khả dụng trên Windows (K3)
-  const { data: serverCategories = [], isLoading } = useQuery({
+  const {
+    data: serverCategories = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['store-categories', 'windows'],
     queryFn: () => khoUngDungService.layDanhSachDanhMuc('windows'),
     staleTime: 1000 * 60 * 5,
@@ -142,6 +149,22 @@ export const TrangDanhMuc: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      ) : isError ? (
+        // Lỗi mạng không được hiện như kho trống, nếu không người dùng tưởng chưa có ứng dụng nào
+        <div className="p-8 rounded-2xl bg-surface border border-danger/30 flex flex-col items-center justify-center text-center gap-3">
+          <AlertCircle className="w-8 h-8 text-danger" />
+          <h3 className="text-sm font-bold text-primary">Không thể tải danh mục</h3>
+          <p className="text-xs text-muted max-w-md">
+            Đã xảy ra lỗi khi kết nối tới máy chủ. Vui lòng kiểm tra lại đường truyền mạng.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="btn-tactile mt-2 px-4 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-xs text-primary font-medium flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-accent-forge outline-none"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Thử lại</span>
+          </button>
         </div>
       ) : displayedCategories.length > 0 ? (
         <AsciiReveal preset="dither" duration="fast" origin="top-left">
