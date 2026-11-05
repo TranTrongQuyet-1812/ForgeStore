@@ -198,8 +198,8 @@ export class DanhGiaService {
     await this.capNhatDiemDanhGiaUngDung(maUngDung);
 
     // Xóa cache chi tiết của ứng dụng
-    await this.cacheService.xoa(`fs:apps:detail:${maUngDung}`);
-    await this.cacheService.xoa(`fs:apps:detail:${ungDung.tenRepoDayDu.toLowerCase()}`);
+    await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${maUngDung}`);
+    await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${ungDung.tenRepoDayDu.toLowerCase()}`);
 
     this.logger.log(
       `Người dùng [${maNguoiDung}] đã gửi đánh giá ${dto.soSao}⭐ cho [${ungDung.tenRepoDayDu}] (v${phienBan})`,
@@ -269,8 +269,10 @@ export class DanhGiaService {
     }
 
     // Xóa cache chi tiết
-    await this.cacheService.xoa(`fs:apps:detail:${danhGia.maUngDung}`);
-    await this.cacheService.xoa(`fs:apps:detail:${danhGia.ungDung.tenRepoDayDu.toLowerCase()}`);
+    await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${danhGia.maUngDung}`);
+    await this.cacheService.xoaTheoPrefix(
+      `fs:apps:detail:${danhGia.ungDung.tenRepoDayDu.toLowerCase()}`,
+    );
 
     return {
       maDanhGia: capNhat.maDanhGia,
@@ -318,8 +320,10 @@ export class DanhGiaService {
     await this.capNhatDiemDanhGiaUngDung(danhGia.maUngDung);
 
     // Xóa cache chi tiết
-    await this.cacheService.xoa(`fs:apps:detail:${danhGia.maUngDung}`);
-    await this.cacheService.xoa(`fs:apps:detail:${danhGia.ungDung.tenRepoDayDu.toLowerCase()}`);
+    await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${danhGia.maUngDung}`);
+    await this.cacheService.xoaTheoPrefix(
+      `fs:apps:detail:${danhGia.ungDung.tenRepoDayDu.toLowerCase()}`,
+    );
 
     this.logger.log(`Đã xóa bài đánh giá [${maDanhGia}] của app [${danhGia.ungDung.tenRepoDayDu}]`);
 

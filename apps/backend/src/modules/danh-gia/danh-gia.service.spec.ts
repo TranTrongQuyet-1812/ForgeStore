@@ -69,6 +69,7 @@ describe('DanhGiaService (P2-53)', () => {
       lay: vi.fn(),
       luu: vi.fn(),
       xoa: vi.fn(),
+      xoaTheoPrefix: vi.fn(),
     };
 
     service = new DanhGiaService(prisma, cacheService);
@@ -147,7 +148,9 @@ describe('DanhGiaService (P2-53)', () => {
 
       expect(res.maDanhGia).toBe(mockReview.maDanhGia);
       expect(res.soSao).toBe(5);
-      expect(cacheService.xoa).toHaveBeenCalledWith(`fs:apps:detail:${mockUngDung.maUngDung}`);
+      expect(cacheService.xoaTheoPrefix).toHaveBeenCalledWith(
+        `fs:apps:detail:${mockUngDung.maUngDung}`,
+      );
       expect(cacheService.luu).toHaveBeenCalledWith(
         `fs:apps:rating:${mockUngDung.maUngDung}`,
         { soSaoTrungBinh: 4.8, soLuotDanhGia: 10 },

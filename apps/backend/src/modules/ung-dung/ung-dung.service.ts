@@ -961,7 +961,7 @@ export class UngDungService {
     }
 
     const cleanId = decodeURIComponent(idOrSlug.trim());
-    const cacheKey = `${this.CACHE_KEY_DETAIL}${cleanId.toLowerCase()}:${platform || 'all'}:${arch || 'all'}`;
+    const cacheKey = this.taoKhoaCacheChiTiet(cleanId.toLowerCase(), platform, arch);
 
     const cached = await this.cacheService.lay<UngDungChiTietDto>(cacheKey);
     if (cached) {
@@ -1130,7 +1130,7 @@ export class UngDungService {
     await this.cacheService.luu(cacheKey, result, this.CACHE_TTL);
     if (!isUuid) {
       await this.cacheService.luu(
-        `${this.CACHE_KEY_DETAIL}${app.maUngDung}:${platform || 'all'}:${arch || 'all'}`,
+        this.taoKhoaCacheChiTiet(app.maUngDung, platform, arch),
         result,
         this.CACHE_TTL,
       );
@@ -1353,6 +1353,15 @@ export class UngDungService {
    * Xóa mọi biến thể cache chi tiết của một app (theo mã và theo tên repo, kể cả đuôi :platform:arch)
    * để Desktop luôn thấy dữ liệu mới nhất sau khi dữ liệu app thay đổi.
    */
+  /**
+   * Khóa cache chi tiết có số phiên bản bộ bóc tách (P3B-25.15): bản cache lấy trả sớm, bỏ qua bước kiểm
+   * "cần bóc tách lại", nên khi tăng phiên bản mà còn cache cũ theo tên repo thì việc tính lại không chạy.
+   * Đổi phiên bản là đổi khóa, cache cũ tự hết hiệu lực. Giữ tiền tố `<mã hoặc tên repo>` để xóa theo tiền tố.
+   */
+  private taoKhoaCacheChiTiet(id: string, platform?: string, arch?: string): string {
+    return `${this.CACHE_KEY_DETAIL}${id}:${platform || 'all'}:${arch || 'all'}:v${PHIEN_BAN_BOC_TACH_CLI}`;
+  }
+
   private async xoaCacheChiTietApp(app: {
     maUngDung: string;
     tenRepoDayDu: string;

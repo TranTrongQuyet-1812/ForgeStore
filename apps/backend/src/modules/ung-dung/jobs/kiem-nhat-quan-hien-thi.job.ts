@@ -4,6 +4,7 @@ import { DinhDangTep } from '@prisma/client';
 import { coCachCaiCliHopLe, HuongDanCaiDatDto } from '@forgestore/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
+import { UngDungService, daCoKetQuaBocTachCli } from '../ung-dung.service';
 
 /**
  * Kiểu dữ liệu thu gọn của ứng dụng phục vụ đối soát tính nhất quán trạng thái hiển thị
@@ -24,6 +25,8 @@ interface UngDungDoiSoat {
 const KICH_THUOC_TRANG = 200;
 // Chỉ in tên tối đa chừng này repo cảnh báo (b) để log không bị ngập; số lượng vẫn đếm đủ
 const SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG = 20;
+// Mỗi đêm bóc tách lại tối đa chừng này dấu lỗi thời (c): mỗi app tốn một lần lấy README (có ETag)
+const SO_BOC_TACH_LAI_TOI_DA = 100;
 
 /**
  * Job chốt chặn tự động hằng ngày kiểm tra tính nhất quán trạng thái hiển thị (P3B-25.8, D-30).
@@ -31,6 +34,8 @@ const SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG = 20;
  * Nhiệm vụ:
  * 1. (a) Đang KHONG_CO_BAN_CAI nhưng có tệp cài hoặc lệnh CLI hợp lệ -> TỰ ĐỘNG SỬA sang HOAT_DONG và xóa cache.
  * 2. (b) Đang HOAT_DONG nhưng không có tệp cài và không có lệnh CLI hợp lệ -> CHỈ CẢNH BÁO trong log, không tự đổi.
+ * 3. (c) P3B-25.15: dấu "không có hướng dẫn" ghi bằng bộ bóc tách cũ -> bóc tách lại, không chờ có người mở trang.
+ *    Chạy trước (a) để app vừa tìm thấy lệnh cài được hiện ngay trong cùng đêm.
  */
 @Injectable()
 export class KiemNhatQuanHienThiJob {
@@ -40,6 +45,7 @@ export class KiemNhatQuanHienThiJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly appsService: UngDungService,
   ) {}
 
   /**
@@ -57,23 +63,25 @@ export class KiemNhatQuanHienThiJob {
    */
   async kiemTraVaSuaNhatQuanHienThi(
     gioiHan = 200,
-  ): Promise<{ soLuongDaSua: number; soLuongCanhBao: number }> {
+  ): Promise<{ soLuongDaSua: number; soLuongCanhBao: number; soLuongBocTachLai: number }> {
     // Chống chạy chồng lấn giữa các chu kỳ cron
     if (this.isRunning) {
       this.logger.warn('Tác vụ kiểm tra nhất quán hiển thị đang chạy dở, bỏ qua chu kỳ này.');
-      return { soLuongDaSua: 0, soLuongCanhBao: 0 };
+      return { soLuongDaSua: 0, soLuongCanhBao: 0, soLuongBocTachLai: 0 };
     }
 
     this.isRunning = true;
     let soLuongDaSua = 0;
     let soLuongCanhBao = 0;
+    let soLuongBocTachLai = 0;
 
     try {
+      soLuongBocTachLai = await this.bocTachLaiDauLoiThoi(SO_BOC_TACH_LAI_TOI_DA);
       soLuongDaSua = await this.xuLyAppBiAnNham(gioiHan);
       soLuongCanhBao = await this.xuLyAppHienNham();
 
       this.logger.log(
-        `[Chốt chặn hoàn tất] Tổng số app đã tự sửa (a): ${soLuongDaSua}, Tổng số app cảnh báo (b): ${soLuongCanhBao}`,
+        `[Chốt chặn hoàn tất] Bóc tách lại (c): ${soLuongBocTachLai}, tự sửa (a): ${soLuongDaSua}, cảnh báo (b): ${soLuongCanhBao}`,
       );
     } catch (error) {
       // Bắt lỗi để sự cố DB không làm sập tiến trình backend
@@ -82,7 +90,28 @@ export class KiemNhatQuanHienThiJob {
       this.isRunning = false;
     }
 
-    return { soLuongDaSua, soLuongCanhBao };
+    return { soLuongDaSua, soLuongCanhBao, soLuongBocTachLai };
+  }
+
+  /**
+   * (c) Bóc tách lại các app đang mang dấu "không có hướng dẫn" của phiên bản bộ bóc tách cũ.
+   * Dùng đúng đường bổ sung của trang chi tiết (`phanTichUngDung`), nên có khóa chống chạy trùng và tự xóa cache.
+   */
+  private async bocTachLaiDauLoiThoi(gioiHan: number): Promise<number> {
+    const dauKhongCo = await this.prisma.phanTichAI.findMany({
+      where: { huongDanCaiDat: { path: ['khongCoHuongDan'], equals: true } },
+      select: { maUngDung: true, huongDanCaiDat: true },
+    });
+    const loiThoi = dauKhongCo
+      .filter((p) => !daCoKetQuaBocTachCli(p.huongDanCaiDat))
+      .slice(0, gioiHan);
+    for (const p of loiThoi) await this.appsService.phanTichUngDung(p.maUngDung);
+    if (loiThoi.length > 0) {
+      this.logger.log(
+        `[Chốt chặn (c)] Đã bóc tách lại ${loiThoi.length} dấu "không có hướng dẫn" cũ.`,
+      );
+    }
+    return loiThoi.length;
   }
 
   /**

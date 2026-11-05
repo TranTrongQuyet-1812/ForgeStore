@@ -688,6 +688,16 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
 
       const res = await service.layChiTietApp('videolan/vlc');
+      // P3B-25.15: khóa cache mang số phiên bản bộ bóc tách, nên tăng phiên bản là cache cũ hết hiệu lực
+      // và lần mở tiếp theo (kể cả bằng owner/repo) chạy lại bước kiểm bóc tách.
+      expect(mockCacheService.lay).toHaveBeenCalledWith(
+        `${service.CACHE_KEY_DETAIL}videolan/vlc:all:all:v${PHIEN_BAN_BOC_TACH_CLI}`,
+      );
+      expect(mockCacheService.luu).toHaveBeenCalledWith(
+        `${service.CACHE_KEY_DETAIL}uuid-vlc:all:all:v${PHIEN_BAN_BOC_TACH_CLI}`,
+        expect.anything(),
+        service.CACHE_TTL,
+      );
       expect(res.maUngDung).toBe('uuid-vlc');
       expect(res.tenKhoChua).toBe('vlc');
     });

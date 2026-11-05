@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { KiemNhatQuanHienThiJob } from './kiem-nhat-quan-hien-thi.job';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
+import { UngDungService, PHIEN_BAN_BOC_TACH_CLI } from '../ung-dung.service';
 
 describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
   let job: KiemNhatQuanHienThiJob;
@@ -10,7 +11,9 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
       findMany: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
+    phanTichAI: { findMany: ReturnType<typeof vi.fn> };
   };
+  let mockAppsService: { phanTichUngDung: ReturnType<typeof vi.fn> };
   let mockCacheService: {
     xoaTheoPrefix: ReturnType<typeof vi.fn>;
   };
@@ -21,7 +24,9 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
         findMany: vi.fn(),
         update: vi.fn().mockResolvedValue({}),
       },
+      phanTichAI: { findMany: vi.fn().mockResolvedValue([]) },
     };
+    mockAppsService = { phanTichUngDung: vi.fn().mockResolvedValue(undefined) };
 
     mockCacheService = {
       xoaTheoPrefix: vi.fn().mockResolvedValue(true),
@@ -30,6 +35,7 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
     job = new KiemNhatQuanHienThiJob(
       mockPrisma as unknown as PrismaService,
       mockCacheService as unknown as CacheService,
+      mockAppsService as unknown as UngDungService,
     );
   });
 
@@ -259,5 +265,29 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
 
     expect(result.soLuongCanhBao).toBe(202);
     expect(mockPrisma.ungDung.update).not.toHaveBeenCalled();
+  });
+
+  it('(c) P3B-25.15: chỉ bóc tách lại dấu "không có hướng dẫn" của phiên bản bộ bóc tách cũ', async () => {
+    mockPrisma.phanTichAI.findMany.mockResolvedValue([
+      {
+        maUngDung: 'cu',
+        huongDanCaiDat: { khongCoHuongDan: true, phienBanBocTach: 1, cachCai: [] },
+      },
+      {
+        maUngDung: 'moi',
+        huongDanCaiDat: {
+          khongCoHuongDan: true,
+          phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI,
+          cachCai: [],
+        },
+      },
+    ]);
+    mockPrisma.ungDung.findMany.mockResolvedValue([]);
+
+    const result = await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(result.soLuongBocTachLai).toBe(1);
+    expect(mockAppsService.phanTichUngDung).toHaveBeenCalledTimes(1);
+    expect(mockAppsService.phanTichUngDung).toHaveBeenCalledWith('cu');
   });
 });
