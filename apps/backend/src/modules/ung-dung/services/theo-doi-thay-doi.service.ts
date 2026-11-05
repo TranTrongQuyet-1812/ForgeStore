@@ -1,12 +1,14 @@
 import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TrangThaiDichReadme } from '@prisma/client';
+import { DinhDangTep, Prisma, TrangThaiDichReadme } from '@prisma/client';
+import { coCachCaiCliHopLe } from '@forgestore/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GithubService } from '../../github/github.service';
 import { GithubRelease, GithubRepo } from '../../github/github.constants';
 import { CacheService } from '../../redis/cache.service';
-import { UngDungService } from '../ung-dung.service';
+import { PHIEN_BAN_BOC_TACH_CLI, UngDungService } from '../ung-dung.service';
+import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
 
 /** Trạng thái ẩn khỏi Store do bộ theo dõi đặt (P3B-07.5). Dữ liệu và Thư viện người dùng giữ nguyên. */
 export const TRANG_THAI_AN = {
@@ -23,6 +25,8 @@ export const NHIP_QUET_GIO: Record<MucDoNong, number> = { NONG: 3, AM: 24, LANH:
 export interface AppTheoDoi {
   maUngDung: string;
   tenRepoDayDu: string;
+  trangThai: string;
+  readmeSha: string | null;
   moTaGocTiengAnh: string | null;
   loaiGiayPhep: string | null;
   daLuuTru: boolean;
@@ -132,6 +136,8 @@ export class TheoDoiThayDoiService {
       select: {
         maUngDung: true,
         tenRepoDayDu: true,
+        trangThai: true,
+        readmeSha: true,
         moTaGocTiengAnh: true,
         loaiGiayPhep: true,
         daLuuTru: true,
@@ -166,7 +172,7 @@ export class TheoDoiThayDoiService {
       },
     });
     const coDoi = repo === 'DOI_HIEN_THI' || banMoi || readmeDoi;
-    if (repo === 'DOI_HIEN_THI') await this.xoaCacheHienThi(app);
+    if (repo === 'DOI_HIEN_THI' || readmeDoi) await this.xoaCacheHienThi(app);
     return coDoi;
   }
 
@@ -228,7 +234,10 @@ export class TheoDoiThayDoiService {
     return coBanMoi;
   }
 
-  /** Nguồn 3, README: nội dung đổi thì đánh dấu bản dịch cũ là DA_CU để hàng đợi dịch làm lại. */
+  /**
+   * Nguồn 3, README: nội dung đổi thì đánh dấu bản dịch cũ là DA_CU để hàng đợi dịch làm lại,
+   * và bóc tách lại lệnh cài từ chính nội dung mới (hướng dẫn đã lưu có thể đã lỗi thời).
+   */
   private async kiemReadme(app: AppTheoDoi, ketQua: KetQuaQuet): Promise<boolean> {
     const kq = await this.hoi<{ content?: string; encoding?: string }>(
       `/repos/${app.tenRepoDayDu}/readme`,
@@ -252,7 +261,42 @@ export class TheoDoiThayDoiService {
       where: { maUngDung: app.maUngDung },
       data: { etagReadme: kq.etag ?? null, readmeSha: sha },
     });
-    return cu.count > 0;
+    const trangThaiDoi = sha !== app.readmeSha && (await this.capNhatHuongDanCli(app, noiDung));
+    return cu.count > 0 || trangThaiDoi;
+  }
+
+  /**
+   * P3B-25.9: README đổi thì lệnh cài đã lưu có thể không còn. Bóc tách lại bằng quy tắc (không AI) rồi suy lại
+   * trạng thái hiển thị theo D-30: có tệp cài hoặc lệnh cài hợp lệ thì hiện, không thì ẩn. Trả true nếu trạng thái đổi.
+   */
+  private async capNhatHuongDanCli(app: AppTheoDoi, readme: string): Promise<boolean> {
+    const huongDan = trichXuatHuongDanCliBangQuyTac(
+      readme,
+      `https://github.com/${app.tenRepoDayDu}#readme`,
+    );
+    const coLenh = coCachCaiCliHopLe(huongDan);
+    const giaTri = coLenh
+      ? huongDan
+      : { khongCoHuongDan: true, phienBanBocTach: PHIEN_BAN_BOC_TACH_CLI, cachCai: [] };
+    await this.prisma.phanTichAI.updateMany({
+      where: { maUngDung: app.maUngDung },
+      data: { huongDanCaiDat: giaTri as unknown as Prisma.InputJsonValue },
+    });
+    const soTepCai = await this.prisma.tepCaiDat.count({
+      where: {
+        banPhatHanh: { maUngDung: app.maUngDung },
+        dinhDangTep: {
+          in: [DinhDangTep.EXE, DinhDangTep.MSI, DinhDangTep.ZIP_PORTABLE, DinhDangTep.APK],
+        },
+      },
+    });
+    const trangThai = soTepCai > 0 || coLenh ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
+    if (trangThai === app.trangThai) return false;
+    await this.prisma.ungDung.update({ where: { maUngDung: app.maUngDung }, data: { trangThai } });
+    this.logger.log(
+      `[Theo dõi thay đổi] [${app.tenRepoDayDu}] README đổi: ${app.trangThai} → ${trangThai}.`,
+    );
+    return true;
   }
 
   private async hoi<T>(endpoint: string, etag: string | null, ketQua: KetQuaQuet) {

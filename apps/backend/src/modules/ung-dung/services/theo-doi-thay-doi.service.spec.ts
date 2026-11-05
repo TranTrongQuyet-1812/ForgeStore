@@ -14,6 +14,8 @@ const ngayTruoc = (n: number) => new Date(now.getTime() - n * 86400000);
 const app = (ghiDe: Partial<AppTheoDoi> = {}): AppTheoDoi => ({
   maUngDung: 'app-1',
   tenRepoDayDu: 'chu/ung-dung',
+  trangThai: 'HOAT_DONG',
+  readmeSha: 'sha-cu',
   moTaGocTiengAnh: 'Old description',
   loaiGiayPhep: 'MIT License',
   daLuuTru: false,
@@ -57,6 +59,8 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
   const prisma = {
     ungDung: { update: vi.fn(), findMany: vi.fn() },
     banDichReadme: { updateMany: vi.fn() },
+    phanTichAI: { updateMany: vi.fn() },
+    tepCaiDat: { count: vi.fn() },
     ungVienRepo: { createMany: vi.fn() },
   };
   const github = { hoiCoDieuKien: vi.fn(), getRateLimitInfo: vi.fn() };
@@ -197,6 +201,7 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
       etag: '"m2"',
     });
     prisma.banDichReadme.updateMany.mockResolvedValue({ count: 1 });
+    prisma.tepCaiDat.count.mockResolvedValue(1); // còn tệp cài nên vẫn hiện
     expect(await service.kiemMotApp(app(), ketQua)).toBe(true);
     const sha = createHash('sha256').update(noiDung.trim()).digest('hex');
     expect(prisma.banDichReadme.updateMany).toHaveBeenCalledWith({
@@ -206,6 +211,34 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
     expect(prisma.ungDung.update).toHaveBeenCalledWith({
       where: { maUngDung: 'app-1' },
       data: { etagReadme: '"m2"', readmeSha: sha },
+    });
+  });
+
+  it('P3B-25.9: README đổi mất lệnh cài và không có tệp cài thì ẩn; README thêm lệnh cài thì hiện lại', async () => {
+    const readme = (s: string) => ({
+      trangThai: 200,
+      duLieu: { content: Buffer.from(s).toString('base64'), encoding: 'base64' },
+      etag: '"m2"',
+    });
+    prisma.tepCaiDat.count.mockResolvedValue(0);
+    traVe(khongDoi, khongDoi, readme('# Tool\nNo install section any more.'));
+    expect(await service.kiemMotApp(app(), ketQua)).toBe(true);
+    expect(prisma.phanTichAI.updateMany.mock.calls[0]![0].data.huongDanCaiDat).toMatchObject({
+      khongCoHuongDan: true,
+    });
+    expect(prisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'app-1' },
+      data: { trangThai: 'KHONG_CO_BAN_CAI' },
+    });
+
+    vi.clearAllMocks();
+    prisma.banDichReadme.updateMany.mockResolvedValue({ count: 0 });
+    prisma.tepCaiDat.count.mockResolvedValue(0);
+    traVe(khongDoi, khongDoi, readme('# Tool\n## Install\n```sh\nnpm install -g ung-dung\n```'));
+    await service.kiemMotApp(app({ trangThai: 'KHONG_CO_BAN_CAI' }), ketQua);
+    expect(prisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'app-1' },
+      data: { trangThai: 'HOAT_DONG' },
     });
   });
 
