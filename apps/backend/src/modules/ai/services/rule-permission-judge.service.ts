@@ -6,9 +6,8 @@ import {
 } from '../interfaces/permission-judge.interface';
 
 /**
- * Bảng trừ điểm cố định dự phòng cho các quyền Android nhạy cảm (P2-32.1 & P2-32.5).
- * Được sử dụng khi TypeSafe AI (Jev) tắt hoặc gặp sự cố mạng.
- * Tuyệt đối KHÔNG gọi đây là Jev (theo nguyên tắc D-01).
+ * Bảng trừ điểm cố định cho các quyền Android nhạy cảm (P2-32.1, P2-32.5).
+ * Từ P2-70 đây là cách thẩm định quyền duy nhất: mỗi điểm trừ có lý do đọc được và kiểm chứng được.
  */
 @Injectable()
 export class RulePermissionJudgeService implements IBoPhanDoanQuyen {
@@ -68,7 +67,7 @@ export class RulePermissionJudgeService implements IBoPhanDoanQuyen {
     },
   };
 
-  async phanDoan(dauVao: DauVaoPhanDoan): Promise<PhanDoanQuyen[]> {
+  phanDoan(dauVao: DauVaoPhanDoan): PhanDoanQuyen[] {
     const ketQua: PhanDoanQuyen[] = [];
 
     for (const quyen of dauVao.quyenCanKiemTra) {
@@ -77,12 +76,9 @@ export class RulePermissionJudgeService implements IBoPhanDoanQuyen {
         ketQua.push({
           quyen,
           tenHienThi: config.tenHienThi,
-          canThiet: false, // Luật dự phòng giả định quyền nhạy cảm cần lưu ý
-          xacSuatNoul: 0.5,
-          phanVan: false,
           diemTru: config.diemTru,
-          nguon: 'DU_PHONG',
-          lyDo: `[Dự phòng] ${config.moTa} Trừ ${config.diemTru} điểm.`,
+          nguon: 'LUAT',
+          lyDo: `${config.tenHienThi}: ${config.moTa} Trừ ${config.diemTru} điểm.`,
         });
       }
     }

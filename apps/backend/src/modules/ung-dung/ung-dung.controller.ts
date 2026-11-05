@@ -81,11 +81,11 @@ export class UngDungController {
   @ApiOperation({
     summary: 'Phân giải tệp cài đặt phù hợp với kiến trúc thiết bị (P2-33)',
     description:
-      'Nhận nền tảng và danh sách ABI ưu tiên của máy khách, tự động chọn file APK/EXE/MSI phù hợp nhất (1-Click matching). Sử dụng Jev Choice khi tên file mơ hồ.',
+      'Nhận nền tảng và danh sách ABI ưu tiên của máy khách, tự động chọn file APK/EXE/MSI phù hợp nhất bằng luật (1-Click matching). Tên file APK mơ hồ thì trả 404 kèm danh sách tệp để người dùng tự chọn.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Tệp cài đặt phù hợp nhất và nguồn quyết định (LUAT | JEV | DU_PHONG)',
+    description: 'Tệp cài đặt phù hợp nhất và nguồn quyết định (luôn là LUAT)',
   })
   async giaiQuyetFileCaiDat(@Body() dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
     return this.appsService.giaiQuyetFileCaiDat(dto);

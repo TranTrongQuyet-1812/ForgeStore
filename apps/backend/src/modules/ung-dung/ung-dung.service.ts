@@ -34,7 +34,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { GithubService } from '../github/github.service';
 import { YeuThichService } from '../yeu-thich/yeu-thich.service';
-import { JevClientService } from '../ai/services/jev-client.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { MO_HINH_EMBEDDING, SemanticSearchService } from '../ai/services/semantic-search.service';
@@ -171,7 +170,6 @@ export class UngDungService {
     private readonly prisma: PrismaService,
     private readonly githubService: GithubService,
     private readonly cacheService: CacheService,
-    private readonly jevClientService: JevClientService,
     private readonly trustScoreService: TrustScoreService,
     private readonly apkInspectorService: ApkInspectorService,
     private readonly semanticSearchService: SemanticSearchService,
@@ -1079,8 +1077,6 @@ export class UngDungService {
             tomTatTinhNangVi: app.phanTichAI.tomTatTinhNangVi,
             diemUyTin: app.phanTichAI.diemUyTin,
             mucDoAnToan: app.phanTichAI.mucDoAnToan,
-            daThamDinhJev: app.phanTichAI.daThamDinhJev,
-            trangThaiThamDinhJev: app.phanTichAI.trangThaiThamDinhJev,
             yeuToRuiRo: (app.phanTichAI.yeuToRuiRo as unknown as YeuToRuiRoItem[]) || [],
             quyenHanDaKiemTra: (app.phanTichAI.quyenHanDaKiemTra as unknown as string[]) || [],
             moHinhTomTat: app.phanTichAI.moHinhTomTat,
@@ -1153,7 +1149,7 @@ export class UngDungService {
 
   /**
    * Phân giải tệp cài đặt phù hợp nhất theo nền tảng và kiến trúc phần cứng (P2-33).
-   * Luật xử lý tên file rõ ràng; Jev AI Choice xử lý tên file mơ hồ.
+   * Chỉ dùng luật (P2-70): tên file mơ hồ thì trả danh sách để người dùng tự chọn, không đoán.
    */
   async giaiQuyetFileCaiDat(dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
     const { maUngDung, nenTang, abis, choPhepBanThuNghiem = false, phienBan } = dto;
@@ -1229,44 +1225,13 @@ export class UngDungService {
         return this.dongGoiTaiSanPhanHoi(universalMatch, 'LUAT');
       }
 
-      // 3.3. Tên file mơ hồ -> Hỏi Jev AI primitive Choice (P2-33.7)
+      // 3.3. Tên file mơ hồ: không đoán, trả danh sách để người dùng tự chọn (P2-70.3)
       const ambiguousFiles = apkFiles.filter((f) => f.kienTrucChip === KienTrucChip.KHONG_XAC_DINH);
-      if (ambiguousFiles.length > 0 && this.jevClientService.isEnabled) {
-        try {
-          const choiceOptions: Record<string, string> = {
-            KHONG_FILE_NAO_PHU_HOP: 'Không có tệp nào phù hợp với kiến trúc này',
-          };
-          for (const file of ambiguousFiles) {
-            choiceOptions[file.maTep] = file.tenTep;
-          }
-
-          const prompt = `Chọn tệp APK phù hợp nhất để cài đặt trên thiết bị Android có kiến trúc ABI chính là [${abis[0]}]:`;
-
-          const resJev = await this.jevClientService.hoiChoice(
-            {
-              app: app.tenRepoDayDu,
-              nenTang: 'ANDROID',
-              clientAbis: abis,
-            },
-            prompt,
-            choiceOptions,
-          );
-
-          if (resJev.luaChon && resJev.luaChon !== 'KHONG_FILE_NAO_PHU_HOP') {
-            const selected = ambiguousFiles.find((f) => f.maTep === resJev.luaChon);
-            if (selected) {
-              return this.dongGoiTaiSanPhanHoi(selected, 'JEV', resJev.doTinCay);
-            }
-          }
-        } catch (err: unknown) {
-          this.logger.warn(`Jev Choice giải quyết file thất bại: ${(err as Error).message}`);
-        }
-      }
-
       throw new NotFoundException({
         maLoi: 'KHONG_CO_FILE_PHU_HOP',
         thongBao: `Không tìm thấy tệp APK tương thích với các kiến trúc thiết bị: ${abis.join(', ')}`,
         abisHienCo: Array.from(new Set(apkFiles.map((f) => f.kienTrucChip))),
+        tepDeNguoiDungChon: ambiguousFiles.map((f) => ({ maTep: f.maTep, tenTep: f.tenTep })),
       });
     }
 
@@ -1363,11 +1328,7 @@ export class UngDungService {
     return KienTrucChip.KHONG_XAC_DINH;
   }
 
-  private dongGoiTaiSanPhanHoi(
-    file: TepCaiDat,
-    nguonQuyetDinh: 'LUAT' | 'JEV' | 'DU_PHONG',
-    doTinCay?: number,
-  ): ResolveAssetResponseDto {
+  private dongGoiTaiSanPhanHoi(file: TepCaiDat, nguonQuyetDinh: 'LUAT'): ResolveAssetResponseDto {
     return {
       tepCaiDat: {
         maTep: file.maTep,
@@ -1382,7 +1343,6 @@ export class UngDungService {
         ngayTao: file.ngayTao.toISOString(),
       },
       nguonQuyetDinh,
-      doTinCay,
     };
   }
 
@@ -1581,7 +1541,7 @@ export class UngDungService {
             }
           }
 
-          // 4. Lấy dữ liệu sống từ GitHub và tính toán Trust Score lai (Rule Engine + Jev Noul) (P2-32 & D-01)
+          // 4. Lấy dữ liệu sống từ GitHub và tính điểm uy tín bằng luật (P2-32, D-01, P2-70)
           let daArchived = false;
           let ngayPushCuoi = app.dongBoLanCuoi;
           let soContributor = 1;
@@ -1609,9 +1569,6 @@ export class UngDungService {
           }
 
           const trustScore = await this.trustScoreService.tinhTrustScore({
-            tenApp: app.tenKhoChua,
-            moTaApp: app.moTaGocTiengAnh || '',
-            topics: app.danhSachChuDe,
             soSaoGithub: app.soSaoGithub,
             soLuotFork: app.soLuotFork,
             loaiGiayPhep: app.loaiGiayPhep,
@@ -1620,7 +1577,6 @@ export class UngDungService {
             soContributor,
             danhSachQuyenAndroid: danhSachQuyen,
             coAccessibilityService,
-            tinhNangTomTat: undefined,
           });
 
           // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3, P3B-16.3, D-23)
@@ -1667,8 +1623,6 @@ export class UngDungService {
               tomTatTinhNangVi: null,
               diemUyTin: trustScore.diemUyTin,
               mucDoAnToan: trustScore.mucDoAnToan,
-              daThamDinhJev: trustScore.daThamDinhJev,
-              trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
               yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
               quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
               moHinhTomTat: null,
@@ -1679,8 +1633,6 @@ export class UngDungService {
               tomTatTinhNangVi: null,
               diemUyTin: trustScore.diemUyTin,
               mucDoAnToan: trustScore.mucDoAnToan,
-              daThamDinhJev: trustScore.daThamDinhJev,
-              trangThaiThamDinhJev: trustScore.trangThaiThamDinhJev,
               yeuToRuiRo: trustScore.yeuToRuiRo as unknown as Prisma.InputJsonValue,
               quyenHanDaKiemTra: danhSachQuyen as unknown as Prisma.InputJsonValue,
               moHinhTomTat: null,

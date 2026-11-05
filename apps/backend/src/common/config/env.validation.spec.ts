@@ -19,54 +19,54 @@ describe('EnvValidation', () => {
     const config = validateEnv(baseValidConfig);
     expect(config.PORT).toBe(3000);
     expect(config.NODE_ENV).toBe('test');
-    expect(config.JEV_ENABLED).toBe(true);
+    expect(config.INGESTION_ENABLED).toBe(false);
     expect(config.APP_DEEP_LINK_SCHEME).toBe('forgestore');
   });
 
-  describe('Phân tích cú pháp JEV_ENABLED (Fix bug z.coerce.boolean)', () => {
+  describe('Phân tích cú pháp INGESTION_ENABLED (Fix bug z.coerce.boolean)', () => {
     it('chuyển đổi "false" thành boolean false', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'false' });
-      expect(config.JEV_ENABLED).toBe(false);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: 'false' });
+      expect(config.INGESTION_ENABLED).toBe(false);
     });
 
     it('chuyển đổi "0" thành boolean false', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: '0' });
-      expect(config.JEV_ENABLED).toBe(false);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: '0' });
+      expect(config.INGESTION_ENABLED).toBe(false);
     });
 
     it('chuyển đổi boolean false thành boolean false', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: false });
-      expect(config.JEV_ENABLED).toBe(false);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: false });
+      expect(config.INGESTION_ENABLED).toBe(false);
     });
 
     it('chuyển đổi "FALSE" hoa thành boolean false (case-insensitive)', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'FALSE' });
-      expect(config.JEV_ENABLED).toBe(false);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: 'FALSE' });
+      expect(config.INGESTION_ENABLED).toBe(false);
     });
 
     it('chuyển đổi "true" thành boolean true', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'true' });
-      expect(config.JEV_ENABLED).toBe(true);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: 'true' });
+      expect(config.INGESTION_ENABLED).toBe(true);
     });
 
     it('chuyển đổi "TRUE" hoa thành boolean true (case-insensitive)', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: 'TRUE' });
-      expect(config.JEV_ENABLED).toBe(true);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: 'TRUE' });
+      expect(config.INGESTION_ENABLED).toBe(true);
     });
 
     it('chuyển đổi boolean true thành boolean true', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: true });
-      expect(config.JEV_ENABLED).toBe(true);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: true });
+      expect(config.INGESTION_ENABLED).toBe(true);
     });
 
     it('chuyển đổi "1" thành boolean true', () => {
-      const config = validateEnv({ ...baseValidConfig, JEV_ENABLED: '1' });
-      expect(config.JEV_ENABLED).toBe(true);
+      const config = validateEnv({ ...baseValidConfig, INGESTION_ENABLED: '1' });
+      expect(config.INGESTION_ENABLED).toBe(true);
     });
 
-    it('mặc định là true khi không truyền JEV_ENABLED', () => {
+    it('mặc định là false (tắt dây chuyền nạp) khi không truyền INGESTION_ENABLED', () => {
       const config = validateEnv({ ...baseValidConfig });
-      expect(config.JEV_ENABLED).toBe(true);
+      expect(config.INGESTION_ENABLED).toBe(false);
     });
   });
 

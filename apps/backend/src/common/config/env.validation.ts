@@ -42,14 +42,6 @@ export const envSchema = z.object({
     .string({ required_error: 'GEMINI_API_KEY là bắt buộc' })
     .min(1, 'GEMINI_API_KEY không được để trống'),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
-  TYPESAFE_API_KEY: z.string().optional(),
-  JEV_ENABLED: z
-    .preprocess(
-      (val) => (typeof val === 'string' ? val.trim().toLowerCase() : val),
-      z.union([z.boolean(), z.enum(['true', 'false', '1', '0'])]),
-    )
-    .default(true)
-    .transform((v) => v === true || v === 'true' || v === '1'),
   NVIDIA_API_KEY: z.string().optional(),
   NVIDIA_NIM_MODEL: z.string().optional(),
   NVIDIA_TRANSLATE_MODEL: z.string().optional(),

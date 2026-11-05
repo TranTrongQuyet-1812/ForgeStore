@@ -1,28 +1,20 @@
-import type {
-  DinhDangTep,
-  KienTrucChip,
-  MucDoUyTin,
-  NenTangHoTro,
-  TrangThaiThamDinhJev,
-} from '../enums.js';
+import type { DinhDangTep, KienTrucChip, MucDoUyTin, NenTangHoTro } from '../enums.js';
 import type { HuongDanCaiDatDto } from './huong-dan-cli.dto.js';
 import type { BanDichReadmeDto } from './ban-dich.dto.js';
 
 /**
  * Mục chi tiết cảnh báo / điểm trừ trong Trust Score.
- * Nguồn: LUAT (bộ luật TypeScript) | JEV (TypeSafe AI) | DU_PHONG (bộ luật khi Jev lỗi).
+ * Chỉ bộ luật được trừ điểm (D-01 đổi 27/10/2026, P2-70).
  */
 export interface YeuToRuiRoItem {
   ma: string;
   moTa: string;
   diemTru: number;
-  nguon: 'LUAT' | 'JEV' | 'DU_PHONG';
-  xacSuat?: number; // Giá trị Noul của Jev (0.0 - 1.0)
-  phanVan?: boolean; // Jev chưa chắc chắn (nằm quanh khoảng giữa)
+  nguon: 'LUAT';
 }
 
 /**
- * DTO phân tích trí tuệ nhân tạo (Dual-AI: Gemini Flash + TypeSafe AI Jev).
+ * DTO phân tích của ứng dụng: điểm uy tín theo luật, quyền đã kiểm, hướng dẫn cài bằng lệnh.
  */
 export interface PhanTichAiDto {
   maPhanTich?: string;
@@ -31,8 +23,6 @@ export interface PhanTichAiDto {
   tomTatTinhNangVi?: string | null; // Không dùng nữa (D-17) - giữ nguyên tương thích ngược
   diemUyTin: number; // 0 - 100
   mucDoAnToan: MucDoUyTin;
-  daThamDinhJev: boolean; // false nếu mới qua bộ luật dự phòng hoặc không cần thiết (tương thích ngược)
-  trangThaiThamDinhJev?: TrangThaiThamDinhJev; // Phân tách rõ: DA_THAM_DINH | KHONG_CAN_THIET | CHUA_THAM_DINH
   yeuToRuiRo: YeuToRuiRoItem[];
   quyenHanDaKiemTra: string[]; // Danh sách quyền Android trích xuất từ APK Range Request
   moHinhTomTat?: string | null; // Tên model (không dùng nữa - D-17)
@@ -157,8 +147,7 @@ export interface ResolveAssetRequest {
  */
 export interface ResolveAssetResponseDto {
   tepCaiDat: TepCaiDatDto;
-  nguonQuyetDinh: 'LUAT' | 'JEV' | 'DU_PHONG';
-  doTinCay?: number; // Độ tin cậy nếu qua Jev AI Choice primitive
+  nguonQuyetDinh: 'LUAT';
 }
 
 /**

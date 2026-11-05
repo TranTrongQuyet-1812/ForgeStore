@@ -1,27 +1,23 @@
 /**
- * Giao diện thẩm định tính hợp lý của quyền ứng dụng (P2-32.1 & D-01).
- * Tách bạch giữa Rule Engine, Jev Noul và Luật Dự Phòng.
+ * Giao diện thẩm định quyền Android (P2-32.1, D-01 đổi 27/10/2026).
+ * Chỉ bộ luật được quyết điểm trừ; AI không đổi điểm hay nhãn an toàn (P2-70).
  */
 
 export interface DauVaoPhanDoan {
-  tenApp: string;
-  moTaApp: string;
-  topics: string[];
   quyenCanKiemTra: string[];
-  tinhNangTomTat?: string[]; // Danh sách tính năng Gemini vừa tóm tắt cung cấp ngữ cảnh phong phú cho Jev
 }
 
 export interface PhanDoanQuyen {
   quyen: string;
   tenHienThi: string;
-  canThiet: boolean;
-  xacSuatNoul: number; // 0.0 -> 1.0 (Xác suất cần thiết từ Jev)
-  phanVan: boolean; // true nếu 0.2 < noul < 0.8 (Jev phân vân, để người dùng tự quyết)
   diemTru: number;
-  nguon: 'JEV' | 'DU_PHONG';
+  nguon: 'LUAT';
   lyDo: string;
 }
 
 export interface IBoPhanDoanQuyen {
-  phanDoan(dauVao: DauVaoPhanDoan): Promise<PhanDoanQuyen[]>;
+  phanDoan(dauVao: DauVaoPhanDoan): PhanDoanQuyen[];
 }
+
+/** Khóa tiêm phụ thuộc để TrustScoreService chỉ biết giao diện, không biết lớp cụ thể. */
+export const BO_PHAN_DOAN_QUYEN = Symbol('BO_PHAN_DOAN_QUYEN');

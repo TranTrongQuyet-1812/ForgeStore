@@ -66,13 +66,6 @@ export const TrangThaiUngDung = {
 } as const;
 export type TrangThaiUngDung = (typeof TrangThaiUngDung)[keyof typeof TrangThaiUngDung];
 
-export const TrangThaiThamDinhJev = {
-  DA_THAM_DINH: 'DA_THAM_DINH',
-  KHONG_CAN_THIET: 'KHONG_CAN_THIET',
-  CHUA_THAM_DINH: 'CHUA_THAM_DINH',
-} as const;
-export type TrangThaiThamDinhJev = (typeof TrangThaiThamDinhJev)[keyof typeof TrangThaiThamDinhJev];
-
 export const TrangThaiDichReadme = {
   DANG_DICH: 'DANG_DICH',
   HOAN_TAT: 'HOAN_TAT',

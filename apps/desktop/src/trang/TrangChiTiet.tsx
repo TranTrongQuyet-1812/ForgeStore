@@ -1021,12 +1021,10 @@ export const TrangChiTiet: React.FC = () => {
 
   const scoreTheme = getScoreTheme(trustScore);
 
-  // L-09, R-03: Hiển thị đúng 3 trạng thái thẩm định quyền bằng ngôn ngữ đời thường (L-10)
-  const getJevStatusText = (status?: string | null) => {
-    if (status === 'DA_THAM_DINH') return 'Đã kiểm tra quyền truy cập của ứng dụng';
-    if (status === 'KHONG_CAN_THIET') return 'Không cần kiểm tra quyền (bản Windows)';
-    return 'Chưa kiểm tra quyền truy cập';
-  };
+  // L-09, R-03: trạng thái kiểm tra quyền bằng ngôn ngữ đời thường (L-10); quyền chỉ có ở bản Android (P2-70)
+  const trangThaiKiemTraQuyen = appDetail?.phanTichAi?.quyenHanDaKiemTra?.length
+    ? 'Đã kiểm tra quyền truy cập của ứng dụng'
+    : 'Không cần kiểm tra quyền (bản Windows)';
 
   // L-10: Tên nhãn định dạng thân thiện đời thường
   const getFormatLabel = (fmt: string) => {
@@ -2493,7 +2491,7 @@ export const TrangChiTiet: React.FC = () => {
               ) : null}
               <div className="flex items-center gap-2 text-secondary">
                 <Check className="w-3.5 h-3.5 text-muted shrink-0" />
-                <span>{getJevStatusText(appDetail.phanTichAi?.trangThaiThamDinhJev)}</span>
+                <span>{trangThaiKiemTraQuyen}</span>
               </div>
               <div className="flex items-center gap-2 text-secondary">
                 <Check className="w-3.5 h-3.5 text-muted shrink-0" />
@@ -2561,7 +2559,7 @@ export const TrangChiTiet: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. MODAL/POPOVER CHI TIẾT THẨM ĐỊNH RỦI RO JEV AI (P3-06.3) */}
+      {/* 3. MODAL/POPOVER CHI TIẾT THẨM ĐỊNH RỦI RO (P3-06.3) */}
       {isSafetyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <div className="tactile-card w-full max-w-lg p-6 rounded-2xl border border-border shadow-2xl flex flex-col gap-5 bg-surface max-h-[85vh] overflow-y-auto">
@@ -2592,9 +2590,7 @@ export const TrangChiTiet: React.FC = () => {
               </div>
               <div className="text-right font-mono text-[11px] text-muted">
                 <div>Trạng thái thẩm định</div>
-                <div className="text-primary font-semibold">
-                  {getJevStatusText(appDetail.phanTichAi?.trangThaiThamDinhJev)}
-                </div>
+                <div className="text-primary font-semibold">{trangThaiKiemTraQuyen}</div>
               </div>
             </div>
 
@@ -2617,12 +2613,6 @@ export const TrangChiTiet: React.FC = () => {
                       <span className="font-mono text-warning font-bold">-{risk.diemTru}đ</span>
                     </div>
                     <p className="text-secondary text-[11px] leading-relaxed mt-0.5">{risk.moTa}</p>
-                    <div className="flex items-center gap-3 text-[10px] font-mono text-muted mt-1">
-                      <span>Nguồn: {risk.nguon}</span>
-                      {risk.xacSuat !== undefined && (
-                        <span>Xác suất: {(risk.xacSuat * 100).toFixed(0)}%</span>
-                      )}
-                    </div>
                   </div>
                 ))
               ) : (

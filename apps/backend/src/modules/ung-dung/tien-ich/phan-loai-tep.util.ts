@@ -224,7 +224,7 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
 
   // 6. Quy tắc Fallback & Phát hiện biến thể mơ hồ (P2-22 & Post-Review #9):
   // - Nếu tên file chứa các biến thể mơ hồ (-fdroid, -google-play, -foss, -debug, -unsigned)
-  //   mà không xác định được chip, giữ nguyên KHONG_XAC_DINH để kích hoạt Jev Choice (P2-33.7).
+  //   mà không xác định được chip, giữ nguyên KHONG_XAC_DINH để người dùng tự chọn tệp (P2-70.3).
   const isAmbiguousVariant =
     /(?:^|[-_.])(fdroid|f-droid|foss|google-play|googleplay|play|debug|unsigned)(?:[-_.]|$)/i.test(
       lowerName,

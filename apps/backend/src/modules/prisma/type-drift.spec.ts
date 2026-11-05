@@ -31,10 +31,6 @@ describe('Prisma vs @forgestore/types Enum Drift Assertion (P2-02.5)', () => {
     expect(PrismaEnums.TrangThaiNapRepo).toEqual(ForgeStoreTypes.TrangThaiNapRepo);
   });
 
-  it('Khớp 100% enum TrangThaiThamDinhJev', () => {
-    expect(PrismaEnums.TrangThaiThamDinhJev).toEqual(ForgeStoreTypes.TrangThaiThamDinhJev);
-  });
-
   it('Khớp 100% enum TrangThaiDichReadme (P3B-02)', () => {
     expect(PrismaEnums.TrangThaiDichReadme).toEqual(ForgeStoreTypes.TrangThaiDichReadme);
   });

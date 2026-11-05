@@ -154,7 +154,7 @@ export class CacheService {
   /**
    * Tăng giá trị số nguyên tử (Atomic INCRBY) kèm TTL (SEC-05).
    * Dùng Lua script trên Redis để bảo đảm INCRBY và EXPIRE diễn ra nguyên tử trong 1 shot.
-   * Dùng cho bộ đếm token Jev, rate limit counters và backoff rotation.
+   * Dùng cho bộ đếm hạn mức AI, rate limit counters và backoff rotation.
    */
   async tangSo(key: string, amount: number = 1, ttlSeconds?: number): Promise<number> {
     const effectiveTtl = ttlSeconds !== undefined && ttlSeconds > 0 ? ttlSeconds : 0;

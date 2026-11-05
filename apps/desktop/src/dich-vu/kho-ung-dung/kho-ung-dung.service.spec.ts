@@ -181,7 +181,6 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
         tomTatTinhNangVi: 'Hỗ trợ Markdown\nBảo mật offline\nMạng lưới liên kết',
         diemUyTin: 98,
         mucDoAnToan: MucDoUyTin.AN_TOAN_CAO,
-        daThamDinhJev: true,
         yeuToRuiRo: [],
         quyenHanDaKiemTra: [],
       },
@@ -194,7 +193,7 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(card.diemUyTin).toBe(98);
   });
 
-  it('layChiTietApp xử lý dữ liệu đầy đủ với Dual-AI và danh sách bản phát hành', async () => {
+  it('layChiTietApp xử lý dữ liệu đầy đủ với phân tích và danh sách bản phát hành', async () => {
     const mockFullDetail: UngDungChiTietDto = {
       maUngDung: 'uuid-rustdesk',
       daLuuTru: false,
@@ -219,14 +218,12 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
         tomTatTinhNangVi: 'Tự dựng server\nHiệu suất Rust\nMã hóa NaCl',
         diemUyTin: 95,
         mucDoAnToan: MucDoUyTin.AN_TOAN_CAO,
-        daThamDinhJev: true,
         yeuToRuiRo: [
           {
             ma: 'YEU_CAU_QUYEN_MANG',
             moTa: 'Yêu cầu quyền mạng UDP listening cho P2P',
             diemTru: 5,
-            nguon: 'JEV',
-            xacSuat: 0.95,
+            nguon: 'LUAT',
           },
         ],
         quyenHanDaKiemTra: [],
@@ -524,7 +521,6 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
         tomTatTinhNangVi: 'Tính năng cũ',
         diemUyTin: 90,
         mucDoAnToan: MucDoUyTin.AN_TOAN_CAO,
-        daThamDinhJev: true,
         yeuToRuiRo: [],
         quyenHanDaKiemTra: [],
       },

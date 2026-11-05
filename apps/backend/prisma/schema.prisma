@@ -62,12 +62,6 @@ enum TrangThaiNapRepo {
   THAT_BAI
 }
 
-enum TrangThaiThamDinhJev {
-  DA_THAM_DINH
-  KHONG_CAN_THIET
-  CHUA_THAM_DINH
-}
-
 enum TrangThaiDichReadme {
   DANG_DICH
   HOAN_TAT
@@ -238,10 +232,8 @@ model PhanTichAI {
   maUngDung           String          @unique @map("ma_ung_dung") @db.Uuid
   khauHieuTiengViet   String          @map("khau_hieu_tieng_viet") // Gemini Slogan (lấy từ moTaVi - D-17)
   tomTatTinhNangVi    String?         @map("tom_tat_tinh_nang_vi") @db.Text // Không dùng nữa (D-17) - giữ nguyên dữ liệu cũ
-  diemUyTin           Int             @default(80) @map("diem_uy_tin") // Bộ luật + Jev (0 - 100)
+  diemUyTin           Int             @default(80) @map("diem_uy_tin") // Chỉ bộ luật (0 - 100), P2-70
   mucDoAnToan         MucDoUyTin      @default(AN_TOAN_CAO) @map("muc_do_an_toan") // Khớp logic: 80 thuộc AN_TOAN_CAO
-  daThamDinhJev       Boolean              @default(false) @map("da_tham_dinh_jev") // false = chỉ có điểm từ bộ luật dự phòng hoặc không cần thiết (tương thích ngược)
-  trangThaiThamDinhJev TrangThaiThamDinhJev @default(KHONG_CAN_THIET) @map("trang_thai_tham_dinh_jev") // Phân biệt: DA_THAM_DINH | KHONG_CAN_THIET | CHUA_THAM_DINH
   soLanThuLai         Int                  @default(0) @map("so_lan_thu_lai") // Đếm số lần job thử tóm tắt lại (tối đa 3 lần)
   yeuToRuiRo          Json                 @default("[]") @map("yeu_to_rui_ro")
   quyenHanDaKiemTra   Json            @default("[]") @map("quyen_han_da_kiem_tra")
@@ -296,7 +288,7 @@ model TepCaiDat {
   duongDanTaiVe     String            @map("duong_dan_tai_ve")
   dungLuongBytes    BigInt            @default(0) @map("dung_luong_bytes")
   dinhDangTep       DinhDangTep       @default(KHAC) @map("dinh_dang_tep")
-  kienTrucChip      KienTrucChip      @default(KHONG_XAC_DINH) @map("kien_truc_chip") // Jev AI đọc trường này
+  kienTrucChip      KienTrucChip      @default(KHONG_XAC_DINH) @map("kien_truc_chip") // Luật chọn tệp theo ABI đọc trường này
   maBamSha256       String?           @map("ma_bam_sha256")
   soLuotTai         Int               @default(0) @map("so_luot_tai")
   ngayTao           DateTime          @default(now()) @map("ngay_tao")

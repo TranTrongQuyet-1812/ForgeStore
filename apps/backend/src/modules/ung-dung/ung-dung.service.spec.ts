@@ -12,7 +12,6 @@ import {
   QueryAppsDto,
   TimeWindowFilter,
 } from './dto/truy-van-ung-dung.dto';
-import { JevClientService } from '../ai/services/jev-client.service';
 import { TrustScoreService } from '../ai/services/trust-score.service';
 import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { SemanticSearchService } from '../ai/services/semantic-search.service';
@@ -63,11 +62,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
   let mockPrisma: MockPrisma;
   let mockGithubService: MockGithubService;
   let mockCacheService: MockCacheService;
-  let mockJevClientService: {
-    isEnabled: boolean;
-    hoiChoice: ReturnType<typeof vi.fn>;
-    hoiNoulBatch: ReturnType<typeof vi.fn>;
-  };
   let mockTrustScoreService: {
     tinhTrustScore: ReturnType<typeof vi.fn>;
   };
@@ -170,19 +164,11 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       withLock: vi.fn(async (_k, _ttl, cb) => cb()),
     };
 
-    mockJevClientService = {
-      isEnabled: true,
-      hoiChoice: vi.fn(),
-      hoiNoulBatch: vi.fn(),
-    };
-
     mockTrustScoreService = {
       tinhTrustScore: vi.fn().mockResolvedValue({
         diemUyTin: 95,
         mucDoAnToan: 'XUAT_SAC',
         yeuToRuiRo: [],
-        daThamDinhJev: true,
-        trangThaiThamDinhJev: 'DA_THAM_DINH',
       }),
     };
 
@@ -234,7 +220,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       mockPrisma as unknown as PrismaService,
       mockGithubService as unknown as GithubService,
       mockCacheService as unknown as CacheService,
-      mockJevClientService as unknown as JevClientService,
       mockTrustScoreService as unknown as TrustScoreService,
       mockApkInspectorService as unknown as ApkInspectorService,
       mockSemanticSearchService as unknown as SemanticSearchService,
@@ -749,8 +734,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           tomTatTinhNangVi: null,
           diemUyTin: 90,
           mucDoAnToan: 'AN_TOAN',
-          daThamDinhJev: false,
-          trangThaiThamDinhJev: 'CHUA_THAM_DINH',
           yeuToRuiRo: [],
           quyenHanDaKiemTra: [],
           moHinhTomTat: null,
@@ -853,7 +836,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       ngayTao: new Date(),
     };
 
-    it('Thiết bị Android arm64: ưu tiên chọn APK arm64-v8a theo luật không cần gọi Jev', async () => {
+    it('Thiết bị Android arm64: ưu tiên chọn APK arm64-v8a theo luật', async () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
       mockPrisma.banPhatHanh.findMany.mockResolvedValue([
         {
@@ -871,7 +854,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
       expect(res.tepCaiDat.maTep).toBe('file-arm64');
       expect(res.nguonQuyetDinh).toBe('LUAT');
-      expect(mockJevClientService.hoiChoice).not.toHaveBeenCalled();
     });
 
     it('Thiết bị Android x86_64: fallback về Universal APK khi không có bản riêng x86_64', async () => {
@@ -894,7 +876,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(res.nguonQuyetDinh).toBe('LUAT');
     });
 
-    it('Thiết bị Android: tên file mơ hồ (KHONG_XAC_DINH), gọi Jev Choice thành công để chọn tệp phù hợp', async () => {
+    it('Thiết bị Android: tên file mơ hồ (KHONG_XAC_DINH) thì không đoán, trả 404 kèm danh sách tệp để người dùng tự chọn (P2-70.3)', async () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
       mockPrisma.banPhatHanh.findMany.mockResolvedValue([
         {
@@ -904,22 +886,19 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         },
       ]);
 
-      mockJevClientService.hoiChoice.mockResolvedValue({
-        luaChon: 'file-ambiguous',
-        doTinCay: 0.92,
-      });
+      const loi = await service
+        .giaiQuyetFileCaiDat({
+          maUngDung: 'rustdesk/rustdesk',
+          nenTang: 'ANDROID',
+          abis: ['arm64-v8a'],
+        })
+        .catch((e: NotFoundException) => e);
 
-      const res = await service.giaiQuyetFileCaiDat({
-        maUngDung: 'rustdesk/rustdesk',
-        nenTang: 'ANDROID',
-        abis: ['arm64-v8a'],
+      expect(loi).toBeInstanceOf(NotFoundException);
+      expect((loi as NotFoundException).getResponse()).toMatchObject({
+        maLoi: 'KHONG_CO_FILE_PHU_HOP',
+        tepDeNguoiDungChon: [{ maTep: 'file-ambiguous', tenTep: mockApkAmbiguous.tenTep }],
       });
-
-      expect(res.tepCaiDat.maTep).toBe('file-ambiguous');
-      expect(res.nguonQuyetDinh).toBe('JEV');
-      expect(res.doTinCay).toBe(0.92);
-      expect(mockJevClientService.hoiChoice).toHaveBeenCalledTimes(1);
-      expect(mockPrisma.tepCaiDat.update).not.toHaveBeenCalled();
     });
 
     it('Thiết bị Android: không có APK nào phù hợp ném NotFoundException với mã KHONG_CO_FILE_PHU_HOP', async () => {
@@ -1732,7 +1711,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           tomTatTinhNangVi: '- Tiện lợi',
           diemUyTin: 85,
           mucDoAnToan: 'AN_TOAN_CAO',
-          daThamDinhJev: true,
           yeuToRuiRo: [],
           quyenHanDaKiemTra: [],
           thoiGianPhanTich: new Date(),
@@ -1787,7 +1765,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           tomTatTinhNangVi: '- Tiện lợi',
           diemUyTin: 85,
           mucDoAnToan: 'AN_TOAN_CAO',
-          daThamDinhJev: true,
           yeuToRuiRo: [],
           quyenHanDaKiemTra: [],
           thoiGianPhanTich: new Date(),
@@ -1854,7 +1831,6 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           tomTatTinhNangVi: '- Tiện lợi',
           diemUyTin: 85,
           mucDoAnToan: 'AN_TOAN_CAO',
-          daThamDinhJev: true,
           yeuToRuiRo: [],
           quyenHanDaKiemTra: [],
           thoiGianPhanTich: new Date(),

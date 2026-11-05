@@ -22,7 +22,7 @@ export const colors = {
   // 10% - Accents & Intelligence (Điểm nhấn nhận diện & AI)
   accentForge: '#FF9E20', // [Lửa Rèn] Forge Amber: Nút "Cài đặt 1-Click", CTA chính, Progress Bar
   accentForgeHover: '#E68A13', // Trạng thái hover/active nút cài đặt
-  accentAi: '#3F9AA0', // [Teal] Huy hiệu Jev AI, nút "AI Tóm Tắt"
+  accentAi: '#3F9AA0', // [Teal] Điểm nhấn cho phần do AI hỗ trợ (tìm kiếm theo ý định)
 
   // Semantic Tokens: Chỉ số Uy tín & Trạng thái An toàn (Ngưỡng 80/60)
   trustHigh: '#10B981', // Xanh Emerald: Trust Score 80-100 (Rất an toàn)
