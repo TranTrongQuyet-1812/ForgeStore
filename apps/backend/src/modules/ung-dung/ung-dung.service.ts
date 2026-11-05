@@ -1073,7 +1073,8 @@ export class UngDungService {
         maReleaseGithub: r.maReleaseGithub ? r.maReleaseGithub.toString() : null,
         tenPhienBan: r.tenPhienBan,
         tieuDePhatHanh: r.tieuDePhatHanh,
-        nhatKyThayDoiGoc: r.nhatKyThayDoiGoc,
+        // Không trả changelog cho lịch sử phiên bản: Desktop không hiện (D-34) mà nó chiếm phần lớn phản hồi
+        // (stablyai/orca 565 KB, đo 05/11/2026). Bản mới nhất vẫn có ở `banPhatHanhMoiNhat`.
         tomTatNangCapVi: r.tomTatNangCapVi,
         laBanThuNghiem: r.laBanThuNghiem,
         ngayPhatHanh: r.ngayPhatHanh.toISOString(),
@@ -1616,6 +1617,7 @@ export class UngDungService {
             topics: app.danhSachChuDe,
             danhMuc: app.danhMucChinh,
           });
+          let duVector = true;
           for (const moHinh of MO_HINH_EMBEDDING) {
             // Mô hình nào lỗi hay hết lượt thì cột đó để trống, lệnh `data-repo sinh-vector` bổ sung sau.
             try {
@@ -1626,8 +1628,13 @@ export class UngDungService {
                 moHinh,
               );
             } catch (err: unknown) {
+              duVector = false;
               this.logger.warn(`Lỗi sinh/lưu vector ${moHinh.model}: ${(err as Error).message}`);
             }
+          }
+          // P3B-09.3: ghi mã băm văn bản để job 2:00 biết khi nào văn bản đổi mà sinh lại
+          if (duVector) {
+            await this.semanticSearchService.ghiMaBamVanBan(phanTich.maPhanTich, textEmbed);
           }
 
           // D-34: Không dịch hoặc tóm tắt changelog; giữ cột tóm tắt để tương thích dữ liệu cũ.

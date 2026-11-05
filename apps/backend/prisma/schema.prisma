@@ -248,6 +248,8 @@ model PhanTichAI {
   vectorNguNghia      Unsupported("vector(768)")? @map("vector_ngu_nghia")
   // P3B-28.3: vector Gemini Embedding 2, cột riêng, không so sánh chéo với vector_ngu_nghia (D-33)
   vectorNguNghiaV2    Unsupported("vector(768)")? @map("vector_ngu_nghia_v2")
+  // P3B-09.3: mã băm văn bản đã dùng sinh vector; lệch với văn bản hiện tại thì job 2:00 sinh lại
+  maBamVanBanVector   String?         @map("ma_bam_van_ban_vector")
   moHinhTomTat        String?         @map("mo_hinh_tom_tat") // D-15: Gemini / NVIDIA NIM / DU_PHONG (không dùng nữa - D-17)
   thoiGianPhanTich    DateTime        @default(now()) @map("thoi_gian_phan_tich")
   ngayTao             DateTime        @default(now()) @map("ngay_tao")

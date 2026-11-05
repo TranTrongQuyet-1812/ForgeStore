@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
@@ -272,6 +273,77 @@ export class SemanticSearchService {
       } catch (err) {
         ketQua.loi++;
         this.logger.warn(`Bổ sung vector ${moHinh.model} lỗi: ${(err as Error).message}`);
+        if ((err as Error).message.includes('hết lượt trong ngày')) break;
+      }
+    }
+    return ketQua;
+  }
+
+  /** Mã băm văn bản dùng sinh vector (P3B-09.3): lệch với văn bản hiện tại nghĩa là vector đã cũ. */
+  tinhMaBamVanBan(vanBan: string): string {
+    return createHash('sha256').update(vanBan).digest('hex');
+  }
+
+  async ghiMaBamVanBan(maPhanTich: string, vanBan: string): Promise<void> {
+    await this.prisma.phanTichAI.update({
+      where: { maPhanTich },
+      data: { maBamVanBanVector: this.tinhMaBamVanBan(vanBan) },
+    });
+  }
+
+  /**
+   * P3B-09.3: sinh lại vector cho app có văn bản (tên, mô tả đã dịch, chủ đề, danh mục) đổi so với lúc sinh.
+   * App chưa có mã băm (sinh trước khi có cột này) chỉ được ghi mốc, không sinh lại hàng loạt để giữ hạn mức.
+   * Sinh đủ mọi mô hình mới ghi mã băm, để lần sau thử lại nếu một mô hình lỗi. Hết hũ ngày thì dừng.
+   */
+  async sinhLaiVectorLoiThoi(
+    toiDa: number,
+  ): Promise<{ ghiMoc: number; sinhLai: number; loi: number }> {
+    const dong = await this.prisma.$queryRaw<
+      Array<{
+        maPhanTich: string;
+        tenKhoChua: string;
+        chuDe: string[];
+        moTa: string | null;
+        danhMuc: string | null;
+        maBam: string | null;
+      }>
+    >`
+      SELECT pa."ma_phan_tich" AS "maPhanTich", u."ten_kho_chua" AS "tenKhoChua",
+             u."danh_sach_chu_de" AS "chuDe", u."danh_muc_chinh" AS "danhMuc",
+             COALESCE(NULLIF(u."mo_ta_vi", ''), u."mo_ta_goc_tieng_anh") AS "moTa",
+             pa."ma_bam_van_ban_vector" AS "maBam"
+      FROM "phan_tich_ai" pa JOIN "ung_dung" u ON pa."ma_ung_dung" = u."ma_ung_dung"
+      WHERE pa."vector_ngu_nghia" IS NOT NULL OR pa."vector_ngu_nghia_v2" IS NOT NULL
+    `;
+    const ketQua = { ghiMoc: 0, sinhLai: 0, loi: 0 };
+    for (const app of dong) {
+      const vanBan = this.chuanBiVanBanNhung({
+        tenKhoChua: app.tenKhoChua,
+        moTa: app.moTa,
+        topics: app.chuDe,
+        danhMuc: app.danhMuc,
+      });
+      if (!app.maBam) {
+        await this.ghiMaBamVanBan(app.maPhanTich, vanBan);
+        ketQua.ghiMoc++;
+        continue;
+      }
+      if (app.maBam === this.tinhMaBamVanBan(vanBan) || ketQua.sinhLai + ketQua.loi >= toiDa)
+        continue;
+      try {
+        for (const moHinh of MO_HINH_EMBEDDING) {
+          await this.luuVectorNguNghia(
+            app.maPhanTich,
+            await this.sinhEmbedding(vanBan, moHinh),
+            moHinh,
+          );
+        }
+        await this.ghiMaBamVanBan(app.maPhanTich, vanBan);
+        ketQua.sinhLai++;
+      } catch (err) {
+        ketQua.loi++;
+        this.logger.warn(`Sinh lại vector lỗi: ${(err as Error).message}`);
         if ((err as Error).message.includes('hết lượt trong ngày')) break;
       }
     }

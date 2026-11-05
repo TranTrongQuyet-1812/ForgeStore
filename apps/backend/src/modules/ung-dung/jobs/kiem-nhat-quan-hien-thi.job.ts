@@ -5,6 +5,7 @@ import { coCachCaiCliHopLe, HuongDanCaiDatDto } from '@forgestore/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
 import { UngDungService, daCoKetQuaBocTachCli } from '../ung-dung.service';
+import { SemanticSearchService } from '../../ai/services/semantic-search.service';
 
 /**
  * Kiểu dữ liệu thu gọn của ứng dụng phục vụ đối soát tính nhất quán trạng thái hiển thị
@@ -27,6 +28,8 @@ const KICH_THUOC_TRANG = 200;
 const SO_REPO_CANH_BAO_TOI_DA_TRONG_LOG = 20;
 // Mỗi đêm bóc tách lại tối đa chừng này dấu lỗi thời (c): mỗi app tốn một lần lấy README (có ETag)
 const SO_BOC_TACH_LAI_TOI_DA = 100;
+// Mỗi đêm sinh lại vector cho tối đa chừng này app có văn bản đổi (d): mỗi app tốn một lượt mỗi mô hình Embedding
+const SO_SINH_LAI_VECTOR_TOI_DA = 100;
 
 /**
  * Job chốt chặn tự động hằng ngày kiểm tra tính nhất quán trạng thái hiển thị (P3B-25.8, D-30).
@@ -36,6 +39,7 @@ const SO_BOC_TACH_LAI_TOI_DA = 100;
  * 2. (b) Đang HOAT_DONG nhưng không có tệp cài và không có lệnh CLI hợp lệ -> CHỈ CẢNH BÁO trong log, không tự đổi.
  * 3. (c) P3B-25.15: dấu "không có hướng dẫn" ghi bằng bộ bóc tách cũ -> bóc tách lại, không chờ có người mở trang.
  *    Chạy trước (a) để app vừa tìm thấy lệnh cài được hiện ngay trong cùng đêm.
+ * 4. (d) P3B-09.3: sinh lại vector tìm kiếm cho app có tên, mô tả đã dịch, chủ đề hay danh mục đổi.
  */
 @Injectable()
 export class KiemNhatQuanHienThiJob {
@@ -46,6 +50,7 @@ export class KiemNhatQuanHienThiJob {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly appsService: UngDungService,
+    private readonly semanticSearchService: SemanticSearchService,
   ) {}
 
   /**
@@ -79,6 +84,11 @@ export class KiemNhatQuanHienThiJob {
       soLuongBocTachLai = await this.bocTachLaiDauLoiThoi(SO_BOC_TACH_LAI_TOI_DA);
       soLuongDaSua = await this.xuLyAppBiAnNham(gioiHan);
       soLuongCanhBao = await this.xuLyAppHienNham();
+      const vector =
+        await this.semanticSearchService.sinhLaiVectorLoiThoi(SO_SINH_LAI_VECTOR_TOI_DA);
+      this.logger.log(
+        `[Chốt chặn (d)] Vector: ghi mốc ${vector.ghiMoc}, sinh lại ${vector.sinhLai}, lỗi ${vector.loi}.`,
+      );
 
       this.logger.log(
         `[Chốt chặn hoàn tất] Bóc tách lại (c): ${soLuongBocTachLai}, tự sửa (a): ${soLuongDaSua}, cảnh báo (b): ${soLuongCanhBao}`,
