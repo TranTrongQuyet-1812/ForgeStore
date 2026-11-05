@@ -56,7 +56,8 @@ export class KiemNhatQuanHienThiJob {
   /**
    * Chạy định kỳ vào 2:00 sáng mỗi ngày, sau job suy giảm điểm thịnh hành (nửa đêm)
    */
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
+  // Server chạy giờ UTC: đặt múi giờ để "nửa đêm", "2:00" là giờ Việt Nam
+  @Cron(CronExpression.EVERY_DAY_AT_2AM, { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleCron(): Promise<void> {
     this.logger.log('Bắt đầu chu kỳ quét kiểm tra tính nhất quán trạng thái hiển thị...');
     await this.kiemTraVaSuaNhatQuanHienThi();

@@ -8,8 +8,12 @@ describe('SemanticSearchService.sinhLaiVectorLoiThoi (P3B-09.3)', () => {
   const prisma = {
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn().mockResolvedValue(1),
-    phanTichAI: { update: vi.fn() },
   };
+  /** Các lần ghi mã băm: câu SQL có cột ma_bam_van_ban_vector, tham số là [mã băm, mã phân tích]. */
+  const lanGhiMaBam = () =>
+    prisma.$executeRaw.mock.calls
+      .filter((c) => (c[0] as string[]).join('').includes('ma_bam_van_ban_vector'))
+      .map((c) => [c[1], c[2]]);
   const rateLimiter = { giuChoEmbedding: vi.fn(), layToken: vi.fn() };
   const embedContent = vi.fn();
   let service: SemanticSearchService;
@@ -43,10 +47,11 @@ describe('SemanticSearchService.sinhLaiVectorLoiThoi (P3B-09.3)', () => {
     const kq = await service.sinhLaiVectorLoiThoi(100);
     expect(kq).toEqual({ ghiMoc: 1, sinhLai: 0, loi: 0 });
     expect(embedContent).not.toHaveBeenCalled();
-    expect(prisma.phanTichAI.update).toHaveBeenCalledWith({
-      where: { maPhanTich: 'a' },
-      data: { maBamVanBanVector: service.tinhMaBamVanBan(vanBan('Mô tả cũ')) },
-    });
+    expect(lanGhiMaBam()).toEqual([[service.tinhMaBamVanBan(vanBan('Mô tả cũ')), 'a']]);
+    // Ghi mã băm bằng SQL thô, không qua Prisma update, để không đổi ngay_cap_nhat
+    expect((prisma.$executeRaw.mock.calls[0]![0] as string[]).join('')).not.toContain(
+      'ngay_cap_nhat',
+    );
   });
 
   it('văn bản đổi thì sinh lại đủ mọi mô hình rồi mới ghi mã băm mới', async () => {
@@ -54,18 +59,15 @@ describe('SemanticSearchService.sinhLaiVectorLoiThoi (P3B-09.3)', () => {
     const kq = await service.sinhLaiVectorLoiThoi(100);
     expect(kq).toEqual({ ghiMoc: 0, sinhLai: 1, loi: 0 });
     expect(embedContent).toHaveBeenCalledTimes(MO_HINH_EMBEDDING.length);
-    expect(prisma.$executeRaw).toHaveBeenCalledTimes(MO_HINH_EMBEDDING.length);
-    expect(prisma.phanTichAI.update).toHaveBeenCalledWith({
-      where: { maPhanTich: 'c' },
-      data: { maBamVanBanVector: service.tinhMaBamVanBan(vanBan('Mô tả mới đã dịch')) },
-    });
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(MO_HINH_EMBEDDING.length + 1);
+    expect(lanGhiMaBam()).toEqual([[service.tinhMaBamVanBan(vanBan('Mô tả mới đã dịch')), 'c']]);
   });
 
   it('hết hũ ngày thì dừng, không ghi mã băm để đêm sau thử lại; tôn trọng giới hạn mỗi đêm', async () => {
     prisma.$queryRaw.mockResolvedValue([dong('d', 'x', 'cu'), dong('e', 'y', 'cu')]);
     rateLimiter.giuChoEmbedding.mockResolvedValue(false);
     expect(await service.sinhLaiVectorLoiThoi(100)).toEqual({ ghiMoc: 0, sinhLai: 0, loi: 1 });
-    expect(prisma.phanTichAI.update).not.toHaveBeenCalled();
+    expect(lanGhiMaBam()).toEqual([]);
 
     rateLimiter.giuChoEmbedding.mockResolvedValue(true);
     expect(await service.sinhLaiVectorLoiThoi(1)).toEqual({ ghiMoc: 0, sinhLai: 1, loi: 0 });

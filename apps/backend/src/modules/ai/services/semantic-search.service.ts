@@ -284,11 +284,15 @@ export class SemanticSearchService {
     return createHash('sha256').update(vanBan).digest('hex');
   }
 
+  /**
+   * Ghi bằng SQL thô để không đổi `ngay_cap_nhat`: lệnh `sinh-vector --lam-lai-truoc` dựa vào cột đó để biết vector
+   * nào đã sinh lại, còn Prisma `update` tự đặt lại nó (`@updatedAt`) dù vector không đổi.
+   */
   async ghiMaBamVanBan(maPhanTich: string, vanBan: string): Promise<void> {
-    await this.prisma.phanTichAI.update({
-      where: { maPhanTich },
-      data: { maBamVanBanVector: this.tinhMaBamVanBan(vanBan) },
-    });
+    await this.prisma.$executeRaw`
+      UPDATE "phan_tich_ai" SET "ma_bam_van_ban_vector" = ${this.tinhMaBamVanBan(vanBan)}
+      WHERE "ma_phan_tich" = ${maPhanTich}::uuid
+    `;
   }
 
   /**

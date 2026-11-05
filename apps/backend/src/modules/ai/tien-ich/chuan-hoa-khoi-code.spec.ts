@@ -23,6 +23,12 @@ describe('chuanHoaKhoiCode (bộ bóc tách phiên bản 6)', () => {
     );
   });
 
+  it('khối rào 4 dấu ` lồng khối 3 dấu: dòng rào bên trong không làm kết thúc sớm', () => {
+    const vao = ['````markdown', '```sh', 'npm install -g a', '```', '````', 'sau'].join('\n');
+    const ra = chuanHoaKhoiCode(vao).split('\n');
+    expect(ra).toEqual(['```markdown', "'''sh", 'npm install -g a', "'''", '```', 'sau']);
+  });
+
   it('không đụng nội dung trong khối ``` (kể cả dòng thụt lề) và dòng thụt lề không đứng sau dòng trống', () => {
     const trongRao = '```sh\n    npm install -g z\n```';
     expect(chuanHoaKhoiCode(trongRao)).toBe(trongRao);

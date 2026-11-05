@@ -785,7 +785,8 @@ export function chuanHoaKhoiCode(readme: string): string {
       const dong2 = dong.match(DONG_RAO);
       const dongRao =
         dong2 && dong2[1]![0] === rao[0] && dong2[1]!.length >= rao.length && !dong2[2]!.trim();
-      ra.push(dongRao ? '```' : dong);
+      // Dòng rào lồng bên trong (khối ```` chứa ```) đổi ` thành ' để các bước sau không tưởng là khối kết thúc
+      ra.push(dongRao ? '```' : dong2 ? dong.replace(/`/g, "'") : dong);
       if (dongRao) rao = null;
       return;
     }

@@ -632,7 +632,8 @@ export class ThietBiService {
    * Dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ (P3B-16.5).
    * Được gọi từ Cron Job định kỳ mỗi ngày lúc nửa đêm; không chạy trong luồng GET để đảm bảo Idempotent.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // Server chạy giờ UTC: đặt múi giờ để "nửa đêm", "2:00" là giờ Việt Nam
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'Asia/Ho_Chi_Minh' })
   async donDepBanGhiCliQuaHan(): Promise<number> {
     const ketQua = await this.prisma.ungDungDaCai.deleteMany({
       where: {

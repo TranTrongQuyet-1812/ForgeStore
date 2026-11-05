@@ -787,7 +787,8 @@ export class XacThucService {
    * Dọn dẹp các phiên làm việc đã hết hạn trong CSDL (P2-12.5).
    * Điểm 10: Tự động chạy mỗi ngày lúc nửa đêm qua Cron job.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // Server chạy giờ UTC: đặt múi giờ để "nửa đêm", "2:00" là giờ Việt Nam
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'Asia/Ho_Chi_Minh' })
   async donDepPhienHetHan(): Promise<number> {
     const result = await this.prisma.phienDangNhap.deleteMany({
       where: {

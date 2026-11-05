@@ -18,7 +18,8 @@ export class SuyGiamThinhHanhJob {
    * Tác vụ định kỳ quét và tính lại điểm thịnh hành suy giảm theo thời gian (P3B-03.4, DELIV-72.4).
    * Mặc định chạy vào nửa đêm mỗi ngày.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  // Server chạy giờ UTC: đặt múi giờ để "nửa đêm", "2:00" là giờ Việt Nam
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'Asia/Ho_Chi_Minh' })
   async handleCron(): Promise<void> {
     this.logger.log('Bắt đầu chu kỳ quét suy giảm điểm thịnh hành...');
     await this.capNhatDiemThinhHanhToanBo();
