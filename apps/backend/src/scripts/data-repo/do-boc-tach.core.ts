@@ -77,7 +77,11 @@ export function doBocTach(danhSach: BanGhiDaCao[]): KetQuaDoBocTach {
   for (const row of danhSach) {
     const dongLenh = timDongLenh(row.readmeEn || '');
     if (!dongLenh.length) continue;
-    const huongDan = trichXuatHuongDanCliBangQuyTac(row.readmeEn || '');
+    // Truyền đường dẫn repo giống backend: bước "tên gói khớp tên repo" (P3B-25.12) cần biết tên repo
+    const huongDan = trichXuatHuongDanCliBangQuyTac(
+      row.readmeEn || '',
+      `https://github.com/${row.repo}#readme`,
+    );
     const duocNhan = coCachCaiCliHopLe(huongDan);
     ketQua.repoCoLenh++;
     if (duocNhan) ketQua.repoDuocNhan++;
@@ -100,7 +104,13 @@ export function doBocTach(danhSach: BanGhiDaCao[]): KetQuaDoBocTach {
  */
 export type TrangThaiDuDoan = 'HOAT_DONG' | 'TUY_TEP_CAI';
 
-export function duDoanTrangThaiTuReadme(readme: string | null | undefined): TrangThaiDuDoan {
-  const huongDan = trichXuatHuongDanCliBangQuyTac(readme || '');
+export function duDoanTrangThaiTuReadme(
+  readme: string | null | undefined,
+  repo?: string,
+): TrangThaiDuDoan {
+  const huongDan = trichXuatHuongDanCliBangQuyTac(
+    readme || '',
+    repo ? `https://github.com/${repo}#readme` : undefined,
+  );
   return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'TUY_TEP_CAI';
 }

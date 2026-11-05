@@ -1482,7 +1482,7 @@ async function lenhDay(): Promise<void> {
           kiemBanDich = `LỆCH: ${String(err).slice(0, 120)}`;
         }
       }
-      const duDoan = caoRow ? duDoanTrangThaiTuReadme(caoRow.readmeEn) : 'KHONG_CO_BAN_CAO';
+      const duDoan = caoRow ? duDoanTrangThaiTuReadme(caoRow.readmeEn, caoRow.repo) : 'KHONG_CO_BAN_CAO';
       demDuDoan[duDoan]++;
       console.info(
         `[thử] ${row.repo}: trạng thái dự kiến ${duDoan} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,

@@ -544,6 +544,36 @@ export function locVaChuanHoaHuongDanCaiDat(
 }
 
 /**
+ * Lệnh chỉ cài hoặc nâng cấp công cụ đóng gói (`pip install -U pip setuptools wheel`, `npm i -g pnpm`,
+ * `npm install -g yarn`) chứ không cài app.
+ */
+function laLenhCaiCongCu(lenh: string): boolean {
+  const congCuPython = String.raw`(?:pip|setuptools|wheel|uv|pipx)`;
+  const congCuNode = String.raw`(?:npm|pnpm|yarn|corepack)(?:@\S+)?`;
+  return (
+    new RegExp(
+      String.raw`^(?:python\d*\s+-m\s+|py\s+-m\s+)?pip\d*\s+install(?:\s+(?:-U|--upgrade|--user))*` +
+        String.raw`(?:\s+${congCuPython})+\s*$`,
+      'i',
+    ).test(lenh) ||
+    new RegExp(
+      String.raw`^npm\s+(?:install|i)\s+(?:-g|--global)(?:\s+${congCuNode})+\s*$`,
+      'i',
+    ).test(lenh)
+  );
+}
+
+/** Một trong các gói đứng sau `install`/`i` (bỏ cờ và phiên bản `@...`) khớp tên repo. */
+function lenhNhacTenRepo(lenh: string, tenRepo: string): boolean {
+  const tu = lenh.split(/\s+/);
+  const viTri = tu.findIndex((t) => /^(?:install|i)$/i.test(t));
+  return tu
+    .slice(viTri + 1)
+    .filter((t) => t && !t.startsWith('-'))
+    .some((goi) => tenGoiKhopTenRepo(goi.replace(/@[^/]*$/, ''), tenRepo));
+}
+
+/**
  * Trích xuất các khối lệnh từ code blocks Markdown mà không cần gọi LLM (Fallback / Offline Mode).
  */
 export function bocTachHuongDanTuCodeBlocks(
@@ -552,6 +582,7 @@ export function bocTachHuongDanTuCodeBlocks(
   duongDanReadmeGoc?: string,
 ): HuongDanCaiDatDto | null {
   if (!rawInstallSection) return null;
+  const tenRepo = layTenRepoTuDuongDan(duongDanReadmeGoc);
 
   // Tìm tất cả các code blocks: ```[lang]\n[code]\n```
   const codeBlockRegex = /```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g;
@@ -590,6 +621,10 @@ export function bocTachHuongDanTuCodeBlocks(
     for (const dongGoc of lines) {
       // Bỏ dấu nhắc shell (`$ `, `> `, `PS> `) để lệnh lưu và gói bóc tách là lệnh sạch
       const line = boDauNhacShell(dongGoc) || dongGoc;
+      // Lệnh chỉ cài công cụ đóng gói (`pip install -U pip`, `npm i -g pnpm`) không phải lệnh cài app; để lại thì
+      // nó đứng đầu nhóm và tên gói bị đọc thành "pip"/"pnpm" (aqtinstall, etherpad). Trừ khi chính repo là công
+      // cụ đó (pnpm/pnpm, astral-sh/uv); không biết repo thì giữ nguyên như cũ.
+      if (tenRepo && laLenhCaiCongCu(line) && !lenhNhacTenRepo(line, tenRepo)) continue;
       const nhom = nhanDienNhomLenh(line);
       if (nhom) {
         cacLenh.push({
@@ -727,6 +762,63 @@ function trichTheoTenRepoTrongToanReadme(
 }
 
 /**
+ * Dòng mở hoặc đóng khối code rào: từ 3 dấu ` hoặc ~ trở lên. Nhận ở mọi độ thụt lề vì README hay lùi khối rào
+ * vào trong mục danh sách (xgplayer, mp-html); nếu chỉ nhận tối đa 3 dấu cách như chuẩn thì khối đó bị bọc thêm rào.
+ */
+const DONG_RAO = /^\s*(`{3,}|~{3,})(.*)$/;
+/** Thụt lề của khối code thụt lề trong Markdown: 4 dấu cách hoặc 1 tab. */
+const THUT_LE_CODE = /^(?: {4}|\t)/;
+
+/**
+ * Đưa khối code rào `~~~` và khối code thụt lề (4 dấu cách hoặc tab, chuẩn Markdown) về dạng ``` mà các bước bóc
+ * tách đọc được. Chỉ thêm dòng rào và bỏ phần thụt lề, không đổi chữ của lệnh, nên kiểm tên gói và chống chèn lệnh
+ * vẫn giữ nguyên. Đo 05/11/2026: nhiều README (instaloader, shellharden, ungit, ffsubsync) viết lệnh cài theo hai
+ * kiểu này nên bị sót. Khối thụt lề phải đứng sau dòng trống, giống luật Markdown, để không nhận nhầm đoạn văn.
+ */
+export function chuanHoaKhoiCode(readme: string): string {
+  const dongVao = readme.split(/\r?\n/);
+  const ra: string[] = [];
+  let rao: string | null = null;
+  let trongThutLe = false;
+  dongVao.forEach((dong, i) => {
+    if (rao) {
+      const dong2 = dong.match(DONG_RAO);
+      const dongRao =
+        dong2 && dong2[1]![0] === rao[0] && dong2[1]!.length >= rao.length && !dong2[2]!.trim();
+      ra.push(dongRao ? '```' : dong);
+      if (dongRao) rao = null;
+      return;
+    }
+    const moRao = dong.match(DONG_RAO);
+    if (trongThutLe && (moRao || (dong.trim() && !THUT_LE_CODE.test(dong)))) {
+      ra.push('```');
+      trongThutLe = false;
+    }
+    if (moRao) {
+      rao = moRao[1]!;
+      ra.push('```' + moRao[2]!.trim());
+      return;
+    }
+    // Dòng trống giữa khối thụt lề chỉ thuộc khối nếu dòng có chữ kế tiếp vẫn thụt lề
+    if (trongThutLe && !dong.trim()) {
+      const keTiep = dongVao.slice(i + 1).find((d) => d.trim());
+      if (!keTiep || !THUT_LE_CODE.test(keTiep)) {
+        ra.push('```');
+        trongThutLe = false;
+      }
+    }
+    const truocTrong = i === 0 || !dongVao[i - 1]!.trim();
+    if (!trongThutLe && dong.trim() && THUT_LE_CODE.test(dong) && truocTrong) {
+      ra.push('```');
+      trongThutLe = true;
+    }
+    ra.push(trongThutLe ? dong.replace(THUT_LE_CODE, '') : dong);
+  });
+  if (trongThutLe || rao) ra.push('```');
+  return ra.join('\n');
+}
+
+/**
  * Trích xuất hướng dẫn cài đặt dòng lệnh hoàn toàn bằng quy tắc thuần từ README (P3B-16.3).
  * Tuyệt đối không dùng AI. Coi là gợi ý, ghi rõ nguồn là README.
  */
@@ -735,6 +827,7 @@ export function trichXuatHuongDanCliBangQuyTac(
   duongDanReadmeGoc?: string,
 ): HuongDanCaiDatDto | null {
   if (!rawReadme || typeof rawReadme !== 'string') return null;
+  rawReadme = chuanHoaKhoiCode(rawReadme);
 
   // 1. Tìm mục cài đặt trong README
   const installSection = trichMucCaiDat(rawReadme);
