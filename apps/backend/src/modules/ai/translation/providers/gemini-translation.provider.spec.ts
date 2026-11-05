@@ -113,4 +113,21 @@ describe('GeminiTranslationProvider', () => {
     expect(res.data).toEqual({ app1: 'Ứng dụng mã nguồn mở tuyệt vời' });
     expect(res.lyDoLoi).toBeNull();
   });
+
+  it('tắt suy nghĩ bằng thinkingLevel MINIMAL, không gửi thinkingBudget (gemini-3.5-flash-lite trả 400)', async () => {
+    provider = new GeminiTranslationProvider(mockConfigService);
+    const generateContent = vi.fn().mockResolvedValue({
+      candidates: [{ finishReason: 'STOP' }],
+      text: '{"app1": "Xin chào"}',
+    });
+    (provider as any).client = { models: { generateContent } };
+
+    await provider.translate('Hello');
+    await provider.translateBatchJson([{ id: 'app1', text: 'Hello' }]);
+
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    for (const [yeuCau] of generateContent.mock.calls) {
+      expect(yeuCau.config.thinkingConfig).toEqual({ thinkingLevel: 'MINIMAL' });
+    }
+  });
 });

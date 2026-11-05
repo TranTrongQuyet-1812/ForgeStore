@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import {
   ITranslationProvider,
   KetQuaDichDoan,
@@ -12,6 +12,13 @@ import { StructureValidator } from '../tien-ich/structure-validator.util';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { LlmRateLimiterService } from '../../services/llm-rate-limiter.service';
 import { phanTichKetQuaBatchJson, phanLoaiLoiBatchJson } from '../tien-ich/batch-translation.util';
+
+/**
+ * Tắt suy nghĩ bằng `thinkingLevel: MINIMAL`: cả gemini-3.1-flash-lite và gemini-3.5-flash-lite đều nhận
+ * (đo 05/11/2026, 0 token suy nghĩ). `thinkingBudget: 0` cũ bị gemini-3.5-flash-lite trả lỗi 400
+ * INVALID_ARGUMENT, làm mọi lượt dịch rơi vào mô hình này thất bại.
+ */
+export const CAU_HINH_TAT_SUY_NGHI = { thinkingLevel: ThinkingLevel.MINIMAL };
 
 @Injectable()
 export class GeminiTranslationProvider implements ITranslationProvider {
@@ -99,16 +106,14 @@ export class GeminiTranslationProvider implements ITranslationProvider {
     const timeoutMs = options?.timeoutMs ?? 45_000;
 
     try {
-      // P3B-05.14 / Mục 9: Tắt chế độ suy nghĩ (thinkingBudget: 0) để dịch phản hồi nhanh tức thì
+      // P3B-05.14 / Mục 9: tắt suy nghĩ để dịch nhanh (xem CAU_HINH_TAT_SUY_NGHI)
       const callPromise = this.client.models.generateContent({
         model: this.modelName,
         contents: taoPromptDich(text, options?.context),
         config: {
           systemInstruction: BAN_DICH_SYSTEM_PROMPT,
           temperature: 0.1,
-          thinkingConfig: {
-            thinkingBudget: 0,
-          },
+          thinkingConfig: CAU_HINH_TAT_SUY_NGHI,
         },
       });
 
@@ -273,9 +278,7 @@ export class GeminiTranslationProvider implements ITranslationProvider {
           systemInstruction,
           temperature: 0.1,
           responseMimeType: 'application/json',
-          thinkingConfig: {
-            thinkingBudget: 0,
-          },
+          thinkingConfig: CAU_HINH_TAT_SUY_NGHI,
         },
       });
 
