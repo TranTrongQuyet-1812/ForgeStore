@@ -148,14 +148,10 @@ describe('Dây chuyền trạng thái hiển thị (P3B-25.9, D-30)', () => {
     expect(await trangThai('cli/tool')).toBe('KHONG_CO_BAN_CAI');
   });
 
-  it('4. lỗi mạng khi lấy README lúc đồng bộ lại thì giữ trạng thái cũ, không hạ', async () => {
+  it('4. lỗi mạng khi lấy README lúc đồng bộ lại (chưa có hướng dẫn lưu sẵn) thì giữ trạng thái cũ, không hạ', async () => {
     await prisma.ungDung.update({
       where: { tenRepoDayDu: 'cli/tool' },
       data: { trangThai: 'HOAT_DONG' },
-    });
-    await prisma.phanTichAI.updateMany({
-      where: { ungDung: { tenRepoDayDu: 'cli/tool' } },
-      data: { huongDanCaiDat: { khongCoHuongDan: true, phienBanBocTach: 1, cachCai: [] } },
     });
     github.layReadme.mockRejectedValue(new Error('fetch failed'));
     await app.get(UngDungService).dongBoRepo('cli', 'tool');

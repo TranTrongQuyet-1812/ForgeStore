@@ -276,7 +276,10 @@ export class DayChuyenNapRepoService {
     return this.ketThucLo(ketQua);
   }
 
-  /** Một yêu cầu GraphQL cho cả nhóm; lỗi thì tăng số lần thử của cả nhóm và trả null để dừng lô. */
+  /**
+   * Một yêu cầu GraphQL cho cả nhóm. Lỗi ở đây (mạng, hạn mức GraphQL) là của cả yêu cầu chứ không của
+   * ứng viên nào, nên không tăng số lần thử, chỉ trả null để dừng lô và để lượt sau thử lại.
+   */
   private async sangLocNhom(
     nhom: UngVienRepo[],
   ): Promise<Map<string, DuLieuSangLoc | null> | null> {
@@ -286,10 +289,7 @@ export class DayChuyenNapRepoService {
       const data = await this.githubService.graphql<Record<string, never>>(taoTruyVanSangLoc(ten));
       return docKetQuaSangLoc(data, ten);
     } catch (err) {
-      this.logger.warn(
-        `Sàng lọc GraphQL lỗi, giữ chờ và tăng số lần thử cho ${nhom.length} repo: ${String(err)}`,
-      );
-      for (const u of nhom) await this.tangSoLanThu(u);
+      this.logger.warn(`Sàng lọc GraphQL lỗi, giữ nguyên hàng chờ và dừng lô: ${String(err)}`);
       return null;
     }
   }

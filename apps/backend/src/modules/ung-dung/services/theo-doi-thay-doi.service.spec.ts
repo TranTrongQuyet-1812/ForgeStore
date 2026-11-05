@@ -4,12 +4,26 @@ import {
   AppTheoDoi,
   KetQuaQuet,
   TheoDoiThayDoiService,
-  tenBanMoiNhat,
+  banMoiNhat,
+  canDongBoLai,
   tinhMucDoNong,
 } from './theo-doi-thay-doi.service';
 
 const now = new Date('2026-11-06T00:00:00Z');
 const ngayTruoc = (n: number) => new Date(now.getTime() - n * 86400000);
+
+const banDb = (tag: string, soNgayTruoc: number, soTep: number) => ({
+  tenPhienBan: tag,
+  ngayPhatHanh: ngayTruoc(soNgayTruoc),
+  _count: { danhSachTepCaiDat: soTep },
+});
+const banGithub = (tag: string, tep: string[] = ['app-setup-x64.exe']) =>
+  ({
+    tag_name: tag,
+    published_at: '2026-11-01T00:00:00Z',
+    draft: false,
+    assets: tep.map((name) => ({ name })),
+  }) as never;
 
 const app = (ghiDe: Partial<AppTheoDoi> = {}): AppTheoDoi => ({
   maUngDung: 'app-1',
@@ -24,19 +38,14 @@ const app = (ghiDe: Partial<AppTheoDoi> = {}): AppTheoDoi => ({
   etagRepo: '"r1"',
   etagReleases: '"l1"',
   etagReadme: '"m1"',
-  danhSachPhatHanh: [{ tenPhienBan: 'v1.0.0', ngayPhatHanh: ngayTruoc(90) }],
+  danhSachPhatHanh: [banDb('v1.0.0', 90, 1)],
   _count: { danhSachDaCai: 0, danhSachYeuThich: 0 },
   ...ghiDe,
 });
 
-describe('tinhMucDoNong và tenBanMoiNhat (P3B-07.9)', () => {
+describe('tinhMucDoNong, banMoiNhat, canDongBoLai (P3B-07)', () => {
   it('nóng khi có bản mới trong 30 ngày, có người dùng, hoặc rất nhiều sao; lạnh khi 180 ngày không push', () => {
-    expect(
-      tinhMucDoNong(
-        app({ danhSachPhatHanh: [{ tenPhienBan: 'v2', ngayPhatHanh: ngayTruoc(5) }] }),
-        now,
-      ),
-    ).toBe('NONG');
+    expect(tinhMucDoNong(app({ danhSachPhatHanh: [banDb('v2', 5, 1)] }), now)).toBe('NONG');
     expect(tinhMucDoNong(app({ _count: { danhSachDaCai: 1, danhSachYeuThich: 0 } }), now)).toBe(
       'NONG',
     );
@@ -49,9 +58,25 @@ describe('tinhMucDoNong và tenBanMoiNhat (P3B-07.9)', () => {
     const r = (tag: string, ngay: string, draft = false) =>
       ({ tag_name: tag, published_at: ngay, draft }) as never;
     expect(
-      tenBanMoiNhat([r('v1', '2026-01-01'), r('v3', '2026-03-01', true), r('v2', '2026-02-01')]),
+      banMoiNhat([r('v1', '2026-01-01'), r('v3', '2026-03-01', true), r('v2', '2026-02-01')])
+        ?.tag_name,
     ).toBe('v2');
-    expect(tenBanMoiNhat([])).toBeNull();
+    expect(banMoiNhat([])).toBeNull();
+  });
+
+  it('đồng bộ lại khi có tag mới hoặc cùng tag nhưng thêm tệp cài; không đồng bộ chỉ vì ETag đổi', () => {
+    expect(canDongBoLai(banGithub('v2'), banDb('v1', 9, 1))).toBe(true);
+    // Bản phát hành tạo trước, CI tải tệp lên sau: lần trước DB lưu 0 tệp
+    expect(canDongBoLai(banGithub('v1'), banDb('v1', 9, 0))).toBe(true);
+    // Cùng tag, cùng số tệp (ETag đổi vì số lượt tải): không đồng bộ
+    expect(
+      canDongBoLai(banGithub('v1', ['app-setup-x64.exe', 'source.tar.gz']), banDb('v1', 9, 1)),
+    ).toBe(false);
+    // Bản CLI bị bỏ khi đã có bộ cài GUI, đếm giống dongBoRepo nên không đồng bộ lặp
+    expect(
+      canDongBoLai(banGithub('v1', ['app-setup-x64.exe', 'app-cli-x64.zip']), banDb('v1', 9, 1)),
+    ).toBe(false);
+    expect(canDongBoLai(null, banDb('v1', 9, 1))).toBe(false);
   });
 });
 
@@ -180,7 +205,7 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
       khongDoi,
       {
         trangThai: 200,
-        duLieu: [{ tag_name: 'v2.0.0', published_at: '2026-11-01', draft: false }],
+        duLieu: [banGithub('v2.0.0')],
         etag: '"l2"',
       },
       khongDoi,
@@ -240,6 +265,16 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
       where: { maUngDung: 'app-1' },
       data: { trangThai: 'HOAT_DONG' },
     });
+  });
+
+  it('quetMotLuot: app lỗi giữa lượt vẫn được hẹn lại sau 1 giờ, không đứng đầu hàng mỗi 10 phút', async () => {
+    prisma.ungDung.findMany.mockResolvedValue([app()]);
+    github.getRateLimitInfo.mockReturnValue({ remaining: 4000 });
+    github.hoiCoDieuKien.mockRejectedValue(new Error('dữ liệu lạ'));
+    const truoc = Date.now();
+    await service.quetMotLuot(10, true);
+    const hen = prisma.ungDung.update.mock.calls[0]![0].data.lanKiemTiepTheo as Date;
+    expect(hen.getTime()).toBeGreaterThanOrEqual(truoc + 3600000 - 1000);
   });
 
   it('quetMotLuot: công tắc tắt thì không quét; hạn mức core dưới ngưỡng thì dừng', async () => {

@@ -40,7 +40,7 @@ import { MO_HINH_EMBEDDING, SemanticSearchService } from '../ai/services/semanti
 import { SearchTranslatorService } from '../ai/services/search-translator.service';
 import {
   phanLoaiTep,
-  hauXuLyKienTrucBanPhatHanh,
+  locTepCaiCuaBanPhatHanh,
   tinhDiemUuTienTep,
 } from './tien-ich/phan-loai-tep.util';
 import { anhXaDanhMuc, doanTenGoiAndroid, DANH_MUC_CHUAN } from './tien-ich/anh-xa-danh-muc.util';
@@ -299,67 +299,23 @@ export class UngDungService {
     let hasAndroid = false;
     const danhSachFileApk: string[] = [];
 
-    // Cấu trúc phân loại trước khi vào transaction
-    const parsedReleases = activeReleases.map((release) => {
-      const initialAssets = (release.assets || [])
-        .map((asset) => {
-          const phanLoai = phanLoaiTep(asset.name);
-          if (phanLoai.boQua || !phanLoai.dinhDang) {
-            return null;
-          }
-
-          return {
-            asset,
-            tenTep: asset.name,
-            dinhDang: phanLoai.dinhDang,
-            kienTruc: phanLoai.kienTruc,
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-
-      // V1: Hậu xử lý kiến trúc ngữ cảnh cho toàn bộ tệp trong release (xử lý Notepad++ x64 vs x86)
-      const contextAwareAssets = hauXuLyKienTrucBanPhatHanh(initialAssets);
-
-      // V2: Nhận diện nếu release đã có file GUI chính quy
-      const coFileGuiChinhQuy = contextAwareAssets.some((a) => {
-        const lower = a.tenTep.toLowerCase();
-        return (
-          !/(?:^|[-_.])cli(?:[-_.]|$)/i.test(lower) &&
-          !/(?:^|[-_.])debug(?:[-_.]|$)/i.test(lower) &&
-          !lower.includes('unsigned') &&
-          !lower.includes('parallel')
-        );
-      });
-
-      const validAssets = contextAwareAssets.filter((item) => {
-        const lower = item.tenTep.toLowerCase();
-        const laCli = /(?:^|[-_.])cli(?:[-_.]|$)/i.test(lower);
-        const laDebug = /(?:^|[-_.])debug(?:[-_.]|$)/i.test(lower);
-
-        // V2: Nếu đã có bộ cài GUI chính quy, loại hẳn file CLI và Debug
-        if (coFileGuiChinhQuy && (laCli || laDebug)) {
-          return false;
-        }
-
-        if (item.dinhDang === DinhDangTep.APK) {
-          hasAndroid = true;
-          danhSachFileApk.push(item.tenTep);
-        } else if (
-          item.dinhDang === DinhDangTep.EXE ||
-          item.dinhDang === DinhDangTep.MSI ||
-          item.dinhDang === DinhDangTep.ZIP_PORTABLE
-        ) {
-          hasWindows = true;
-        }
-
-        return true;
-      });
-
-      return {
-        release,
-        validAssets,
-      };
-    });
+    // Cấu trúc phân loại trước khi vào transaction (bộ lọc dùng chung với bộ theo dõi thay đổi)
+    const parsedReleases = activeReleases.map((release) => ({
+      release,
+      validAssets: locTepCaiCuaBanPhatHanh(release.assets || []),
+    }));
+    for (const item of parsedReleases.flatMap((r) => r.validAssets)) {
+      if (item.dinhDang === DinhDangTep.APK) {
+        hasAndroid = true;
+        danhSachFileApk.push(item.tenTep);
+      } else if (
+        item.dinhDang === DinhDangTep.EXE ||
+        item.dinhDang === DinhDangTep.MSI ||
+        item.dinhDang === DinhDangTep.ZIP_PORTABLE
+      ) {
+        hasWindows = true;
+      }
+    }
 
     // 3. Suy luận nền tảng hỗ trợ và trạng thái ứng dụng (P2-21.4, L1)
     let nenTangHoTro: NenTangHoTro = NenTangHoTro.WINDOWS;

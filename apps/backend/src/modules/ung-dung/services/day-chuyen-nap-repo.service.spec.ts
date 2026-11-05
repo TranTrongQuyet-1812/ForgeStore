@@ -312,13 +312,24 @@ describe('DayChuyenNapRepoService (P3B-06 & P3B-05.4)', () => {
     });
 
     it('P3B-06.7: quá 3 lần lỗi tạm thời thì chuyển sang LOI_KHI_SANG_LOC để không chặn đầu hàng chờ', async () => {
-      datHangCho(uv('n/lo-gql', 3));
-      mockGithubService.graphql.mockRejectedValue(new Error('fetch failed'));
+      datHangCho(uv('n/lo-readme', 3));
+      mockGithubService.graphql.mockResolvedValue({
+        r0: repoGql('n/lo-readme', { latestRelease: null }),
+      });
+      mockGithubService.layReadme.mockRejectedValue(new Error('fetch failed'));
       await service.sangLocVaNapLauNho(30, true);
-      expect(lyDoCuaUngVien('uv-n/lo-gql')).toEqual({
+      expect(lyDoCuaUngVien('uv-n/lo-readme')).toEqual({
         trangThai: 'BI_LOAI',
         lyDoLoai: LyDoLoaiUngVien.LOI_KHI_SANG_LOC,
       });
+    });
+
+    it('GraphQL lỗi cả yêu cầu thì dừng lô nhưng không tính lỗi cho ứng viên nào', async () => {
+      datHangCho(uv('q/mot', 3), uv('r/hai'));
+      mockGithubService.graphql.mockRejectedValue(new Error('fetch failed'));
+      const res = await service.sangLocVaNapLauNho(30, true);
+      expect(res.soLuongUngVienQuet).toBe(0);
+      expect(mockPrisma.ungVienRepo.update).not.toHaveBeenCalled();
     });
 
     it('bỏ qua repo đã có trong kho (vd. tên cũ của app đã nạp) mà không đồng bộ lại', async () => {

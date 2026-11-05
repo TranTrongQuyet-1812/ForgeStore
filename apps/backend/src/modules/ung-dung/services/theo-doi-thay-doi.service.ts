@@ -8,6 +8,7 @@ import { GithubService } from '../../github/github.service';
 import { GithubRelease, GithubRepo } from '../../github/github.constants';
 import { CacheService } from '../../redis/cache.service';
 import { PHIEN_BAN_BOC_TACH_CLI, UngDungService } from '../ung-dung.service';
+import { locTepCaiCuaBanPhatHanh } from '../tien-ich/phan-loai-tep.util';
 import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
 
 /** Trạng thái ẩn khỏi Store do bộ theo dõi đặt (P3B-07.5). Dữ liệu và Thư viện người dùng giữ nguyên. */
@@ -18,6 +19,9 @@ export const TRANG_THAI_AN = {
 } as const;
 
 export type MucDoNong = 'NONG' | 'AM' | 'LANH';
+
+/** Lượt quét lỗi thì hẹn lại sau chừng này giờ, để app lỗi không đứng đầu hàng mỗi 10 phút. */
+const GIO_HEN_LAI_KHI_LOI = 1;
 
 /** P3B-07.9: nóng 3 giờ, ấm mỗi ngày, lạnh mỗi tuần. */
 export const NHIP_QUET_GIO: Record<MucDoNong, number> = { NONG: 3, AM: 24, LANH: 168 };
@@ -35,7 +39,11 @@ export interface AppTheoDoi {
   etagRepo: string | null;
   etagReleases: string | null;
   etagReadme: string | null;
-  danhSachPhatHanh: Array<{ tenPhienBan: string; ngayPhatHanh: Date }>;
+  danhSachPhatHanh: Array<{
+    tenPhienBan: string;
+    ngayPhatHanh: Date;
+    _count: { danhSachTepCaiDat: number };
+  }>;
   _count: { danhSachDaCai: number; danhSachYeuThich: number };
 }
 
@@ -54,11 +62,24 @@ export function tinhMucDoNong(app: AppTheoDoi, now: Date): MucDoNong {
 }
 
 /** Bản phát hành mới nhất (bỏ bản nháp), theo ngày đăng. */
-export function tenBanMoiNhat(releases: GithubRelease[]): string | null {
+export function banMoiNhat(releases: GithubRelease[]): GithubRelease | null {
   const ban = releases
     .filter((r) => !r.draft)
     .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())[0];
-  return ban?.tag_name ?? null;
+  return ban ?? null;
+}
+
+/**
+ * Cần đồng bộ lại khi có bản mới hơn, hoặc cùng bản nhưng số tệp cài hợp lệ khác DB: nhiều repo tạo bản phát hành
+ * trước rồi CI mới tải tệp lên. Không đồng bộ chỉ vì ETag đổi, vì ETag đổi cả khi số lượt tải thay đổi.
+ */
+export function canDongBoLai(
+  banGithub: GithubRelease | null,
+  banDb: AppTheoDoi['danhSachPhatHanh'][number] | undefined,
+): boolean {
+  if (!banGithub) return false;
+  if (banGithub.tag_name !== banDb?.tenPhienBan) return true;
+  return locTepCaiCuaBanPhatHanh(banGithub.assets ?? []).length !== banDb._count.danhSachTepCaiDat;
 }
 
 export interface KetQuaQuet {
@@ -112,6 +133,7 @@ export class TheoDoiThayDoiService {
         else ketQua.soKhongDoi++;
       } catch (err) {
         this.logger.warn(`Quét thay đổi [${app.tenRepoDayDu}] lỗi: ${String(err)}`);
+        await this.henQuetLaiKhiLoi(app);
         if (String(err).includes('hạn mức')) {
           ketQua.dungVi = 'github_rate_limited';
           break;
@@ -149,7 +171,11 @@ export class TheoDoiThayDoiService {
         danhSachPhatHanh: {
           orderBy: { ngayPhatHanh: 'desc' },
           take: 1,
-          select: { tenPhienBan: true, ngayPhatHanh: true },
+          select: {
+            tenPhienBan: true,
+            ngayPhatHanh: true,
+            _count: { select: { danhSachTepCaiDat: true } },
+          },
         },
         _count: { select: { danhSachDaCai: true, danhSachYeuThich: true } },
       },
@@ -212,7 +238,7 @@ export class TheoDoiThayDoiService {
     return doiHienThi ? 'DOI_HIEN_THI' : 'DOI_NGAM';
   }
 
-  /** Nguồn 2, danh sách bản phát hành: có bản mới thì đồng bộ qua `dongBoRepo` (tự tính cột tính sẵn, xóa cache). */
+  /** Nguồn 2, danh sách bản phát hành: có bản mới hay thêm tệp cài thì đồng bộ qua `dongBoRepo` (tự tính cột tính sẵn, xóa cache). */
   private async kiemBanPhatHanh(app: AppTheoDoi, ketQua: KetQuaQuet): Promise<boolean> {
     const kq = await this.hoi<GithubRelease[]>(
       `/repos/${app.tenRepoDayDu}/releases?per_page=15`,
@@ -220,12 +246,20 @@ export class TheoDoiThayDoiService {
       ketQua,
     );
     if (kq.trangThai !== 200) return false;
-    const banMoi = tenBanMoiNhat(kq.duLieu ?? []);
-    const coBanMoi = banMoi !== null && banMoi !== app.danhSachPhatHanh[0]?.tenPhienBan;
-    if (coBanMoi) {
+    const banMoi = banMoiNhat(kq.duLieu ?? []);
+    const coBanMoi = canDongBoLai(banMoi, app.danhSachPhatHanh[0]);
+    if (coBanMoi && banMoi) {
       const [owner = '', repo = ''] = app.tenRepoDayDu.split('/');
-      this.logger.log(`✨ [${app.tenRepoDayDu}] có bản mới ${banMoi}, đồng bộ lại.`);
+      this.logger.log(
+        `✨ [${app.tenRepoDayDu}] bản ${banMoi.tag_name} mới hoặc thêm tệp cài, đồng bộ lại.`,
+      );
       await this.appsService.dongBoRepo(owner, repo);
+      // Mức nóng tính theo bản vừa đồng bộ, không theo bản cũ trong DB
+      app.danhSachPhatHanh[0] = {
+        tenPhienBan: banMoi.tag_name,
+        ngayPhatHanh: new Date(banMoi.published_at),
+        _count: { danhSachTepCaiDat: locTepCaiCuaBanPhatHanh(banMoi.assets ?? []).length },
+      };
     }
     await this.prisma.ungDung.update({
       where: { maUngDung: app.maUngDung },
@@ -304,6 +338,18 @@ export class TheoDoiThayDoiService {
     const kq = await this.githubService.hoiCoDieuKien<T>(endpoint, etag);
     if (kq.trangThai === 304) ketQua.so304++;
     return kq;
+  }
+
+  /** Lỗi giữa lượt quét: vẫn hẹn lần sau, không thì app lỗi đứng đầu hàng và bị hỏi lại mỗi 10 phút. */
+  private async henQuetLaiKhiLoi(app: AppTheoDoi): Promise<void> {
+    try {
+      await this.prisma.ungDung.update({
+        where: { maUngDung: app.maUngDung },
+        data: { lanKiemTiepTheo: new Date(Date.now() + GIO_HEN_LAI_KHI_LOI * 3600000) },
+      });
+    } catch (err) {
+      this.logger.warn(`Không hẹn lại được lượt quét [${app.tenRepoDayDu}]: ${String(err)}`);
+    }
   }
 
   private async anApp(app: AppTheoDoi, trangThai: string): Promise<'DA_AN'> {

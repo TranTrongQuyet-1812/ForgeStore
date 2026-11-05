@@ -414,3 +414,39 @@ export function tinhDiemUuTienTep(
     laPhu,
   };
 }
+
+/** Một tệp của bản phát hành đã phân loại, giữ nguyên dữ liệu gốc của GitHub trong `asset`. */
+export interface TepCaiDaLoc<A> {
+  asset: A;
+  tenTep: string;
+  dinhDang: DinhDangTep;
+  kienTruc: KienTrucChip;
+}
+
+/**
+ * Lọc các tệp cài hợp lệ của một bản phát hành, đúng như `dongBoRepo` lưu vào DB. Dùng chung với bộ theo dõi
+ * thay đổi (P3B-07) để hai nơi đếm tệp giống nhau. Bỏ tệp không cài được, hậu xử lý kiến trúc (V1), và khi đã có
+ * bộ cài GUI chính quy thì bỏ bản CLI và Debug (V2).
+ */
+export function locTepCaiCuaBanPhatHanh<A extends { name: string }>(assets: A[]): TepCaiDaLoc<A>[] {
+  const daPhanLoai = assets.flatMap((asset) => {
+    const phanLoai = phanLoaiTep(asset.name);
+    if (phanLoai.boQua || !phanLoai.dinhDang) return [];
+    return [
+      { asset, tenTep: asset.name, dinhDang: phanLoai.dinhDang, kienTruc: phanLoai.kienTruc },
+    ];
+  });
+  const theoNguCanh = hauXuLyKienTrucBanPhatHanh(daPhanLoai);
+  const laCli = (ten: string) => /(?:^|[-_.])cli(?:[-_.]|$)/i.test(ten);
+  const laDebug = (ten: string) => /(?:^|[-_.])debug(?:[-_.]|$)/i.test(ten);
+  const coFileGuiChinhQuy = theoNguCanh.some((a) => {
+    const lower = a.tenTep.toLowerCase();
+    return (
+      !laCli(lower) && !laDebug(lower) && !lower.includes('unsigned') && !lower.includes('parallel')
+    );
+  });
+  if (!coFileGuiChinhQuy) return theoNguCanh;
+  return theoNguCanh.filter(
+    (a) => !laCli(a.tenTep.toLowerCase()) && !laDebug(a.tenTep.toLowerCase()),
+  );
+}
