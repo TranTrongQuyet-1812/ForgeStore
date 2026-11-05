@@ -1206,7 +1206,7 @@ export class UngDungService {
         throw new NotFoundException({
           maLoi: 'KHONG_CO_FILE_PHU_HOP',
           thongBao: 'Bản phát hành không chứa tệp cài đặt định dạng APK cho Android.',
-          abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))),
+          details: { abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))) },
         });
       }
 
@@ -1225,13 +1225,16 @@ export class UngDungService {
         return this.dongGoiTaiSanPhanHoi(universalMatch, 'LUAT');
       }
 
-      // 3.3. Tên file mơ hồ: không đoán, trả danh sách để người dùng tự chọn (P2-70.3)
+      // 3.3. Tên file mơ hồ: không đoán, trả danh sách để người dùng tự chọn (P2-70.3).
+      // Dữ liệu phụ phải nằm trong `details`: bộ lọc lỗi chung chỉ chuyển trường này về máy khách (thành `chiTiet`).
       const ambiguousFiles = apkFiles.filter((f) => f.kienTrucChip === KienTrucChip.KHONG_XAC_DINH);
       throw new NotFoundException({
         maLoi: 'KHONG_CO_FILE_PHU_HOP',
         thongBao: `Không tìm thấy tệp APK tương thích với các kiến trúc thiết bị: ${abis.join(', ')}`,
-        abisHienCo: Array.from(new Set(apkFiles.map((f) => f.kienTrucChip))),
-        tepDeNguoiDungChon: ambiguousFiles.map((f) => ({ maTep: f.maTep, tenTep: f.tenTep })),
+        details: {
+          abisHienCo: Array.from(new Set(apkFiles.map((f) => f.kienTrucChip))),
+          tepDeNguoiDungChon: ambiguousFiles.map((f) => ({ maTep: f.maTep, tenTep: f.tenTep })),
+        },
       });
     }
 
@@ -1248,7 +1251,7 @@ export class UngDungService {
         throw new NotFoundException({
           maLoi: 'KHONG_CO_FILE_PHU_HOP',
           thongBao: 'Bản phát hành không chứa tệp cài đặt cho Windows.',
-          abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))),
+          details: { abisHienCo: Array.from(new Set(allFiles.map((f) => f.kienTrucChip))) },
         });
       }
 

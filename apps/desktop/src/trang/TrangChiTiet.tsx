@@ -1021,10 +1021,13 @@ export const TrangChiTiet: React.FC = () => {
 
   const scoreTheme = getScoreTheme(trustScore);
 
-  // L-09, R-03: trạng thái kiểm tra quyền bằng ngôn ngữ đời thường (L-10); quyền chỉ có ở bản Android (P2-70)
+  // L-09, R-03: trạng thái kiểm tra quyền bằng ngôn ngữ đời thường (L-10); quyền chỉ có ở bản Android (P2-70).
+  // App có bản Android mà danh sách quyền rỗng là chưa đọc được tệp APK, không được ghi là "bản Windows".
   const trangThaiKiemTraQuyen = appDetail?.phanTichAi?.quyenHanDaKiemTra?.length
     ? 'Đã kiểm tra quyền truy cập của ứng dụng'
-    : 'Không cần kiểm tra quyền (bản Windows)';
+    : appDetail?.nenTangHoTro === 'WINDOWS'
+      ? 'Không cần kiểm tra quyền (bản Windows)'
+      : 'Chưa đọc được quyền truy cập của bản Android';
 
   // L-10: Tên nhãn định dạng thân thiện đời thường
   const getFormatLabel = (fmt: string) => {

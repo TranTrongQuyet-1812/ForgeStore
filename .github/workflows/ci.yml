@@ -174,7 +174,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h localhost -U postgres -d forgestore_e2e -v ON_ERROR_STOP=1             -c 'CREATE SCHEMA IF NOT EXISTS extensions'             -c 'CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions'             -c 'ALTER DATABASE forgestore_e2e SET search_path TO public, extensions'
+          psql -h localhost -U postgres -d forgestore_e2e -v ON_ERROR_STOP=1 \
+            -c 'CREATE SCHEMA IF NOT EXISTS extensions' \
+            -c 'CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions' \
+            -c 'ALTER DATABASE forgestore_e2e SET search_path TO public, extensions'
           pnpm --filter @forgestore/backend exec prisma migrate deploy
 
       - name: Chạy test e2e

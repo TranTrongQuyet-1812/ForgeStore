@@ -897,7 +897,9 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(loi).toBeInstanceOf(NotFoundException);
       expect((loi as NotFoundException).getResponse()).toMatchObject({
         maLoi: 'KHONG_CO_FILE_PHU_HOP',
-        tepDeNguoiDungChon: [{ maTep: 'file-ambiguous', tenTep: mockApkAmbiguous.tenTep }],
+        details: {
+          tepDeNguoiDungChon: [{ maTep: 'file-ambiguous', tenTep: mockApkAmbiguous.tenTep }],
+        },
       });
     });
 

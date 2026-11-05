@@ -23,7 +23,11 @@ function chanMoiTruongThat(): void {
   if (!tenDb.includes('e2e')) {
     throw new Error(`Từ chối chạy e2e trên DB "${tenDb}": tên DB phải chứa "e2e".`);
   }
-  const redis = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
+  // Thiếu REDIS_URL thì Nest sẽ lấy Redis production từ .env, nên phải đặt rõ, không đoán là máy cục bộ.
+  if (!process.env.REDIS_URL) {
+    throw new Error('Phải đặt REDIS_URL cho e2e (Redis cục bộ, hoặc Redis ngoài với DB số 15).');
+  }
+  const redis = new URL(process.env.REDIS_URL);
   const laMayCucBo = ['localhost', '127.0.0.1'].includes(redis.hostname);
   if (!laMayCucBo && redis.pathname !== '/15') {
     throw new Error('Redis ngoài máy cục bộ chỉ được dùng DB số 15 cho e2e.');
@@ -171,6 +175,41 @@ describe('Luồng chính qua HTTP (P2-61)', () => {
       .expect(200);
     expect(res.body.nguonQuyetDinh).toBe('LUAT');
     expect(res.body.tepCaiDat.tenTep).toBe('e2e-ung-dung-1.0.0-x64.msi');
+  });
+
+  it('POST /ung-dung/giai-quyet-tai-san: APK tên mơ hồ thì 404 kèm danh sách cho người dùng tự chọn', async () => {
+    await app.get(PrismaService).ungDung.create({
+      data: {
+        tenRepoDayDu: 'e2e-chu/e2e-android',
+        chuSoHuu: 'e2e-chu',
+        tenKhoChua: 'e2e-android',
+        duongDanGithub: 'https://github.com/e2e-chu/e2e-android',
+        nenTangHoTro: 'ANDROID',
+        danhSachPhatHanh: {
+          create: {
+            tenPhienBan: 'v1.0.0',
+            ngayPhatHanh: new Date(),
+            danhSachTepCaiDat: {
+              create: {
+                tenTep: 'e2e-android-release.apk',
+                duongDanTaiVe:
+                  'https://github.com/e2e-chu/e2e-android/releases/download/v1.0.0/app.apk',
+                dinhDangTep: 'APK',
+                kienTrucChip: 'KHONG_XAC_DINH',
+              },
+            },
+          },
+        },
+      },
+    });
+    const res = await api()
+      .post('/api/v1/ung-dung/giai-quyet-tai-san')
+      .send({ maUngDung: 'e2e-chu/e2e-android', nenTang: 'ANDROID', abis: ['arm64-v8a'] })
+      .expect(404);
+    expect(res.body.maLoi).toBe('KHONG_CO_FILE_PHU_HOP');
+    expect(res.body.chiTiet.tepDeNguoiDungChon).toEqual([
+      expect.objectContaining({ tenTep: 'e2e-android-release.apk' }),
+    ]);
   });
 
   it('POST /ung-dung/giai-quyet-tai-san từ chối dữ liệu sai kiểu (ValidationPipe)', async () => {
