@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { XacThucService } from './xac-thuc.service';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
@@ -207,6 +208,8 @@ export class XacThucController {
   }
 
   @CongKhai()
+  // P6-04.4: endpoint công khai cấp token nên siết chặt hơn mức chung 100/phút
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('doi-ma')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -221,6 +224,8 @@ export class XacThucController {
   }
 
   @CongKhai()
+  // P6-04.4: Desktop làm mới khoảng 15 phút một lần; 20/phút đủ cho nhiều máy chung một IP
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('lam-moi')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

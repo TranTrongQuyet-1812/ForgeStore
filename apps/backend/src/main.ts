@@ -53,7 +53,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('ForgeStore Central Backend API')
     .setDescription(
-      'Hệ thống API phân phối ứng dụng mã nguồn mở ForgeStore — Kết nối GitHub Releases, Dual-AI Engine, Desktop & Mobile.',
+      'Hệ thống API của kho ứng dụng mã nguồn mở ForgeStore: lấy phần mềm từ GitHub Releases, chấm điểm uy tín bằng luật, dịch mô tả và README sang tiếng Việt.',
     )
     .setVersion('1.0.0')
     .addBearerAuth(
