@@ -14,7 +14,7 @@ import {
   layBanPhatHanhMoiNhat,
   BanPhatHanhToiThieu,
 } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
-import { coBanMoiHon } from '../cap-nhat/tien-ich/so-sanh-phien-ban.util';
+import { kiemTraCoBanCapNhat } from '../cap-nhat/tien-ich/so-sanh-phien-ban.util';
 import {
   kiemTraTenGoiHopLe,
   kiemTraPhienBanHopLe,
@@ -204,6 +204,7 @@ export class ThietBiService {
         thoiGianHetHan: true,
         ngayCaiDat: true,
         ngayCapNhatCuoi: true,
+        tepDaCai: { select: { banPhatHanh: { select: { ngayPhatHanh: true } } } },
         ungDung: {
           select: {
             maUngDung: true,
@@ -254,8 +255,18 @@ export class ThietBiService {
       );
       const phienBanMoi = banMoiNhat?.tenPhienBan ?? null;
 
-      // Cờ có bản mới: so sánh SemVer bằng coBanMoiHon theo nền tảng
-      const coBanMoi = Boolean(phienBanMoi && coBanMoiHon(item.phienBanHienTai, phienBanMoi));
+      // Cờ có bản mới: dùng cùng luật với API kiểm tra cập nhật (có so ngày phát hành cho tag không có số
+      // như "nightly", "windows"), để Thư viện và nút cập nhật không báo khác nhau
+      const coBanMoi = Boolean(
+        phienBanMoi &&
+        kiemTraCoBanCapNhat(
+          {
+            tenPhienBan: item.phienBanHienTai,
+            ngayPhatHanh: item.tepDaCai?.banPhatHanh?.ngayPhatHanh ?? null,
+          },
+          { tenPhienBan: phienBanMoi, ngayPhatHanh: banMoiNhat?.ngayPhatHanh ?? null },
+        ).coBanCapNhat,
+      );
 
       // P3B-16.7: Tính câu lệnh cập nhật an toàn cho ứng dụng cài bằng dòng lệnh CLI
       let lenhCapNhatCli: string | null = null;

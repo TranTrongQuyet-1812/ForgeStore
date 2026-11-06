@@ -82,7 +82,7 @@ describe('tinhMucDoNong, banMoiNhat, canDongBoLai (P3B-07)', () => {
 
 describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
   const prisma = {
-    ungDung: { update: vi.fn(), findMany: vi.fn() },
+    ungDung: { update: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     banDichReadme: { updateMany: vi.fn() },
     phanTichAI: { updateMany: vi.fn() },
     tepCaiDat: { count: vi.fn() },
@@ -147,13 +147,27 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
     expect(cache.xoaTheoPrefix).toHaveBeenCalledWith('fs:apps:list:');
   });
 
-  it('repo đổi tên: ẩn bản cũ và đưa tên mới vào hàng chờ ưu tiên 1', async () => {
+  it('repo đổi tên: đổi tên tại chỗ, giữ app (bản dịch, Thư viện) và không ẩn', async () => {
+    prisma.ungDung.findUnique.mockResolvedValue(null);
+    traVe(
+      { trangThai: 200, duLieu: repoGithub({ full_name: 'chu-moi/ten-moi' }), etag: '"r2"' },
+      khongDoi,
+      khongDoi,
+    );
+    await service.kiemMotApp(app(), ketQua);
+    expect(prisma.ungDung.update).toHaveBeenCalledWith({
+      where: { maUngDung: 'app-1' },
+      data: expect.objectContaining({ tenRepoDayDu: 'chu-moi/ten-moi' }),
+    });
+    expect(prisma.ungDung.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { trangThai: 'REPO_DOI_TEN' } }),
+    );
+  });
+
+  it('repo đổi tên sang tên đã có trong kho: ẩn bản trùng', async () => {
+    prisma.ungDung.findUnique.mockResolvedValue({ maUngDung: 'app-khac' });
     traVe({ trangThai: 200, duLieu: repoGithub({ full_name: 'chu-moi/ten-moi' }), etag: '"r2"' });
     await service.kiemMotApp(app(), ketQua);
-    expect(prisma.ungVienRepo.createMany).toHaveBeenCalledWith({
-      data: [{ tenRepoDayDu: 'chu-moi/ten-moi', nguonKhamPha: 'doi_ten', doUuTien: 1 }],
-      skipDuplicates: true,
-    });
     expect(prisma.ungDung.update).toHaveBeenCalledWith({
       where: { maUngDung: 'app-1' },
       data: { trangThai: 'REPO_DOI_TEN' },

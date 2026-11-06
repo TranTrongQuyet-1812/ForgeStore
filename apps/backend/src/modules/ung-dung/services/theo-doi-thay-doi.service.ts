@@ -215,8 +215,26 @@ export class TheoDoiThayDoiService {
     if (kq.trangThai === 404) return this.anApp(app, TRANG_THAI_AN.REPO_DA_XOA);
     const r = kq.duLieu!;
     if (r.full_name.toLowerCase() !== app.tenRepoDayDu.toLowerCase()) {
-      await this.dayTenMoiVaoHangCho(r.full_name);
-      return this.anApp(app, TRANG_THAI_AN.REPO_DOI_TEN);
+      // Tên mới đã có trong kho (nạp riêng trước đó) thì ẩn bản trùng; chưa có thì đổi tên tại chỗ để giữ bản dịch,
+      // phân tích và Thư viện của người dùng. Hàng chờ ứng viên chỉ được xử lý khi dây chuyền nạp bật, nên không
+      // dựa vào nó nữa.
+      const daCoTenMoi = await this.prisma.ungDung.findUnique({
+        where: { tenRepoDayDu: r.full_name },
+        select: { maUngDung: true },
+      });
+      if (daCoTenMoi) return this.anApp(app, TRANG_THAI_AN.REPO_DOI_TEN);
+      await this.prisma.ungDung.update({
+        where: { maUngDung: app.maUngDung },
+        data: {
+          tenRepoDayDu: r.full_name,
+          chuSoHuu: r.full_name.split('/')[0] ?? '',
+          tenKhoChua: r.full_name.split('/')[1] ?? '',
+          duongDanGithub: `https://github.com/${r.full_name}`,
+        },
+      });
+      this.logger.log(`[Theo dõi thay đổi] [${app.tenRepoDayDu}] đổi tên thành [${r.full_name}].`);
+      await this.xoaCacheHienThi(app);
+      app.tenRepoDayDu = r.full_name;
     }
     if (!r.license) return this.anApp(app, TRANG_THAI_AN.KHONG_CON_GIAY_PHEP);
     const doiHienThi =
@@ -357,14 +375,6 @@ export class TheoDoiThayDoiService {
     this.logger.warn(`[Theo dõi thay đổi] Ẩn [${app.tenRepoDayDu}] khỏi Store: ${trangThai}.`);
     await this.xoaCacheHienThi(app);
     return 'DA_AN';
-  }
-
-  /** Repo đổi tên hoặc chuyển chủ: đưa tên mới vào hàng chờ ưu tiên cao để tầng sàng lọc nạp lại. */
-  private async dayTenMoiVaoHangCho(tenMoi: string): Promise<void> {
-    await this.prisma.ungVienRepo.createMany({
-      data: [{ tenRepoDayDu: tenMoi, nguonKhamPha: 'doi_ten', doUuTien: 1 }],
-      skipDuplicates: true,
-    });
   }
 
   /** P3B-07.10: xóa đúng các khóa người dùng đọc, nếu không họ thấy dữ liệu cũ tới 1 giờ. */

@@ -461,6 +461,42 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(result.banPhatHanhMoiNhat?.tenPhienBan).toBe('1.2.3');
       expect(result.danhSachBanPhatHanh).toHaveLength(1);
     });
+
+    it('repo đã đổi tên: cập nhật bản ghi cũ và đổi tên nó, không tạo app thứ hai', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
+        trangThai: 'HOAT_DONG',
+        phanTichAI: null,
+      });
+      mockGithubService.layRepo.mockResolvedValue({
+        id: 1,
+        name: 'ten-moi',
+        full_name: 'chu-moi/ten-moi',
+        owner: { login: 'chu-moi' },
+        html_url: 'https://github.com/chu-moi/ten-moi',
+        description: 'x',
+        stargazers_count: 5000,
+        forks_count: 1,
+        license: { key: 'mit', name: 'MIT', spdx_id: 'MIT' },
+        language: null,
+        topics: [],
+        updated_at: '2026-11-01T00:00:00Z',
+      });
+      mockGithubService.layDanhSachRelease.mockResolvedValue([]);
+      mockGithubService.layReadme.mockResolvedValue(null);
+      mockPrisma.ungDung.upsert.mockResolvedValue({
+        maUngDung: 'app-cu',
+        tenRepoDayDu: 'chu-moi/ten-moi',
+      });
+
+      await service.dongBoRepo('chu-cu', 'ten-cu').catch(() => undefined);
+
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenRepoDayDu: 'chu-cu/ten-cu' },
+          update: expect.objectContaining({ tenRepoDayDu: 'chu-moi/ten-moi' }),
+        }),
+      );
+    });
   });
 
   describe('layDanhSachApps (P2-23)', () => {
@@ -549,84 +585,23 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       );
     });
 
-    it('B2: Lọc thật sự theo khung thời gian phát hành bản mới nhất (TODAY / WEEK)', async () => {
+    it('B2: lọc theo khung thời gian đẩy xuống CSDL (bản phát hành trong 1, 7, 30 ngày)', async () => {
       mockCacheService.lay.mockResolvedValue(null);
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+      const MOT_NGAY = 24 * 60 * 60 * 1000;
 
-      const now = new Date();
-      const appMoiHomNay = {
-        maUngDung: 'app-today',
-        tenRepoDayDu: 'org/today-app',
-        chuSoHuu: 'org',
-        tenKhoChua: 'today-app',
-        duongDanGithub: 'https://github.com/org/today-app',
-        duongDanIcon: null,
-        soSaoGithub: 100,
-        danhMucChinh: 'Tiện ích',
-        nenTangHoTro: NenTangHoTro.WINDOWS,
-        duocNoiBat: false,
-        daXacMinh: false,
-        tenGoiAndroid: null,
-        dongBoLanCuoi: now,
-        phanTichAI: null,
-        danhSachPhatHanh: [
-          {
-            tenPhienBan: '1.0.0',
-            ngayPhatHanh: new Date(now.getTime() - 4 * 60 * 60 * 1000), // 4 giờ trước
-            laBanThuNghiem: false,
-            danhSachTepCaiDat: [{ dinhDangTep: DinhDangTep.EXE }],
-          },
-        ],
-      };
-
-      const appCuBaTuan = {
-        maUngDung: 'app-old',
-        tenRepoDayDu: 'org/old-app',
-        chuSoHuu: 'org',
-        tenKhoChua: 'old-app',
-        duongDanGithub: 'https://github.com/org/old-app',
-        duongDanIcon: null,
-        soSaoGithub: 5000,
-        danhMucChinh: 'Tiện ích',
-        nenTangHoTro: NenTangHoTro.WINDOWS,
-        duocNoiBat: false,
-        daXacMinh: false,
-        tenGoiAndroid: null,
-        dongBoLanCuoi: now,
-        phanTichAI: null,
-        danhSachPhatHanh: [
-          {
-            tenPhienBan: '2.0.0',
-            ngayPhatHanh: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), // 20 ngày trước
-            laBanThuNghiem: false,
-            danhSachTepCaiDat: [{ dinhDangTep: DinhDangTep.EXE }],
-          },
-        ],
-      };
-
-      mockPrisma.ungDung.findMany.mockResolvedValue([appMoiHomNay, appCuBaTuan]);
-
-      // Khi lọc TODAY: chỉ appMoiHomNay thỏa mãn (trong vòng 1 ngày)
-      const resToday = await service.layDanhSachApps({
-        window: TimeWindowFilter.TODAY,
-        sort: AppSortOption.TRENDING,
-      });
-      expect(resToday.duLieu).toHaveLength(1);
-      expect(resToday.duLieu[0].maUngDung).toBe('app-today');
-
-      // Khi lọc WEEK: appCuBaTuan (20 ngày trước) vẫn bị loại bỏ
-      const resWeek = await service.layDanhSachApps({
-        window: TimeWindowFilter.WEEK,
-        sort: AppSortOption.TRENDING,
-      });
-      expect(resWeek.duLieu).toHaveLength(1);
-      expect(resWeek.duLieu[0].maUngDung).toBe('app-today');
-
-      // Khi lọc MONTH: cả 2 app đều thỏa mãn (trong vòng 30 ngày)
-      const resMonth = await service.layDanhSachApps({
-        window: TimeWindowFilter.MONTH,
-        sort: AppSortOption.TRENDING,
-      });
-      expect(resMonth.duLieu).toHaveLength(2);
+      for (const [window, soNgay] of [
+        [TimeWindowFilter.TODAY, 1],
+        [TimeWindowFilter.WEEK, 7],
+        [TimeWindowFilter.MONTH, 30],
+      ] as const) {
+        mockPrisma.ungDung.findMany.mockClear();
+        await service.layDanhSachApps({ window, sort: AppSortOption.TRENDING });
+        const where = mockPrisma.ungDung.findMany.mock.calls[0][0].where;
+        const moc: Date = where.danhSachPhatHanh.some.ngayPhatHanh.gte;
+        expect(Math.abs(Date.now() - soNgay * MOT_NGAY - moc.getTime())).toBeLessThan(5000);
+      }
     });
   });
 
@@ -856,6 +831,53 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       soLuotTai: 120,
       ngayTao: new Date(),
     };
+
+    it('Windows: bản mới nhất chỉ có APK thì lấy bản trước đó có tệp Windows (repo phát hành riêng từng nền tảng)', async () => {
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        {
+          maPhatHanh: 'rel-android',
+          tenPhienBan: 'android-2.0',
+          danhSachTepCaiDat: [mockApkArm64],
+        },
+        { maPhatHanh: 'rel-1', tenPhienBan: '1.2.3', danhSachTepCaiDat: [mockExeX64] },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'WINDOWS',
+        abis: [],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-exe-x64');
+    });
+
+    it('Windows: tệp không ghi kiến trúc thì không chọn nhầm bản ARM64', async () => {
+      const exeArm = {
+        ...mockExeX64,
+        maTep: 'file-arm',
+        tenTep: 'app-arm64-setup.exe',
+        kienTrucChip: KienTrucChip.KHONG_XAC_DINH,
+      };
+      const exeChung = {
+        ...mockExeX64,
+        maTep: 'file-setup',
+        tenTep: 'app-setup.exe',
+        kienTrucChip: KienTrucChip.KHONG_XAC_DINH,
+      };
+      mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);
+      mockPrisma.banPhatHanh.findMany.mockResolvedValue([
+        { maPhatHanh: 'rel-1', tenPhienBan: '1.2.3', danhSachTepCaiDat: [exeArm, exeChung] },
+      ]);
+
+      const res = await service.giaiQuyetFileCaiDat({
+        maUngDung: 'rustdesk/rustdesk',
+        nenTang: 'WINDOWS',
+        abis: [],
+      });
+
+      expect(res.tepCaiDat.maTep).toBe('file-setup');
+    });
 
     it('Thiết bị Android arm64: ưu tiên chọn APK arm64-v8a theo luật', async () => {
       mockPrisma.ungDung.findFirst.mockResolvedValue(mockApp);

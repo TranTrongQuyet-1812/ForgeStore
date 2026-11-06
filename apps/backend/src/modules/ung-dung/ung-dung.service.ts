@@ -374,9 +374,12 @@ export class UngDungService {
     const ungDungUpdated = await this.prisma.$transaction(
       async (tx) => {
         // 6.1. Upsert bảng UngDung
+        // Repo đã đổi tên hoặc chuyển chủ thì GitHub trả tên mới: cập nhật đúng bản ghi đang có (theo tên cũ) và đổi
+        // tên nó, không tạo app thứ hai thiếu bản dịch và phân tích
         const app = await tx.ungDung.upsert({
-          where: { tenRepoDayDu: repoData.full_name },
+          where: { tenRepoDayDu: ungDungHienTai ? `${owner}/${repo}` : repoData.full_name },
           update: {
+            tenRepoDayDu: repoData.full_name,
             chuSoHuu: repoData.owner.login,
             tenKhoChua: repoData.name,
             duongDanGithub: repoData.html_url,
@@ -606,6 +609,8 @@ export class UngDungService {
     await this.cacheService.xoaTheoPrefix(
       this.CACHE_KEY_DETAIL + ungDungUpdated.tenRepoDayDu.toLowerCase(),
     );
+    // Repo đổi tên: khóa cache theo tên cũ cũng phải xóa, không thì trang cũ còn hiện dữ liệu cũ tới 1 giờ
+    await this.cacheService.xoaTheoPrefix(this.CACHE_KEY_DETAIL + `${owner}/${repo}`.toLowerCase());
 
     this.logger.log(`Đồng bộ thành công [${owner}/${repo}] (UUID: ${ungDungUpdated.maUngDung})`);
 
@@ -760,7 +765,7 @@ export class UngDungService {
     }
 
     // Truy vấn trực tiếp PostgreSQL với skip/take, không tải toàn bộ app lên RAM (P3B-03.4)
-    let [danhSach, tongSo] = await Promise.all([
+    const [danhSach, tongSo] = await Promise.all([
       this.prisma.ungDung.findMany({
         where,
         orderBy,
@@ -778,39 +783,6 @@ export class UngDungService {
       }),
       this.prisma.ungDung.count({ where }),
     ]);
-
-    // Hỗ trợ kiểm thử mock in-memory khi mock trả về danh sách chưa lọc theo window
-    if (windowFilter) {
-      const maxNgay =
-        windowFilter === TimeWindowFilter.TODAY
-          ? 1
-          : windowFilter === TimeWindowFilter.WEEK
-            ? 7
-            : 30;
-      const now = Date.now();
-      const filtered = danhSach.filter((app) => {
-        let thoiGianGoc: number | null = null;
-        const appWithReleases = app as typeof app & {
-          danhSachPhatHanh?: BanPhatHanhToiThieu[];
-        };
-        if ('danhSachPhatHanh' in app && Array.isArray(appWithReleases.danhSachPhatHanh)) {
-          const banMoi = layBanPhatHanhMoiNhat(appWithReleases.danhSachPhatHanh, platform);
-          if (banMoi?.ngayPhatHanh) {
-            thoiGianGoc = new Date(banMoi.ngayPhatHanh).getTime();
-          }
-        }
-        if (!thoiGianGoc && app.dongBoLanCuoi) {
-          thoiGianGoc = new Date(app.dongBoLanCuoi).getTime();
-        }
-        if (!thoiGianGoc) return true;
-        const sn = Math.max(0, (now - thoiGianGoc) / (1000 * 60 * 60 * 24));
-        return sn <= maxNgay;
-      });
-      if (filtered.length !== danhSach.length) {
-        danhSach = filtered;
-        tongSo = filtered.length;
-      }
-    }
 
     // Chuẩn hóa định dạng UngDungTomTatDto đọc từ các cột tính sẵn (D-19, P3B-03.1, P3B-03.2)
     const duLieu: UngDungTomTatDto[] = danhSach.map((app) => {
@@ -1172,7 +1144,20 @@ export class UngDungService {
       });
     }
 
-    const targetRelease = releases.find((r) => r.danhSachTepCaiDat.length > 0);
+    // Repo nhiều nền tảng hay phát hành riêng từng bản (vd. bản Android mới hơn bản Windows): lấy bản mới nhất
+    // có tệp của đúng nền tảng được hỏi, không phải bản mới nhất có tệp bất kỳ
+    const DINH_DANG_WINDOWS: DinhDangTep[] = [
+      DinhDangTep.EXE,
+      DinhDangTep.MSI,
+      DinhDangTep.ZIP_PORTABLE,
+    ];
+    const laTepCuaNenTang = (f: { dinhDangTep: DinhDangTep }) =>
+      nenTang === 'ANDROID'
+        ? f.dinhDangTep === DinhDangTep.APK
+        : DINH_DANG_WINDOWS.includes(f.dinhDangTep);
+    const targetRelease =
+      releases.find((r) => r.danhSachTepCaiDat.some(laTepCuaNenTang)) ??
+      releases.find((r) => r.danhSachTepCaiDat.length > 0);
     if (!targetRelease) {
       throw new NotFoundException({
         maLoi: 'KHONG_CO_FILE_PHU_HOP',
@@ -1290,9 +1275,15 @@ export class UngDungService {
       );
       if (zipX86) return this.dongGoiTaiSanPhanHoi(zipX86, 'LUAT');
 
-      // 4.5. File Windows bất kỳ còn lại
-      if (winFiles.length > 0 && winFiles[0]) {
-        return this.dongGoiTaiSanPhanHoi(winFiles[0], 'LUAT');
+      // 4.5. File Windows còn lại (tên không ghi kiến trúc, như "Setup.exe"): ưu tiên bộ cài, rồi tới bản không
+      // phải ARM, vì thứ tự tệp trong CSDL không cố định và máy x64 không chạy được bản ARM
+      const laArm = (f: TepCaiDat) => /arm64|aarch64/i.test(f.tenTep);
+      const conLai =
+        winFiles.find((f) => f.dinhDangTep !== DinhDangTep.ZIP_PORTABLE && !laArm(f)) ??
+        winFiles.find((f) => !laArm(f)) ??
+        winFiles[0];
+      if (conLai) {
+        return this.dongGoiTaiSanPhanHoi(conLai, 'LUAT');
       }
 
       throw new NotFoundException({
