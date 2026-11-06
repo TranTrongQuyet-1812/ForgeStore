@@ -28,6 +28,7 @@ import {
   SO_REPO_MOI_TRUY_VAN,
   taoTruyVanSangLoc,
 } from '../tien-ich/sang-loc-graphql.util';
+import { thoatKyTuLike } from '../../../common/utils/thoat-ky-tu-like.util';
 
 export interface KetQuaNapLau {
   dangChay?: boolean;
@@ -429,7 +430,7 @@ export class DayChuyenNapRepoService {
 
   private async daCoTrongKho(tenRepo: string): Promise<boolean> {
     const app = await this.prisma.ungDung.findFirst({
-      where: { tenRepoDayDu: { equals: tenRepo, mode: 'insensitive' } },
+      where: { tenRepoDayDu: { equals: thoatKyTuLike(tenRepo), mode: 'insensitive' } },
       select: { maUngDung: true },
     });
     return Boolean(app);

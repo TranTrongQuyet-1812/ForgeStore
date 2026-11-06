@@ -14,6 +14,7 @@ import { QueryReviewsDto, ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 import { DanhGiaDto, TrangKetQua } from '@forgestore/types';
 import { Prisma } from '@prisma/client';
 import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
+import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
 @Injectable()
 export class DanhGiaService {
@@ -43,7 +44,7 @@ export class DanhGiaService {
     const ungDung = await this.prisma.ungDung.findFirst({
       where: isUuid
         ? { maUngDung: cleanId }
-        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+        : { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
       select: { maUngDung: true },
     });
 
@@ -137,7 +138,7 @@ export class DanhGiaService {
     const ungDung = await this.prisma.ungDung.findFirst({
       where: isUuid
         ? { maUngDung: cleanId }
-        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+        : { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
       include: {
         danhSachPhatHanh: {
           orderBy: { ngayPhatHanh: 'desc' },

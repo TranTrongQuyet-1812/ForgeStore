@@ -70,6 +70,7 @@ import { taoDieuKienNenTang } from './tien-ich/dieu-kien-nen-tang.util';
 import { locCucBo, LyDoLoc } from './tien-ich/bo-loc-nap-repo.util';
 import { GithubRepo } from '../github/github.constants';
 import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
+import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
 /** Lý do "Dán link GitHub" không nhận repo, viết bằng lời đời thường để hiện cho người dùng. */
 const LY_DO_KHONG_NHAN: Partial<Record<LyDoLoc, string>> = {
@@ -949,7 +950,7 @@ export class UngDungService {
     const app = await this.prisma.ungDung.findFirst({
       where: isUuid
         ? { maUngDung: cleanId }
-        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+        : { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
       include: {
         phanTichAI: true,
         danhSachPhatHanh: {
@@ -1129,7 +1130,7 @@ export class UngDungService {
     const app = await this.prisma.ungDung.findFirst({
       where: isUuid
         ? { maUngDung: cleanId }
-        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+        : { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
     });
 
     if (!app) {

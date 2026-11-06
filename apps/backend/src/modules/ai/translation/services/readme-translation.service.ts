@@ -15,6 +15,7 @@ import {
   rapLaiReadme,
 } from '../tien-ich/readme-markdown-processor.util';
 import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types';
+import { thoatKyTuLike } from '../../../../common/utils/thoat-ky-tu-like.util';
 
 @Injectable()
 export class ReadmeTranslationService {
@@ -330,7 +331,7 @@ export class ReadmeTranslationService {
     const app = await this.prisma.ungDung.findFirst({
       where: isUuid
         ? { maUngDung: cleanId }
-        : { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
+        : { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
       select: {
         maUngDung: true,
         tenRepoDayDu: true,

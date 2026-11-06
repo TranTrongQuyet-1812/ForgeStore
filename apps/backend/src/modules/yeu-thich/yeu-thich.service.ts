@@ -5,6 +5,7 @@ import { CacheService } from '../redis/cache.service';
 import { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
 import { trichXuatDinhDangVaKienTruc } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
 import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
+import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
 @Injectable()
 export class YeuThichService {
@@ -121,8 +122,8 @@ export class YeuThichService {
 
     // 1. Gộp tìm ứng dụng theo mã UUID hoặc tên/slug trong MỘT truy vấn duy nhất (L-11)
     const orConditions: Prisma.UngDungWhereInput[] = [
-      { tenRepoDayDu: { equals: cleanId, mode: 'insensitive' } },
-      { tenKhoChua: { equals: cleanId, mode: 'insensitive' } },
+      { tenRepoDayDu: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
+      { tenKhoChua: { equals: thoatKyTuLike(cleanId), mode: 'insensitive' } },
     ];
     if (isUuid) {
       orConditions.unshift({ maUngDung: cleanId });

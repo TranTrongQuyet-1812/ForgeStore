@@ -75,6 +75,7 @@ import {
   taoMapBanDichCoKyHieu,
   taoMapTrangThaiLuuTru,
 } from './day.core';
+import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
 const NHAN_MO_HINH = 'antigravity/gemini-3.8-flash';
 
@@ -1335,11 +1336,14 @@ async function lenhDoiChieu(): Promise<void> {
     const theoMa = new Map(co.map((c) => [c.maBam, c.doanGoc]));
     const khop = doan.filter((d, i) => theoMa.get(maBam[i] ?? '') === d.trim()).length;
     const app0 = await prisma.ungDung.findFirst({
-      where: { tenRepoDayDu: { equals: repo, mode: 'insensitive' } },
+      where: { tenRepoDayDu: { equals: thoatKyTuLike(repo), mode: 'insensitive' } },
       select: { readmeSha: true, maBamMoTa: true, moTaGocTiengAnh: true },
     });
     const ban = await prisma.banDichReadme.findFirst({
-      where: { ungDung: { tenRepoDayDu: { equals: repo, mode: 'insensitive' } }, ngonNgu: 'vi' },
+      where: {
+        ungDung: { tenRepoDayDu: { equals: thoatKyTuLike(repo), mode: 'insensitive' } },
+        ngonNgu: 'vi',
+      },
       select: { readmeSha: true, trangThai: true, moHinhDich: true },
     });
     console.info(
@@ -1522,7 +1526,7 @@ async function lenhDay(): Promise<void> {
       let trangThaiSau: string | null = null;
       try {
         const ungDungTruoc = await prisma.ungDung.findFirst({
-          where: { tenRepoDayDu: { equals: r.repo, mode: 'insensitive' } },
+          where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
           select: { trangThai: true },
         });
         trangThaiTruoc = ungDungTruoc?.trangThai ?? null;
@@ -1548,7 +1552,7 @@ async function lenhDay(): Promise<void> {
         }
         await apps.dongBoRepo(owner, ten);
         const ud = await prisma.ungDung.findFirst({
-          where: { tenRepoDayDu: { equals: r.repo, mode: 'insensitive' } },
+          where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
           select: {
             maUngDung: true,
             tenRepoDayDu: true,
@@ -2029,7 +2033,7 @@ async function lenhPhanTich(): Promise<void> {
     const prisma = app.get(PrismaService);
     const apps = app.get(UngDungService);
     const ud = await prisma.ungDung.findFirst({
-      where: { tenRepoDayDu: { equals: repo, mode: 'insensitive' } },
+      where: { tenRepoDayDu: { equals: thoatKyTuLike(repo), mode: 'insensitive' } },
       select: { maUngDung: true, tenRepoDayDu: true },
     });
     if (!ud) throw new Error('Repo chưa có trong DB (chạy day trước).');
