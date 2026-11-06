@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { headerBaoMat } from './common/middleware/header-bao-mat.middleware';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -12,6 +13,10 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
  * tiền tố /api/v1, kiểm tra dữ liệu vào, chuẩn hóa lỗi và gắn X-Request-Id.
  */
 export function cauHinhUngDung(app: INestApplication): void {
+  // Quét ZAP 06/11/2026: không lộ framework qua X-Powered-By, thêm nosniff và HSTS
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
+  app.use(headerBaoMat);
+
   // P2-04.1: Tiền tố chung /api/v1 cho mọi route (ngoại trừ root / chào mừng)
   app.setGlobalPrefix('api/v1', { exclude: ['/'] });
 
