@@ -1,4 +1,4 @@
-# ⚒️ ForgeStore
+# ForgeStore
 
 [![CI](https://github.com/TranTrongQuyet-1812/ForgeStore_Project/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TranTrongQuyet-1812/ForgeStore_Project/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -9,7 +9,7 @@ ForgeStore gom các phần mềm mã nguồn mở từ GitHub Releases vào mộ
 
 ---
 
-## ✨ Tính năng chính
+## Tính năng chính
 
 - **Duyệt và tìm kiếm**: 9 danh mục, lọc theo nền tảng, sắp xếp theo sao, mới cập nhật hoặc đang thịnh hành. Gõ tiếng Việt vẫn tìm ra kết quả tiếng Anh nhờ dịch câu tìm và tìm theo ngữ nghĩa.
 - **Đọc hiểu nhanh**: mô tả ngắn và README được dịch sang tiếng Việt, giữ nguyên tên repo, tên ứng dụng và khối mã.
@@ -19,7 +19,7 @@ ForgeStore gom các phần mềm mã nguồn mở từ GitHub Releases vào mộ
 - **Tài khoản**: đăng nhập bằng GitHub hoặc Google, yêu thích và đánh giá ứng dụng.
 - **Bộ lọc chất lượng**: chỉ nhận kho có từ 1.000 sao, có bản phát hành hoặc cách cài rõ ràng, giấy phép phù hợp.
 
-## 🏗️ Kiến trúc
+## Kiến trúc
 
 | Thành phần                      | Công nghệ                                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -32,7 +32,7 @@ ForgeStore gom các phần mềm mã nguồn mở từ GitHub Releases vào mộ
 
 Backend theo mô hình Controller → Service. Phần Mobile (React Native) để sau, chưa nằm trong kho mã này.
 
-## 📂 Cấu trúc thư mục
+## Cấu trúc thư mục
 
 ```
 apps/
@@ -44,7 +44,7 @@ packages/
 infra/        Worker dịch trên Cloudflare
 ```
 
-## 🚀 Chạy thử trên máy
+## Chạy thử trên máy
 
 Yêu cầu: Node.js 20 trở lên, pnpm, PostgreSQL có pgvector, Redis. Riêng Desktop cần thêm Rust và các công cụ build của Tauri.
 
@@ -58,7 +58,7 @@ pnpm dev:desktop     # chạy ứng dụng Desktop
 
 Không đưa mật khẩu, khóa API hay token vào mã nguồn; mọi giá trị nhạy cảm nằm trong `.env` (đã được bỏ qua khỏi git).
 
-## ✅ Kiểm tra chất lượng
+## Kiểm tra chất lượng
 
 CI chạy đúng các lệnh dưới đây, nên nên chạy xanh cả năm trước khi gửi code:
 
@@ -70,7 +70,7 @@ pnpm typecheck
 pnpm test
 ```
 
-## 🔒 Bảo mật
+## Bảo mật
 
 Backend đã được quét bằng OWASP ZAP (chế độ an toàn, các route công khai) và không phát hiện lỗ hổng nghiêm trọng. Phát hiện lỗ hổng, vui lòng báo riêng cho tác giả thay vì đăng công khai.
 
