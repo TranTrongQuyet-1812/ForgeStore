@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('YeuThichService (P2-50)', () => {
   let service: YeuThichService;
-   
+
   let prisma: any;
 
   beforeEach(() => {

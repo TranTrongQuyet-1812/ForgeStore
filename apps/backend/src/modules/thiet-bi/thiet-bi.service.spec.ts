@@ -6,9 +6,9 @@ import { LoaiThietBi } from '@prisma/client';
 
 describe('ThietBiService', () => {
   let service: ThietBiService;
-   
+
   let mockPrisma: any;
-   
+
   let mockCacheService: any;
 
   beforeEach(() => {
