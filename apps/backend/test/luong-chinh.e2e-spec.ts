@@ -134,6 +134,13 @@ describe('Luồng chính qua HTTP (P2-61)', () => {
     await api().get('/api/v1/ung-dung/khong-co/ung-dung-nay').expect(404);
   });
 
+  it('GET /ung-dung/:id/danh-gia tới đúng bộ đánh giá, không bị đường chi tiết app nuốt mất', async () => {
+    const res = await api()
+      .get(`/api/v1/ung-dung/${encodeURIComponent(REPO)}/danh-gia`)
+      .expect(200);
+    expect(res.body).toMatchObject({ duLieu: [], tongSo: 0 });
+  });
+
   it('GET /danh-muc đếm đúng ứng dụng theo danh mục', async () => {
     const res = await api().get('/api/v1/danh-muc?platform=windows').expect(200);
     expect(res.body).toEqual(

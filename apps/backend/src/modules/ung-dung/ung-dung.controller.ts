@@ -9,7 +9,9 @@ import {
   UngDungChiTietDto,
   UngDungTomTatDto,
 } from '@forgestore/types';
+import { VaiTro } from '@prisma/client';
 import { CongKhai } from '../../common/decorators/cong-khai.decorator';
+import { VaiTroYeuCau } from '../../common/decorators/vai-tro.decorator';
 import { UngDungService } from './ung-dung.service';
 import { ReadmeTranslationService } from '../ai/translation/services/readme-translation.service';
 import { PlatformFilter, QueryAppsDto, SyncRepoDto } from './dto/truy-van-ung-dung.dto';
@@ -57,7 +59,8 @@ export class UngDungController {
     return this.appsService.layDanhSachApps(query, userId);
   }
 
-  @CongKhai()
+  // Ghi thẳng repo bất kỳ vào CSDL production nên chỉ quản trị viên được gọi (desktop không dùng)
+  @VaiTroYeuCau(VaiTro.QUAN_TRI_VIEN)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('dong-bo')
   @HttpCode(HttpStatus.OK)

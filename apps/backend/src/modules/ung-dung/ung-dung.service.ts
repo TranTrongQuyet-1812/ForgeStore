@@ -66,6 +66,18 @@ import { SearchQueryDto } from './dto/tim-kiem.dto';
 import { InspectRepoDto } from './dto/kiem-tra-repo.dto';
 import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
 import { taoDieuKienNenTang } from './tien-ich/dieu-kien-nen-tang.util';
+import { locCucBo, LyDoLoc } from './tien-ich/bo-loc-nap-repo.util';
+import { GithubRepo } from '../github/github.constants';
+
+/** Lý do "Dán link GitHub" không nhận repo, viết bằng lời đời thường để hiện cho người dùng. */
+const LY_DO_KHONG_NHAN: Partial<Record<LyDoLoc, string>> = {
+  IT_SAO: 'chưa đủ 1.000 sao trên GitHub',
+  LA_FORK: 'là bản sao (fork) của một repo khác',
+  DA_LUU_TRU: 'đã ngừng phát triển',
+  KHONG_CON_CAP_NHAT: 'đã lâu không được cập nhật',
+  KHONG_CO_GIAY_PHEP: 'không có giấy phép mã nguồn mở',
+  TRONG_DANH_SACH_CHAN: 'thuộc nhóm phần mềm ForgeStore không nhận',
+};
 
 /**
  * Phiên bản bộ bóc tách CLI. Dấu "không có hướng dẫn" ghi bởi bản cũ (thiếu phienBanBocTach)
@@ -2176,8 +2188,9 @@ export class UngDungService {
 
     // 3. Repo chưa có: Thẩm định trực tiếp từ GitHub Releases (P2-41.3)
     // 3.1: Kiểm tra repo tồn tại
+    let repoInfo: GithubRepo;
     try {
-      await this.githubService.layRepo(owner, repo);
+      repoInfo = await this.githubService.layRepo(owner, repo);
     } catch (err: unknown) {
       await this.ghiNhatKyNapRepo({
         duongDan: rawUrl,
@@ -2186,6 +2199,25 @@ export class UngDungService {
         userId,
       });
       throw new NotFoundException(`Không tìm thấy repository [${fullSlug}] trên GitHub.`);
+    }
+
+    // 3.1b: Cùng bộ lọc với dây chuyền nạp (≥ 1.000 sao, không fork, còn cập nhật, có giấy phép) để người dùng
+    // không đưa được repo dưới chuẩn của kho vào CSDL production (D-28, ngưỡng sao cố định)
+    const loc = locCucBo({
+      ...repoInfo,
+      fork: Boolean(repoInfo.fork),
+      archived: Boolean(repoInfo.archived),
+      pushed_at: repoInfo.pushed_at ?? null,
+    });
+    if (!loc.dat) {
+      const lyDo = LY_DO_KHONG_NHAN[loc.lyDo ?? 'IT_SAO'] ?? 'chưa đạt tiêu chuẩn của kho';
+      await this.ghiNhatKyNapRepo({
+        duongDan: rawUrl,
+        trangThai: TrangThaiNapRepo.THAT_BAI,
+        thongBaoLoi: `Không đạt bộ lọc: ${loc.lyDo}`,
+        userId,
+      });
+      throw new BadRequestException(`ForgeStore chưa nhận [${fullSlug}] vì repo ${lyDo}.`);
     }
 
     // 3.2: Kiểm tra bản phát hành

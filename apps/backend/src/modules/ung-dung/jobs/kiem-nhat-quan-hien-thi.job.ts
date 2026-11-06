@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { DinhDangTep } from '@prisma/client';
-import { coCachCaiCliHopLe, HuongDanCaiDatDto } from '@forgestore/types';
+import { DinhDangTep, Prisma } from '@prisma/client';
+import { coCachCaiCliHopLe, HuongDanCaiDatDto, YeuToRuiRoItem } from '@forgestore/types';
+import { tinhLaiDiemTheoThoiGian } from '../../ai/services/trust-score.service';
+import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
 import { UngDungService, daCoKetQuaBocTachCli } from '../ung-dung.service';
@@ -51,6 +53,7 @@ export class KiemNhatQuanHienThiJob {
     private readonly cacheService: CacheService,
     private readonly appsService: UngDungService,
     private readonly semanticSearchService: SemanticSearchService,
+    private readonly descriptionService: AppDescriptionTranslationService,
   ) {}
 
   /**
@@ -85,11 +88,20 @@ export class KiemNhatQuanHienThiJob {
       soLuongBocTachLai = await this.bocTachLaiDauLoiThoi(SO_BOC_TACH_LAI_TOI_DA);
       soLuongDaSua = await this.xuLyAppBiAnNham(gioiHan);
       soLuongCanhBao = await this.xuLyAppHienNham();
+      // (e) Chạy trước (d) để vector sinh từ mô tả tiếng Việt mới ngay trong đêm
+      const moTa = await this.descriptionService.dichMoTaCacApp(false);
+      if (moTa.soAppCanDich > 0) {
+        this.logger.log(
+          `[Chốt chặn (e)] Mô tả: dịch ${moTa.dichThanhCong}/${moTa.soAppCanDich}, chờ ngày mai ${moTa.soAppChoNgayMai}.`,
+        );
+      }
       const vector =
         await this.semanticSearchService.sinhLaiVectorLoiThoi(SO_SINH_LAI_VECTOR_TOI_DA);
       this.logger.log(
         `[Chốt chặn (d)] Vector: ghi mốc ${vector.ghiMoc}, sinh lại ${vector.sinhLai}, lỗi ${vector.loi}.`,
       );
+      const soDiemDoi = await this.tinhLaiDiemUyTinTheoThoiGian();
+      if (soDiemDoi > 0) this.logger.log(`[Chốt chặn (f)] Tính lại điểm uy tín: ${soDiemDoi} app.`);
 
       this.logger.log(
         `[Chốt chặn hoàn tất] Bóc tách lại (c): ${soLuongBocTachLai}, tự sửa (a): ${soLuongDaSua}, cảnh báo (b): ${soLuongCanhBao}`,
@@ -249,6 +261,49 @@ export class KiemNhatQuanHienThiJob {
         },
       },
     });
+  }
+
+  /**
+   * (f) Điểm uy tín tính một lần lúc phân tích; repo bị lưu trữ hay lâu không push sau đó thì điểm phải đổi theo.
+   * Chỉ đọc CSDL (cờ lưu trữ do job quét giữ, ngày push do bộ theo dõi giữ), chỉ ghi dòng có điểm hoặc yếu tố đổi.
+   */
+  private async tinhLaiDiemUyTinTheoThoiGian(): Promise<number> {
+    const ds = await this.prisma.phanTichAI.findMany({
+      select: {
+        maPhanTich: true,
+        maUngDung: true,
+        diemUyTin: true,
+        yeuToRuiRo: true,
+        ungDung: { select: { daLuuTru: true, pushedAt: true } },
+      },
+    });
+    let soDoi = 0;
+    for (const pt of ds) {
+      const yeuToCu = (Array.isArray(pt.yeuToRuiRo)
+        ? pt.yeuToRuiRo
+        : []) as unknown as YeuToRuiRoItem[];
+      const moi = tinhLaiDiemTheoThoiGian(yeuToCu, pt.ungDung.daLuuTru, pt.ungDung.pushedAt);
+      const maCu = yeuToCu
+        .map((yt) => yt.ma)
+        .sort()
+        .join(',');
+      const maMoi = moi.yeuToRuiRo
+        .map((yt) => yt.ma)
+        .sort()
+        .join(',');
+      if (moi.diemUyTin === pt.diemUyTin && maCu === maMoi) continue;
+      await this.prisma.phanTichAI.update({
+        where: { maPhanTich: pt.maPhanTich },
+        data: {
+          diemUyTin: moi.diemUyTin,
+          mucDoAnToan: moi.mucDoAnToan,
+          yeuToRuiRo: moi.yeuToRuiRo as unknown as Prisma.InputJsonValue,
+        },
+      });
+      soDoi++;
+    }
+    if (soDoi > 0) await this.xoaCacheHienThi();
+    return soDoi;
   }
 
   /**

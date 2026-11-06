@@ -12,6 +12,7 @@ import {
   CornerDownLeft,
 } from 'lucide-react';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
+import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import { khoUngDungService } from '../../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { layThongBaoLoi } from '../../dich-vu/api/thong-bao-loi';
 import { layMaMoTrangTuLink } from './tien-ich-tim-kiem';
@@ -31,6 +32,7 @@ const GOI_Y_TIM_KIEM = [
 export const ThanhTimKiemDropdown: React.FC = () => {
   const { openAppDetail, isSearchModalOpen, setSearchModalOpen } = useDieuHuongStore();
   const { kiemTraAppDaCai } = useDeviceInstalledApps();
+  const isAuthenticated = useXacThucStore((s) => s.isAuthenticated);
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
@@ -158,6 +160,12 @@ export const ThanhTimKiemDropdown: React.FC = () => {
   // Xử lý nạp và kiểm định repo Paste & Play
   const handleInspectRepo = async (rawUrl: string) => {
     if (!rawUrl || isInspecting) return;
+    // Thêm app mới vào kho cần đăng nhập (máy chủ từ chối khách), báo trước thay vì để lộ lỗi kỹ thuật
+    if (!isAuthenticated) {
+      setInspectSuccess(null);
+      setInspectError('Hãy đăng nhập để thêm ứng dụng mới từ GitHub vào ForgeStore.');
+      return;
+    }
     const urlToInspect = rawUrl.startsWith('http') ? rawUrl : `https://github.com/${rawUrl}`;
     setIsInspecting(true);
     setInspectError(null);

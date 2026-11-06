@@ -57,6 +57,17 @@ interface MockCacheService {
   withLock: ReturnType<typeof vi.fn>;
 }
 
+/** Repo GitHub giả đạt bộ lọc của kho (≥ 1.000 sao, có giấy phép, mới push) dùng cho test "Dán link GitHub". */
+const repoDatChuan = (full_name: string) => ({
+  id: 1,
+  full_name,
+  name: full_name.split('/')[1],
+  description: 'A tool',
+  stargazers_count: 5000,
+  license: { key: 'mit', name: 'MIT License', spdx_id: 'MIT' },
+  pushed_at: new Date().toISOString(),
+});
+
 describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
   let service: UngDungService;
   let mockPrisma: MockPrisma;
@@ -1284,9 +1295,22 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       );
     });
 
+    it('repo dưới 1.000 sao bị từ chối, không ghi vào kho', async () => {
+      mockPrisma.ungDung.findUnique.mockResolvedValue(null);
+      mockGithubService.layRepo.mockResolvedValue({
+        ...repoDatChuan('nho/repo'),
+        stargazers_count: 300,
+      });
+
+      await expect(service.kiemDinhVaNapRepo({ urlRepo: 'nho/repo' })).rejects.toThrow(
+        'chưa đủ 1.000 sao',
+      );
+      expect(mockGithubService.layDanhSachRelease).not.toHaveBeenCalled();
+    });
+
     it('4. Repo không có bản phát hành (release) -> ném BadRequestException và ghi KHONG_CO_RELEASE', async () => {
       mockPrisma.ungDung.findUnique.mockResolvedValue(null);
-      mockGithubService.layRepo.mockResolvedValue({ id: 1, full_name: 'test/no-release' });
+      mockGithubService.layRepo.mockResolvedValue(repoDatChuan('test/no-release'));
       mockGithubService.layDanhSachRelease.mockResolvedValue([]);
 
       await expect(
@@ -1306,7 +1330,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
     it('5. Repo không có file cài đặt phù hợp với nền tảng yêu cầu -> ném KHONG_CO_FILE_CAI_DAT', async () => {
       mockPrisma.ungDung.findUnique.mockResolvedValue(null);
-      mockGithubService.layRepo.mockResolvedValue({ id: 1, full_name: 'test/windows-only' });
+      mockGithubService.layRepo.mockResolvedValue(repoDatChuan('test/windows-only'));
       mockGithubService.layDanhSachRelease.mockResolvedValue([
         {
           id: 101,
@@ -1342,10 +1366,12 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         name: 'coolapp',
         owner: { login: 'newowner', avatar_url: '' },
         html_url: 'https://github.com/newowner/coolapp',
-        stargazers_count: 500,
+        stargazers_count: 5000,
         forks_count: 50,
         topics: ['android', 'tools'],
         description: 'A cool Android tool',
+        license: { key: 'mit', name: 'MIT License', spdx_id: 'MIT' },
+        pushed_at: new Date().toISOString(),
       });
       mockGithubService.layDanhSachRelease.mockResolvedValue([
         {
@@ -1415,7 +1441,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
 
     it('dán link repo chỉ có lệnh cài gọi dongBoRepo mà không cần cờ riêng', async () => {
       mockPrisma.ungDung.findUnique.mockResolvedValueOnce(null);
-      mockGithubService.layRepo.mockResolvedValueOnce({ full_name: 'owner/cli-only' });
+      mockGithubService.layRepo.mockResolvedValueOnce(repoDatChuan('owner/cli-only'));
       mockGithubService.layDanhSachRelease.mockResolvedValueOnce([]);
       mockGithubService.layReadme.mockResolvedValueOnce(
         '## Installation\n```bash\nnpm install -g cli-only@latest\n```',

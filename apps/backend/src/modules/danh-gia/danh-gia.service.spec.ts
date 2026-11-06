@@ -61,7 +61,9 @@ describe('DanhGiaService (P2-53)', () => {
         update: vi.fn(),
         delete: vi.fn(),
         count: vi.fn(),
-        aggregate: vi.fn(),
+      },
+      banPhatHanh: {
+        findUnique: vi.fn().mockResolvedValue({ maPhatHanh: 'ph-1' }),
       },
     };
 
@@ -70,6 +72,7 @@ describe('DanhGiaService (P2-53)', () => {
       luu: vi.fn(),
       xoa: vi.fn(),
       xoaTheoPrefix: vi.fn(),
+      setNx: vi.fn().mockResolvedValue(true),
     };
 
     service = new DanhGiaService(prisma, cacheService);
@@ -130,14 +133,24 @@ describe('DanhGiaService (P2-53)', () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it('tạo đánh giá mới thành công và tính lại điểm app', async () => {
+    it('từ chối phiên bản không có thật (chặn lách khóa chống trùng bằng chuỗi tùy ý)', async () => {
+      prisma.ungDung.findFirst.mockResolvedValue(mockUngDung);
+      prisma.banPhatHanh.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.taoDanhGia('user-1', mockUngDung.maUngDung, {
+          soSao: 1,
+          noiDungNhanXet: 'Spam',
+          phienBanDanhGia: 'bia-dat-1',
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.danhGiaUngDung.create).not.toHaveBeenCalled();
+    });
+
+    it('tạo đánh giá mới thành công và xóa cache chi tiết app', async () => {
       prisma.ungDung.findFirst.mockResolvedValue(mockUngDung);
       prisma.danhGiaUngDung.findUnique.mockResolvedValue(null);
       prisma.danhGiaUngDung.create.mockResolvedValue(mockReview);
-      prisma.danhGiaUngDung.aggregate.mockResolvedValue({
-        _avg: { soSao: 4.8 },
-        _count: { maDanhGia: 10 },
-      });
 
       const res = await service.taoDanhGia('user-1', mockUngDung.maUngDung, {
         soSao: 5,
@@ -150,11 +163,6 @@ describe('DanhGiaService (P2-53)', () => {
       expect(res.soSao).toBe(5);
       expect(cacheService.xoaTheoPrefix).toHaveBeenCalledWith(
         `fs:apps:detail:${mockUngDung.maUngDung}`,
-      );
-      expect(cacheService.luu).toHaveBeenCalledWith(
-        `fs:apps:rating:${mockUngDung.maUngDung}`,
-        { soSaoTrungBinh: 4.8, soLuotDanhGia: 10 },
-        86400,
       );
     });
   });
@@ -182,10 +190,6 @@ describe('DanhGiaService (P2-53)', () => {
         ...mockReview,
         soSao: 4,
         tieuDe: 'Cập nhật tiêu đề',
-      });
-      prisma.danhGiaUngDung.aggregate.mockResolvedValue({
-        _avg: { soSao: 4.0 },
-        _count: { maDanhGia: 1 },
       });
 
       const res = await service.suaDanhGia(
@@ -237,10 +241,6 @@ describe('DanhGiaService (P2-53)', () => {
     it('chủ sở hữu xóa bài thành công', async () => {
       prisma.danhGiaUngDung.findUnique.mockResolvedValue(mockReview);
       prisma.danhGiaUngDung.delete.mockResolvedValue(mockReview);
-      prisma.danhGiaUngDung.aggregate.mockResolvedValue({
-        _avg: { soSao: null },
-        _count: { maDanhGia: 0 },
-      });
 
       const res = await service.xoaDanhGia('user-1', mockReview.maDanhGia, false);
 
@@ -253,10 +253,6 @@ describe('DanhGiaService (P2-53)', () => {
     it('admin xóa bài của người khác thành công', async () => {
       prisma.danhGiaUngDung.findUnique.mockResolvedValue(mockReview);
       prisma.danhGiaUngDung.delete.mockResolvedValue(mockReview);
-      prisma.danhGiaUngDung.aggregate.mockResolvedValue({
-        _avg: { soSao: null },
-        _count: { maDanhGia: 0 },
-      });
 
       const res = await service.xoaDanhGia('admin-user', mockReview.maDanhGia, true);
 
@@ -277,20 +273,34 @@ describe('DanhGiaService (P2-53)', () => {
       prisma.danhGiaUngDung.findUnique.mockResolvedValue({
         maDanhGia: mockReview.maDanhGia,
         soLuotHuuIch: 3,
+        maNguoiDung: 'user-9',
       });
-      cacheService.lay.mockResolvedValue('1');
+      cacheService.setNx.mockResolvedValue(false);
 
       await expect(service.binhChonHuuIch('user-1', mockReview.maDanhGia)).rejects.toThrow(
         BadRequestException,
       );
     });
 
-    it('bình chọn hữu ích thành công lần đầu và lưu Redis TTL 30 ngày', async () => {
+    it('không cho tự bình chọn nhận xét của chính mình', async () => {
       prisma.danhGiaUngDung.findUnique.mockResolvedValue({
         maDanhGia: mockReview.maDanhGia,
         soLuotHuuIch: 3,
+        maNguoiDung: 'user-1',
       });
-      cacheService.lay.mockResolvedValue(null);
+
+      await expect(service.binhChonHuuIch('user-1', mockReview.maDanhGia)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.danhGiaUngDung.update).not.toHaveBeenCalled();
+    });
+
+    it('bình chọn hữu ích thành công lần đầu và giữ khóa Redis TTL 30 ngày', async () => {
+      prisma.danhGiaUngDung.findUnique.mockResolvedValue({
+        maDanhGia: mockReview.maDanhGia,
+        soLuotHuuIch: 3,
+        maNguoiDung: 'user-9',
+      });
       prisma.danhGiaUngDung.update.mockResolvedValue({ soLuotHuuIch: 4 });
 
       const res = await service.binhChonHuuIch('user-1', mockReview.maDanhGia);
@@ -302,9 +312,8 @@ describe('DanhGiaService (P2-53)', () => {
         data: { soLuotHuuIch: { increment: 1 } },
         select: { soLuotHuuIch: true },
       });
-      expect(cacheService.luu).toHaveBeenCalledWith(
+      expect(cacheService.setNx).toHaveBeenCalledWith(
         `fs:review:helpful:${mockReview.maDanhGia}:user-1`,
-        '1',
         30 * 24 * 60 * 60,
       );
     });

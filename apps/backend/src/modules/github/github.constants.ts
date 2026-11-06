@@ -56,6 +56,7 @@ export interface GithubRepo {
   updated_at: string;
   pushed_at?: string;
   archived?: boolean;
+  fork?: boolean;
 }
 
 export type GithubSearchRepoItem = GithubRepo;

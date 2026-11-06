@@ -36,39 +36,10 @@ export class TrustScoreService {
     // PHẦN 1: BỘ LUẬT TÍN HIỆU CỨNG (HÀM THUẦN TYPESCRIPT - P2-32.3)
     // ============================================================
 
-    // 1. Kho lưu trữ bị Archived: -40 điểm
-    if (dauVao.daArchived) {
-      diem -= 40;
-      yeuToRuiRo.push({
-        ma: 'REPO_ARCHIVED',
-        moTa: 'Kho lưu trữ đã bị lưu trữ (archived), không còn được phát triển.',
-        diemTru: 40,
-        nguon: 'LUAT',
-      });
-    }
-
-    // 2. Thời gian kể từ lần push cuối cùng
-    if (dauVao.ngayPushCuoi) {
-      const msMoiThang = 30 * 24 * 60 * 60 * 1000;
-      const soThangKhongPush = (Date.now() - dauVao.ngayPushCuoi.getTime()) / msMoiThang;
-
-      if (soThangKhongPush > 12) {
-        diem -= 25;
-        yeuToRuiRo.push({
-          ma: 'NO_PUSH_OVER_12_MONTHS',
-          moTa: 'Dự án không có cập nhật mới trong hơn 12 tháng qua.',
-          diemTru: 25,
-          nguon: 'LUAT',
-        });
-      } else if (soThangKhongPush > 6) {
-        diem -= 10;
-        yeuToRuiRo.push({
-          ma: 'NO_PUSH_OVER_6_MONTHS',
-          moTa: 'Dự án không có cập nhật mới trong hơn 6 tháng qua.',
-          diemTru: 10,
-          nguon: 'LUAT',
-        });
-      }
+    // 1 và 2. Kho bị lưu trữ (-40), lâu không push (-10 hoặc -25)
+    for (const yt of yeuToTheoThoiGian(dauVao.daArchived, dauVao.ngayPushCuoi)) {
+      diem -= yt.diemTru;
+      yeuToRuiRo.push(yt);
     }
 
     // 3. Không có giấy phép mã nguồn mở (License): -15 điểm
@@ -136,4 +107,63 @@ export function xepMucDoAnToan(diem: number): MucDoUyTin {
   if (diem >= 80) return MucDoUyTin.AN_TOAN_CAO;
   if (diem >= 60) return MucDoUyTin.CAN_LUU_Y;
   return MucDoUyTin.CANH_BAO_RUI_RO;
+}
+
+const MA_THEO_THOI_GIAN = ['REPO_ARCHIVED', 'NO_PUSH_OVER_12_MONTHS', 'NO_PUSH_OVER_6_MONTHS'];
+
+/** Hai luật đổi theo thời gian: kho bị lưu trữ, và bao lâu chưa push. */
+export function yeuToTheoThoiGian(
+  daArchived: boolean,
+  ngayPushCuoi: Date | null,
+  now = Date.now(),
+): YeuToRuiRoItem[] {
+  const ketQua: YeuToRuiRoItem[] = [];
+  if (daArchived) {
+    ketQua.push({
+      ma: 'REPO_ARCHIVED',
+      moTa: 'Kho lưu trữ đã bị lưu trữ (archived), không còn được phát triển.',
+      diemTru: 40,
+      nguon: 'LUAT',
+    });
+  }
+  if (ngayPushCuoi) {
+    const soThangKhongPush = (now - ngayPushCuoi.getTime()) / (30 * 24 * 60 * 60 * 1000);
+    if (soThangKhongPush > 12) {
+      ketQua.push({
+        ma: 'NO_PUSH_OVER_12_MONTHS',
+        moTa: 'Dự án không có cập nhật mới trong hơn 12 tháng qua.',
+        diemTru: 25,
+        nguon: 'LUAT',
+      });
+    } else if (soThangKhongPush > 6) {
+      ketQua.push({
+        ma: 'NO_PUSH_OVER_6_MONTHS',
+        moTa: 'Dự án không có cập nhật mới trong hơn 6 tháng qua.',
+        diemTru: 10,
+        nguon: 'LUAT',
+      });
+    }
+  }
+  return ketQua;
+}
+
+/**
+ * Tính lại điểm khi trạng thái lưu trữ hoặc ngày push đổi sau lần phân tích đầu, chỉ từ CSDL (không gọi GitHub).
+ * Điểm luôn là 100 trừ tổng điểm trừ của các yếu tố, nên thay các yếu tố theo thời gian rồi cộng lại là đúng.
+ * Chưa biết ngày push (null) thì giữ nguyên yếu tố push cũ.
+ */
+export function tinhLaiDiemTheoThoiGian(
+  yeuToCu: YeuToRuiRoItem[],
+  daArchived: boolean,
+  ngayPushCuoi: Date | null,
+  now = Date.now(),
+): KetQuaTrustScore {
+  const giuLai = yeuToCu.filter(
+    (yt) =>
+      yt.ma !== 'REPO_ARCHIVED' && (ngayPushCuoi === null || !MA_THEO_THOI_GIAN.includes(yt.ma)),
+  );
+  const yeuToRuiRo = [...yeuToTheoThoiGian(daArchived, ngayPushCuoi, now), ...giuLai];
+  const tongTru = yeuToRuiRo.reduce((tong, yt) => tong + yt.diemTru, 0);
+  const diemUyTin = Math.max(0, Math.min(100, 100 - tongTru));
+  return { diemUyTin, mucDoAnToan: xepMucDoAnToan(diemUyTin), yeuToRuiRo };
 }

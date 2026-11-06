@@ -40,6 +40,7 @@ export class CreateReviewDto {
   })
   @IsOptional()
   @IsString({ message: 'Phiên bản phải là chuỗi ký tự' })
+  @MaxLength(100, { message: 'Phiên bản không vượt quá 100 ký tự' })
   phienBanDanhGia?: string;
 
   @ApiPropertyOptional({
@@ -48,5 +49,6 @@ export class CreateReviewDto {
   })
   @IsOptional()
   @IsString({ message: 'Tên thiết bị phải là chuỗi ký tự' })
+  @MaxLength(100, { message: 'Tên thiết bị không vượt quá 100 ký tự' })
   thietBiDanhGia?: string;
 }

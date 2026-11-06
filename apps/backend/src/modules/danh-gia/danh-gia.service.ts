@@ -153,6 +153,16 @@ export class DanhGiaService {
     const maUngDung = ungDung.maUngDung;
     const phienBan =
       dto.phienBanDanhGia?.trim() || ungDung.danhSachPhatHanh[0]?.tenPhienBan || '1.0.0';
+    // Khóa chống trùng gồm cả phiên bản: chỉ nhận phiên bản có thật, nếu không đổi chuỗi là đăng được vô hạn đánh giá
+    if (dto.phienBanDanhGia?.trim()) {
+      const banCoThat = await this.prisma.banPhatHanh.findUnique({
+        where: { maUngDung_tenPhienBan: { maUngDung, tenPhienBan: phienBan } },
+        select: { maPhatHanh: true },
+      });
+      if (!banCoThat) {
+        throw new BadRequestException(`Ứng dụng không có phiên bản [${phienBan}] để đánh giá.`);
+      }
+    }
 
     // Kiểm tra xem người dùng đã đánh giá phiên bản này chưa (P2-53.2: UNIQUE)
     const daTonTai = await this.prisma.danhGiaUngDung.findUnique({
@@ -193,9 +203,6 @@ export class DanhGiaService {
         },
       },
     });
-
-    // Cập nhật điểm trung bình và số lượt đánh giá của ứng dụng
-    await this.capNhatDiemDanhGiaUngDung(maUngDung);
 
     // Xóa cache chi tiết của ứng dụng
     await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${maUngDung}`);
@@ -264,10 +271,6 @@ export class DanhGiaService {
       },
     });
 
-    if (dto.soSao !== undefined) {
-      await this.capNhatDiemDanhGiaUngDung(danhGia.maUngDung);
-    }
-
     // Xóa cache chi tiết
     await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${danhGia.maUngDung}`);
     await this.cacheService.xoaTheoPrefix(
@@ -316,9 +319,6 @@ export class DanhGiaService {
       where: { maDanhGia },
     });
 
-    // Cập nhật lại điểm trung bình
-    await this.capNhatDiemDanhGiaUngDung(danhGia.maUngDung);
-
     // Xóa cache chi tiết
     await this.cacheService.xoaTheoPrefix(`fs:apps:detail:${danhGia.maUngDung}`);
     await this.cacheService.xoaTheoPrefix(
@@ -340,17 +340,22 @@ export class DanhGiaService {
   ): Promise<{ daBinhChon: boolean; soLuotHuuIch: number }> {
     const danhGia = await this.prisma.danhGiaUngDung.findUnique({
       where: { maDanhGia },
-      select: { maDanhGia: true, soLuotHuuIch: true },
+      select: { maDanhGia: true, soLuotHuuIch: true, maNguoiDung: true },
     });
 
     if (!danhGia) {
       throw new NotFoundException(`Không tìm thấy nhận xét với mã [${maDanhGia}]`);
     }
 
-    const redisKey = `fs:review:helpful:${maDanhGia}:${maNguoiDung}`;
-    const daBinhChon = await this.cacheService.lay<string>(redisKey);
+    if (danhGia.maNguoiDung === maNguoiDung) {
+      throw new BadRequestException('Bạn không thể bình chọn hữu ích cho nhận xét của chính mình.');
+    }
 
-    if (daBinhChon) {
+    // SET NX nguyên tử: hai lượt bấm cùng lúc chỉ một lượt được tính
+    const redisKey = `fs:review:helpful:${maDanhGia}:${maNguoiDung}`;
+    const laLanDau = await this.cacheService.setNx(redisKey, this.HELPFUL_TTL);
+
+    if (!laLanDau) {
       throw new BadRequestException('Bạn đã bình chọn hữu ích cho nhận xét này rồi.');
     }
 
@@ -361,43 +366,11 @@ export class DanhGiaService {
       select: { soLuotHuuIch: true },
     });
 
-    // Lưu vào Redis để chặn bấm nhiều lần (TTL 30 ngày)
-    await this.cacheService.luu(redisKey, '1', this.HELPFUL_TTL);
-
     this.logger.log(`Người dùng [${maNguoiDung}] đã vote hữu ích cho đánh giá [${maDanhGia}]`);
 
     return {
       daBinhChon: true,
       soLuotHuuIch: capNhat.soLuotHuuIch,
     };
-  }
-
-  /**
-   * Tính điểm trung bình và số lượt đánh giá cập nhật vào bảng UngDung (P2-53.4).
-   */
-  private async capNhatDiemDanhGiaUngDung(maUngDung: string): Promise<void> {
-    try {
-      const thongKe = await this.prisma.danhGiaUngDung.aggregate({
-        where: { maUngDung },
-        _avg: { soSao: true },
-        _count: { maDanhGia: true },
-      });
-
-      const soSaoTrungBinh = thongKe._avg.soSao ? Number(thongKe._avg.soSao.toFixed(1)) : 0;
-      const soLuotDanhGia = thongKe._count.maDanhGia;
-
-      // Lưu kết quả thống kê vào Redis cache để truy xuất nhanh
-      await this.cacheService.luu(
-        `fs:apps:rating:${maUngDung}`,
-        { soSaoTrungBinh, soLuotDanhGia },
-        86400,
-      );
-
-      this.logger.log(
-        `Đã tính lại điểm app [${maUngDung}]: ${soSaoTrungBinh}⭐ (${soLuotDanhGia} lượt đánh giá)`,
-      );
-    } catch (err) {
-      this.logger.error(`Lỗi cập nhật điểm trung bình cho app [${maUngDung}]:`, err);
-    }
   }
 }

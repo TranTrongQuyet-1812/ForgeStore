@@ -41,11 +41,13 @@ import { AppController } from './app.controller';
     ThietBiModule,
     XacThucModule,
     GithubModule,
+    // Phải đứng trước UngDungModule: Nest đăng ký route theo thứ tự module, và GET `ung-dung/:owner/:repo`
+    // của UngDungModule sẽ nuốt GET `ung-dung/:id/danh-gia` nếu được đăng ký trước (trả 404 cho mọi app)
+    DanhGiaModule,
     UngDungModule,
     AiModule,
     YeuThichModule,
     CapNhatModule,
-    DanhGiaModule,
   ],
   providers: [
     {

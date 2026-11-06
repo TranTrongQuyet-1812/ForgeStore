@@ -3,7 +3,6 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { InspectRepoResponseDto } from '@forgestore/types';
-import { CongKhai } from '../../../common/decorators/cong-khai.decorator';
 import { UngDungService } from '../ung-dung.service';
 import { InspectRepoDto } from '../dto/kiem-tra-repo.dto';
 
@@ -16,7 +15,7 @@ interface RequestWithUser extends Request {
 export class KhoChuaController {
   constructor(private readonly appsService: UngDungService) {}
 
-  @CongKhai()
+  // Nạp repo mới ghi vào CSDL production: bắt đăng nhập để mỗi lượt nạp gắn với một tài khoản (nhật ký nạp)
   @Throttle({ default: { limit: 30, ttl: 3600000 } })
   @Post('kiem-tra')
   @HttpCode(HttpStatus.OK)

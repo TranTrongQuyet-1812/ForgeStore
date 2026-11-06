@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../redis/cache.service';
 import { UngDungService, PHIEN_BAN_BOC_TACH_CLI } from '../ung-dung.service';
 import { SemanticSearchService } from '../../ai/services/semantic-search.service';
+import { AppDescriptionTranslationService } from '../../ai/translation/services/app-description-translation.service';
 
 describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
   let job: KiemNhatQuanHienThiJob;
@@ -12,11 +13,16 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
       findMany: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
     };
-    phanTichAI: { findMany: ReturnType<typeof vi.fn> };
+    phanTichAI: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
   };
   let mockAppsService: { phanTichUngDung: ReturnType<typeof vi.fn> };
   const mockSemantic = {
     sinhLaiVectorLoiThoi: vi.fn().mockResolvedValue({ ghiMoc: 0, sinhLai: 0, loi: 0 }),
+  };
+  const mockMoTa = {
+    dichMoTaCacApp: vi
+      .fn()
+      .mockResolvedValue({ soAppCanDich: 0, dichThanhCong: 0, soAppChoNgayMai: 0 }),
   };
   let mockCacheService: {
     xoaTheoPrefix: ReturnType<typeof vi.fn>;
@@ -28,7 +34,10 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
         findMany: vi.fn(),
         update: vi.fn().mockResolvedValue({}),
       },
-      phanTichAI: { findMany: vi.fn().mockResolvedValue([]) },
+      phanTichAI: {
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn().mockResolvedValue({}),
+      },
     };
     mockAppsService = { phanTichUngDung: vi.fn().mockResolvedValue(undefined) };
 
@@ -41,6 +50,7 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
       mockCacheService as unknown as CacheService,
       mockAppsService as unknown as UngDungService,
       mockSemantic as unknown as SemanticSearchService,
+      mockMoTa as unknown as AppDescriptionTranslationService,
     );
   });
 
@@ -273,7 +283,7 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
   });
 
   it('(c) P3B-25.15: chỉ bóc tách lại dấu "không có hướng dẫn" của phiên bản bộ bóc tách cũ', async () => {
-    mockPrisma.phanTichAI.findMany.mockResolvedValue([
+    mockPrisma.phanTichAI.findMany.mockResolvedValueOnce([
       {
         maUngDung: 'cu',
         huongDanCaiDat: { khongCoHuongDan: true, phienBanBocTach: 1, cachCai: [] },
@@ -300,5 +310,38 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
     mockPrisma.ungDung.findMany.mockResolvedValue([]);
     await job.kiemTraVaSuaNhatQuanHienThi();
     expect(mockSemantic.sinhLaiVectorLoiThoi).toHaveBeenCalledWith(100);
+  });
+
+  it('(e) dịch mô tả còn thiếu hoặc lệch, và (f) tính lại điểm khi repo bị lưu trữ sau lần phân tích', async () => {
+    mockPrisma.ungDung.findMany.mockResolvedValue([]);
+    mockPrisma.phanTichAI.findMany
+      .mockResolvedValueOnce([]) // (c)
+      .mockResolvedValueOnce([
+        {
+          maPhanTich: 'pt-1',
+          maUngDung: 'app-1',
+          diemUyTin: 100,
+          yeuToRuiRo: [],
+          ungDung: { daLuuTru: true, pushedAt: null },
+        },
+        {
+          maPhanTich: 'pt-2',
+          maUngDung: 'app-2',
+          diemUyTin: 100,
+          yeuToRuiRo: [],
+          ungDung: { daLuuTru: false, pushedAt: null },
+        },
+      ]);
+
+    await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(mockMoTa.dichMoTaCacApp).toHaveBeenCalledWith(false);
+    expect(mockPrisma.phanTichAI.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.phanTichAI.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { maPhanTich: 'pt-1' },
+        data: expect.objectContaining({ diemUyTin: 60 }),
+      }),
+    );
   });
 });

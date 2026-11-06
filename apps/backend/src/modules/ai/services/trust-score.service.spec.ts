@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MucDoUyTin } from '@prisma/client';
-import { DauVaoTrustScore, TrustScoreService, xepMucDoAnToan } from './trust-score.service';
+import {
+  DauVaoTrustScore,
+  TrustScoreService,
+  tinhLaiDiemTheoThoiGian,
+  xepMucDoAnToan,
+} from './trust-score.service';
 import { RulePermissionJudgeService } from './rule-permission-judge.service';
 
 describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P2-70)', () => {
@@ -133,6 +138,43 @@ describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P
       expect(xepMucDoAnToan(60)).toBe(MucDoUyTin.CAN_LUU_Y);
       expect(xepMucDoAnToan(59)).toBe(MucDoUyTin.CANH_BAO_RUI_RO);
       expect(xepMucDoAnToan(0)).toBe(MucDoUyTin.CANH_BAO_RUI_RO);
+    });
+  });
+
+  describe('tinhLaiDiemTheoThoiGian (job đêm, không gọi GitHub)', () => {
+    const NGAY = 24 * 60 * 60 * 1000;
+    const now = Date.UTC(2026, 10, 6);
+    const motNguoi = { ma: 'SINGLE_CONTRIBUTOR', moTa: 'x', diemTru: 10, nguon: 'LUAT' as const };
+
+    it('repo bị lưu trữ sau lần phân tích: trừ thêm 40 và giữ yếu tố khác', () => {
+      const kq = tinhLaiDiemTheoThoiGian([motNguoi], true, null, now);
+      expect(kq.diemUyTin).toBe(50);
+      expect(kq.mucDoAnToan).toBe(MucDoUyTin.CANH_BAO_RUI_RO);
+      expect(kq.yeuToRuiRo.map((y) => y.ma).sort()).toEqual([
+        'REPO_ARCHIVED',
+        'SINGLE_CONTRIBUTOR',
+      ]);
+    });
+
+    it('hết lưu trữ và mới push lại: gỡ yếu tố cũ, điểm hồi về', () => {
+      const cu = [
+        motNguoi,
+        { ma: 'REPO_ARCHIVED', moTa: 'x', diemTru: 40, nguon: 'LUAT' as const },
+        { ma: 'NO_PUSH_OVER_12_MONTHS', moTa: 'x', diemTru: 25, nguon: 'LUAT' as const },
+      ];
+      const kq = tinhLaiDiemTheoThoiGian(cu, false, new Date(now - 10 * NGAY), now);
+      expect(kq.diemUyTin).toBe(90);
+      expect(kq.yeuToRuiRo.map((y) => y.ma)).toEqual(['SINGLE_CONTRIBUTOR']);
+    });
+
+    it('chưa biết ngày push thì giữ yếu tố push cũ', () => {
+      const cu = [{ ma: 'NO_PUSH_OVER_6_MONTHS', moTa: 'x', diemTru: 10, nguon: 'LUAT' as const }];
+      expect(tinhLaiDiemTheoThoiGian(cu, false, null, now).diemUyTin).toBe(90);
+    });
+
+    it('lâu không push sau lần phân tích: trừ 25', () => {
+      const kq = tinhLaiDiemTheoThoiGian([], false, new Date(now - 400 * NGAY), now);
+      expect(kq.diemUyTin).toBe(75);
     });
   });
 });
