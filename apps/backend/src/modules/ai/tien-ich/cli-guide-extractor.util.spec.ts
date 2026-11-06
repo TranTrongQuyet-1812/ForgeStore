@@ -122,12 +122,10 @@ MIT
       expect(nhanDienNhomLenh('./setup.sh')).toBe(NhomCachCai.NGUON);
     });
 
-    it('npm/pnpm/yarn/bun cài thư viện vào dự án (không -g) không phải lệnh cài app', () => {
-      // Lỗi thật trong DB 06/11: cài `npm install ioredis` nhưng gỡ `npm uninstall -g ioredis`
-      expect(nhanDienNhomLenh('npm install ioredis')).toBeNull();
-      expect(nhanDienNhomLenh('npm install --save-dev @types/node')).toBeNull();
-      expect(nhanDienNhomLenh('yarn add electron-builder --dev')).toBeNull();
-      expect(nhanDienNhomLenh('pnpm add zod')).toBeNull();
+    it('D-36: npm/pnpm/yarn/bun cài thư viện vào dự án (không -g) vẫn là lệnh cài hợp lệ của kho', () => {
+      expect(nhanDienNhomLenh('npm install ioredis')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('yarn add electron-builder --dev')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('pnpm add zod')).toBe(NhomCachCai.NPM);
       expect(nhanDienNhomLenh('npm install --global serve')).toBe(NhomCachCai.NPM);
       expect(nhanDienNhomLenh('npm install serve -g')).toBe(NhomCachCai.NPM);
       expect(nhanDienNhomLenh('yarn global add serve')).toBe(NhomCachCai.NPM);
@@ -408,6 +406,41 @@ MIT
   });
 
   describe('P3B-16.3 & P3B-16.9: trichXuatHuongDanCliBangQuyTac (README thật & quy tắc thuần)', () => {
+    it('D-36: thư viện npm cài vào dự án được giữ, lệnh gỡ và cập nhật cũng cục bộ (không -g)', () => {
+      const readme = [
+        '# ioredis',
+        '',
+        '## Install',
+        '',
+        '```sh',
+        'npm install ioredis',
+        '```',
+        '',
+      ].join('\n');
+      const res = trichXuatHuongDanCliBangQuyTac(readme, 'https://github.com/redis/ioredis');
+
+      expect(res?.cachCai).toHaveLength(1);
+      expect(res?.cachCai[0]?.lenhGo).toBe('npm uninstall ioredis');
+      expect(res?.cachCai[0]?.lenhCapNhat).toBe('npm update ioredis');
+    });
+
+    it('npm cài toàn máy vẫn gỡ và cập nhật bằng -g', () => {
+      const readme = [
+        '# serve',
+        '',
+        '## Install',
+        '',
+        '```sh',
+        'npm install -g serve',
+        '```',
+        '',
+      ].join('\n');
+      const res = trichXuatHuongDanCliBangQuyTac(readme, 'https://github.com/vercel/serve');
+
+      expect(res?.cachCai[0]?.lenhGo).toBe('npm uninstall -g serve');
+      expect(res?.cachCai[0]?.lenhCapNhat).toBe('npm update -g serve');
+    });
+
     it('trích xuất thành công README có winget và scoop của Fastfetch', () => {
       const fastfetchReadme = `# Fastfetch
 A neofetch-like tool for fetching system information and displaying them prettily.

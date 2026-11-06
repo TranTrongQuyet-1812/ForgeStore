@@ -2207,10 +2207,36 @@ describe('daCoKetQuaBocTachCli (làm mới dấu "không có CLI" của bản c�
     expect(daCoKetQuaBocTachCli({ cachCai: [{ ten: 'x' }] })).toBe(true);
   });
 
-  it('hướng dẫn còn lệnh cài thư viện npm vào dự án (không -g) bị coi là lỗi thời để bóc lại', () => {
-    const cucBo = { cachCai: [{ buoc: [{ lenh: 'npm install ioredis' }] }] };
-    const toanMay = { cachCai: [{ buoc: [{ lenh: 'npm install -g serve' }] }] };
-    expect(daCoKetQuaBocTachCli(cucBo)).toBe(false);
+  it('hướng dẫn cài thư viện npm cục bộ mà lệnh gỡ vẫn là -g (bản cũ) bị coi là lỗi thời để bóc lại', () => {
+    const lech = {
+      cachCai: [
+        {
+          trinhQuanLy: 'npm',
+          lenhGo: 'npm uninstall -g ioredis',
+          buoc: [{ lenh: 'npm install ioredis' }],
+        },
+      ],
+    };
+    const dung = {
+      cachCai: [
+        {
+          trinhQuanLy: 'npm',
+          lenhGo: 'npm uninstall ioredis',
+          buoc: [{ lenh: 'npm install ioredis' }],
+        },
+      ],
+    };
+    const toanMay = {
+      cachCai: [
+        {
+          trinhQuanLy: 'npm',
+          lenhGo: 'npm uninstall -g serve',
+          buoc: [{ lenh: 'npm install -g serve' }],
+        },
+      ],
+    };
+    expect(daCoKetQuaBocTachCli(lech)).toBe(false);
+    expect(daCoKetQuaBocTachCli(dung)).toBe(true);
     expect(daCoKetQuaBocTachCli(toanMay)).toBe(true);
   });
 });

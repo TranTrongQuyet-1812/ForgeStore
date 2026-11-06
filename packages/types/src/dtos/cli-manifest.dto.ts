@@ -240,6 +240,7 @@ export function ghepLenhCliAnToan(
   trinhQuanLy: MaTrinhQuanLyGoi,
   tenGoi: string,
   phienBan?: string,
+  cucBo = false,
 ): KetQuaGhepLenhCli {
   const manifest = DANH_SACH_TRINH_QUAN_LY_GOI[trinhQuanLy];
   if (!manifest) {
@@ -273,11 +274,14 @@ export function ghepLenhCliAnToan(
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
-  const lenhCapNhat = manifest.mauLenhCapNhat
+  // Thư viện npm cài vào dự án (`npm install x`, không -g): lệnh cập nhật và gỡ phải cùng phạm vi cục bộ, nếu không
+  // sẽ gỡ nhầm bản toàn máy (D-36 vẫn nhận các thư viện này vào kho)
+  const duocCucBo = cucBo && trinhQuanLy === MaTrinhQuanLyGoi.NPM;
+  const lenhCapNhat = (duocCucBo ? 'npm update {tenGoi}' : manifest.mauLenhCapNhat)
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
-  const lenhGo = manifest.mauLenhGo
+  const lenhGo = (duocCucBo ? 'npm uninstall {tenGoi}' : manifest.mauLenhGo)
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
@@ -292,6 +296,18 @@ export function ghepLenhCliAnToan(
     tenContainer: trinhQuanLy === MaTrinhQuanLyGoi.DOCKER ? cleanTenContainer : undefined,
     phienBan: cleanPhienBan,
   };
+}
+
+/**
+ * `npm install x`, `pnpm add x`, `yarn add x`, `bun add x` không có -g/--global: cài thư viện vào dự án đang mở.
+ * Dùng chung cho bộ bóc lệnh (backend) và nút "Tôi đã cài" (desktop) để lệnh gỡ và cập nhật cùng phạm vi.
+ */
+export function laLenhNpmCucBo(lenh?: string): boolean {
+  const l = (lenh ?? '').trim();
+  return (
+    /^(npm\s+(i|install)|pnpm\s+(add|i|install)|yarn\s+add|bun\s+(add|i))\s/i.test(l) &&
+    !/\s(?:-g|--global)(?=\s|$)/i.test(l)
+  );
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   trichTenGoiTuLenhTho,
   boDauNhacShell,
   ghepLenhCliAnToan,
+  laLenhNpmCucBo,
 } from '@forgestore/types';
 
 /**
@@ -166,16 +167,12 @@ export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
     return NhomCachCai.CONDA;
   }
 
-  // NPM: chỉ nhận cài toàn máy (-g, --global, yarn global) hoặc chạy thẳng bằng npx. `npm install x` không cờ là cài
-  // thư viện vào dự án đang mở (ioredis, Tone.js...), không phải cài app; lệnh gỡ và cập nhật lại ghép theo -g nên lệch.
-  if (/^npx\b/i.test(l) || /^yarn\s+global\s+add\b/i.test(l)) {
-    return NhomCachCai.NPM;
-  }
+  // NPM: nhận cả cài toàn máy lẫn cài thư viện vào dự án (D-36: kho lấy cả thư viện cài bằng lệnh như axios, ioredis).
+  // Lệnh gỡ và cập nhật được ghép theo đúng phạm vi ở phần gom nhóm bên dưới (cục bộ thì không dùng -g).
   if (
-    /^(npm\s+i\b|npm\s+install\b|pnpm\s+add\b|pnpm\s+i\b|pnpm\s+install\b|bun\s+add\b|bun\s+i\b)/i.test(
+    /^(npm\s+i\b|npm\s+install\b|npx\b|pnpm\s+add\b|pnpm\s+i\b|pnpm\s+install\b|yarn\s+global\s+add\b|yarn\s+add\b|bun\s+add\b|bun\s+i\b)/i.test(
       l,
-    ) &&
-    /\s(?:-g|--global)(?=\s|$)/i.test(l)
+    )
   ) {
     return NhomCachCai.NPM;
   }
@@ -667,7 +664,12 @@ export function bocTachHuongDanTuCodeBlocks(
     let lenhCapNhat: string | undefined;
     let lenhGo: string | undefined;
     if (pkgInfo) {
-      const ghep = ghepLenhCliAnToan(pkgInfo.trinhQuanLy, pkgInfo.tenGoi);
+      const ghep = ghepLenhCliAnToan(
+        pkgInfo.trinhQuanLy,
+        pkgInfo.tenGoi,
+        undefined,
+        laLenhNpmCucBo(items[0]?.lenh),
+      );
       if (ghep.hopLe) {
         lenhCapNhat = ghep.lenhCapNhat;
         lenhGo = ghep.lenhGo;

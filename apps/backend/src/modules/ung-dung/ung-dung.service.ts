@@ -28,6 +28,7 @@ import {
   UngDungTomTatDto,
   YeuToRuiRoItem,
   coCachCaiCliHopLe,
+  laLenhNpmCucBo,
 } from '@forgestore/types';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -88,30 +89,30 @@ const LY_DO_KHONG_NHAN: Partial<Record<LyDoLoc, string>> = {
  * Phiên bản 5 (P3B-25.12): thêm bước quét cả README nhưng chỉ nhận gói khớp tên repo (pandas, fzf...),
  * nên các dấu "không có hướng dẫn" ghi từ phiên bản 4 được tính lại.
  * Phiên bản 6 (05/11/2026): đọc cả khối code rào `~~~` và khối code thụt lề (instaloader, shellharden...).
+ * Phiên bản 7 (06/11/2026): một luật npm sai (đã gỡ) từng ghi nhầm dấu "không có hướng dẫn" cho thư viện cài bằng
+ * `npm install x`; tăng phiên bản để các dấu đó được bóc lại. D-36 giữ các thư viện cài bằng lệnh trong kho.
  */
-export const PHIEN_BAN_BOC_TACH_CLI = 6;
+export const PHIEN_BAN_BOC_TACH_CLI = 7;
 
 export function daCoKetQuaBocTachCli(hd: unknown): boolean {
   if (hd === null || hd === undefined) return false;
   const obj = hd as {
     khongCoHuongDan?: boolean;
     phienBanBocTach?: number;
-    cachCai?: Array<{ buoc?: Array<{ lenh?: string }> }>;
+    cachCai?: Array<{ trinhQuanLy?: string; lenhGo?: string; buoc?: Array<{ lenh?: string }> }>;
   };
   if (obj.khongCoHuongDan) {
     return (obj.phienBanBocTach ?? 0) >= PHIEN_BAN_BOC_TACH_CLI;
   }
-  // Hướng dẫn bóc bằng luật cũ còn lệnh cài thư viện npm vào dự án (không -g): coi là lỗi thời để bóc lại
-  return !(obj.cachCai ?? []).some((c) => (c.buoc ?? []).some((b) => laLenhNpmCucBo(b.lenh)));
-}
-
-/** `npm install x`, `yarn add x`... không có -g/--global: cài thư viện vào dự án, không phải cài app (06/11/2026). */
-export function laLenhNpmCucBo(lenh?: string): boolean {
-  const l = (lenh ?? '').trim();
-  return (
-    /^(npm\s+(i|install)|pnpm\s+(add|i|install)|yarn\s+add|bun\s+(add|i))\s/i.test(l) &&
-    !/\s(?:-g|--global)(?=\s|$)/i.test(l)
+  // Bản cũ ghép lệnh gỡ toàn máy (`npm uninstall -g x`) cho thư viện cài vào dự án (`npm install x`): bóc lại để lệnh
+  // gỡ và cập nhật cùng phạm vi cục bộ. Sau khi bóc lại lệnh gỡ không còn -g nên điều kiện này hết đúng, không lặp.
+  const lenhGoLech = (obj.cachCai ?? []).some(
+    (c) =>
+      c.trinhQuanLy === 'npm' &&
+      /\s(?:-g|--global)(?=\s|$)/i.test(c.lenhGo ?? '') &&
+      (c.buoc ?? []).some((b) => laLenhNpmCucBo(b.lenh)),
   );
+  return !lenhGoLech;
 }
 
 /**

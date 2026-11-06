@@ -77,6 +77,8 @@ export interface GhiNhanCaiDatCliRequest {
   trinhQuanLy: string;
   tenGoi: string;
   phienBan?: string;
+  /** Thư viện npm cài vào dự án (không -g): lệnh gỡ và cập nhật ghép theo phạm vi cục bộ. */
+  cucBo?: boolean;
 }
 
 /**

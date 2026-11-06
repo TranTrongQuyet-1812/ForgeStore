@@ -347,23 +347,39 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
     );
   });
 
-  it('(c) bóc lại cả hướng dẫn còn lệnh npm cài thư viện (không -g), bỏ qua hướng dẫn dùng -g', async () => {
+  it('(c) bóc lại hướng dẫn thư viện npm cục bộ còn lệnh gỡ -g (bản cũ), bỏ qua hướng dẫn đã đúng', async () => {
     mockPrisma.ungDung.findMany.mockResolvedValue([]);
     mockPrisma.$queryRaw.mockResolvedValueOnce([
       {
-        maUngDung: 'lib',
-        huongDanCaiDat: { cachCai: [{ buoc: [{ lenh: 'npm install ioredis' }] }] },
+        maUngDung: 'lech',
+        huongDanCaiDat: {
+          cachCai: [
+            {
+              trinhQuanLy: 'npm',
+              lenhGo: 'npm uninstall -g ioredis',
+              buoc: [{ lenh: 'npm install ioredis' }],
+            },
+          ],
+        },
       },
       {
-        maUngDung: 'cli',
-        huongDanCaiDat: { cachCai: [{ buoc: [{ lenh: 'npm install -g serve' }] }] },
+        maUngDung: 'dung',
+        huongDanCaiDat: {
+          cachCai: [
+            {
+              trinhQuanLy: 'npm',
+              lenhGo: 'npm uninstall ioredis',
+              buoc: [{ lenh: 'npm install ioredis' }],
+            },
+          ],
+        },
       },
     ]);
 
     const result = await job.kiemTraVaSuaNhatQuanHienThi();
 
     expect(result.soLuongBocTachLai).toBe(1);
-    expect(mockAppsService.phanTichUngDung).toHaveBeenCalledWith('lib');
-    expect(mockAppsService.phanTichUngDung).not.toHaveBeenCalledWith('cli');
+    expect(mockAppsService.phanTichUngDung).toHaveBeenCalledWith('lech');
+    expect(mockAppsService.phanTichUngDung).not.toHaveBeenCalledWith('dung');
   });
 });

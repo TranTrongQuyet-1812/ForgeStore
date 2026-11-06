@@ -273,10 +273,13 @@ export class ThietBiService {
       // P3B-16.7: Tính câu lệnh cập nhật an toàn cho ứng dụng cài bằng dòng lệnh CLI
       let lenhCapNhatCli: string | null = null;
       if (item.trinhQuanLyGoi && item.tenGoiCli && coBanMoi) {
+        // Bản ghi cài thư viện npm cục bộ có lệnh gỡ không -g: lệnh cập nhật cũng phải cục bộ
+        const cucBo = !/\s(?:-g|--global)(?=\s|$)/i.test(item.lenhGoCli ?? ' -g');
         const ghep = ghepLenhCliAnToan(
           item.trinhQuanLyGoi as MaTrinhQuanLyGoi,
           item.tenGoiCli,
           phienBanMoi || undefined,
+          cucBo,
         );
         if (ghep.hopLe) {
           lenhCapNhatCli = ghep.lenhCapNhat || null;
@@ -497,7 +500,12 @@ export class ThietBiService {
     }
 
     // Ghép lệnh gỡ an toàn từ manifest
-    const ghep = ghepLenhCliAnToan(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.tenGoi, dto.phienBan);
+    const ghep = ghepLenhCliAnToan(
+      dto.trinhQuanLy as MaTrinhQuanLyGoi,
+      dto.tenGoi,
+      dto.phienBan,
+      dto.cucBo,
+    );
     if (!ghep.hopLe || !ghep.lenhGo) {
       throw new BadRequestException(`Không thể ghép lệnh an toàn: ${ghep.lyDoKhongHopLe}`);
     }

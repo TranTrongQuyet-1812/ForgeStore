@@ -50,6 +50,7 @@ import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
   trichTenGoiTuLenhTho,
+  laLenhNpmCucBo,
   timTepTheoMauWildcard,
   kiemTraGoiThuocRepo,
   type TrangKetQua,
@@ -877,6 +878,9 @@ export const TrangChiTiet: React.FC = () => {
         trinhQuanLy,
         tenGoi,
         phienBan,
+        // Thư viện npm cài vào dự án (không -g): lệnh gỡ và cập nhật cũng phải cục bộ
+        cucBo:
+          trinhQuanLy === MaTrinhQuanLyGoi.NPM && laLenhNpmCucBo(currentMethod?.buoc?.[0]?.lenh),
       });
 
       if (res) {

@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { MaTrinhQuanLyGoi } from '@forgestore/types';
 
 export class GhiNhanCaiDatDto {
@@ -112,4 +120,12 @@ export class GhiNhanCaiDatCliDto {
   @IsString({ message: 'Phiên bản phải là chuỗi' })
   @MaxLength(64, { message: 'Phiên bản không được vượt quá 64 ký tự' })
   phienBan?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Thư viện npm cài vào dự án (không -g): lệnh gỡ và cập nhật ghép theo phạm vi cục bộ',
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'cucBo phải là true hoặc false' })
+  cucBo?: boolean;
 }
