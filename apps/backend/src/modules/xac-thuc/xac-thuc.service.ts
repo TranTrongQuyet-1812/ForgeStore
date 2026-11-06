@@ -607,7 +607,9 @@ export class XacThucService {
    */
   async lamMoiToken(dto: RefreshTokenDto) {
     const parts = dto.refreshToken.split('.');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    // maPhien là cột UUID: chuỗi khác dạng làm Prisma ném lỗi và trả 500 thay vì 401
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (parts.length !== 2 || !parts[0] || !parts[1] || !UUID.test(parts[0])) {
       throw new UnauthorizedException({
         maLoi: 'CHUA_XAC_THUC',
         thongBao: 'Định dạng Refresh Token không hợp lệ',
@@ -768,18 +770,16 @@ export class XacThucService {
    * Đăng xuất trên toàn bộ thiết bị (Xóa toàn bộ PhienDangNhap của người dùng).
    */
   async dangXuatTatCa(maNguoiDung: string): Promise<void> {
-    try {
-      const phienList = await this.prisma.phienDangNhap.findMany({
-        where: { maNguoiDung },
-        select: { maPhien: true },
-      });
-      await Promise.all(phienList.map((p) => this.cacheService.del(`auth:session:${p.maPhien}`)));
-    } catch {
-      // Bỏ qua nếu lỗi đọc
-    }
+    const phienList = await this.prisma.phienDangNhap.findMany({
+      where: { maNguoiDung },
+      select: { maPhien: true },
+    });
+    // Xóa phiên trong CSDL trước rồi mới xóa cache: làm ngược lại thì request lọt vào giữa sẽ được
+    // cache lại là "phiên hợp lệ" thêm 60 giây dù người dùng đã đăng xuất
     await this.prisma.phienDangNhap.deleteMany({
       where: { maNguoiDung },
     });
+    await Promise.all(phienList.map((p) => this.cacheService.del(`auth:session:${p.maPhien}`)));
     this.logger.log(`Đã thu hồi toàn bộ phiên đăng nhập của người dùng [${maNguoiDung}]`);
   }
 

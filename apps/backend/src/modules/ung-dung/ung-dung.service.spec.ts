@@ -2152,4 +2152,11 @@ describe('daCoKetQuaBocTachCli (làm mới dấu "không có CLI" của bản c�
   it('hướng dẫn thật luôn được coi là đã có kết quả', () => {
     expect(daCoKetQuaBocTachCli({ cachCai: [{ ten: 'x' }] })).toBe(true);
   });
+
+  it('hướng dẫn còn lệnh cài thư viện npm vào dự án (không -g) bị coi là lỗi thời để bóc lại', () => {
+    const cucBo = { cachCai: [{ buoc: [{ lenh: 'npm install ioredis' }] }] };
+    const toanMay = { cachCai: [{ buoc: [{ lenh: 'npm install -g serve' }] }] };
+    expect(daCoKetQuaBocTachCli(cucBo)).toBe(false);
+    expect(daCoKetQuaBocTachCli(toanMay)).toBe(true);
+  });
 });

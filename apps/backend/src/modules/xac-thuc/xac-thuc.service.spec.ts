@@ -577,6 +577,11 @@ describe('XacThucService', () => {
         UnauthorizedException,
       );
 
+      // Mã phiên không phải UUID: trả 401 ngay, không để Prisma ném lỗi UUID thành 500
+      await expect(service.lamMoiToken({ refreshToken: 'abc.def' })).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(mockPrisma.phienDangNhap.findUnique).not.toHaveBeenCalled();
       await expect(service.lamMoiToken({ refreshToken: 'session-only.' })).rejects.toThrow(
         UnauthorizedException,
       );
@@ -585,24 +590,24 @@ describe('XacThucService', () => {
     it('ném lỗi UnauthorizedException khi phiên đăng nhập không tồn tại', async () => {
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue(null);
 
-      await expect(service.lamMoiToken({ refreshToken: 'session-123.secret-456' })).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.lamMoiToken({ refreshToken: '00000000-0000-4000-8000-000000000010.secret-456' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('ném lỗi và xóa phiên khi phiên đăng nhập đã hết hạn', async () => {
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-expired',
+        maPhien: '00000000-0000-4000-8000-000000000011',
         thoiGianHetHan: new Date(Date.now() - 10000),
         chuoiMaHoaToken: 'hashed-secret',
       });
 
       await expect(
-        service.lamMoiToken({ refreshToken: 'session-expired.some-secret' }),
+        service.lamMoiToken({ refreshToken: '00000000-0000-4000-8000-000000000011.some-secret' }),
       ).rejects.toThrow(UnauthorizedException);
 
       expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
-        where: { maPhien: 'session-expired' },
+        where: { maPhien: '00000000-0000-4000-8000-000000000011' },
       });
     });
 
@@ -611,7 +616,7 @@ describe('XacThucService', () => {
       const hashed = await argon2.hash(currentSecret);
 
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-valid',
+        maPhien: '00000000-0000-4000-8000-000000000012',
         thoiGianHetHan: new Date(Date.now() + 1000000),
         chuoiMaHoaToken: hashed,
         maNguoiDung: 'user-uuid-1',
@@ -625,14 +630,14 @@ describe('XacThucService', () => {
       mockPrisma.phienDangNhap.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.lamMoiToken({
-        refreshToken: `session-valid.${currentSecret}`,
+        refreshToken: `00000000-0000-4000-8000-000000000012.${currentSecret}`,
       });
 
       expect(result.accessToken).toBe('mocked-jwt-access-token');
-      expect(result.refreshToken).toMatch(/^session-valid\.[a-f0-9]{64}$/);
+      expect(result.refreshToken).toMatch(/^00000000-0000-4000-8000-000000000012\.[a-f0-9]{64}$/);
       expect(mockPrisma.phienDangNhap.updateMany).toHaveBeenCalledWith({
         where: {
-          maPhien: 'session-valid',
+          maPhien: '00000000-0000-4000-8000-000000000012',
           chuoiMaHoaToken: hashed,
         },
         data: expect.objectContaining({
@@ -650,7 +655,7 @@ describe('XacThucService', () => {
 
       // Phiên vừa xoay vòng 2 giây trước (< 15s Grace Period)
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-grace',
+        maPhien: '00000000-0000-4000-8000-000000000013',
         thoiGianHetHan: new Date(Date.now() + 1000000),
         chuoiMaHoaToken: hashedCurrent,
         chuoiMaHoaTokenCu: hashedPrev,
@@ -665,7 +670,7 @@ describe('XacThucService', () => {
 
       // Request thứ 2 gửi lại token cũ (previousSecret) trong khoảng Grace Period
       const result = await service.lamMoiToken({
-        refreshToken: `session-grace.${previousSecret}`,
+        refreshToken: `00000000-0000-4000-8000-000000000013.${previousSecret}`,
       });
 
       expect(result.accessToken).toBe('mocked-jwt-access-token');
@@ -683,7 +688,7 @@ describe('XacThucService', () => {
       // Ban đầu findUnique trả về bản ghi cũ (chưa xoay)
       mockPrisma.phienDangNhap.findUnique
         .mockResolvedValueOnce({
-          maPhien: 'session-race',
+          maPhien: '00000000-0000-4000-8000-000000000014',
           thoiGianHetHan: new Date(Date.now() + 1000000),
           chuoiMaHoaToken: hashedCurrent,
           chuoiMaHoaTokenCu: null,
@@ -694,7 +699,7 @@ describe('XacThucService', () => {
         })
         // Lần findUnique thứ 2 (khi count === 0) trả về bản ghi mới nhất vừa do request thắng cuộc cập nhật
         .mockResolvedValueOnce({
-          maPhien: 'session-race',
+          maPhien: '00000000-0000-4000-8000-000000000014',
           thoiGianHetHan: new Date(Date.now() + 1000000),
           chuoiMaHoaToken: hashedNewer,
           chuoiMaHoaTokenCu: hashedCurrent,
@@ -708,7 +713,7 @@ describe('XacThucService', () => {
       mockPrisma.phienDangNhap.updateMany.mockResolvedValue({ count: 0 });
 
       const result = await service.lamMoiToken({
-        refreshToken: `session-race.${currentSecret}`,
+        refreshToken: `00000000-0000-4000-8000-000000000014.${currentSecret}`,
       });
 
       expect(result.accessToken).toBe('mocked-jwt-access-token');
@@ -724,7 +729,7 @@ describe('XacThucService', () => {
 
       // Phiên đã xoay vòng 20 giây trước (> 15s Grace Period)
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-attacked',
+        maPhien: '00000000-0000-4000-8000-000000000015',
         thoiGianHetHan: new Date(Date.now() + 1000000),
         chuoiMaHoaToken: hashedCurrent,
         chuoiMaHoaTokenCu: hashedPrev,
@@ -732,12 +737,14 @@ describe('XacThucService', () => {
       });
 
       await expect(
-        service.lamMoiToken({ refreshToken: `session-attacked.${previousSecret}` }),
+        service.lamMoiToken({
+          refreshToken: `00000000-0000-4000-8000-000000000015.${previousSecret}`,
+        }),
       ).rejects.toThrow(UnauthorizedException);
 
       // Verify phiên bị thu hồi lập tức khỏi CSDL
       expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
-        where: { maPhien: 'session-attacked' },
+        where: { maPhien: '00000000-0000-4000-8000-000000000015' },
       });
     }, 15000);
 
@@ -746,7 +753,7 @@ describe('XacThucService', () => {
       const prevHashed = await argon2.hash('legit-previous-secret');
 
       mockPrisma.phienDangNhap.findUnique.mockResolvedValue({
-        maPhien: 'session-victim',
+        maPhien: '00000000-0000-4000-8000-000000000016',
         thoiGianHetHan: new Date(Date.now() + 1000000),
         chuoiMaHoaToken: currentHashed,
         chuoiMaHoaTokenCu: prevHashed,
@@ -755,7 +762,9 @@ describe('XacThucService', () => {
 
       // Kẻ xấu biết sid gửi chuỗi ngẫu nhiên (sid.rac_fake_secret)
       await expect(
-        service.lamMoiToken({ refreshToken: 'session-victim.completely_random_garbage_secret' }),
+        service.lamMoiToken({
+          refreshToken: '00000000-0000-4000-8000-000000000016.completely_random_garbage_secret',
+        }),
       ).rejects.toThrow(UnauthorizedException);
 
       // ĐẢM BẢO TUYỆT ĐỐI: Phiên của nạn nhân KHÔNG BỊ XÓA!
@@ -765,18 +774,21 @@ describe('XacThucService', () => {
 
   describe('P2-14: dangXuat & dangXuatTatCa', () => {
     it('đăng xuất đơn lẻ: xóa phiên đăng nhập nhưng giữ nguyên thiết bị (D-02)', async () => {
-      mockPrisma.phienDangNhap.delete.mockResolvedValue({ maPhien: 'session-123' });
+      mockPrisma.phienDangNhap.delete.mockResolvedValue({
+        maPhien: '00000000-0000-4000-8000-000000000010',
+      });
 
-      await service.dangXuat('session-123');
+      await service.dangXuat('00000000-0000-4000-8000-000000000010');
 
       expect(mockPrisma.phienDangNhap.delete).toHaveBeenCalledWith({
-        where: { maPhien: 'session-123' },
+        where: { maPhien: '00000000-0000-4000-8000-000000000010' },
       });
       // Không có thao tác xóa nào trên bảng thietBi
       expect(mockPrisma.thietBi?.delete).toBeUndefined();
     });
 
     it('đăng xuất tất cả: xóa mọi phiên làm việc của người dùng', async () => {
+      mockPrisma.phienDangNhap.findMany = vi.fn().mockResolvedValue([{ maPhien: 'p-1' }]);
       mockPrisma.phienDangNhap.deleteMany.mockResolvedValue({ count: 3 });
 
       await service.dangXuatTatCa('user-uuid-1');

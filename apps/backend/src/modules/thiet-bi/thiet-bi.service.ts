@@ -59,8 +59,8 @@ export class ThietBiService {
         tenThietBi: params.tenThietBi,
         loaiThietBi: loai,
       },
+      // Không ghi đè tên khi đăng nhập lại: tên có thể đã được người dùng đổi (PATCH /thiet-bi/:id)
       update: {
-        tenThietBi: params.tenThietBi,
         loaiThietBi: loai,
         hoatDongLanCuoi: new Date(),
       },
@@ -364,36 +364,18 @@ export class ThietBiService {
         khoaRegistry: dto.khoaRegistry !== undefined ? dto.khoaRegistry || null : undefined,
         tenHienThiRegistry:
           dto.tenHienThiRegistry !== undefined ? dto.tenHienThiRegistry || null : undefined,
+        // Đã cài thật bằng bộ cài: bỏ dấu "Tôi đã cài" bằng lệnh, nếu không job nửa đêm xóa bản ghi sau 24 giờ
+        trinhQuanLyGoi: null,
+        tenGoiCli: null,
+        lenhGoCli: null,
+        trangThaiXacNhan: 'DA_XAC_NHAN',
+        thoiGianHetHan: null,
         ngayCapNhatCuoi:
           dto.phienBanHienTai !== undefined || dto.maTepDaCai !== undefined
             ? new Date()
             : undefined,
       },
     });
-
-    // Tăng số lượt tải của tệp cài đặt nếu có (SEC-R7-09: chỉ tăng nếu tệp thuộc ứng dụng đang ghi nhận)
-    if (dto.maTepDaCai) {
-      const tepThuocApp = await this.prisma.tepCaiDat.findFirst({
-        where: {
-          maTep: dto.maTepDaCai,
-          banPhatHanh: { maUngDung: dto.maUngDung },
-        },
-        select: { maTep: true },
-      });
-
-      if (tepThuocApp) {
-        await this.prisma.tepCaiDat
-          .update({
-            where: { maTep: dto.maTepDaCai },
-            data: { soLuotTai: { increment: 1 } },
-          })
-          .catch((err) => {
-            this.logger.warn(
-              `Lỗi tăng soLuotTai cho tệp cài đặt [${dto.maTepDaCai}]: ${(err as Error).message}`,
-            );
-          });
-      }
-    }
 
     await this.xoaCacheThietBi(maThietBi);
 

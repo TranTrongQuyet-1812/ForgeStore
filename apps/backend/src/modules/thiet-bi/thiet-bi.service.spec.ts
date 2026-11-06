@@ -77,8 +77,8 @@ describe('ThietBiService', () => {
           tenThietBi: 'Laptop Dell',
           loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
         },
+        // Đăng nhập lại không ghi đè tên người dùng đã đổi
         update: {
-          tenThietBi: 'Laptop Dell',
           loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
           hoatDongLanCuoi: expect.any(Date),
         },
@@ -514,7 +514,7 @@ describe('ThietBiService', () => {
         ).rejects.toThrow(NotFoundException);
       });
 
-      it('ghi nhận cài đặt thành công qua upsert kèm khoaRegistry và tăng soLuotTai cho tệp cài đặt', async () => {
+      it('ghi nhận cài đặt qua upsert kèm khoaRegistry, bỏ dấu CLI chờ xác nhận, không tự tăng soLuotTai', async () => {
         mockPrisma.ungDung.findUnique.mockResolvedValue({
           maUngDung,
           tenRepoDayDu: 'rustdesk/rustdesk',
@@ -548,13 +548,14 @@ describe('ThietBiService', () => {
             update: expect.objectContaining({
               khoaRegistry: 'Notepad++',
               tenHienThiRegistry: 'Notepad++ (64-bit x64)',
+              trangThaiXacNhan: 'DA_XAC_NHAN',
+              thoiGianHetHan: null,
+              trinhQuanLyGoi: null,
             }),
           }),
         );
-        expect(mockPrisma.tepCaiDat.update).toHaveBeenCalledWith({
-          where: { maTep: 'tep-1' },
-          data: { soLuotTai: { increment: 1 } },
-        });
+        // Số lượt tải lấy từ GitHub mỗi lần đồng bộ; tự cộng ở đây vừa bị ghi đè vừa cho phép thổi phồng
+        expect(mockPrisma.tepCaiDat.update).not.toHaveBeenCalled();
       });
 
       it('tạo mới bản ghi cài đặt lưu đúng khoaRegistry và tenHienThiRegistry (DELIV-39.2)', async () => {

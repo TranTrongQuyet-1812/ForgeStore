@@ -117,12 +117,12 @@ export class KiemNhatQuanHienThiJob {
   }
 
   /**
-   * (c) Bóc tách lại các app đang mang dấu "không có hướng dẫn" của phiên bản bộ bóc tách cũ.
+   * (c) Bóc tách lại các hướng dẫn lỗi thời: dấu "không có hướng dẫn" của bộ bóc tách cũ, và hướng dẫn còn lệnh
+   * cài thư viện npm vào dự án (luật cũ nhận nhầm, xem `daCoKetQuaBocTachCli`).
    * Dùng đúng đường bổ sung của trang chi tiết (`phanTichUngDung`), nên có khóa chống chạy trùng và tự xóa cache.
    */
   private async bocTachLaiDauLoiThoi(gioiHan: number): Promise<number> {
     const dauKhongCo = await this.prisma.phanTichAI.findMany({
-      where: { huongDanCaiDat: { path: ['khongCoHuongDan'], equals: true } },
       select: { maUngDung: true, huongDanCaiDat: true },
     });
     const loiThoi = dauKhongCo

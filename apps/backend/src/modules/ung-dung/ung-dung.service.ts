@@ -93,11 +93,25 @@ export const PHIEN_BAN_BOC_TACH_CLI = 6;
 
 export function daCoKetQuaBocTachCli(hd: unknown): boolean {
   if (hd === null || hd === undefined) return false;
-  const obj = hd as { khongCoHuongDan?: boolean; phienBanBocTach?: number };
+  const obj = hd as {
+    khongCoHuongDan?: boolean;
+    phienBanBocTach?: number;
+    cachCai?: Array<{ buoc?: Array<{ lenh?: string }> }>;
+  };
   if (obj.khongCoHuongDan) {
     return (obj.phienBanBocTach ?? 0) >= PHIEN_BAN_BOC_TACH_CLI;
   }
-  return true;
+  // Hướng dẫn bóc bằng luật cũ còn lệnh cài thư viện npm vào dự án (không -g): coi là lỗi thời để bóc lại
+  return !(obj.cachCai ?? []).some((c) => (c.buoc ?? []).some((b) => laLenhNpmCucBo(b.lenh)));
+}
+
+/** `npm install x`, `yarn add x`... không có -g/--global: cài thư viện vào dự án, không phải cài app (06/11/2026). */
+export function laLenhNpmCucBo(lenh?: string): boolean {
+  const l = (lenh ?? '').trim();
+  return (
+    /^(npm\s+(i|install)|pnpm\s+(add|i|install)|yarn\s+add|bun\s+(add|i))\s/i.test(l) &&
+    !/\s(?:-g|--global)(?=\s|$)/i.test(l)
+  );
 }
 
 /**

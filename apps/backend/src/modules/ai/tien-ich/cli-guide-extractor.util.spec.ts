@@ -122,6 +122,19 @@ MIT
       expect(nhanDienNhomLenh('./setup.sh')).toBe(NhomCachCai.NGUON);
     });
 
+    it('npm/pnpm/yarn/bun cài thư viện vào dự án (không -g) không phải lệnh cài app', () => {
+      // Lỗi thật trong DB 06/11: cài `npm install ioredis` nhưng gỡ `npm uninstall -g ioredis`
+      expect(nhanDienNhomLenh('npm install ioredis')).toBeNull();
+      expect(nhanDienNhomLenh('npm install --save-dev @types/node')).toBeNull();
+      expect(nhanDienNhomLenh('yarn add electron-builder --dev')).toBeNull();
+      expect(nhanDienNhomLenh('pnpm add zod')).toBeNull();
+      expect(nhanDienNhomLenh('npm install --global serve')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('npm install serve -g')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('yarn global add serve')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('bun add -g serve')).toBe(NhomCachCai.NPM);
+      expect(nhanDienNhomLenh('npx create-vite')).toBe(NhomCachCai.NPM);
+    });
+
     it('BE-01: loại bỏ shell prompt $, #, > trước khi nhận diện nhóm lệnh', () => {
       expect(nhanDienNhomLenh('$ pip install flask')).toBe(NhomCachCai.PIP);
       expect(nhanDienNhomLenh('# winget install vscode')).toBe(NhomCachCai.WINGET);

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsNotEmpty,
   IsOptional,
@@ -62,6 +63,8 @@ export class CheckUpdatesDto {
   })
   @IsOptional()
   @IsArray({ message: 'Danh sách ứng dụng phải là mảng' })
+  // Mỗi app tốn vài truy vấn CSDL: chặn một request gửi hàng nghìn mục
+  @ArrayMaxSize(300, { message: 'Tối đa 300 ứng dụng mỗi lần kiểm tra' })
   @ValidateNested({ each: true })
   @Type(() => AppVersionCheckItemDto)
   ungDung?: AppVersionCheckItemDto[];
@@ -73,6 +76,8 @@ export class CheckUpdatesDto {
   })
   @IsOptional()
   @IsArray({ message: 'Danh sách ứng dụng phải là mảng' })
+  // Mỗi app tốn vài truy vấn CSDL: chặn một request gửi hàng nghìn mục
+  @ArrayMaxSize(300, { message: 'Tối đa 300 ứng dụng mỗi lần kiểm tra' })
   @ValidateNested({ each: true })
   @Type(() => AppVersionCheckItemDto)
   danhSachCaiDat?: AppVersionCheckItemDto[];

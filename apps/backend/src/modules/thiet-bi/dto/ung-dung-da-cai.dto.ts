@@ -17,6 +17,7 @@ export class GhiNhanCaiDatDto {
   })
   @IsNotEmpty({ message: 'Phiên bản không được để trống' })
   @IsString({ message: 'Phiên bản phải là chuỗi ký tự' })
+  @MaxLength(100, { message: 'Phiên bản không được vượt quá 100 ký tự' })
   phienBanHienTai!: string;
 
   @ApiPropertyOptional({
@@ -33,6 +34,7 @@ export class GhiNhanCaiDatDto {
   })
   @IsOptional()
   @IsString({ message: 'Đường dẫn thư mục phải là chuỗi ký tự' })
+  @MaxLength(1024, { message: 'Đường dẫn thư mục không được vượt quá 1024 ký tự' })
   duongDanThuMuc?: string;
 
   @ApiPropertyOptional({
