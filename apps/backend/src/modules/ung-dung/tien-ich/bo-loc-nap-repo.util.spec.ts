@@ -43,6 +43,13 @@ describe('locCucBo (P3B-06.3 bộ lọc 1 đến 5 và 7)', () => {
     expect(locCucBo(repo({ license: { spdx_id: 'NOASSERTION' } }), NOW).dat).toBe(true);
     expect(locCucBo(repo({ license: { spdx_id: 'other' } }), NOW).dat).toBe(true);
   });
+  it('7-Zip là ngoại lệ duy nhất cho repo không nhận ra giấy phép (Chủ chốt 06/11/2026)', () => {
+    expect(locCucBo(repo({ full_name: 'ip7z/7zip', license: null }), NOW).dat).toBe(true);
+    expect(locCucBo(repo({ full_name: 'IP7Z/7Zip', license: null }), NOW).dat).toBe(true);
+    expect(locCucBo(repo({ full_name: 'khac/7zip', license: null }), NOW).lyDo).toBe(
+      'KHONG_CO_GIAY_PHEP',
+    );
+  });
   it('danh sách chặn bắt crack, keygen, awesome-*, nhưng không chặn nhầm tên thường', () => {
     expect(trongDanhSachChan(repo({ name: 'photoshop-crack' }))).toBe('crack');
     expect(trongDanhSachChan(repo({ description: 'Free KeyGen for ...' }))).toMatch(/keygen/i);

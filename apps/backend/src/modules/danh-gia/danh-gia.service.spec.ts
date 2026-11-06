@@ -73,6 +73,7 @@ describe('DanhGiaService (P2-53)', () => {
       xoa: vi.fn(),
       xoaTheoPrefix: vi.fn(),
       setNx: vi.fn().mockResolvedValue(true),
+      del: vi.fn(),
     };
 
     service = new DanhGiaService(prisma, cacheService);
@@ -279,6 +280,22 @@ describe('DanhGiaService (P2-53)', () => {
 
       await expect(service.binhChonHuuIch('user-1', mockReview.maDanhGia)).rejects.toThrow(
         BadRequestException,
+      );
+    });
+
+    it('ghi CSDL lỗi thì nhả khóa bình chọn để bấm lại được', async () => {
+      prisma.danhGiaUngDung.findUnique.mockResolvedValue({
+        maDanhGia: mockReview.maDanhGia,
+        soLuotHuuIch: 3,
+        maNguoiDung: 'user-9',
+      });
+      prisma.danhGiaUngDung.update.mockRejectedValue(new Error('db down'));
+
+      await expect(service.binhChonHuuIch('user-1', mockReview.maDanhGia)).rejects.toThrow(
+        'db down',
+      );
+      expect(cacheService.del).toHaveBeenCalledWith(
+        `fs:review:helpful:${mockReview.maDanhGia}:user-1`,
       );
     });
 

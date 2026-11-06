@@ -2572,7 +2572,7 @@ export const TrangChiTiet: React.FC = () => {
       </div>
 
       {/* 3. MODAL/POPOVER CHI TIẾT THẨM ĐỊNH RỦI RO (P3-06.3) */}
-      {isSafetyModalOpen && (
+      {isSafetyModalOpen && coDiemUyTin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
           <div className="tactile-card w-full max-w-lg p-6 rounded-2xl border border-border shadow-2xl flex flex-col gap-5 bg-surface max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-border pb-3">

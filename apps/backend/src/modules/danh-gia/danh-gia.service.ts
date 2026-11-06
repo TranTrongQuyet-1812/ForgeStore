@@ -360,11 +360,18 @@ export class DanhGiaService {
     }
 
     // Tăng số lượt hữu ích trong CSDL
-    const capNhat = await this.prisma.danhGiaUngDung.update({
-      where: { maDanhGia },
-      data: { soLuotHuuIch: { increment: 1 } },
-      select: { soLuotHuuIch: true },
-    });
+    let capNhat: { soLuotHuuIch: number };
+    try {
+      capNhat = await this.prisma.danhGiaUngDung.update({
+        where: { maDanhGia },
+        data: { soLuotHuuIch: { increment: 1 } },
+        select: { soLuotHuuIch: true },
+      });
+    } catch (err) {
+      // Ghi CSDL lỗi thì nhả khóa, nếu không lần bấm lại báo "đã bình chọn" dù lượt này chưa được ghi
+      await this.cacheService.del(redisKey);
+      throw err;
+    }
 
     this.logger.log(`Người dùng [${maNguoiDung}] đã vote hữu ích cho đánh giá [${maDanhGia}]`);
 

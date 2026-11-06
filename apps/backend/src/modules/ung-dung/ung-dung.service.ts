@@ -105,12 +105,12 @@ export function daCoKetQuaBocTachCli(hd: unknown): boolean {
     return (obj.phienBanBocTach ?? 0) >= PHIEN_BAN_BOC_TACH_CLI;
   }
   // Bản cũ ghép lệnh gỡ toàn máy (`npm uninstall -g x`) cho thư viện cài vào dự án (`npm install x`): bóc lại để lệnh
-  // gỡ và cập nhật cùng phạm vi cục bộ. Sau khi bóc lại lệnh gỡ không còn -g nên điều kiện này hết đúng, không lặp.
+  // gỡ và cập nhật cùng phạm vi cục bộ. Chỉ xét bước đầu, đúng như bộ bóc lệnh chọn phạm vi theo `items[0]`. Sau khi bóc lại lệnh gỡ không còn -g nên điều kiện này hết đúng, không lặp.
   const lenhGoLech = (obj.cachCai ?? []).some(
     (c) =>
       c.trinhQuanLy === 'npm' &&
       /\s(?:-g|--global)(?=\s|$)/i.test(c.lenhGo ?? '') &&
-      (c.buoc ?? []).some((b) => laLenhNpmCucBo(b.lenh)),
+      laLenhNpmCucBo(c.buoc?.[0]?.lenh),
   );
   return !lenhGoLech;
 }

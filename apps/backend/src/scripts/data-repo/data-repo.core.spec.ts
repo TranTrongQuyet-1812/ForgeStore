@@ -253,6 +253,12 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     const ten = Array.from({ length: 20 }, (_, i) => `user${i}`);
     ten[3] = 'Marco P.';
     expect(chiLaChuoiNhan(`⟦C0⟧${ten.map((t, i) => `${t}⟦C${i + 1}⟧`).join('')}`)).toBe(true);
+    // câu dài có chữ README vẫn là câu chưa dịch, không phải nhãn
+    expect(
+      chiLaChuoiNhan(
+        '⟦C1⟧See the README for installation instructions and usage examples.⟦C2⟧English⟦C3⟧',
+      ),
+    ).toBe(false);
     // câu thật chưa dịch vẫn phải bị bắt
     expect(
       chiLaChuoiNhan('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),

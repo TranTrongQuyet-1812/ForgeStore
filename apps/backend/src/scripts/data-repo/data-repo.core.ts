@@ -69,7 +69,7 @@ export function chiLaChuoiNhan(daChe: string): boolean {
     .filter(Boolean);
   const laNhan = (x: string) =>
     // "README in English", "README en Español": thanh chọn ngôn ngữ, giữ nguyên là đúng
-    /\bREADME\b/.test(x) ||
+    (/\bREADME\b/.test(x) && x.length <= 40 && !/[.!?]$/.test(x)) ||
     (x.length <= 30 &&
       x.split(/\s+/).length <= 3 &&
       !/[.!?]$/.test(x) &&

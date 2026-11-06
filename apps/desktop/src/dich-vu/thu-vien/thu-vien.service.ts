@@ -24,7 +24,7 @@ export const thuVienService = {
    * Ghi nhận hoặc nâng cấp ứng dụng vừa cài đặt lên thiết bị (P3-12.2)
    */
   /**
-   * Như `ghiNhanCaiDat` nhưng cho biết lỗi có đáng thử lại không: mất mạng, hết giờ, 5xx và 429 thì thử lại được;
+   * Như `ghiNhanCaiDat` nhưng cho biết lỗi có đáng thử lại không: mất mạng, hết giờ, 401 (đang làm mới phiên), 5xx và 429 thì thử lại được;
    * lỗi 4xx khác (app không còn trong kho, dữ liệu sai, không có quyền) thì thử lại bao nhiêu lần cũng vậy.
    */
   async ghiNhanCaiDatCoKetQua(
@@ -36,7 +36,7 @@ export const thuVienService = {
       return { thanhCong: true, thuLaiDuoc: false };
     } catch (err) {
       const ma = err instanceof ApiError ? err.status : 0;
-      const loiVinhVien = ma >= 400 && ma < 500 && ma !== 408 && ma !== 429;
+      const loiVinhVien = ma >= 400 && ma < 500 && ma !== 401 && ma !== 408 && ma !== 429;
       console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt lên backend:', err);
       return { thanhCong: false, thuLaiDuoc: !loiVinhVien };
     }

@@ -2235,6 +2235,17 @@ describe('daCoKetQuaBocTachCli (làm mới dấu "không có CLI" của bản c�
         },
       ],
     };
+    // Bước đầu là lệnh toàn máy thì bộ bóc lệnh ghép -g đúng: không coi là lỗi thời dù bước sau là cục bộ (không lặp)
+    const buocDauToanMay = {
+      cachCai: [
+        {
+          trinhQuanLy: 'npm',
+          lenhGo: 'npm uninstall -g foo',
+          buoc: [{ lenh: 'npm install -g foo' }, { lenh: 'npm install foo' }],
+        },
+      ],
+    };
+    expect(daCoKetQuaBocTachCli(buocDauToanMay)).toBe(true);
     expect(daCoKetQuaBocTachCli(lech)).toBe(false);
     expect(daCoKetQuaBocTachCli(dung)).toBe(true);
     expect(daCoKetQuaBocTachCli(toanMay)).toBe(true);

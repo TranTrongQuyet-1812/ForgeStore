@@ -134,10 +134,10 @@ export class KiemNhatQuanHienThiJob {
         FROM "phan_tich_ai"
         WHERE "huong_dan_cai_dat"::text ~ '"lenh": "(npm|pnpm|yarn|bun) '`,
     ]);
-    const daThay = new Set<string>();
-    const loiThoi = [...dauKhongCo, ...(coLenhNpm ?? [])]
-      .filter((p) => !daCoKetQuaBocTachCli(p.huongDanCaiDat) && !daThay.has(p.maUngDung))
-      .filter((p) => (daThay.add(p.maUngDung), true))
+    // Gộp hai nhóm theo mã app (một app chỉ bóc một lần), rồi giữ những hướng dẫn thật sự lỗi thời
+    const theoMaApp = new Map([...dauKhongCo, ...(coLenhNpm ?? [])].map((p) => [p.maUngDung, p]));
+    const loiThoi = [...theoMaApp.values()]
+      .filter((p) => !daCoKetQuaBocTachCli(p.huongDanCaiDat))
       .slice(0, gioiHan);
     for (const p of loiThoi) await this.appsService.phanTichUngDung(p.maUngDung);
     if (loiThoi.length > 0) {

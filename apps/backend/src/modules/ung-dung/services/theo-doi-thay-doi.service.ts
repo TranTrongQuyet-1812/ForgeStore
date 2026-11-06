@@ -9,6 +9,7 @@ import { GithubRelease, GithubRepo } from '../../github/github.constants';
 import { CacheService } from '../../redis/cache.service';
 import { PHIEN_BAN_BOC_TACH_CLI, UngDungService } from '../ung-dung.service';
 import { locTepCaiCuaBanPhatHanh } from '../tien-ich/phan-loai-tep.util';
+import { NGOAI_LE_GIAY_PHEP } from '../tien-ich/bo-loc-nap-repo.util';
 import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
 
 /** Trạng thái ẩn khỏi Store do bộ theo dõi đặt (P3B-07.5). Dữ liệu và Thư viện người dùng giữ nguyên. */
@@ -17,13 +18,6 @@ export const TRANG_THAI_AN = {
   REPO_DOI_TEN: 'REPO_DOI_TEN',
   KHONG_CON_GIAY_PHEP: 'KHONG_CON_GIAY_PHEP',
 } as const;
-
-/**
- * Repo GitHub không nhận diện được giấy phép nhưng vẫn được giữ trong kho. Danh sách này chỉ có đúng một ngoại lệ
- * do Chủ chốt 06/11/2026: 7-Zip dùng giấy phép riêng (LGPL kèm điều khoản unRAR) nên GitHub trả `license: null`.
- * Mọi repo khác mất giấy phép đều bị ẩn như luật P3B-07.
- */
-export const NGOAI_LE_GIAY_PHEP = new Set(['ip7z/7zip']);
 
 export type MucDoNong = 'NONG' | 'AM' | 'LANH';
 

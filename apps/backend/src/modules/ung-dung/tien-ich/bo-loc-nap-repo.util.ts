@@ -83,6 +83,13 @@ export function soThangTu(iso: string | null | undefined, now: Date): number {
   return ms / (1000 * 60 * 60 * 24 * 30.4375);
 }
 
+/**
+ * Repo GitHub không nhận diện được giấy phép nhưng vẫn được giữ trong kho. Chỉ có đúng một ngoại lệ, do Chủ chốt
+ * 06/11/2026: 7-Zip dùng giấy phép riêng (LGPL kèm điều khoản unRAR) nên GitHub trả `license: null`.
+ * Dùng chung cho dây chuyền nạp, "Dán link GitHub" và bộ theo dõi thay đổi để ba nơi không lệch nhau.
+ */
+export const NGOAI_LE_GIAY_PHEP = new Set(['ip7z/7zip']);
+
 /** Bộ lọc 1 đến 5 và 7 (không gọi API). Bộ lọc 6 (trùng kho) làm ở nơi có DB. */
 export function locCucBo(
   repo: RepoUngVien,
@@ -97,7 +104,7 @@ export function locCucBo(
   }
   // D-36: nhận mọi giấy phép kể cả NOASSERTION và other (tác giả có ghi, GitHub chỉ không đọc ra mã);
   // chỉ loại repo hoàn toàn không có giấy phép vì theo luật là mọi quyền được bảo lưu.
-  if (!repo.license) {
+  if (!repo.license && !NGOAI_LE_GIAY_PHEP.has(repo.full_name.toLowerCase())) {
     return { dat: false, lyDo: 'KHONG_CO_GIAY_PHEP', chiTiet: 'không có' };
   }
   const chan = trongDanhSachChan(repo);
