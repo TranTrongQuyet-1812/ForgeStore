@@ -17,6 +17,7 @@ ForgeStore gom các phần mềm mã nguồn mở từ GitHub Releases vào mộ
 - **Cài đặt thật sự**: tải đúng tệp cài theo máy, hoặc hiện sẵn lệnh cài (winget, scoop, npm, pip, docker) để sao chép. Ứng dụng không tự chạy lệnh thay người dùng.
 - **Thư viện theo thiết bị**: theo dõi ứng dụng đã cài, cập nhật, gỡ cài đặt.
 - **Tài khoản**: đăng nhập bằng GitHub hoặc Google, yêu thích và đánh giá ứng dụng.
+- **Tự cập nhật**: ForgeStore tự báo khi có bản mới, bấm một lần là cập nhật. Bản cập nhật được ký để tránh bị giả mạo.
 - **Bộ lọc chất lượng**: chỉ nhận kho có từ 1.000 sao, có bản phát hành hoặc cách cài rõ ràng, giấy phép phù hợp.
 
 ## Kiến trúc
