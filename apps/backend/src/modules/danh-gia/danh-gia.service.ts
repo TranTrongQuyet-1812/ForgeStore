@@ -13,6 +13,7 @@ import { UpdateReviewDto } from './dto/cap-nhat-danh-gia.dto';
 import { QueryReviewsDto, ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 import { DanhGiaDto, TrangKetQua } from '@forgestore/types';
 import { Prisma } from '@prisma/client';
+import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 
 @Injectable()
 export class DanhGiaService {
@@ -36,7 +37,7 @@ export class DanhGiaService {
     const sort = query.sort || ReviewSortOption.MOI_NHAT;
 
     // Tìm ứng dụng theo UUID hoặc slug
-    const cleanId = decodeURIComponent(idOrSlug.trim());
+    const cleanId = giaiMaDinhDanh(idOrSlug);
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
     const ungDung = await this.prisma.ungDung.findFirst({
@@ -130,7 +131,7 @@ export class DanhGiaService {
     idOrSlug: string,
     dto: CreateReviewDto,
   ): Promise<DanhGiaDto> {
-    const cleanId = decodeURIComponent(idOrSlug.trim());
+    const cleanId = giaiMaDinhDanh(idOrSlug);
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
     const ungDung = await this.prisma.ungDung.findFirst({

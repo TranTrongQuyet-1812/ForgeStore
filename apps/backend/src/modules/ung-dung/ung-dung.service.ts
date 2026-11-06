@@ -69,6 +69,7 @@ import { tinhDiemThinhHanh } from './tien-ich/thinh-hanh.util';
 import { taoDieuKienNenTang } from './tien-ich/dieu-kien-nen-tang.util';
 import { locCucBo, LyDoLoc } from './tien-ich/bo-loc-nap-repo.util';
 import { GithubRepo } from '../github/github.constants';
+import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 
 /** Lý do "Dán link GitHub" không nhận repo, viết bằng lời đời thường để hiện cho người dùng. */
 const LY_DO_KHONG_NHAN: Partial<Record<LyDoLoc, string>> = {
@@ -927,7 +928,7 @@ export class UngDungService {
       throw new BadRequestException('Mã định danh ứng dụng không được để trống.');
     }
 
-    const cleanId = decodeURIComponent(idOrSlug.trim());
+    const cleanId = giaiMaDinhDanh(idOrSlug);
     const cacheKey = this.taoKhoaCacheChiTiet(cleanId.toLowerCase(), platform, arch);
 
     const cached = await this.cacheService.lay<UngDungChiTietDto>(cacheKey);
@@ -1121,7 +1122,7 @@ export class UngDungService {
    */
   async giaiQuyetFileCaiDat(dto: ResolveAssetDto): Promise<ResolveAssetResponseDto> {
     const { maUngDung, nenTang, abis, choPhepBanThuNghiem = false, phienBan } = dto;
-    const cleanId = decodeURIComponent(maUngDung.trim());
+    const cleanId = giaiMaDinhDanh(maUngDung);
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
 
     // 1. Tìm ứng dụng

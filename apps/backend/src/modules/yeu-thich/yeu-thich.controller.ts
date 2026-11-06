@@ -13,6 +13,7 @@ import { YeuThichService } from './yeu-thich.service';
 import { QueryFavoritesDto } from './dto/truy-van-yeu-thich.dto';
 import { JwtAuthGuard } from '../xac-thuc/guards/jwt-auth.guard';
 import { NguoiDungHienTai } from '../../common/decorators/nguoi-dung.decorator';
+import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 
 @ApiTags('Favorites')
 @ApiBearerAuth('JWT-auth')
@@ -63,7 +64,7 @@ export class YeuThichController {
     @Param('id') id: string,
     @NguoiDungHienTai('maThietBi') maThietBi?: string,
   ) {
-    const cleanId = decodeURIComponent(id.trim());
+    const cleanId = giaiMaDinhDanh(id);
     // Loại thiết bị lấy từ phiên đăng nhập (JWT `did`), không nhận header tự khai của client:
     // header lạ còn khiến preflight CORS của WebView2 chặn luôn request.
     const thietBi = await this.favoritesService.xacDinhThietBiThem(maThietBi);

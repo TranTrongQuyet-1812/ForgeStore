@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
 import { trichXuatDinhDangVaKienTruc } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
+import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 
 @Injectable()
 export class YeuThichService {
@@ -114,7 +115,7 @@ export class YeuThichService {
     idOrSlug: string,
     thietBiThem: string = 'MAY_TINH',
   ): Promise<{ daYeuThich: boolean }> {
-    const cleanId = decodeURIComponent(idOrSlug.trim());
+    const cleanId = giaiMaDinhDanh(idOrSlug);
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
 
