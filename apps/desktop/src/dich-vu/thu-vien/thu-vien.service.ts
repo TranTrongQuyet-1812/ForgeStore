@@ -1,4 +1,4 @@
-import { apiClient } from '../api/api-client';
+import { apiClient, ApiError } from '../api/api-client';
 import type {
   CapNhatKhoaRegistryRequest,
   GhiNhanCaiDatCliRequest,
@@ -23,6 +23,25 @@ export const thuVienService = {
   /**
    * Ghi nhận hoặc nâng cấp ứng dụng vừa cài đặt lên thiết bị (P3-12.2)
    */
+  /**
+   * Như `ghiNhanCaiDat` nhưng cho biết lỗi có đáng thử lại không: mất mạng, hết giờ, 5xx và 429 thì thử lại được;
+   * lỗi 4xx khác (app không còn trong kho, dữ liệu sai, không có quyền) thì thử lại bao nhiêu lần cũng vậy.
+   */
+  async ghiNhanCaiDatCoKetQua(
+    deviceId: string,
+    dto: GhiNhanCaiDatRequest,
+  ): Promise<{ thanhCong: boolean; thuLaiDuoc: boolean }> {
+    try {
+      await apiClient.post(`/thiet-bi/${deviceId}/da-cai`, dto);
+      return { thanhCong: true, thuLaiDuoc: false };
+    } catch (err) {
+      const ma = err instanceof ApiError ? err.status : 0;
+      const loiVinhVien = ma >= 400 && ma < 500 && ma !== 408 && ma !== 429;
+      console.warn('[LibraryService] Lỗi khi ghi nhận cài đặt lên backend:', err);
+      return { thanhCong: false, thuLaiDuoc: !loiVinhVien };
+    }
+  },
+
   async ghiNhanCaiDat(
     deviceId: string,
     dto: GhiNhanCaiDatRequest,

@@ -78,7 +78,9 @@ export const useCaiDatUngDungStore = create<InstallState>()(
 
       thuGhiNhanLai: async () => {
         for (const [maUngDung, muc] of Object.entries(get().choGhiNhan)) {
-          if (!(await thuVienService.ghiNhanCaiDat(muc.maThietBi, muc.dto))) continue;
+          const kq = await thuVienService.ghiNhanCaiDatCoKetQua(muc.maThietBi, muc.dto);
+          // Lỗi vĩnh viễn (4xx) thì bỏ khỏi hàng chờ, không thử lại mãi mỗi lần mở Thư viện
+          if (!kq.thanhCong && kq.thuLaiDuoc) continue;
           set((state) => {
             const conLai = { ...state.choGhiNhan };
             delete conLai[maUngDung];
@@ -192,7 +194,8 @@ export const useCaiDatUngDungStore = create<InstallState>()(
                     khoaRegistry: res.thong_tin_registry?.registry_key ?? undefined,
                     tenHienThiRegistry: res.thong_tin_registry?.display_name ?? undefined,
                   };
-                  if (!(await thuVienService.ghiNhanCaiDat(maThietBi, dto))) {
+                  const kq = await thuVienService.ghiNhanCaiDatCoKetQua(maThietBi, dto);
+                  if (!kq.thanhCong && kq.thuLaiDuoc) {
                     // App đã cài trên máy nhưng chưa lưu được vào Thư viện: giữ lại để ghi khi mở Thư viện lần sau
                     set((state) => ({
                       choGhiNhan: { ...state.choGhiNhan, [maUngDung]: { maThietBi, dto } },

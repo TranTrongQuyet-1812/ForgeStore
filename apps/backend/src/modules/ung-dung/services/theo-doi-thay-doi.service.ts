@@ -18,6 +18,13 @@ export const TRANG_THAI_AN = {
   KHONG_CON_GIAY_PHEP: 'KHONG_CON_GIAY_PHEP',
 } as const;
 
+/**
+ * Repo GitHub không nhận diện được giấy phép nhưng vẫn được giữ trong kho. Danh sách này chỉ có đúng một ngoại lệ
+ * do Chủ chốt 06/11/2026: 7-Zip dùng giấy phép riêng (LGPL kèm điều khoản unRAR) nên GitHub trả `license: null`.
+ * Mọi repo khác mất giấy phép đều bị ẩn như luật P3B-07.
+ */
+export const NGOAI_LE_GIAY_PHEP = new Set(['ip7z/7zip']);
+
 export type MucDoNong = 'NONG' | 'AM' | 'LANH';
 
 /** Lượt quét lỗi thì hẹn lại sau chừng này giờ, để app lỗi không đứng đầu hàng mỗi 10 phút. */
@@ -236,7 +243,8 @@ export class TheoDoiThayDoiService {
       await this.xoaCacheHienThi(app);
       app.tenRepoDayDu = r.full_name;
     }
-    if (!r.license) return this.anApp(app, TRANG_THAI_AN.KHONG_CON_GIAY_PHEP);
+    if (!r.license && !NGOAI_LE_GIAY_PHEP.has(r.full_name.toLowerCase()))
+      return this.anApp(app, TRANG_THAI_AN.KHONG_CON_GIAY_PHEP);
     const doiHienThi =
       (r.description ?? null) !== app.moTaGocTiengAnh || Boolean(r.archived) !== app.daLuuTru;
     await this.prisma.ungDung.update({
@@ -247,7 +255,7 @@ export class TheoDoiThayDoiService {
         daLuuTru: Boolean(r.archived),
         soSaoGithub: r.stargazers_count,
         soLuotFork: r.forks_count,
-        loaiGiayPhep: r.license.name,
+        loaiGiayPhep: r.license?.name ?? 'Giấy phép riêng',
         pushedAt: r.pushed_at ? new Date(r.pushed_at) : app.pushedAt,
       },
     });

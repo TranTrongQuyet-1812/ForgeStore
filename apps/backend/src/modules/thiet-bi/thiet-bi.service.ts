@@ -59,8 +59,10 @@ export class ThietBiService {
         tenThietBi: params.tenThietBi,
         loaiThietBi: loai,
       },
-      // Không ghi đè tên khi đăng nhập lại: tên có thể đã được người dùng đổi (PATCH /thiet-bi/:id)
+      // Tên lấy theo tên máy (COMPUTERNAME) mỗi lần đăng nhập nên đổi tên máy thì app theo kịp. Khi có giao diện đổi
+      // tên thiết bị (PATCH /thiet-bi/:id) thì phải đổi chỗ này để không ghi đè tên người dùng đặt.
       update: {
+        tenThietBi: params.tenThietBi,
         loaiThietBi: loai,
         hoatDongLanCuoi: new Date(),
       },

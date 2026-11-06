@@ -77,8 +77,8 @@ describe('ThietBiService', () => {
           tenThietBi: 'Laptop Dell',
           loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
         },
-        // Đăng nhập lại không ghi đè tên người dùng đã đổi
         update: {
+          tenThietBi: 'Laptop Dell',
           loaiThietBi: LoaiThietBi.MAY_TINH_WINDOWS,
           hoatDongLanCuoi: expect.any(Date),
         },

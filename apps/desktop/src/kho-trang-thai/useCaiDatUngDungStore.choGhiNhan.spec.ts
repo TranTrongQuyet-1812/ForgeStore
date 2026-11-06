@@ -12,7 +12,9 @@ describe('Hàng chờ ghi Thư viện (cài xong nhưng lưu lên máy chủ l�
   });
 
   it('máy chủ vẫn lỗi thì giữ lại để thử lần sau', async () => {
-    const spy = vi.spyOn(thuVienService, 'ghiNhanCaiDat').mockResolvedValue(null);
+    const spy = vi
+      .spyOn(thuVienService, 'ghiNhanCaiDatCoKetQua')
+      .mockResolvedValue({ thanhCong: false, thuLaiDuoc: true });
     await useCaiDatUngDungStore.getState().thuGhiNhanLai();
     expect(spy).toHaveBeenCalledWith('tb-1', dto);
     expect(useCaiDatUngDungStore.getState().choGhiNhan['app-1']).toBeDefined();
@@ -21,8 +23,17 @@ describe('Hàng chờ ghi Thư viện (cài xong nhưng lưu lên máy chủ l�
 
   it('ghi được thì bỏ khỏi hàng chờ', async () => {
     const spy = vi
-      .spyOn(thuVienService, 'ghiNhanCaiDat')
-      .mockResolvedValue({ maUngDung: 'app-1' } as never);
+      .spyOn(thuVienService, 'ghiNhanCaiDatCoKetQua')
+      .mockResolvedValue({ thanhCong: true, thuLaiDuoc: false });
+    await useCaiDatUngDungStore.getState().thuGhiNhanLai();
+    expect(useCaiDatUngDungStore.getState().choGhiNhan).toEqual({});
+    spy.mockRestore();
+  });
+
+  it('lỗi vĩnh viễn (4xx) thì bỏ khỏi hàng chờ, không thử lại mãi', async () => {
+    const spy = vi
+      .spyOn(thuVienService, 'ghiNhanCaiDatCoKetQua')
+      .mockResolvedValue({ thanhCong: false, thuLaiDuoc: false });
     await useCaiDatUngDungStore.getState().thuGhiNhanLai();
     expect(useCaiDatUngDungStore.getState().choGhiNhan).toEqual({});
     spy.mockRestore();

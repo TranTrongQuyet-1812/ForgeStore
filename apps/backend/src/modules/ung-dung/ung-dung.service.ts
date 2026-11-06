@@ -321,6 +321,17 @@ export class UngDungService {
     // Bỏ qua các bản phát hành nháp (draft === true)
     const activeReleases = rawReleases.filter((r) => !r.draft);
 
+    // Repo đổi tên: đổi tên bản ghi đang có. Nếu tên mới đã là một app khác thì không đổi (khóa duy nhất sẽ chặn),
+    // đồng bộ vào chính app mang tên mới
+    let khoaBanGhi = repoData.full_name;
+    if (ungDungHienTai && repoData.full_name !== `${owner}/${repo}`) {
+      const daCoTenMoi = await this.prisma.ungDung.findUnique({
+        where: { tenRepoDayDu: repoData.full_name },
+        select: { maUngDung: true },
+      });
+      if (!daCoTenMoi) khoaBanGhi = `${owner}/${repo}`;
+    }
+
     // 2. Phân loại toàn bộ các file đính kèm trong các bản phát hành
     let hasWindows = false;
     let hasAndroid = false;
@@ -377,7 +388,7 @@ export class UngDungService {
         // Repo đã đổi tên hoặc chuyển chủ thì GitHub trả tên mới: cập nhật đúng bản ghi đang có (theo tên cũ) và đổi
         // tên nó, không tạo app thứ hai thiếu bản dịch và phân tích
         const app = await tx.ungDung.upsert({
-          where: { tenRepoDayDu: ungDungHienTai ? `${owner}/${repo}` : repoData.full_name },
+          where: { tenRepoDayDu: khoaBanGhi },
           update: {
             tenRepoDayDu: repoData.full_name,
             chuSoHuu: repoData.owner.login,

@@ -9,6 +9,7 @@ import { AppDescriptionTranslationService } from '../../ai/translation/services/
 describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
   let job: KiemNhatQuanHienThiJob;
   let mockPrisma: {
+    $queryRaw: ReturnType<typeof vi.fn>;
     ungDung: {
       findMany: ReturnType<typeof vi.fn>;
       update: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       ungDung: {
         findMany: vi.fn(),
         update: vi.fn().mockResolvedValue({}),
@@ -343,5 +345,25 @@ describe('KiemNhatQuanHienThiJob (P3B-25.8, D-30)', () => {
         data: expect.objectContaining({ diemUyTin: 60 }),
       }),
     );
+  });
+
+  it('(c) bóc lại cả hướng dẫn còn lệnh npm cài thư viện (không -g), bỏ qua hướng dẫn dùng -g', async () => {
+    mockPrisma.ungDung.findMany.mockResolvedValue([]);
+    mockPrisma.$queryRaw.mockResolvedValueOnce([
+      {
+        maUngDung: 'lib',
+        huongDanCaiDat: { cachCai: [{ buoc: [{ lenh: 'npm install ioredis' }] }] },
+      },
+      {
+        maUngDung: 'cli',
+        huongDanCaiDat: { cachCai: [{ buoc: [{ lenh: 'npm install -g serve' }] }] },
+      },
+    ]);
+
+    const result = await job.kiemTraVaSuaNhatQuanHienThi();
+
+    expect(result.soLuongBocTachLai).toBe(1);
+    expect(mockAppsService.phanTichUngDung).toHaveBeenCalledWith('lib');
+    expect(mockAppsService.phanTichUngDung).not.toHaveBeenCalledWith('cli');
   });
 });

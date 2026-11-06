@@ -174,6 +174,24 @@ describe('TheoDoiThayDoiService.kiemMotApp (P3B-07)', () => {
     });
   });
 
+  it('7-Zip là ngoại lệ duy nhất: GitHub không nhận ra giấy phép nhưng vẫn giữ hiện, không ghi null', async () => {
+    traVe(
+      { trangThai: 200, duLieu: repoGithub({ full_name: 'ip7z/7zip', license: null }) },
+      khongDoi,
+      khongDoi,
+    );
+    await service.kiemMotApp(app({ tenRepoDayDu: 'ip7z/7zip' }), ketQua);
+    expect(prisma.ungDung.update).not.toHaveBeenCalledWith({
+      where: { maUngDung: 'app-1' },
+      data: { trangThai: 'KHONG_CON_GIAY_PHEP' },
+    });
+    expect(prisma.ungDung.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ loaiGiayPhep: 'Giấy phép riêng' }),
+      }),
+    );
+  });
+
   it('mất giấy phép: ẩn; archive: chỉ đặt cờ và vẫn hiện (D-29), xóa cache để thấy nhãn ngay', async () => {
     traVe({ trangThai: 200, duLieu: repoGithub({ license: null }) });
     await service.kiemMotApp(app(), ketQua);

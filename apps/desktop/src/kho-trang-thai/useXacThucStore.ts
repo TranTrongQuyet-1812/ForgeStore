@@ -30,6 +30,9 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
 }
 
+/** Chỉ giữ một bộ lắng nghe `online` tại một thời điểm, dù initAuth thất bại nhiều lần lúc mất mạng. */
+let dangChoCoMang = false;
+
 export const useXacThucStore = create<AuthState>((set, get) => ({
   user: null,
   thietBi: null,
@@ -92,10 +95,12 @@ export const useXacThucStore = create<AuthState>((set, get) => ({
         );
         set({ isAuthenticated: false });
         // Mở app lúc mất mạng: có mạng lại thì tự khôi phục phiên, không bắt người dùng khởi động lại app
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && !dangChoCoMang) {
+          dangChoCoMang = true;
           window.addEventListener(
             'online',
             () => {
+              dangChoCoMang = false;
               if (!get().isAuthenticated) void get().initAuth();
             },
             { once: true },

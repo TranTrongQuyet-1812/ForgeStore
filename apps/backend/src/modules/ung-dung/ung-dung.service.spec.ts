@@ -462,6 +462,38 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       expect(result.danhSachBanPhatHanh).toHaveLength(1);
     });
 
+    it('repo đổi tên sang tên đã là app khác: đồng bộ vào app mang tên mới, không đổi tên bản ghi cũ (khóa duy nhất)', async () => {
+      mockPrisma.ungDung.findUnique
+        .mockResolvedValueOnce({ trangThai: 'HOAT_DONG', phanTichAI: null }) // bản ghi theo tên cũ
+        .mockResolvedValueOnce({ maUngDung: 'app-da-co' }); // tên mới đã có
+      mockGithubService.layRepo.mockResolvedValue({
+        id: 1,
+        name: 'ten-moi',
+        full_name: 'chu-moi/ten-moi',
+        owner: { login: 'chu-moi' },
+        html_url: 'https://github.com/chu-moi/ten-moi',
+        description: 'x',
+        stargazers_count: 5000,
+        forks_count: 1,
+        license: { key: 'mit', name: 'MIT', spdx_id: 'MIT' },
+        language: null,
+        topics: [],
+        updated_at: '2026-11-01T00:00:00Z',
+      });
+      mockGithubService.layDanhSachRelease.mockResolvedValue([]);
+      mockGithubService.layReadme.mockResolvedValue(null);
+      mockPrisma.ungDung.upsert.mockResolvedValue({
+        maUngDung: 'app-da-co',
+        tenRepoDayDu: 'chu-moi/ten-moi',
+      });
+
+      await service.dongBoRepo('chu-cu', 'ten-cu').catch(() => undefined);
+
+      expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenRepoDayDu: 'chu-moi/ten-moi' } }),
+      );
+    });
+
     it('repo đã đổi tên: cập nhật bản ghi cũ và đổi tên nó, không tạo app thứ hai', async () => {
       mockPrisma.ungDung.findUnique.mockResolvedValueOnce({
         trangThai: 'HOAT_DONG',

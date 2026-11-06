@@ -122,11 +122,22 @@ export class KiemNhatQuanHienThiJob {
    * Dùng đúng đường bổ sung của trang chi tiết (`phanTichUngDung`), nên có khóa chống chạy trùng và tự xóa cache.
    */
   private async bocTachLaiDauLoiThoi(gioiHan: number): Promise<number> {
-    const dauKhongCo = await this.prisma.phanTichAI.findMany({
-      select: { maUngDung: true, huongDanCaiDat: true },
-    });
-    const loiThoi = dauKhongCo
-      .filter((p) => !daCoKetQuaBocTachCli(p.huongDanCaiDat))
+    // Chỉ đọc đúng hai nhóm có thể lỗi thời (không kéo hết cột JSON của mọi app mỗi đêm): dấu "không có hướng dẫn",
+    // và hướng dẫn còn lệnh npm/yarn/pnpm/bun (luật JS `daCoKetQuaBocTachCli` quyết định cuối cùng)
+    const [dauKhongCo, coLenhNpm] = await Promise.all([
+      this.prisma.phanTichAI.findMany({
+        where: { huongDanCaiDat: { path: ['khongCoHuongDan'], equals: true } },
+        select: { maUngDung: true, huongDanCaiDat: true },
+      }),
+      this.prisma.$queryRaw<Array<{ maUngDung: string; huongDanCaiDat: unknown }>>`
+        SELECT "ma_ung_dung" AS "maUngDung", "huong_dan_cai_dat" AS "huongDanCaiDat"
+        FROM "phan_tich_ai"
+        WHERE "huong_dan_cai_dat"::text ~ '"lenh": "(npm|pnpm|yarn|bun) '`,
+    ]);
+    const daThay = new Set<string>();
+    const loiThoi = [...dauKhongCo, ...(coLenhNpm ?? [])]
+      .filter((p) => !daCoKetQuaBocTachCli(p.huongDanCaiDat) && !daThay.has(p.maUngDung))
+      .filter((p) => (daThay.add(p.maUngDung), true))
       .slice(0, gioiHan);
     for (const p of loiThoi) await this.appsService.phanTichUngDung(p.maUngDung);
     if (loiThoi.length > 0) {

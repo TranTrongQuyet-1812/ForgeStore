@@ -315,13 +315,13 @@ export class CaiDatUngDungService {
    * Chờ app thật sự biến mất khỏi Registry sau khi bộ gỡ trả về.
    * Bộ gỡ NSIS (mặc định của Electron) tự chép ra thư mục tạm rồi thoát ngay với mã 0, trong khi cửa sổ gỡ thật
    * vẫn đang chờ người dùng; nếu tin mã thoát mà xóa bản ghi thì người dùng bấm Hủy vẫn mất app khỏi Thư viện.
-   * Trả true nếu đã gỡ hẳn trong thời gian chờ.
+   * Trả true nếu đã gỡ hẳn trong thời gian chờ (60 giây: người dùng bấm Hủy thì không phải chờ quá lâu).
    */
   async choGoXong(
     tenApp: string,
     registryKey?: string,
     displayName?: string,
-    giayToiDa = 120,
+    giayToiDa = 60,
     msMoiLan = 3000,
   ): Promise<boolean> {
     const hetHan = Date.now() + giayToiDa * 1000;
