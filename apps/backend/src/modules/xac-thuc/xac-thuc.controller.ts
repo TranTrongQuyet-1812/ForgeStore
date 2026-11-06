@@ -114,10 +114,10 @@ export class XacThucController {
       return this.traVeApp(res, 'thanh-cong', deepLinkUrl);
     } catch (err: unknown) {
       // 3. Bắt các lỗi trong quá trình callback và trả về deep-link để UI client không bị treo
-      const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
+      const errObj = err as { response?: { maLoi?: string; thongBao?: string; redirect?: string } };
       return this.traVeLoi(
         res,
-        'forgestore://auth',
+        errObj?.response?.redirect || 'forgestore://auth',
         errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI',
       );
     }
@@ -176,10 +176,10 @@ export class XacThucController {
       const deepLinkUrl = await this.authService.xuLyGoogleCallback(code, state);
       return this.traVeApp(res, 'thanh-cong', deepLinkUrl);
     } catch (err: unknown) {
-      const errObj = err as { response?: { maLoi?: string; thongBao?: string } };
+      const errObj = err as { response?: { maLoi?: string; thongBao?: string; redirect?: string } };
       return this.traVeLoi(
         res,
-        'forgestore://auth',
+        errObj?.response?.redirect || 'forgestore://auth',
         errObj?.response?.maLoi || 'DANG_NHAP_THAT_BAI',
       );
     }

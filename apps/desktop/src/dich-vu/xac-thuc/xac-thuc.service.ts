@@ -157,18 +157,22 @@ export class XacThucService {
    * Xử lý chuỗi URL Deep Link nhận được từ hệ điều hành
    */
   public async handleDeepLinkUrl(urlStr: string): Promise<boolean> {
+    let laLuotKhac = false;
     try {
       // Phân tách tham số từ URL (ví dụ: forgestore://auth?a=xyz&code=abc hoặc forgestore://auth?a=xyz&error=access_denied)
       const parsedUrl = new URL(urlStr.replace('forgestore://auth', 'http://localhost/auth'));
       const sessionId = parsedUrl.searchParams.get('a') || undefined;
+      // Link không thuộc lượt đang chờ (tab trình duyệt cũ, hoặc không ghi lượt nào): thất bại của nó không được
+      // tắt vòng chờ hay xóa mã PKCE của lượt hiện tại. Thành công thì vẫn nhận, vì mã PKCE theo đúng lượt của nó.
+      laLuotKhac = Boolean(this.currentSessionId) && sessionId !== this.currentSessionId;
 
       // Kiểm tra nếu callback trả về mã lỗi (ví dụ người dùng hủy cấp quyền)
       const error = parsedUrl.searchParams.get('error');
       if (error) {
-        // Xóa verifier của phiên đó khỏi storage
+        // Xóa verifier của phiên đó khỏi storage (không biết phiên nào thì chỉ xóa khi không có lượt nào đang chờ)
         if (sessionId) {
           pkce.getAndClearVerifier(sessionId);
-        } else {
+        } else if (!this.currentSessionId) {
           pkce.getAndClearVerifier();
         }
 
@@ -178,7 +182,7 @@ export class XacThucService {
         }
 
         // Nếu lỗi gửi về từ một tab cũ (không khớp phiên đang chờ hiện tại), bỏ qua và không tắt spinner
-        if (sessionId && this.currentSessionId && sessionId !== this.currentSessionId) {
+        if (laLuotKhac) {
           console.warn(
             `[XacThucService] Bỏ qua deep link lỗi từ phiên cũ [${sessionId}]. Phiên hiện tại đang chờ là [${this.currentSessionId}].`,
           );
@@ -195,7 +199,7 @@ export class XacThucService {
 
       if (!code) {
         console.warn('[XacThucService] Deep link không chứa mã code xác thực:', urlStr);
-        this.thongBaoLoiXacThuc('MISSING_CODE');
+        if (!laLuotKhac) this.thongBaoLoiXacThuc('MISSING_CODE');
         return false;
       }
 
@@ -205,7 +209,7 @@ export class XacThucService {
         console.error(
           `[XacThucService] Không tìm thấy PKCE Verifier hợp lệ cho phiên [${sessionId ?? 'default'}]. Phiên đăng nhập có thể đã hết hạn.`,
         );
-        this.thongBaoLoiXacThuc('EXPIRED_VERIFIER');
+        if (!laLuotKhac) this.thongBaoLoiXacThuc('EXPIRED_VERIFIER');
         return false;
       }
 
@@ -226,7 +230,7 @@ export class XacThucService {
       return true;
     } catch (err) {
       console.error('[XacThucService] Lỗi trong quá trình đổi mã xác thực:', err);
-      this.thongBaoLoiXacThuc('EXCHANGE_FAILED');
+      if (!laLuotKhac) this.thongBaoLoiXacThuc('EXCHANGE_FAILED');
       return false;
     }
   }

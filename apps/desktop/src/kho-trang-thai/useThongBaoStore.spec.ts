@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useThongBaoStore, toast } from './useThongBaoStore';
+import { useThongBaoStore, toast, thoiGianHien } from './useThongBaoStore';
 
 describe('useThongBaoStore & toast utility (Mục 69 - In-App Toast System)', () => {
   beforeEach(() => {
@@ -91,5 +91,11 @@ describe('useThongBaoStore & toast utility (Mục 69 - In-App Toast System)', ()
     // Tua nốt thời gian còn lại
     vi.advanceTimersByTime(2500);
     expect(useThongBaoStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('thông báo dài hiện lâu hơn để kịp đọc, tối đa 10 giây', () => {
+    expect(thoiGianHien('Đã lưu')).toBe(3500);
+    expect(thoiGianHien('x'.repeat(100))).toBe(6000);
+    expect(thoiGianHien('x'.repeat(1000))).toBe(10000);
   });
 });

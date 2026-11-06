@@ -16,6 +16,11 @@ interface ToastState {
 
 const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+/** Thông báo dài cần lâu hơn để đọc kịp: 3,5 giây cho câu ngắn, thêm theo độ dài, tối đa 10 giây. */
+export function thoiGianHien(message: string): number {
+  return Math.min(10_000, Math.max(3_500, message.length * 60));
+}
+
 function clearToastTimer(id: string) {
   const timer = toastTimers.get(id);
   if (timer) {
@@ -46,7 +51,7 @@ export const useThongBaoStore = create<ToastState>((set) => ({
       set((state) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
-    }, 3500);
+    }, thoiGianHien(message));
 
     toastTimers.set(id, timer);
   },

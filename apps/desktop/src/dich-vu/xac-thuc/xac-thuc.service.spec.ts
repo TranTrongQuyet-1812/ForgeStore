@@ -157,6 +157,12 @@ describe('XacThucService (P3-04 & Mục 68 - Multi-Session Deep Link & PKCE Exch
       // Vì sessionA != sessionB (phiên hiện tại đang chờ), errorListener KHÔNG ĐƯỢC PHÉP gọi để tránh tắt spinner Tab B!
       expect(errorListener).not.toHaveBeenCalled();
 
+      // 3b. Tab A cũ mở lại lần nữa (mã PKCE của A đã bị xóa) và lỗi không ghi lượt: đều không được đụng tới Tab B
+      await xacThucService.handleDeepLinkUrl(`forgestore://auth?a=${sessionA}&code=code-cu`);
+      await xacThucService.handleDeepLinkUrl('forgestore://auth?error=DANG_NHAP_THAT_BAI');
+      expect(errorListener).not.toHaveBeenCalled();
+      expect(xacThucService.laySessionIdHienTai()).toBe(sessionB);
+
       // 4. Mock fetch cho exchange của Tab B
       const mockFetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
         if (url.includes('/xac-thuc/doi-ma')) {

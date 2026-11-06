@@ -44,6 +44,11 @@ export const ThanhTieuDe: React.FC = () => {
   const [avatarError, setAvatarError] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // Ảnh đại diện lỗi một lần thì đổi tài khoản (ảnh khác) phải thử tải lại, không giữ chữ cái thay thế mãi
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.duongDanAvatar]);
+
   // Đóng user profile menu khi click ra ngoài hoặc nhấn Esc
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

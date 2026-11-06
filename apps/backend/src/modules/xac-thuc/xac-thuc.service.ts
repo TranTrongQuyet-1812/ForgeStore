@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -12,6 +18,20 @@ import { ThietBiService } from '../thiet-bi/thiet-bi.service';
 import { AuthExchangeDto } from './dto/trao-doi-xac-thuc.dto';
 import { RefreshTokenDto } from './dto/lam-moi-token.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+
+/** Bọc lỗi callback kèm đường quay lại đã kiểm hợp lệ lúc tạo state (forgestore://auth?a=...). */
+function ganDuongQuayLai(err: unknown, redirect: string): BadRequestException {
+  const goc = err instanceof HttpException ? err.getResponse() : null;
+  const maLoi =
+    goc && typeof goc === 'object' && 'maLoi' in goc
+      ? (goc as { maLoi?: string }).maLoi
+      : undefined;
+  return new BadRequestException({
+    maLoi: maLoi || 'DANG_NHAP_THAT_BAI',
+    thongBao: err instanceof Error ? err.message : 'Đăng nhập thất bại',
+    redirect,
+  });
+}
 
 @Injectable()
 export class XacThucService {
@@ -172,6 +192,19 @@ export class XacThucService {
       });
     }
 
+    try {
+      return await this.hoanTatGithubCallback(code, stateData);
+    } catch (err) {
+      // Lỗi sau khi đã đọc state thì kèm đường quay lại có mã lượt đăng nhập (?a=) để app biết lỗi của lượt nào
+      throw ganDuongQuayLai(err, stateData.redirect);
+    }
+  }
+
+  /** Phần còn lại của callback sau khi state đã đọc được: kiểm nhà cung cấp, đổi code, tạo hoặc liên kết người dùng. */
+  private async hoanTatGithubCallback(
+    code: string,
+    stateData: { challenge: string; redirect: string; provider?: 'github' | 'google' },
+  ): Promise<string> {
     if (stateData.provider !== 'github') {
       throw new BadRequestException({
         maLoi: 'PROVIDER_KHONG_KHOP',
@@ -368,6 +401,19 @@ export class XacThucService {
       });
     }
 
+    try {
+      return await this.hoanTatGoogleCallback(code, stateData);
+    } catch (err) {
+      // Lỗi sau khi đã đọc state thì kèm đường quay lại có mã lượt đăng nhập (?a=) để app biết lỗi của lượt nào
+      throw ganDuongQuayLai(err, stateData.redirect);
+    }
+  }
+
+  /** Phần còn lại của callback sau khi state đã đọc được: kiểm nhà cung cấp, đổi code, tạo hoặc liên kết người dùng. */
+  private async hoanTatGoogleCallback(
+    code: string,
+    stateData: { challenge: string; redirect: string; provider?: 'github' | 'google' },
+  ): Promise<string> {
     if (stateData.provider !== 'google') {
       throw new BadRequestException({
         maLoi: 'PROVIDER_KHONG_KHOP',

@@ -10,6 +10,15 @@ export const HopThoaiXacNhan: React.FC = () => {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Đóng hộp thoại thì trả focus về nút đã mở nó, để người dùng bàn phím không bị đẩy về đầu trang
+  useEffect(() => {
+    if (!isOpen) return;
+    const truocKhiMo = document.activeElement as HTMLElement | null;
+    return () => {
+      if (truocKhiMo?.isConnected) truocKhiMo.focus();
+    };
+  }, [isOpen]);
+
   // Auto-focus nút Hủy để tránh người dùng nhấn Enter nhầm
   useEffect(() => {
     if (isOpen) {
@@ -93,10 +102,13 @@ export const HopThoaiXacNhan: React.FC = () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
+      // onConfirm (của confirmDialog) tự đóng hộp thoại. Gọi close() lần nữa sau await sẽ chạy SAU khi nơi gọi đã
+      // mở hộp thoại kế tiếp (chuỗi xác nhận) và đóng nhầm hộp thoại mới đó.
       if (onConfirm) {
         await onConfirm();
+      } else {
+        close();
       }
-      close();
     } catch (err) {
       console.error('[HopThoaiXacNhan] Lỗi khi thực thi xác nhận:', err);
     } finally {

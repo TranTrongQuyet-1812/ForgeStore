@@ -134,6 +134,16 @@ describe('XacThucController (Unit Tests)', () => {
       expect(htmlDaGui()).toContain('Đăng nhập chưa hoàn tất');
       expect(htmlDaGui()).toContain('"forgestore://auth?error=MA_XAC_THUC_KHONG_HOP_LE"');
     });
+
+    it('xuLyCallback (GitHub): lỗi sau khi đọc state thì quay lại kèm mã lượt đăng nhập (?a=)', async () => {
+      mockAuthService.xuLyGithubCallback.mockRejectedValue({
+        response: { maLoi: 'DANG_NHAP_THAT_BAI', redirect: 'forgestore://auth?a=luot-1' },
+      });
+
+      await controller.xuLyCallback({ code: 'c', state: 's' }, mockResponse as unknown as Response);
+
+      expect(htmlDaGui()).toContain('"forgestore://auth?a=luot-1&amp;error=DANG_NHAP_THAT_BAI"');
+    });
   });
 
   describe('Trang quay lại app sau callback', () => {
