@@ -1,6 +1,6 @@
 {
   "name": "@forgestore/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "ForgeStore Desktop Client (Tauri v2 + React 19 + TypeScript + Tailwind CSS)",
   "type": "module",
@@ -19,6 +19,7 @@
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-deep-link": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "ascii-reveal": "^0.3.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",

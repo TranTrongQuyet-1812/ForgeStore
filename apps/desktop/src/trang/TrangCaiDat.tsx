@@ -12,6 +12,7 @@ import {
   Check,
   FileText,
   Copy,
+  RefreshCw,
 } from 'lucide-react';
 import { useGiaoDienStore } from '../kho-trang-thai/useGiaoDienStore';
 import { useCaiDatStore } from '../kho-trang-thai/useCaiDatStore';
@@ -19,6 +20,10 @@ import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
 import { thietBiService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
 import { desktopLogger } from '../dich-vu/logger/desktop-logger';
+import {
+  kiemTraVaHoiCapNhat,
+  layPhienBanHienTai,
+} from '../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
 
 export const TrangCaiDat: React.FC = () => {
   const { theme, setTheme } = useGiaoDienStore();
@@ -38,6 +43,21 @@ export const TrangCaiDat: React.FC = () => {
   const [isCleaning, setIsCleaning] = useState(false);
   const [isWtAvailable, setIsWtAvailable] = useState<boolean>(true);
   const [logFilePath, setLogFilePath] = useState<string>('');
+  const [phienBanApp, setPhienBanApp] = useState<string | null>(null);
+  const [dangKiemCapNhat, setDangKiemCapNhat] = useState(false);
+
+  useEffect(() => {
+    void layPhienBanHienTai().then(setPhienBanApp);
+  }, []);
+
+  const kiemTraBanMoi = async () => {
+    setDangKiemCapNhat(true);
+    try {
+      await kiemTraVaHoiCapNhat(true);
+    } finally {
+      setDangKiemCapNhat(false);
+    }
+  };
 
   const fetchDownloadSize = async () => {
     const isTauri =
@@ -181,6 +201,28 @@ export const TrangCaiDat: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Phiên bản ForgeStore và kiểm tra bản mới (D-37) */}
+      <div className="p-5 rounded-2xl bg-surface border border-border flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-accent-forge-text" />
+            <span>Phiên bản ForgeStore</span>
+          </h3>
+          <p className="text-xs text-secondary mt-1">
+            {phienBanApp ? `Bạn đang dùng bản ${phienBanApp}. ` : ''}
+            ForgeStore tự kiểm tra bản mới và hỏi bạn trước khi cập nhật.
+          </p>
+        </div>
+        <button
+          onClick={() => void kiemTraBanMoi()}
+          disabled={dangKiemCapNhat}
+          className="btn-tactile px-3 py-1.5 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold flex items-center gap-1.5 shadow-sm disabled:opacity-60"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${dangKiemCapNhat ? 'animate-spin' : ''}`} />
+          <span>{dangKiemCapNhat ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'}</span>
+        </button>
       </div>
 
       {/* Cấu hình Thư mục lưu bản Portable (A1) */}
