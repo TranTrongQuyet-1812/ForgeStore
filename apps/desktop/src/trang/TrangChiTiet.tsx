@@ -449,8 +449,8 @@ export const TrangChiTiet: React.FC = () => {
       const match = userFavoritesData.duLieu.some(
         (fav) =>
           fav.maUngDung === appDetail?.maUngDung ||
-          fav.tenRepoDayDu === appId ||
-          fav.tenKhoChua === appId,
+          // Chỉ so mã app hoặc tên đầy đủ owner/repo: chỉ tên repo thì hai repo trùng tên khác chủ sẽ bị nhầm
+          fav.tenRepoDayDu === appId,
       );
       setIsFavorited(match);
     }
@@ -814,10 +814,7 @@ export const TrangChiTiet: React.FC = () => {
   const isInstalledOnDevice = useMemo(() => {
     if (!isAuthenticated || !maThietBi) return false;
     return installedAppsOnDevice.some(
-      (item) =>
-        item.maUngDung === appDetail?.maUngDung ||
-        item.ungDung?.tenRepoDayDu === appId ||
-        item.ungDung?.tenKhoChua === appId,
+      (item) => item.maUngDung === appDetail?.maUngDung || item.ungDung?.tenRepoDayDu === appId,
     );
   }, [installedAppsOnDevice, isAuthenticated, maThietBi, appDetail?.maUngDung, appId]);
 
@@ -827,9 +824,7 @@ export const TrangChiTiet: React.FC = () => {
     return (
       installedAppsOnDevice.find(
         (item) =>
-          (item.maUngDung === appDetail?.maUngDung ||
-            item.ungDung?.tenRepoDayDu === appId ||
-            item.ungDung?.tenKhoChua === appId) &&
+          (item.maUngDung === appDetail?.maUngDung || item.ungDung?.tenRepoDayDu === appId) &&
           Boolean(item.trinhQuanLyGoi),
       ) || null
     );
@@ -990,7 +985,9 @@ export const TrangChiTiet: React.FC = () => {
   };
 
   // Điểm an toàn & xếp hạng
-  const trustScore = appDetail?.phanTichAi?.diemUyTin ?? appDetail?.diemUyTin ?? 100;
+  const diemUyTinGoc = appDetail?.phanTichAi?.diemUyTin ?? appDetail?.diemUyTin ?? null;
+  const coDiemUyTin = typeof diemUyTinGoc === 'number';
+  const trustScore = diemUyTinGoc ?? 0;
   const riskItems = appDetail?.phanTichAi?.yeuToRuiRo || [];
 
   // L-09 & L-10: Nhãn mức độ uy tín trung tính, chuẩn hóa ngôn ngữ đời thường
@@ -2460,78 +2457,81 @@ export const TrangChiTiet: React.FC = () => {
           )}
 
           {/* Điểm Uy Tín Kho Mã & Thẩm Định Chi Tiết (L-09 / L-10) */}
-          <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold font-display text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-muted" />
-                <span>ĐIỂM UY TÍN KHO MÃ</span>
-              </span>
-              <NhanTinCay score={trustScore} size="sm" />
-            </div>
+          {/* Chưa có phân tích thì không hiện điểm, tránh hiện 100 điểm giả */}
+          {coDiemUyTin && (
+            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold font-display text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-muted" />
+                  <span>ĐIỂM UY TÍN KHO MÃ</span>
+                </span>
+                <NhanTinCay score={trustScore} size="sm" />
+              </div>
 
-            <div className="flex items-baseline gap-2">
-              <span className={`text-4xl font-bold font-mono font-tnum ${scoreTheme.text}`}>
-                {trustScore}
-              </span>
-              <span className="text-sm font-mono text-muted">/ 100</span>
-              <span
-                className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreTheme.text} ${scoreTheme.bg} ${scoreTheme.border}`}
-              >
-                {scoreTheme.label}
-              </span>
-            </div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-4xl font-bold font-mono font-tnum ${scoreTheme.text}`}>
+                  {trustScore}
+                </span>
+                <span className="text-sm font-mono text-muted">/ 100</span>
+                <span
+                  className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreTheme.text} ${scoreTheme.bg} ${scoreTheme.border}`}
+                >
+                  {scoreTheme.label}
+                </span>
+              </div>
 
-            {/* Thanh Progress Gauge Trực Quan */}
-            <div className="w-full bg-surface-elevated/80 h-2.5 rounded-full overflow-hidden p-0.5 border border-border">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${scoreTheme.bar}`}
-                style={{ width: `${Math.min(100, Math.max(5, trustScore))}%` }}
-              />
-            </div>
+              {/* Thanh Progress Gauge Trực Quan */}
+              <div className="w-full bg-surface-elevated/80 h-2.5 rounded-full overflow-hidden p-0.5 border border-border">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${scoreTheme.bar}`}
+                  style={{ width: `${Math.min(100, Math.max(5, trustScore))}%` }}
+                />
+              </div>
 
-            {/* Điểm nổi bật & Yếu tố rủi ro */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-border text-xs">
-              {appDetail.soLuotFork ? (
+              {/* Điểm nổi bật & Yếu tố rủi ro */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-border text-xs">
+                {appDetail.soLuotFork ? (
+                  <div className="flex items-center gap-2 text-secondary">
+                    <Check className="w-3.5 h-3.5 text-muted shrink-0" />
+                    <span>Kho chứa có hơn {appDetail.soLuotFork} lượt forks</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-2 text-secondary">
                   <Check className="w-3.5 h-3.5 text-muted shrink-0" />
-                  <span>Kho chứa có hơn {appDetail.soLuotFork} lượt forks</span>
+                  <span>{trangThaiKiemTraQuyen}</span>
                 </div>
-              ) : null}
-              <div className="flex items-center gap-2 text-secondary">
-                <Check className="w-3.5 h-3.5 text-muted shrink-0" />
-                <span>{trangThaiKiemTraQuyen}</span>
-              </div>
-              <div className="flex items-center gap-2 text-secondary">
-                <Check className="w-3.5 h-3.5 text-muted shrink-0" />
-                <span>Bản phát hành cập nhật liên tục từ GitHub</span>
-              </div>
+                <div className="flex items-center gap-2 text-secondary">
+                  <Check className="w-3.5 h-3.5 text-muted shrink-0" />
+                  <span>Bản phát hành cập nhật liên tục từ GitHub</span>
+                </div>
 
-              {riskItems.length > 0 ? (
-                riskItems.slice(0, 2).map((risk, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-muted">
-                    <span className="text-[11px] font-mono text-warning shrink-0">
-                      -{risk.diemTru}đ
-                    </span>
-                    <span className="truncate">{risk.moTa}</span>
+                {riskItems.length > 0 ? (
+                  riskItems.slice(0, 2).map((risk, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-muted">
+                      <span className="text-[11px] font-mono text-warning shrink-0">
+                        -{risk.diemTru}đ
+                      </span>
+                      <span className="truncate">{risk.moTa}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex items-center gap-2 text-success text-[11px]">
+                    <Check className="w-3 h-3 shrink-0" />
+                    <span>Không phát hiện yếu tố rủi ro bất thường.</span>
                   </div>
-                ))
-              ) : (
-                <div className="flex items-center gap-2 text-success text-[11px]">
-                  <Check className="w-3 h-3 shrink-0" />
-                  <span>Không phát hiện yếu tố rủi ro bất thường.</span>
-                </div>
-              )}
+                )}
 
-              {/* Nút mở Popover/Modal Chi Tiết (P3-06.3) */}
-              <button
-                onClick={() => setIsSafetyModalOpen(true)}
-                className="btn-tactile text-accent-ai hover:underline text-left text-xs font-semibold mt-1 flex items-center gap-1"
-              >
-                <Info className="w-3.5 h-3.5" />
-                <span>Xem chi tiết thẩm định rủi ro ({riskItems.length} mục)</span>
-              </button>
+                {/* Nút mở Popover/Modal Chi Tiết (P3-06.3) */}
+                <button
+                  onClick={() => setIsSafetyModalOpen(true)}
+                  className="btn-tactile text-accent-ai hover:underline text-left text-xs font-semibold mt-1 flex items-center gap-1"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Xem chi tiết thẩm định rủi ro ({riskItems.length} mục)</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Thẻ Thông Tin Kho Lưu Trữ GitHub */}
           <div className="tactile-card p-5 rounded-2xl flex flex-col gap-3 text-xs">

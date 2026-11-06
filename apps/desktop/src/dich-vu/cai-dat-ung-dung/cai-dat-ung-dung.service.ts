@@ -312,6 +312,27 @@ export class CaiDatUngDungService {
   }
 
   /**
+   * Chờ app thật sự biến mất khỏi Registry sau khi bộ gỡ trả về.
+   * Bộ gỡ NSIS (mặc định của Electron) tự chép ra thư mục tạm rồi thoát ngay với mã 0, trong khi cửa sổ gỡ thật
+   * vẫn đang chờ người dùng; nếu tin mã thoát mà xóa bản ghi thì người dùng bấm Hủy vẫn mất app khỏi Thư viện.
+   * Trả true nếu đã gỡ hẳn trong thời gian chờ.
+   */
+  async choGoXong(
+    tenApp: string,
+    registryKey?: string,
+    displayName?: string,
+    giayToiDa = 120,
+    msMoiLan = 3000,
+  ): Promise<boolean> {
+    const hetHan = Date.now() + giayToiDa * 1000;
+    for (;;) {
+      if (!(await this.kiemTraAppRegistry(tenApp, registryKey, displayName))) return true;
+      if (Date.now() + msMoiLan > hetHan) return false;
+      await new Promise((resolve) => setTimeout(resolve, msMoiLan));
+    }
+  }
+
+  /**
    * Chạy tiến trình gỡ cài đặt chính chủ của phần mềm qua UninstallString từ Registry (A4, SEC-01)
    */
   async goCaiDatQuaRegistry(

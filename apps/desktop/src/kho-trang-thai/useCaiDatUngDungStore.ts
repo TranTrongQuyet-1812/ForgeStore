@@ -6,6 +6,8 @@ import { queryClient } from '../dich-vu/api/query-client';
 import { apiClient } from '../dich-vu/api/api-client';
 import { useXacThucStore } from './useXacThucStore';
 import { taoMauTenTepWildcard } from '@forgestore/types';
+import type { GhiNhanCaiDatRequest } from '@forgestore/types';
+import { toast } from './useThongBaoStore';
 import type {
   ThamSoCaiDat,
   ThongTinCaiDatApp,
@@ -62,6 +64,9 @@ interface InstallState {
   layThongTinApp: (maUngDung: string) => ThongTinCaiDatApp | undefined;
   luuBienThe: (maUngDung: string, tenTep: string, phienBan?: string) => void;
   layBienThe: (maUngDung: string) => string | undefined;
+  /** Lượt ghi Thư viện bị lỗi mạng hay máy chủ: giữ lại qua lần mở app sau để ghi lại, theo mã ứng dụng. */
+  choGhiNhan: Record<string, { maThietBi: string; dto: GhiNhanCaiDatRequest }>;
+  thuGhiNhanLai: () => Promise<void>;
 }
 
 export const useCaiDatUngDungStore = create<InstallState>()(
@@ -69,6 +74,19 @@ export const useCaiDatUngDungStore = create<InstallState>()(
     (set, get) => ({
       caiDatMap: {},
       bienTheMap: {},
+      choGhiNhan: {},
+
+      thuGhiNhanLai: async () => {
+        for (const [maUngDung, muc] of Object.entries(get().choGhiNhan)) {
+          if (!(await thuVienService.ghiNhanCaiDat(muc.maThietBi, muc.dto))) continue;
+          set((state) => {
+            const conLai = { ...state.choGhiNhan };
+            delete conLai[maUngDung];
+            return { choGhiNhan: conLai };
+          });
+          queryClient.invalidateQueries({ queryKey: ['device-installed-apps'] });
+        }
+      },
 
       luuBienThe: (maUngDung, tenTep, phienBan) => {
         const mauBienThe = taoMauTenTepWildcard(tenTep, phienBan);
@@ -166,14 +184,23 @@ export const useCaiDatUngDungStore = create<InstallState>()(
               try {
                 const maThietBi = useXacThucStore.getState().maThietBi;
                 if (maThietBi) {
-                  await thuVienService.ghiNhanCaiDat(maThietBi, {
+                  const dto: GhiNhanCaiDatRequest = {
                     maUngDung,
                     phienBanHienTai: params.phienBan || '0.0.0',
                     maTepDaCai: params.maTep,
                     duongDanThuMuc: undefined, // DELIV-44.3: Bản EXE/MSI không lưu duongDanThuMuc (lấy từ registry)
                     khoaRegistry: res.thong_tin_registry?.registry_key ?? undefined,
                     tenHienThiRegistry: res.thong_tin_registry?.display_name ?? undefined,
-                  });
+                  };
+                  if (!(await thuVienService.ghiNhanCaiDat(maThietBi, dto))) {
+                    // App đã cài trên máy nhưng chưa lưu được vào Thư viện: giữ lại để ghi khi mở Thư viện lần sau
+                    set((state) => ({
+                      choGhiNhan: { ...state.choGhiNhan, [maUngDung]: { maThietBi, dto } },
+                    }));
+                    toast.info(
+                      `Đã cài ${tenApp} nhưng chưa lưu được vào Thư viện. ForgeStore sẽ tự lưu lại khi có mạng.`,
+                    );
+                  }
                   // Cập nhật tức thì cả trang Chi tiết và trang Thư viện qua server query (A3)
                   queryClient.invalidateQueries({ queryKey: ['device-installed-apps'] });
                 }
@@ -254,7 +281,8 @@ export const useCaiDatUngDungStore = create<InstallState>()(
       },
 
       xoaTrangThaiTam: () => {
-        set({ caiDatMap: {} });
+        // Hàng chờ ghi Thư viện gắn với thiết bị của người vừa đăng xuất: bỏ đi để người sau không ghi nhầm
+        set({ caiDatMap: {}, choGhiNhan: {} });
       },
 
       moApp: async (maUngDung) => {
@@ -271,6 +299,7 @@ export const useCaiDatUngDungStore = create<InstallState>()(
       storage: createJSONStorage(() => safeMemoryStorage),
       partialize: (state) => ({
         bienTheMap: state.bienTheMap,
+        choGhiNhan: state.choGhiNhan,
         // L-08: Chỉ lưu các tiến trình dở dang để merge reset sang DA_HUY khi khởi động lại app.
         // Bản Portable ZIP không lưu kẹt DA_CAI_DAT trong storage.
         caiDatMap: Object.fromEntries(

@@ -91,6 +91,16 @@ export const useXacThucStore = create<AuthState>((set, get) => ({
           err,
         );
         set({ isAuthenticated: false });
+        // Mở app lúc mất mạng: có mạng lại thì tự khôi phục phiên, không bắt người dùng khởi động lại app
+        if (typeof window !== 'undefined') {
+          window.addEventListener(
+            'online',
+            () => {
+              if (!get().isAuthenticated) void get().initAuth();
+            },
+            { once: true },
+          );
+        }
       }
     } finally {
       set({ isLoading: false });

@@ -108,6 +108,13 @@ export const TrangThuVien: React.FC = () => {
     }
   }, [isAuthenticated, maThietBi, kiemTraCapNhat]);
 
+  // Ghi lại vào Thư viện các app đã cài nhưng lần trước chưa lưu được lên máy chủ (mất mạng, máy chủ lỗi)
+  useEffect(() => {
+    if (isAuthenticated && maThietBi) {
+      void useCaiDatUngDungStore.getState().thuGhiNhanLai();
+    }
+  }, [isAuthenticated, maThietBi]);
+
   // 4. Đối chiếu ứng dụng đã cài đặt với Windows Registry (A4)
   useEffect(() => {
     if (backendInstalledApps.length === 0) {
@@ -727,6 +734,19 @@ export const TrangThuVien: React.FC = () => {
           app.regInfo.uninstall_string,
           keyToUse,
         );
+
+        // Chỉ xóa bản ghi khi app đã biến mất khỏi Registry (bộ gỡ NSIS thoát sớm trước khi gỡ xong)
+        const daGoHan = await caiDatUngDungService.choGoXong(
+          app.tenApp,
+          keyToUse,
+          app.regInfo.display_name || undefined,
+        );
+        if (!daGoHan) {
+          toast.info(
+            `"${app.tenApp}" vẫn còn trên máy (có thể bạn đã hủy giữa chừng), nên vẫn giữ trong Thư viện.`,
+          );
+          return;
+        }
 
         // Sau khi bộ gỡ chính chủ chạy xong thành công: Xóa bản ghi trên Backend
         if (maThietBi) {

@@ -135,7 +135,9 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                 GetExitCodeProcess(h_process, &mut exit_code);
                 CloseHandle(h_process);
 
-                if exit_code == 0 {
+                // 3010 và 1641: cài xong nhưng cần khởi động lại máy (bộ cài WiX Burn hay trả), giống nhánh MSI
+                let can_khoi_dong_lai = exit_code == 3010 || exit_code == 1641;
+                if exit_code == 0 || can_khoi_dong_lai {
                     // L-05: Cài đặt EXE thành công, tự động xóa file bộ cài trong downloads để tránh phình đĩa
                     let clean_exe_path = bo_tien_to_dos_device_path(&safe_path);
                     let _ = std::fs::remove_file(&clean_exe_path);
@@ -146,7 +148,11 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
                     Ok(KetQuaCaiDat {
                         thanh_cong: true,
                         loai_cai_dat: "EXE".to_string(),
-                        thong_diep: "Đã cài đặt phần mềm (.exe) thành công.".to_string(),
+                        thong_diep: if can_khoi_dong_lai {
+                            "Cài đặt thành công nhưng cần khởi động lại máy để hoàn tất.".to_string()
+                        } else {
+                            "Đã cài đặt phần mềm (.exe) thành công.".to_string()
+                        },
                         duong_dan_cai_dat: None, // DELIV-44.3: Không lưu đường dẫn file bộ cài downloads mang tiền tố \\?\
                         duong_dan_thuc_thi: None, // Điểm 5: Không mở lại bộ cài
                         thong_tin_registry,

@@ -195,6 +195,25 @@ describe('CaiDatUngDungService & useCaiDatUngDungStore (P3-08..P3-11)', () => {
       );
       expect(res).toBe(true);
     });
+
+    it('choGoXong chờ tới khi app biến mất khỏi Registry (bộ gỡ NSIS thoát sớm)', async () => {
+      const thongTin = { registry_key: 'K' } as never;
+      const spy = vi
+        .spyOn(caiDatUngDungService, 'kiemTraAppRegistry')
+        .mockResolvedValueOnce(thongTin)
+        .mockResolvedValueOnce(null);
+      expect(await caiDatUngDungService.choGoXong('App', 'K', undefined, 5, 0)).toBe(true);
+      expect(spy).toHaveBeenCalledTimes(2);
+      spy.mockRestore();
+    });
+
+    it('choGoXong trả false khi app vẫn còn (người dùng hủy trong bộ gỡ)', async () => {
+      const spy = vi
+        .spyOn(caiDatUngDungService, 'kiemTraAppRegistry')
+        .mockResolvedValue({ registry_key: 'K' } as never);
+      expect(await caiDatUngDungService.choGoXong('App', 'K', undefined, 0, 0)).toBe(false);
+      spy.mockRestore();
+    });
   });
 
   describe('Safe Folder Opener (A1, TC-09, SEC-02)', () => {
