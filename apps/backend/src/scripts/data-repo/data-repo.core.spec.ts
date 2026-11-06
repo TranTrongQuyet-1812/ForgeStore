@@ -248,6 +248,11 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
         '⟦C1⟧&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⟦C2⟧&nbsp;&nbsp;⟦C3⟧',
       ),
     ).toBe(true);
+    // thanh chọn ngôn ngữ "README in ..." (ten-framework) và danh sách dài tên người đóng góp (EarTrumpet)
+    expect(chiLaChuoiNhan('⟦C1⟧README in English⟦C2⟧简体中文⟦C3⟧README in 한국어⟦C4⟧')).toBe(true);
+    const ten = Array.from({ length: 20 }, (_, i) => `user${i}`);
+    ten[3] = 'Marco P.';
+    expect(chiLaChuoiNhan(`⟦C0⟧${ten.map((t, i) => `${t}⟦C${i + 1}⟧`).join('')}`)).toBe(true);
     // câu thật chưa dịch vẫn phải bị bắt
     expect(
       chiLaChuoiNhan('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),

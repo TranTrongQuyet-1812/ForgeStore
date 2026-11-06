@@ -67,13 +67,16 @@ export function chiLaChuoiNhan(daChe: string): boolean {
     .split(/⟦C\d+⟧/)
     .map((x) => x.trim())
     .filter(Boolean);
-  return nhan.every(
-    (x) =>
-      x.length <= 30 &&
+  const laNhan = (x: string) =>
+    // "README in English", "README en Español": thanh chọn ngôn ngữ, giữ nguyên là đúng
+    /\bREADME\b/.test(x) ||
+    (x.length <= 30 &&
       x.split(/\s+/).length <= 3 &&
       !/[.!?]$/.test(x) &&
-      !TU_CAU_TIENG_ANH.test(x),
-  );
+      !TU_CAU_TIENG_ANH.test(x));
+  const soNhan = nhan.filter(laNhan).length;
+  // Danh sách dài (người đóng góp, nhà tài trợ): vài tên có "from", "da" hay viết tắt "Marco P." vẫn là danh sách tên
+  return soNhan === nhan.length || (nhan.length >= 20 && soNhan / nhan.length >= 0.9);
 }
 
 const TU_NOI_TIENG_ANH = new RegExp(`^${TU_CAU_TIENG_ANH.source.replace(/\\b/g, '')}$`, 'i');

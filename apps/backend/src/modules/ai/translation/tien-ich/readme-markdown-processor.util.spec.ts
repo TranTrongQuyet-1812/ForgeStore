@@ -366,8 +366,32 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(result.hang).toBe('B');
     expect(result.canhBao).toContain('so_muc_danh_sach_thay_doi');
     expect(result.canhBao).toContain('url_thay_doi');
-    expect(result.canhBao).toContain('ma_inline_thay_doi');
+    // Nội dung mã inline đổi (`run` thành `changed`) do bước so khung bắt
+    expect(result.canhBao).toContain('khung_van_ban_thay_doi');
     expect(result.canhBao).toContain('nguong_do_dai_cho_benchmark');
+    // Mất dấu ` thì bước mã inline bắt
+    expect(kiemBatBienReadme('Use `run` now.', 'Dùng run ngay.').canhBao).toContain(
+      'ma_inline_thay_doi',
+    );
+  });
+
+  it('không báo nhầm: khối code trong comment HTML, dòng giữa đoạn bắt đầu bằng năm, bảng lẫn ```x``` và `y`', () => {
+    const trongChuThich =
+      '<!--\n```python\nrun()\n``` -->\n\nThe API\n=======\n\nIf you want this.';
+    expect(
+      kiemBatBienReadme(trongChuThich, trongChuThich.replace('If you want this.', 'Nếu bạn muốn.'))
+        .canhBao,
+    ).not.toContain('khoi_code_thay_doi');
+
+    const nam = 'Released in\n2026. Benchmarks below.\n\n- one\n- two';
+    expect(
+      kiemBatBienReadme(nam, 'Phát hành năm 2026.\nKết quả đo bên dưới.\n\n- một\n- hai').canhBao,
+    ).not.toContain('so_muc_danh_sach_thay_doi');
+
+    const bang = '| ```opt``` | `a` (only in config) |\n| ```x``` | `b` folder. If it is `c` |';
+    const bangDich =
+      '| ```opt``` | `a` (chỉ trong cấu hình) |\n| ```x``` | `b` thư mục. Nếu là `c` |';
+    expect(kiemBatBienReadme(bang, bangDich).canhBao).not.toContain('ma_inline_thay_doi');
   });
 
   it('từ chối lắp nếu vị trí nguồn không còn khớp', () => {

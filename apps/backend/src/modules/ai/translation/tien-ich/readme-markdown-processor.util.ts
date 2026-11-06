@@ -1116,10 +1116,6 @@ function layKhoiCode(markdown: string): string[] {
   return blocks;
 }
 
-function layCacMoc(markdown: string, regex: RegExp): string[] {
-  return [...markdown.matchAll(regex)].map((match) => match[0]);
-}
-
 function layTapUrl(markdown: string): string[] {
   const urls = new Set<string>();
   const patterns = [
@@ -1174,6 +1170,23 @@ function boTenTepVaThuMuc(text: string): string {
     .replace(/(?<![\p{L}\p{N}])[\w.@+-]*client[\w.@+-]*\.[\w-]+\b/giu, ' ');
 }
 
+/**
+ * Đếm mục danh sách. Mục đánh số chỉ mở danh sách khi đứng sau dòng trống, sau mục khác, sau dòng thụt lề của
+ * mục, hoặc là số 1 (theo CommonMark). Dòng giữa đoạn văn bắt đầu bằng "2026." là chữ thường; đếm vào thì báo nhầm
+ * khi câu dịch đổi chỗ năm (kividb).
+ */
+function demMucDanhSach(text: string): number {
+  const LA_MUC = /^\s{0,3}(?:[-+*]|\d+[.)])\s+/;
+  const lines = text.split(/\r?\n/);
+  return lines.filter((line, i) => {
+    if (!LA_MUC.test(line)) return false;
+    const so = line.match(/^\s{0,3}(\d+)[.)]\s+/);
+    if (!so || so[1] === '1') return true;
+    const truoc = i > 0 ? lines[i - 1]! : '';
+    return truoc.trim() === '' || LA_MUC.test(truoc) || /^\s{2,}\S/.test(truoc);
+  }).length;
+}
+
 /** So bất biến cấu trúc và nội dung. Ngưỡng độ dài chưa được đo nên chỉ báo chờ, không tự đặt số. */
 export function kiemBatBienReadme(
   goc: string,
@@ -1187,13 +1200,17 @@ export function kiemBatBienReadme(
 ): KetQuaBatBienReadme {
   const warnings: string[] = [];
   if (layKhungReadme(goc) !== layKhungReadme(dich)) warnings.push('khung_van_ban_thay_doi');
-  if (JSON.stringify(layKhoiCode(goc)) !== JSON.stringify(layKhoiCode(dich)))
+  // Comment HTML được giữ nguyên byte; bỏ đi trước khi tìm khối code vì ``` nằm trong comment (dòng "``` -->")
+  // không được nhận là dấu đóng, khối code nuốt luôn phần chữ đã dịch phía sau và báo nhầm (PyBoy, chepy)
+  const boChuThich = (md: string) => md.replace(/<!--[\s\S]*?-->/g, '');
+  if (
+    JSON.stringify(layKhoiCode(boChuThich(goc))) !== JSON.stringify(layKhoiCode(boChuThich(dich)))
+  )
     warnings.push('khoi_code_thay_doi');
-  for (const [name, regex] of [['ma_inline', /`+[^`\n]+`+/g]] as const) {
-    const before = layCacMoc(goc, regex).sort();
-    const after = layCacMoc(dich, regex).sort();
-    if (JSON.stringify(before) !== JSON.stringify(after)) warnings.push(`${name}_thay_doi`);
-  }
+  // Nội dung mã inline đã được che và so ở khung (layKhungReadme); ở đây chỉ bắt thêm hoặc mất dấu `. Tự ghép cặp
+  // bằng regex lệch với bộ tách khi bảng lẫn ```x``` và `y`, coi chữ thường là mã và báo nhầm (yarle)
+  if ((goc.match(/`/g) ?? []).length !== (dich.match(/`/g) ?? []).length)
+    warnings.push('ma_inline_thay_doi');
   if (JSON.stringify(layTapUrl(goc)) !== JSON.stringify(layTapUrl(dich)))
     warnings.push('url_thay_doi');
   for (let level = 1; level <= 6; level++) {
@@ -1201,8 +1218,7 @@ export function kiemBatBienReadme(
     if ((goc.match(heading) ?? []).length !== (dich.match(heading) ?? []).length)
       warnings.push(`tieu_de_h${level}_thay_doi`);
   }
-  const listCount = (text: string) => (text.match(/^\s{0,3}(?:[-+*]|\d+[.)])\s+/gm) ?? []).length;
-  if (listCount(goc) !== listCount(dich)) warnings.push('so_muc_danh_sach_thay_doi');
+  if (demMucDanhSach(goc) !== demMucDanhSach(dich)) warnings.push('so_muc_danh_sach_thay_doi');
   const tableRows = (text: string) =>
     text.split(/\r?\n/).filter((line) => /^\s*\|.*\|\s*$/.test(line));
   const beforeRows = tableRows(goc);
