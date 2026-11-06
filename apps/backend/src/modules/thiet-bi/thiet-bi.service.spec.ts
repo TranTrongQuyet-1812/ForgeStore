@@ -6,9 +6,9 @@ import { LoaiThietBi } from '@prisma/client';
 
 describe('ThietBiService', () => {
   let service: ThietBiService;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let mockPrisma: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let mockCacheService: any;
 
   beforeEach(() => {

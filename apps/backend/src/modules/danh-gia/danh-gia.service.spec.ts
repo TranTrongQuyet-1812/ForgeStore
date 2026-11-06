@@ -10,9 +10,9 @@ import { ReviewSortOption } from './dto/truy-van-danh-gia.dto';
 
 describe('DanhGiaService (P2-53)', () => {
   let service: DanhGiaService;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let prisma: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let cacheService: any;
 
   const mockUngDung = {

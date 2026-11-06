@@ -12,6 +12,11 @@ import { GoogleAuthQueryDto } from './dto/truy-van-xac-thuc-google.dto';
 import { UserSessionContext } from './interfaces/jwt-payload.interface';
 import { dungTrangQuayLaiApp, TrangThaiQuayLai } from './trang-quay-lai-app';
 
+/** Chống HTTP Parameter Pollution: `?code=a&code=b` thành mảng, chỉ lấy giá trị đầu. */
+function layMotGiaTri(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : typeof v === 'string' ? v : undefined;
+}
+
 @ApiTags('Xác thực (Auth)')
 @Controller('xac-thuc')
 export class XacThucController {
@@ -78,27 +83,15 @@ export class XacThucController {
     description:
       'Trang HTML tự mở lại native app qua deep link kèm mã 1 lần ?code=... (hoặc ?error=...)',
   })
-  async xuLyCallback(@Query() query: Record<string, string | undefined>, @Res() res: Response) {
+  async xuLyCallback(
+    @Query() query: Record<string, string | string[] | undefined>,
+    @Res() res: Response,
+  ) {
     try {
       // Chuẩn hóa ép kiểu an toàn chống HTTP Parameter Pollution (HPP)
-      const code =
-        typeof query.code === 'string'
-          ? query.code
-          : Array.isArray(query.code)
-            ? (query.code as string[])[0]
-            : undefined;
-      const state =
-        typeof query.state === 'string'
-          ? query.state
-          : Array.isArray(query.state)
-            ? (query.state as string[])[0]
-            : undefined;
-      const error =
-        typeof query.error === 'string'
-          ? query.error
-          : Array.isArray(query.error)
-            ? (query.error as string[])[0]
-            : undefined;
+      const code = layMotGiaTri(query.code);
+      const state = layMotGiaTri(query.state);
+      const error = layMotGiaTri(query.error);
 
       // 1. Nếu GitHub trả về lỗi hoặc người dùng hủy ủy quyền
       if (error || !code || !state) {
@@ -156,29 +149,14 @@ export class XacThucController {
       'Trang HTML tự mở lại native app qua deep link kèm mã 1 lần ?code=... (hoặc ?error=...)',
   })
   async xuLyGoogleCallback(
-    @Query() query: Record<string, string | undefined>,
+    @Query() query: Record<string, string | string[] | undefined>,
     @Res() res: Response,
   ) {
     try {
       // Chuẩn hóa ép kiểu an toàn chống HTTP Parameter Pollution (HPP)
-      const code =
-        typeof query.code === 'string'
-          ? query.code
-          : Array.isArray(query.code)
-            ? (query.code as string[])[0]
-            : undefined;
-      const state =
-        typeof query.state === 'string'
-          ? query.state
-          : Array.isArray(query.state)
-            ? (query.state as string[])[0]
-            : undefined;
-      const error =
-        typeof query.error === 'string'
-          ? query.error
-          : Array.isArray(query.error)
-            ? (query.error as string[])[0]
-            : undefined;
+      const code = layMotGiaTri(query.code);
+      const state = layMotGiaTri(query.state);
+      const error = layMotGiaTri(query.error);
 
       if (error || !code || !state) {
         let redirectTarget = 'forgestore://auth';

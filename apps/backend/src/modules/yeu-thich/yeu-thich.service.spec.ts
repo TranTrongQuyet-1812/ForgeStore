@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('YeuThichService (P2-50)', () => {
   let service: YeuThichService;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let prisma: any;
 
   beforeEach(() => {

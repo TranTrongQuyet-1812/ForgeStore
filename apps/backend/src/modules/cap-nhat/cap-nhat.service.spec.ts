@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 describe('CapNhatService (P2-52)', () => {
   let service: CapNhatService;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let mockPrisma: any;
 
   beforeEach(() => {
@@ -325,7 +325,7 @@ describe('CapNhatService (P2-52)', () => {
   });
 
   describe('timTepTuongDong (Điểm Vàng 2 - P3B-17 Polish)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const danhSachMoi: any[] = [
       {
         maTep: 'file-x64',
