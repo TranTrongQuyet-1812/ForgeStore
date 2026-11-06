@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useTuCapNhatStore } from '../../kho-trang-thai/useTuCapNhatStore';
 
-const check = vi.fn();
-const confirmDialog = vi.fn();
-const toast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+const { check, confirmDialog, toast } = vi.hoisted(() => ({
+  check: vi.fn(),
+  confirmDialog: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 
 vi.mock('@tauri-apps/plugin-updater', () => ({ check }));
 vi.mock('../../kho-trang-thai/useHopThoaiStore', () => ({ confirmDialog }));
@@ -10,84 +13,143 @@ vi.mock('../../kho-trang-thai/useThongBaoStore', () => ({ toast }));
 vi.mock('../logger/desktop-logger', () => ({ desktopLogger: { ghiLogWarn: vi.fn() } }));
 vi.mock('../xac-thuc/luu-tru-token', () => ({ isTauri: () => true }));
 
-// Nạp lại module mỗi test để trạng thái "đã hỏi phiên bản" và cờ đang chạy không dính giữa các test
-async function nap() {
-  vi.resetModules();
-  return import('./tu-cap-nhat.service');
+import { caiBanMoi, kiemTraNen, kiemTraThuCong } from './tu-cap-nhat.service';
+
+type SuKien =
+  | { event: 'Started'; data: { contentLength?: number } }
+  | { event: 'Progress'; data: { chunkLength: number } }
+  | { event: 'Finished' };
+
+function banMoi(version: string, suKien: SuKien[] = []) {
+  return {
+    version,
+    downloadAndInstall: vi.fn(async (khiCoSuKien?: (e: SuKien) => void) => {
+      suKien.forEach((e) => khiCoSuKien?.(e));
+    }),
+  };
 }
 
-function banMoi(version: string) {
-  return { version, downloadAndInstall: vi.fn().mockResolvedValue(undefined) };
-}
-
-describe('kiemTraVaHoiCapNhat', () => {
+describe('tự cập nhật ForgeStore (D-37)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useTuCapNhatStore.setState({ banMoi: null, dangTai: false, tienDo: null });
   });
 
-  it('bấm tay mà chưa có bản mới thì báo đang dùng bản mới nhất', async () => {
-    check.mockResolvedValue(null);
-    const { kiemTraVaHoiCapNhat } = await nap();
+  describe('kiemTraNen (chạy nền)', () => {
+    it('có bản mới thì chỉ ghi vào kho để chỉ báo hiện, không bật hộp thoại hay thông báo', async () => {
+      check.mockResolvedValue(banMoi('0.2.0'));
 
-    await kiemTraVaHoiCapNhat(true);
+      await kiemTraNen();
 
-    expect(toast.success).toHaveBeenCalledOnce();
-    expect(confirmDialog).not.toHaveBeenCalled();
+      expect(useTuCapNhatStore.getState().banMoi?.version).toBe('0.2.0');
+      expect(confirmDialog).not.toHaveBeenCalled();
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('chưa có bản mới thì giữ kho trống và im lặng', async () => {
+      check.mockResolvedValue(null);
+
+      await kiemTraNen();
+
+      expect(useTuCapNhatStore.getState().banMoi).toBeNull();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('lỗi mạng thì im lặng và không làm mất chỉ báo bản mới đã có', async () => {
+      useTuCapNhatStore.setState({ banMoi: banMoi('0.2.0') as never });
+      check.mockRejectedValue(new Error('network'));
+
+      await kiemTraNen();
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(useTuCapNhatStore.getState().banMoi?.version).toBe('0.2.0');
+    });
   });
 
-  it('chạy nền mà chưa có bản mới thì im lặng', async () => {
-    check.mockResolvedValue(null);
-    const { kiemTraVaHoiCapNhat } = await nap();
+  describe('kiemTraThuCong (bấm ở Cài đặt)', () => {
+    it('chưa có bản mới thì báo đang dùng bản mới nhất', async () => {
+      check.mockResolvedValue(null);
 
-    await kiemTraVaHoiCapNhat(false);
+      await kiemTraThuCong();
 
-    expect(toast.success).not.toHaveBeenCalled();
-    expect(confirmDialog).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledOnce();
+      expect(confirmDialog).not.toHaveBeenCalled();
+    });
+
+    it('có bản mới và người dùng đồng ý thì tải và cài', async () => {
+      const ban = banMoi('0.2.0');
+      check.mockResolvedValue(ban);
+      confirmDialog.mockResolvedValue(true);
+
+      await kiemTraThuCong();
+
+      expect(ban.downloadAndInstall).toHaveBeenCalledOnce();
+    });
+
+    it('người dùng chọn "Để sau" thì không cài, chỉ báo vẫn còn ở thanh bên', async () => {
+      const ban = banMoi('0.2.0');
+      check.mockResolvedValue(ban);
+      confirmDialog.mockResolvedValue(false);
+
+      await kiemTraThuCong();
+
+      expect(ban.downloadAndInstall).not.toHaveBeenCalled();
+      expect(useTuCapNhatStore.getState().banMoi?.version).toBe('0.2.0');
+    });
+
+    it('lỗi mạng thì báo lỗi cho người dùng', async () => {
+      check.mockRejectedValue(new Error('network'));
+
+      await kiemTraThuCong();
+
+      expect(toast.error).toHaveBeenCalledOnce();
+    });
   });
 
-  it('có bản mới và người dùng đồng ý thì tải và cài', async () => {
-    const ban = banMoi('0.2.0');
-    check.mockResolvedValue(ban);
-    confirmDialog.mockResolvedValue(true);
-    const { kiemTraVaHoiCapNhat } = await nap();
+  describe('caiBanMoi (bấm vào chỉ báo)', () => {
+    it('cài ngay không hỏi lại và cập nhật phần trăm theo dung lượng đã tải', async () => {
+      const phanTram: Array<number | null> = [];
+      const ban = banMoi('0.2.0', [
+        { event: 'Started', data: { contentLength: 200 } },
+        { event: 'Progress', data: { chunkLength: 50 } },
+        { event: 'Progress', data: { chunkLength: 100 } },
+        { event: 'Finished' },
+      ]);
+      useTuCapNhatStore.setState({ banMoi: ban as never });
+      useTuCapNhatStore.subscribe((s) => phanTram.push(s.tienDo));
 
-    await kiemTraVaHoiCapNhat(false);
+      await caiBanMoi();
 
-    expect(ban.downloadAndInstall).toHaveBeenCalledOnce();
-  });
+      expect(confirmDialog).not.toHaveBeenCalled();
+      expect(phanTram).toContain(25);
+      expect(phanTram).toContain(75);
+      expect(useTuCapNhatStore.getState().dangTai).toBe(true);
+    });
 
-  it('người dùng chọn "Để sau" thì không cài, và chạy nền không hỏi lại cùng phiên bản', async () => {
-    const ban = banMoi('0.2.0');
-    check.mockResolvedValue(ban);
-    confirmDialog.mockResolvedValue(false);
-    const { kiemTraVaHoiCapNhat } = await nap();
+    it('thất bại thì mở lại nút và báo lỗi, người dùng bấm thử lại được', async () => {
+      const ban = banMoi('0.2.0');
+      ban.downloadAndInstall.mockRejectedValue(new Error('disk full'));
+      useTuCapNhatStore.setState({ banMoi: ban as never });
 
-    await kiemTraVaHoiCapNhat(false);
-    await kiemTraVaHoiCapNhat(false);
+      await caiBanMoi();
 
-    expect(ban.downloadAndInstall).not.toHaveBeenCalled();
-    expect(confirmDialog).toHaveBeenCalledOnce();
-  });
+      expect(toast.error).toHaveBeenCalledOnce();
+      expect(useTuCapNhatStore.getState().dangTai).toBe(false);
+    });
 
-  it('bấm tay thì vẫn hỏi lại dù trước đó đã chọn "Để sau"', async () => {
-    check.mockResolvedValue(banMoi('0.2.0'));
-    confirmDialog.mockResolvedValue(false);
-    const { kiemTraVaHoiCapNhat } = await nap();
+    it('đang tải thì bấm thêm không tải lần hai', async () => {
+      const ban = banMoi('0.2.0');
+      useTuCapNhatStore.setState({ banMoi: ban as never, dangTai: true });
 
-    await kiemTraVaHoiCapNhat(false);
-    await kiemTraVaHoiCapNhat(true);
+      await caiBanMoi();
 
-    expect(confirmDialog).toHaveBeenCalledTimes(2);
-  });
+      expect(ban.downloadAndInstall).not.toHaveBeenCalled();
+    });
 
-  it('lỗi mạng: bấm tay thì báo lỗi, chạy nền thì im lặng', async () => {
-    check.mockRejectedValue(new Error('network'));
-    const { kiemTraVaHoiCapNhat } = await nap();
+    it('chưa có bản mới thì không làm gì', async () => {
+      await caiBanMoi();
 
-    await kiemTraVaHoiCapNhat(false);
-    expect(toast.error).not.toHaveBeenCalled();
-
-    await kiemTraVaHoiCapNhat(true);
-    expect(toast.error).toHaveBeenCalledOnce();
+      expect(useTuCapNhatStore.getState().dangTai).toBe(false);
+    });
   });
 });

@@ -20,10 +20,7 @@ import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
 import { thietBiService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
 import { desktopLogger } from '../dich-vu/logger/desktop-logger';
-import {
-  kiemTraVaHoiCapNhat,
-  layPhienBanHienTai,
-} from '../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
+import { kiemTraThuCong, layPhienBanHienTai } from '../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
 
 export const TrangCaiDat: React.FC = () => {
   const { theme, setTheme } = useGiaoDienStore();
@@ -53,7 +50,7 @@ export const TrangCaiDat: React.FC = () => {
   const kiemTraBanMoi = async () => {
     setDangKiemCapNhat(true);
     try {
-      await kiemTraVaHoiCapNhat(true);
+      await kiemTraThuCong();
     } finally {
       setDangKiemCapNhat(false);
     }

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Compass, LayoutGrid, Library, Heart, Settings } from 'lucide-react';
 import { useDieuHuongStore, NavTab } from '../../kho-trang-thai/useDieuHuongStore';
 import { useCapNhatStore } from '../../kho-trang-thai/useCapNhatStore';
-import { layPhienBanHienTai } from '../../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
+import { ChiBaPhienBan } from './ChiBaPhienBan';
 
 interface NavGroup {
   groupName: string;
@@ -37,12 +37,6 @@ const NAV_GROUPS: NavGroup[] = [
 export const ThanhBen: React.FC = () => {
   const { currentTab, navigateTo } = useDieuHuongStore();
   const { soLuongBanCapNhat } = useCapNhatStore();
-  // Số phiên bản lấy từ chính app, không gõ cứng, để bản nào cũng hiện đúng số (D-37)
-  const [phienBanApp, setPhienBanApp] = useState<string | null>(null);
-
-  useEffect(() => {
-    void layPhienBanHienTai().then(setPhienBanApp);
-  }, []);
 
   return (
     <aside className="w-[260px] min-w-[260px] h-full bg-surface border-r border-border flex flex-col justify-between select-none transition-colors duration-200 shadow-sm z-30">
@@ -126,15 +120,7 @@ export const ThanhBen: React.FC = () => {
 
       {/* 3. Chân ThanhBen: Widget trạng thái hệ thống mini */}
       <div className="p-3 border-t border-border shrink-0">
-        <div className="p-2.5 rounded-xl bg-surface-elevated border border-border flex items-center justify-between text-[11px] font-mono text-muted">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-success-solid animate-pulse" />
-            <span className="text-secondary font-medium">
-              {phienBanApp ? `v${phienBanApp} • FOSS` : 'FOSS'}
-            </span>
-          </div>
-          <span className="text-[10px] text-muted font-medium">Desktop</span>
-        </div>
+        <ChiBaPhienBan />
       </div>
     </aside>
   );
