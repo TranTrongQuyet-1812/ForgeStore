@@ -72,6 +72,14 @@ export async function dongBoUngDungCli(maThietBi: string, ban: UngDungDaCaiDto):
   const may = await doMay(ban.trinhQuanLyGoi, ban.tenGoiCli);
   const quyetDinh = quyetDinhDongBoCli(ban, may);
 
+  // P3B-30 vòng 2: nếu bản ghi đang chờ xác nhận mà máy trả "chưa thấy" (daCai !== true và không có phiên bản thật),
+  // xóa mốc nghỉ để lần mở sau (người dùng vừa chạy lệnh cài xong) hỏi lại ngay thay vì phải đợi 10 phút.
+  const coPhienBanThat = may.phienBanThat !== null && may.phienBanThat !== '';
+  const thayGoi = may.daCai === true || coPhienBanThat;
+  if (ban.trangThaiXacNhan === 'CHO_XAC_NHAN' && !thayGoi) {
+    lichSuDongBo.delete(khoa);
+  }
+
   let coDoi = false;
   if (quyetDinh.xacNhan) {
     coDoi = (await thuVienService.xacNhanCaiDatCli(maThietBi, ban.maUngDung)) !== null;

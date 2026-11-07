@@ -91,15 +91,44 @@ describe('dongBoUngDungCli (P3B-30)', () => {
     expect(thuVien.xacNhanCaiDatCli).toHaveBeenCalledWith('tb-1', 'app-1');
   });
 
-  it('khoảng nghỉ 10 phút: gọi hai lần liên tiếp thì lần hai không hỏi máy', async () => {
-    giaLapMay(null, '1.0.0');
+  it('bản ghi CHO_XAC_NHAN khi lần 1 máy chưa có gói thì lần 2 phải hỏi lại và tự xác nhận khi người dùng đã cài (P3B-30 vòng 2)', async () => {
+    // Lần 1: máy chưa có gói (npm trả null)
+    giaLapMay(null, null);
+    const doiLan1 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'CHO_XAC_NHAN' }));
+    expect(doiLan1).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(thuVien.xacNhanCaiDatCli).not.toHaveBeenCalled();
 
-    const doiLan1 = await dongBoUngDungCli('tb-1', ban({}));
-    expect(doiLan1).toBe(true);
+    // Người dùng vừa chạy lệnh cài xong, lần 2 mở Thư viện: máy đã có gói
+    giaLapMay(null, '1.0.0');
+    const doiLan2 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'CHO_XAC_NHAN' }));
+    expect(doiLan2).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2); // Đã hỏi lại máy, không bị vướng khoảng nghỉ 10 phút!
+    expect(thuVien.xacNhanCaiDatCli).toHaveBeenCalledWith('tb-1', 'app-1');
+  });
+
+  it('bản ghi DA_XAC_NHAN gọi hai lần liên tiếp thì lần 2 vẫn không hỏi máy (giữ khoảng nghỉ 10 phút)', async () => {
+    giaLapMay(null, null);
+
+    const doiLan1 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'DA_XAC_NHAN' }));
+    expect(doiLan1).toBe(false);
     expect(invoke).toHaveBeenCalledTimes(1);
 
     // Lần 2 ngay sau đó: phải bỏ qua, không gọi thêm lệnh nào
-    const doiLan2 = await dongBoUngDungCli('tb-1', ban({}));
+    const doiLan2 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'DA_XAC_NHAN' }));
+    expect(doiLan2).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('bản ghi CHO_XAC_NHAN khi đã thấy gói thì giữ khoảng nghỉ 10 phút không hỏi lại máy', async () => {
+    giaLapMay(null, '1.0.0');
+
+    const doiLan1 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'CHO_XAC_NHAN' }));
+    expect(doiLan1).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    // Lần 2 ngay sau đó: đã thấy gói nên giữ khoảng nghỉ, không gọi thêm lệnh nào
+    const doiLan2 = await dongBoUngDungCli('tb-1', ban({ trangThaiXacNhan: 'CHO_XAC_NHAN' }));
     expect(doiLan2).toBe(false);
     expect(invoke).toHaveBeenCalledTimes(1);
   });
