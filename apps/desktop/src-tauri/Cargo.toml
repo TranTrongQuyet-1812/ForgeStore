@@ -1,6 +1,6 @@
 [package]
 name = "forgestore-desktop"
-version = "0.1.2"
+version = "0.1.3"
 description = "ForgeStore Desktop Client"
 authors = ["ForgeStore Team"]
 edition = "2021"

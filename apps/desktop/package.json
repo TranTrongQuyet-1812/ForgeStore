@@ -1,6 +1,6 @@
 {
   "name": "@forgestore/desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "ForgeStore Desktop Client (Tauri v2 + React 19 + TypeScript + Tailwind CSS)",
   "type": "module",
