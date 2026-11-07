@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
 } from 'class-validator';
 import { MaTrinhQuanLyGoi } from '@forgestore/types';
@@ -82,6 +83,20 @@ export class CapNhatKhoaRegistryDto {
   @IsString({ message: 'Tên hiển thị Registry phải là chuỗi ký tự' })
   @MaxLength(255, { message: 'Tên hiển thị Registry không được vượt quá 255 ký tự' })
   tenHienThiRegistry?: string;
+}
+
+/** P3B-30: Desktop đọc phiên bản thật của gói đã cài (npm ls -g, pip show) và gửi lên để so với bản mới nhất. */
+export class CapNhatPhienBanCliDto {
+  @ApiProperty({
+    description: 'Phiên bản thật của gói đang cài trên máy (do Desktop đọc từ trình quản lý gói)',
+    example: '1.4.2',
+  })
+  @IsNotEmpty({ message: 'Phiên bản không được để trống' })
+  @IsString({ message: 'Phiên bản phải là chuỗi ký tự' })
+  @MaxLength(100, { message: 'Phiên bản không được vượt quá 100 ký tự' })
+  // Chỉ chữ, số và . + _ ~ -, không khoảng trắng hay ký tự điều khiển: chuỗi này đi vào so sánh phiên bản và hiển thị
+  @Matches(/^[0-9A-Za-z][0-9A-Za-z.+_~-]*$/, { message: 'Phiên bản chứa ký tự không hợp lệ' })
+  phienBan!: string;
 }
 
 export class GhiNhanCaiDatCliDto {

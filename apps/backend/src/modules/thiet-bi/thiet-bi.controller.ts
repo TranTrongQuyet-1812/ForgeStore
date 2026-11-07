@@ -4,6 +4,7 @@ import { ThietBiService } from './thiet-bi.service';
 import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 import {
   CapNhatKhoaRegistryDto,
+  CapNhatPhienBanCliDto,
   GhiNhanCaiDatCliDto,
   GhiNhanCaiDatDto,
 } from './dto/ung-dung-da-cai.dto';
@@ -116,6 +117,30 @@ export class ThietBiController {
     @Param('appId', new ParseUUIDPipe({ version: '4' })) appId: string,
   ) {
     return await this.devicesService.xacNhanCaiDatCli(user.maNguoiDung, id, appId);
+  }
+
+  @Patch(':id/da-cai/:appId/phien-ban')
+  @ApiOperation({
+    summary: 'Cập nhật phiên bản thật của ứng dụng cài bằng dòng lệnh (P3B-30)',
+    description:
+      'Desktop đọc phiên bản gói đang cài (npm ls -g, pip show) rồi gửi lên. Chỉ đổi phiên bản, giữ nguyên trạng thái xác nhận. Không áp cho bản cài EXE/MSI/Portable.',
+  })
+  @ApiParam({ name: 'id', description: 'Mã UUID của thiết bị' })
+  @ApiParam({ name: 'appId', description: 'Mã UUID của ứng dụng' })
+  @ApiResponse({ status: 200, description: 'Cập nhật phiên bản thành công' })
+  @ApiResponse({
+    status: 400,
+    description: 'Phiên bản không hợp lệ hoặc không phải ứng dụng cài bằng lệnh',
+  })
+  @ApiResponse({ status: 403, description: 'Không có quyền truy cập thiết bị của người khác' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy bản ghi cài đặt' })
+  async capNhatPhienBanCli(
+    @NguoiDungHienTai() user: UserSessionContext,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('appId', new ParseUUIDPipe({ version: '4' })) appId: string,
+    @Body() dto: CapNhatPhienBanCliDto,
+  ) {
+    return await this.devicesService.capNhatPhienBanCli(user.maNguoiDung, id, appId, dto.phienBan);
   }
 
   @Delete(':id/da-cai/:appId')

@@ -892,6 +892,47 @@ describe('ThietBiService', () => {
       });
     });
 
+    describe('capNhatPhienBanCli (P3B-30)', () => {
+      it('ném NotFoundException nếu không có bản ghi', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue(null);
+
+        await expect(
+          service.capNhatPhienBanCli(maNguoiDung, maThietBi, maUngDung, '1.2.3'),
+        ).rejects.toThrow(NotFoundException);
+      });
+
+      it('từ chối bản ghi cài bằng EXE/MSI (không có trình quản lý gói)', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({
+          maThietBi,
+          maUngDung,
+          trinhQuanLyGoi: null,
+        });
+
+        await expect(
+          service.capNhatPhienBanCli(maNguoiDung, maThietBi, maUngDung, '1.2.3'),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrisma.ungDungDaCai.update).not.toHaveBeenCalled();
+      });
+
+      it('chỉ đổi phiên bản, giữ nguyên trạng thái xác nhận và hạn 24 giờ', async () => {
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue({
+          maThietBi,
+          maUngDung,
+          trinhQuanLyGoi: 'npm',
+          trangThaiXacNhan: 'DA_XAC_NHAN',
+        });
+        mockPrisma.ungDungDaCai.update.mockResolvedValue({});
+
+        const res = await service.capNhatPhienBanCli(maNguoiDung, maThietBi, maUngDung, '1.2.3');
+
+        expect(res).toEqual({ maUngDung, phienBan: '1.2.3', thanhCong: true });
+        const lenh = mockPrisma.ungDungDaCai.update.mock.calls[0][0];
+        expect(lenh.data).toEqual({ phienBanHienTai: '1.2.3', ngayCapNhatCuoi: expect.any(Date) });
+        expect(lenh.data).not.toHaveProperty('trangThaiXacNhan');
+        expect(lenh.data).not.toHaveProperty('thoiGianHetHan');
+      });
+    });
+
     describe('donDepBanGhiCliQuaHan (P3B-16.5 & Review)', () => {
       it('dọn dẹp các bản ghi CLI CHO_XAC_NHAN đã hết hạn qua deleteMany', async () => {
         mockPrisma.ungDungDaCai.deleteMany.mockResolvedValue({ count: 5 });

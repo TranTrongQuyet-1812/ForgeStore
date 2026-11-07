@@ -632,6 +632,42 @@ export class ThietBiService {
   }
 
   /**
+   * Cập nhật phiên bản thật của gói cài bằng dòng lệnh (P3B-30): Desktop đọc từ `npm ls -g`, `pip show`
+   * rồi gửi lên để báo "có bản mới" theo số thật thay vì số lúc bấm "Tôi đã cài".
+   * Chỉ đổi phiên bản: không đụng trạng thái xác nhận hay hạn 24 giờ, và chỉ áp cho bản ghi cài bằng lệnh.
+   */
+  async capNhatPhienBanCli(
+    maNguoiDung: string,
+    maThietBi: string,
+    maUngDung: string,
+    phienBan: string,
+  ) {
+    await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
+
+    const tonTai = await this.prisma.ungDungDaCai.findUnique({
+      where: { maThietBi_maUngDung: { maThietBi, maUngDung } },
+    });
+    if (!tonTai) {
+      throw new NotFoundException(
+        `Không tìm thấy bản ghi cài đặt của ứng dụng [${maUngDung}] trên thiết bị [${maThietBi}]`,
+      );
+    }
+    if (!tonTai.trinhQuanLyGoi) {
+      throw new BadRequestException(
+        'Chỉ cập nhật phiên bản cho ứng dụng cài bằng dòng lệnh. Bản cài EXE/MSI/Portable lấy phiên bản từ bộ cài.',
+      );
+    }
+
+    await this.prisma.ungDungDaCai.update({
+      where: { maThietBi_maUngDung: { maThietBi, maUngDung } },
+      data: { phienBanHienTai: phienBan, ngayCapNhatCuoi: new Date() },
+    });
+    await this.xoaCacheThietBi(maThietBi);
+
+    return { maUngDung, phienBan, thanhCong: true };
+  }
+
+  /**
    * Dọn dẹp các bản ghi CLI chờ xác nhận đã quá hạn 24 giờ (P3B-16.5).
    * Được gọi từ Cron Job định kỳ mỗi ngày lúc nửa đêm; không chạy trong luồng GET để đảm bảo Idempotent.
    */

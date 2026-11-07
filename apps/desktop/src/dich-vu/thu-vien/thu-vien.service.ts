@@ -89,6 +89,20 @@ export const thuVienService = {
   },
 
   /**
+   * Ghi phiên bản thật của gói cài bằng dòng lệnh (P3B-30), đọc từ `npm ls -g` hay `pip show`.
+   * Chỉ đổi phiên bản, giữ nguyên trạng thái xác nhận. Lỗi thì trả `false`, lần mở Thư viện sau sẽ thử lại.
+   */
+  async capNhatPhienBanCli(deviceId: string, appId: string, phienBan: string): Promise<boolean> {
+    try {
+      await apiClient.patch(`/thiet-bi/${deviceId}/da-cai/${appId}/phien-ban`, { phienBan });
+      return true;
+    } catch (err) {
+      console.warn('[LibraryService] Lỗi khi cập nhật phiên bản CLI lên backend:', err);
+      return false;
+    }
+  },
+
+  /**
    * Cập nhật riêng khóa Registry Windows cho ứng dụng đã cài đặt (DELIV-40.2)
    * Giữ nguyên mã tệp đã cài và phiên bản hiện tại trên CSDL backend.
    */

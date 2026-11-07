@@ -348,6 +348,19 @@ async fn kiem_tra_goi_da_cai(trinh_quan_ly: String, ten_goi: String) -> Result<O
     .map_err(|e| e.to_string())?
 }
 
+/// Đọc phiên bản thật của gói cài bằng dòng lệnh (P3B-30, npm và pip). Chạy ở luồng nền vì có thể mất vài giây.
+#[tauri::command]
+async fn doc_phien_ban_goi_da_cai(
+    trinh_quan_ly: String,
+    ten_goi: String,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        goi_da_cai::doc_phien_ban_goi(&trinh_quan_ly, &ten_goi)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Kiểm tra xem Windows Terminal (wt.exe) có khả dụng trên hệ thống không (D-27)
 #[tauri::command]
 fn kiem_tra_windows_terminal_kha_dung() -> Result<bool, String> {
@@ -398,6 +411,7 @@ pub fn run() {
             mo_terminal_chay_lenh,
             kiem_tra_windows_terminal_kha_dung,
             kiem_tra_goi_da_cai,
+            doc_phien_ban_goi_da_cai,
             logger::ghi_log_desktop,
             logger::mo_thu_muc_log_cmd,
             logger::lay_duong_dan_tep_log

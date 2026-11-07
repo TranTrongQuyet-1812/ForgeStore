@@ -84,6 +84,17 @@ export interface GhiNhanCaiDatCliRequest {
 /**
  * Kết quả xác nhận lại ứng dụng CLI ("Xác nhận đã cài" - P3B-16.5).
  */
+/** P3B-30: gửi phiên bản thật của gói cài bằng lệnh (đọc từ npm ls -g, pip show) lên backend. */
+export interface CapNhatPhienBanCliRequest {
+  phienBan: string;
+}
+
+export interface CapNhatPhienBanCliResponse {
+  maUngDung: string;
+  phienBan: string;
+  thanhCong: boolean;
+}
+
 export interface XacNhanCaiDatCliResponse {
   maBanGhi: string;
   maUngDung: string;

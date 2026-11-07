@@ -44,6 +44,7 @@ import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service'
 import { yeuThichService } from '../dich-vu/yeu-thich/yeu-thich.service';
 import { thuVienService } from '../dich-vu/thu-vien/thu-vien.service';
 import { ApiError } from '../dich-vu/api/api-client';
+import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
 import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi-cach-cai.core';
 import {
@@ -830,6 +831,13 @@ export const TrangChiTiet: React.FC = () => {
       ) || null
     );
   }, [installedAppsOnDevice, isAuthenticated, maThietBi, appDetail?.maUngDung, appId]);
+
+  // P3B-30: đối chiếu bản ghi cài bằng dòng lệnh của ứng dụng này với máy (tự xác nhận, đọc phiên bản thật)
+  const banGhiCliDeDongBo = useMemo(
+    () => (installedCliRecord ? [installedCliRecord] : []),
+    [installedCliRecord],
+  );
+  useDongBoUngDungCli(maThietBi, banGhiCliDeDongBo);
 
   // Ghi nhận "Tôi đã cài" qua dòng lệnh CLI (P3B-16.5)
   const handleRecordCliInstall = async (currentMethod?: CachCaiDto | null) => {

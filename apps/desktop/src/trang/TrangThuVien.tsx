@@ -38,6 +38,7 @@ import {
   type ThongBaoKiemTra,
 } from '../dich-vu/cap-nhat/thong-bao-kiem-tra';
 import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
+import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 
 export const TrangThuVien: React.FC = () => {
@@ -100,6 +101,9 @@ export const TrangThuVien: React.FC = () => {
     enabled: Boolean(isAuthenticated && maThietBi),
     staleTime: 1000 * 60 * 2,
   });
+
+  // P3B-30: tự xác nhận ứng dụng cài bằng dòng lệnh khi gói có thật trên máy, và đọc phiên bản thật để báo cập nhật đúng
+  useDongBoUngDungCli(maThietBi, backendInstalledApps);
 
   // 3. Tự động kiểm tra cập nhật khi tải trang thư viện (P3-12.3 & Điểm 1)
   useEffect(() => {
