@@ -90,6 +90,16 @@ jobs:
           $noiDung | ConvertTo-Json -Depth 5 | Set-Content -Path "$thuMuc/latest.json" -Encoding utf8NoBOM
           Get-Content "$thuMuc/latest.json"
 
+      # Bản tên cố định để Landing dùng đường dẫn tải trực tiếp .../releases/latest/download/ForgeStore-Setup.exe,
+      # không phải sửa trang mỗi lần đổi số phiên bản. Bản có số phiên bản vẫn giữ nguyên cho bộ cập nhật (latest.json).
+      - name: Tạo bản bộ cài tên cố định
+        shell: pwsh
+        run: |
+          $thuMuc = 'apps/desktop/src-tauri/target/release/bundle/nsis'
+          $exe = Get-ChildItem "$thuMuc/ForgeStore_*_x64-setup.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error 'Không thấy bộ cài có số phiên bản.'; exit 1 }
+          Copy-Item $exe.FullName "$thuMuc/ForgeStore-Setup.exe"
+
       - name: Đăng bộ cài lên GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
