@@ -36,6 +36,7 @@ local.properties
 Thumbs.db
 .antigravity/
 .agents/
+.commandcode/
 scratchpad/
 AGENTS.md
 CLAUDE.md
