@@ -5,6 +5,8 @@
 
 > **Kho ứng dụng mã nguồn mở, đọc bằng tiếng Việt.**
 
+**Trang giới thiệu:** [forgestore.lhutech.click](https://forgestore.lhutech.click) · **Tải bản Windows:** [GitHub Releases](https://github.com/TranTrongQuyet-1812/ForgeStore_Project/releases/latest)
+
 ForgeStore gom các phần mềm mã nguồn mở từ GitHub Releases vào một cửa hàng gọn gàng: tìm bằng tiếng Việt, đọc mô tả và README đã dịch sẵn, xem điểm uy tín kèm lý do, rồi cài ngay trên máy. AI chỉ là phần phụ trợ (dịch và tìm kiếm); phần cốt lõi là bộ luật rõ ràng, ai cũng kiểm lại được.
 
 ---
