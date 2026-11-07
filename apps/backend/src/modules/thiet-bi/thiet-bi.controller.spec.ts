@@ -6,6 +6,7 @@ import {
   GhiNhanCaiDatCliDto,
   GhiNhanCaiDatDto,
   CapNhatKhoaRegistryDto,
+  CapNhatPhienBanCliDto,
 } from './dto/ung-dung-da-cai.dto';
 import { UpdateDeviceDto } from './dto/cap-nhat-thiet-bi.dto';
 
@@ -30,6 +31,7 @@ describe('ThietBiController', () => {
       ghiNhanCaiDat: vi.fn(),
       ghiNhanCaiDatCli: vi.fn(),
       xacNhanCaiDatCli: vi.fn(),
+      capNhatPhienBanCli: vi.fn(),
       goCaiDat: vi.fn(),
       capNhatKhoaRegistry: vi.fn(),
     };
@@ -131,6 +133,27 @@ describe('ThietBiController', () => {
         mockUser.maNguoiDung,
         deviceId,
         appId,
+      );
+    });
+  });
+
+  describe('capNhatPhienBanCli (P3B-30)', () => {
+    it('gọi capNhatPhienBanCli cập nhật đúng phiên bản gói CLI', async () => {
+      const dto: CapNhatPhienBanCliDto = { phienBan: '1.2.3' };
+      const mockResult = {
+        maBanGhi: 'rec-cli-1',
+        phienBanHienTai: '1.2.3',
+      };
+      mockService.capNhatPhienBanCli!.mockResolvedValue(mockResult as never);
+
+      const res = await controller.capNhatPhienBanCli(mockUser, deviceId, appId, dto);
+
+      expect(res).toEqual(mockResult);
+      expect(mockService.capNhatPhienBanCli).toHaveBeenCalledWith(
+        mockUser.maNguoiDung,
+        deviceId,
+        appId,
+        '1.2.3',
       );
     });
   });

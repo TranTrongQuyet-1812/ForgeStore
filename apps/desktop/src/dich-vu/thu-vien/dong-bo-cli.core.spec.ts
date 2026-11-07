@@ -14,8 +14,13 @@ describe('giongPhienBan', () => {
 });
 
 describe('quyetDinhDongBoCli (P3B-30)', () => {
-  it('tự xác nhận khi đang chờ xác nhận và gói có thật trên máy', () => {
+  it('tự xác nhận khi đang chờ xác nhận và gói có thật trên máy (winget có daCai: true)', () => {
     const qd = quyetDinhDongBoCli(choXacNhan, { daCai: true, phienBanThat: null });
+    expect(qd.xacNhan).toBe(true);
+  });
+
+  it('gói pip (daCai: null, có phiên bản) thì tự xác nhận vì phiên bản thật là bằng chứng đã cài', () => {
+    const qd = quyetDinhDongBoCli(choXacNhan, { daCai: null, phienBanThat: '1.0.0' });
     expect(qd.xacNhan).toBe(true);
   });
 

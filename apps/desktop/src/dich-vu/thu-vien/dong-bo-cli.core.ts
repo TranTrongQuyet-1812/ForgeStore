@@ -35,8 +35,13 @@ export function giongPhienBan(a: string, b: string): boolean {
 }
 
 export function quyetDinhDongBoCli(ban: BanGhiCliDongBo, may: KetQuaHoiMay): QuyetDinhDongBo {
-  // Chỉ tự xác nhận khi chắc chắn gói có trên máy. `false` hay `null` thì giữ nguyên, không tự xóa gì (P3B-16.6)
-  const xacNhan = ban.trangThaiXacNhan === 'CHO_XAC_NHAN' && may.daCai === true;
+  // Coi đọc được phiên bản thật cũng là bằng chứng đã cài (đặc biệt cho pip khi daCai là null).
+  // Giữ nguyên: daCai === false hoặc không có bằng chứng thì không tự xác nhận và không tự xóa gì (P3B-16.6)
+  const coPhienBanThat = may.phienBanThat !== null && may.phienBanThat !== '';
+  const xacNhan =
+    ban.trangThaiXacNhan === 'CHO_XAC_NHAN' &&
+    may.daCai !== false &&
+    (may.daCai === true || coPhienBanThat);
   const coPhienBanMoi =
     may.phienBanThat !== null &&
     may.phienBanThat !== '' &&

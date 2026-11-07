@@ -11,7 +11,11 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('./thu-vien.service', () => ({ thuVienService: thuVien }));
 vi.mock('../xac-thuc/luu-tru-token', () => ({ isTauri }));
 
-import { dongBoCacUngDungCli, dongBoUngDungCli } from './dong-bo-cli.service';
+import {
+  dongBoCacUngDungCli,
+  dongBoUngDungCli,
+  xoaLichSuDongBoChoTest,
+} from './dong-bo-cli.service';
 
 function ban(phan: Partial<UngDungDaCaiDto>): UngDungDaCaiDto {
   return {
@@ -38,19 +42,66 @@ function giaLapMay(daCai: boolean | null, phienBan: string | null) {
 describe('dongBoUngDungCli (P3B-30)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    xoaLichSuDongBoChoTest();
     isTauri.mockReturnValue(true);
     thuVien.xacNhanCaiDatCli.mockResolvedValue({ thanhCong: true });
     thuVien.capNhatPhienBanCli.mockResolvedValue(true);
   });
 
-  it('gói có thật thì tự xác nhận, không gọi cập nhật phiên bản khi chưa đọc được', async () => {
-    giaLapMay(true, null);
+  it('gói npm chỉ gọi một lệnh đọc phiên bản, đọc được thì coi là đã cài và tự xác nhận', async () => {
+    giaLapMay(null, '1.0.0');
 
-    const doi = await dongBoUngDungCli('tb-1', ban({}));
+    const doi = await dongBoUngDungCli('tb-1', ban({ trinhQuanLyGoi: 'npm' }));
 
     expect(doi).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith('doc_phien_ban_goi_da_cai', {
+      trinhQuanLy: 'npm',
+      tenGoi: 'ten-goi',
+    });
     expect(thuVien.xacNhanCaiDatCli).toHaveBeenCalledWith('tb-1', 'app-1');
     expect(thuVien.capNhatPhienBanCli).not.toHaveBeenCalled();
+  });
+
+  it('gói winget vẫn gọi kiểm tra đã cài như cũ', async () => {
+    giaLapMay(true, null);
+
+    const doi = await dongBoUngDungCli('tb-1', ban({ trinhQuanLyGoi: 'winget' }));
+
+    expect(doi).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith('kiem_tra_goi_da_cai', {
+      trinhQuanLy: 'winget',
+      tenGoi: 'ten-goi',
+    });
+    expect(thuVien.xacNhanCaiDatCli).toHaveBeenCalledWith('tb-1', 'app-1');
+  });
+
+  it('gói pip đọc được phiên bản thật thì tự xác nhận (Việc 1)', async () => {
+    giaLapMay(null, '1.0.0');
+
+    const doi = await dongBoUngDungCli('tb-1', ban({ trinhQuanLyGoi: 'pip' }));
+
+    expect(doi).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith('doc_phien_ban_goi_da_cai', {
+      trinhQuanLy: 'pip',
+      tenGoi: 'ten-goi',
+    });
+    expect(thuVien.xacNhanCaiDatCli).toHaveBeenCalledWith('tb-1', 'app-1');
+  });
+
+  it('khoảng nghỉ 10 phút: gọi hai lần liên tiếp thì lần hai không hỏi máy', async () => {
+    giaLapMay(null, '1.0.0');
+
+    const doiLan1 = await dongBoUngDungCli('tb-1', ban({}));
+    expect(doiLan1).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    // Lần 2 ngay sau đó: phải bỏ qua, không gọi thêm lệnh nào
+    const doiLan2 = await dongBoUngDungCli('tb-1', ban({}));
+    expect(doiLan2).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it('đọc được phiên bản khác thì ghi lên máy chủ', async () => {
@@ -107,7 +158,7 @@ describe('dongBoUngDungCli (P3B-30)', () => {
   });
 
   it('dongBoCacUngDungCli đếm số ứng dụng có thay đổi', async () => {
-    giaLapMay(true, null);
+    giaLapMay(null, '1.0.0');
 
     const so = await dongBoCacUngDungCli('tb-1', [
       ban({ maUngDung: 'a' }),
