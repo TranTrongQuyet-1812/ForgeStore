@@ -1629,34 +1629,27 @@ export const TrangChiTiet: React.FC = () => {
 
                         return (
                           <div key={bIdx} className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-primary flex items-center gap-2">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="text-xs font-semibold text-primary flex items-center gap-2 min-w-0">
                                 <span className="w-5 h-5 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-[10px] font-mono font-bold text-accent-forge-text shrink-0">
                                   {bIdx + 1}
                                 </span>
-                                <span>{buoc.moTa}</span>
+                                <span className="truncate">{buoc.moTa}</span>
+                                {buoc.ruiRoCao && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-danger/20 text-danger font-bold border border-danger/30 flex items-center gap-1 shrink-0">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    Lệnh rủi ro cao
+                                  </span>
+                                )}
                               </span>
 
-                              {buoc.ruiRoCao && (
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-danger/20 text-danger font-bold border border-danger/30 flex items-center gap-1 shrink-0">
-                                  <AlertTriangle className="w-3 h-3" />
-                                  Lệnh rủi ro cao
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Khối dòng lệnh nguyên văn (P3B-18 & D-27: Nút Mở Terminal cạnh Chép lệnh, tách cột để không đè lên lệnh dài) */}
-                            <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
-                              <pre className="flex-1 min-w-0 py-0.5 text-xs font-mono text-success overflow-x-auto leading-relaxed select-text font-medium">
-                                <code>{buoc.lenh}</code>
-                              </pre>
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                 <button
                                   type="button"
                                   onClick={() =>
                                     handleOpenTerminal(buoc.lenh, buoc.ruiRoCao, buoc.canhBaoRuiRo)
                                   }
-                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm font-semibold whitespace-nowrap"
+                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-[11px] font-mono flex items-center gap-1.5 transition-all shadow-sm font-semibold whitespace-nowrap"
                                   title="Mở Terminal đã chuẩn bị sẵn câu lệnh trong biến môi trường và Clipboard (D-27)"
                                 >
                                   <Terminal className="w-3 h-3" />
@@ -1665,7 +1658,7 @@ export const TrangChiTiet: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleCopyCommand(buoc.lenh, stepId)}
-                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 backdrop-blur-xs transition-all shadow-sm whitespace-nowrap"
+                                  className="btn-tactile px-2.5 py-1 rounded-lg bg-surface-elevated hover:bg-surface-hover text-secondary hover:text-primary border border-border text-[11px] font-mono flex items-center gap-1.5 transition-all shadow-xs whitespace-nowrap"
                                   title="Sao chép câu lệnh này vào Clipboard"
                                 >
                                   {isCopied ? (
@@ -1681,6 +1674,13 @@ export const TrangChiTiet: React.FC = () => {
                                   )}
                                 </button>
                               </div>
+                            </div>
+
+                            {/* Khối dòng lệnh nguyên văn rộng trọn 100% chiều ngang */}
+                            <div className="rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
+                              <pre className="p-3.5 text-xs font-mono text-success overflow-x-auto leading-relaxed select-text font-medium">
+                                <code>{buoc.lenh}</code>
+                              </pre>
                             </div>
 
                             {/* Cảnh báo rủi ro cao */}
