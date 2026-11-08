@@ -7,11 +7,7 @@ import {
   Moon,
   LogOut,
   User as UserIcon,
-  Compass,
-  Sparkles,
-  Library,
   Heart,
-  LayoutGrid,
   Settings,
   ChevronDown,
 } from 'lucide-react';
@@ -23,16 +19,13 @@ import { xacThucService } from '../../dich-vu/xac-thuc/xac-thuc.service';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
 import { ThanhTimKiemDropdown } from '../tim-kiem/ThanhTimKiemDropdown';
 
-const TAB_CONFIGS: Record<
-  string,
-  { label: string; icon: React.ComponentType<{ className?: string }> }
-> = {
-  explore: { label: 'Khám phá Store', icon: Compass },
-  detail: { label: 'Chi tiết ứng dụng', icon: Sparkles },
-  library: { label: 'Thư viện máy', icon: Library },
-  favorites: { label: 'Kho yêu thích', icon: Heart },
-  categories: { label: 'Danh mục', icon: LayoutGrid },
-  settings: { label: 'Cài đặt', icon: Settings },
+const TAB_LABELS: Record<string, string> = {
+  explore: 'Khám phá Store',
+  detail: 'Chi tiết ứng dụng',
+  library: 'Thư viện máy',
+  favorites: 'Kho yêu thích',
+  categories: 'Danh mục',
+  settings: 'Cài đặt',
 };
 
 export const ThanhTieuDe: React.FC = () => {
@@ -119,26 +112,17 @@ export const ThanhTieuDe: React.FC = () => {
       data-tauri-drag-region
       className="h-16 min-h-[64px] w-full bg-surface border-b border-border flex items-center justify-between px-5 select-none z-40 transition-colors duration-200 shadow-xs shrink-0 cursor-default"
     >
-      {/* Vùng bên trái: Breadcrumbs trang hiện tại */}
-      {(() => {
-        const config = TAB_CONFIGS[currentTab] || TAB_CONFIGS.explore;
-        const Icon = config.icon;
-        return (
-          <div data-tauri-drag-region className="flex items-center gap-2.5 text-xs">
-            <div className="w-7 h-7 rounded-lg bg-surface-elevated border border-border flex items-center justify-center text-secondary shrink-0 shadow-xs">
-              <Icon className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-primary font-semibold font-display text-sm tracking-tight">
-              {config.label}
-            </span>
-            {!isTauri() && (
-              <span className="ml-1.5 px-2 py-0.5 rounded-full bg-surface-elevated border border-border text-muted font-mono text-[10px] font-medium tracking-wide">
-                Web Preview
-              </span>
-            )}
-          </div>
-        );
-      })()}
+      {/* Vùng bên trái: Tên trang hiện tại */}
+      <div data-tauri-drag-region className="flex items-center gap-2 text-xs">
+        <span className="text-primary font-semibold font-display text-sm tracking-tight">
+          {TAB_LABELS[currentTab] || TAB_LABELS.explore}
+        </span>
+        {!isTauri() && (
+          <span className="ml-1.5 px-2 py-0.5 rounded-full bg-surface-elevated border border-border text-muted font-mono text-[10px] font-medium tracking-wide">
+            Web Preview
+          </span>
+        )}
+      </div>
 
       {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh (căn giữa, bề rộng gọn gàng) */}
       <div data-tauri-drag-region className="flex-1 flex justify-center mx-4 min-w-0">

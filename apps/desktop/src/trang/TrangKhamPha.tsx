@@ -1,18 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Star,
-  Clock,
-  Download,
-  Check,
-  Flame,
-  ArrowUpRight,
-  Shield,
-  RefreshCw,
-  AlertCircle,
-  PackageOpen,
-  Loader2,
-} from 'lucide-react';
+import { Download, Check, RefreshCw, AlertCircle, PackageOpen, Loader2 } from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
 import { ThanhPhanTrang } from '../thanh-phan/dung-chung/ThanhPhanTrang';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
@@ -36,7 +24,6 @@ type SortTab = 'trending' | 'stars' | 'recent';
 interface SpotlightConfig {
   app: AppCardData;
   badge: string;
-  badgeIcon: React.ReactNode;
   subtitle: string;
   quote: string;
   gradient: string;
@@ -212,7 +199,6 @@ export const TrangKhamPha: React.FC = () => {
       trending: {
         app: topStarApp,
         badge: 'ĐANG ĐƯỢC QUAN TÂM',
-        badgeIcon: <Flame className="w-3.5 h-3.5 fill-accent-forge text-accent-forge-text" />,
         subtitle: `Dẫn đầu cộng đồng FOSS (${((topStarApp.soSaoGithub || 0) / 1000).toFixed(0)}k sao)`,
         quote: `"${topStarApp.moTaNgan}"`,
         gradient: 'from-accent-forge to-warning',
@@ -220,7 +206,6 @@ export const TrangKhamPha: React.FC = () => {
       curated: {
         app: curatedApp,
         badge: 'FORGE ĐỀ XUẤT • TIÊU ĐIỂM FOSS',
-        badgeIcon: <Star className="w-3.5 h-3.5 fill-warning text-warning" />,
         subtitle: 'Tuyển chọn chất lượng: mã nguồn minh bạch, hiệu năng cao',
         quote: `"${curatedApp.moTaNgan}"`,
         gradient: 'from-accent-ai to-accent-ai',
@@ -228,7 +213,6 @@ export const TrangKhamPha: React.FC = () => {
       security: {
         app: securityApp,
         badge: `ĐIỂM UY TÍN CAO • ${securityApp.diemUyTin || 100}/100`,
-        badgeIcon: <Shield className="w-3.5 h-3.5 text-success" />,
         subtitle: 'Đánh giá dựa trên lịch sử kho mã và tính minh bạch',
         quote: `"${securityApp.moTaNgan}"`,
         gradient: 'from-accent-ai to-accent-ai',
@@ -267,9 +251,6 @@ export const TrangKhamPha: React.FC = () => {
                         : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                     }`}
                   >
-                    {spotlightMode === 'trending' && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                    )}
                     <span>Đang được quan tâm</span>
                   </button>
 
@@ -281,9 +262,6 @@ export const TrangKhamPha: React.FC = () => {
                         : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                     }`}
                   >
-                    {spotlightMode === 'curated' && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                    )}
                     <span>Forge Đề Xuất</span>
                   </button>
 
@@ -295,9 +273,6 @@ export const TrangKhamPha: React.FC = () => {
                         : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
                     }`}
                   >
-                    {spotlightMode === 'security' && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0" />
-                    )}
                     <span>Điểm uy tín cao</span>
                   </button>
                 </div>
@@ -319,7 +294,6 @@ export const TrangKhamPha: React.FC = () => {
                 <div className="flex-1 max-w-2xl flex flex-col gap-3">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge-text border border-accent-forge/40 flex items-center gap-1">
-                      {currentSpotlight.badgeIcon}
                       <span>{currentSpotlight.badge}</span>
                     </span>
                     <span className="text-xs font-mono text-muted">
@@ -346,14 +320,9 @@ export const TrangKhamPha: React.FC = () => {
                         <h2 className="text-2xl font-bold font-display text-primary tracking-tight">
                           {spotlightApp.tenApp}
                         </h2>
-                        {spotlightApp.isVerifiedFoss && (
-                          <span className="text-success" title="Mã nguồn mở đã xác minh minh bạch">
-                            <Check className="w-4 h-4 stroke-[2.5]" />
-                          </span>
-                        )}
                       </div>
                       <p className="text-xs font-mono text-muted">
-                        {spotlightApp.repoHandle} • ⭐ {formatStars(spotlightApp.soSaoGithub)} sao
+                        {spotlightApp.repoHandle} • {formatStars(spotlightApp.soSaoGithub)} sao
                         GitHub
                         {spotlightApp.starDelta && (
                           <span className="text-success font-semibold ml-1.5">
@@ -433,7 +402,6 @@ export const TrangKhamPha: React.FC = () => {
                     className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
                   >
                     <span>Xem chi tiết ứng dụng</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-muted" />
                   </button>
                 </div>
               </div>
@@ -456,9 +424,6 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Flame
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'trending' ? 'text-accent-forge-text' : 'text-muted'}`}
-                />
                 <span className="whitespace-nowrap">Thịnh Hành</span>
               </button>
 
@@ -470,9 +435,6 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Star
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'stars' ? 'text-accent-forge-text' : 'text-muted'}`}
-                />
                 <span className="whitespace-nowrap">Nhiều Sao Nhất</span>
               </button>
 
@@ -484,9 +446,6 @@ export const TrangKhamPha: React.FC = () => {
                     : 'text-muted hover:text-secondary'
                 }`}
               >
-                <Clock
-                  className={`w-3.5 h-3.5 shrink-0 ${activeSort === 'recent' ? 'text-accent-forge-text' : 'text-muted'}`}
-                />
                 <span className="whitespace-nowrap">Mới Cập Nhật</span>
               </button>
             </div>
@@ -545,9 +504,6 @@ export const TrangKhamPha: React.FC = () => {
                       : 'bg-surface hover:bg-surface-hover text-secondary hover:text-primary border border-border'
                   }`}
                 >
-                  {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(255,158,32,0.6)]" />
-                  )}
                   <span className="whitespace-nowrap">{category.ten}</span>
                   {category.soLuong > 0 && (
                     <span

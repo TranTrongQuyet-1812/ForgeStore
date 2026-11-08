@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Download, Check, Loader2 } from 'lucide-react';
+import { Star, Check, Loader2 } from 'lucide-react';
 import { NhanTinCay } from './NhanTinCay';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
@@ -88,11 +88,6 @@ const TheUngDungGoc: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
               <h3 className="text-base font-bold font-display text-primary truncate group-hover:text-accent-forge-text transition-colors">
                 {app.tenApp}
               </h3>
-              {app.isVerifiedFoss && (
-                <span title="Xác minh mã nguồn mở minh bạch" className="text-success shrink-0">
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                </span>
-              )}
             </div>
 
             <p className="text-xs font-mono text-muted truncate mt-0.5">
@@ -199,10 +194,7 @@ const TheUngDungGoc: React.FC<AppCardProps> = ({ app, staggerIndex }) => {
               <span>{trangThaiCaiDat.label}</span>
             </>
           ) : (
-            <>
-              <Download className="w-3.5 h-3.5" />
-              <span>{trangThaiCaiDat.label}</span>
-            </>
+            <span>{trangThaiCaiDat.label}</span>
           )}
         </button>
       </div>

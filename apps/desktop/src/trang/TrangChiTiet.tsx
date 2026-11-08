@@ -9,7 +9,6 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Github,
   FileArchive,
   CheckCircle2,
   Shield,
@@ -18,14 +17,10 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Layers,
-  Info,
   X,
   Loader2,
   FolderOpen,
   Terminal,
-  BookOpen,
-  Languages,
   Library,
   Smartphone,
 } from 'lucide-react';
@@ -1187,15 +1182,8 @@ export const TrangChiTiet: React.FC = () => {
                 </h1>
                 <NhanLuuTru daLuuTru={appDetail.daLuuTru} />
                 {appDetail.daXacMinh && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-success/10 text-success text-xs font-mono font-medium border border-success/25 flex items-center gap-1.5">
-                    <Check className="w-3 h-3 stroke-[2.5]" />
+                  <span className="px-2.5 py-0.5 rounded-full bg-success/10 text-success text-xs font-mono font-medium border border-success/25">
                     Mã nguồn mở · {appDetail.loaiGiayPhep || 'FOSS'}
-                  </span>
-                )}
-                {appDetail.duocNoiBat && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated text-secondary text-xs font-mono font-medium border border-border flex items-center gap-1.5">
-                    <Star className="w-3 h-3 text-muted" />
-                    Forge Đề Xuất
                   </span>
                 )}
               </div>
@@ -1238,7 +1226,6 @@ export const TrangChiTiet: React.FC = () => {
           <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-border/60 pb-3 flex-wrap gap-2">
               <div className="flex items-center gap-2 text-primary font-display font-bold text-sm">
-                <BookOpen className="w-4 h-4 text-accent-forge-text" />
                 <span>Tài liệu & Hướng dẫn (README)</span>
               </div>
 
@@ -1253,11 +1240,7 @@ export const TrangChiTiet: React.FC = () => {
                       : 'text-secondary hover:text-primary hover:bg-surface-hover'
                   }`}
                 >
-                  <Languages className="w-3.5 h-3.5" />
                   <span>Tiếng Việt</span>
-                  {readmeData?.trangThai === 'HOAN_TAT' && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-success-solid"></span>
-                  )}
                 </button>
                 <button
                   type="button"
@@ -1427,7 +1410,6 @@ export const TrangChiTiet: React.FC = () => {
               <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
                 <div>
                   <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
-                    <FileArchive className="w-4 h-4 text-accent-forge-text" />
                     <span>
                       BẢN PHÁT HÀNH {latestRelease?.tenPhienBan || 'MỚI NHẤT'}
                       {latestRelease?.laBanThuNghiem && (
@@ -1922,7 +1904,6 @@ export const TrangChiTiet: React.FC = () => {
             <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-muted" />
                   <span>LỊCH SỬ PHIÊN BẢN ({appDetail.danhSachBanPhatHanh.length})</span>
                 </h3>
                 <button
@@ -2474,9 +2455,8 @@ export const TrangChiTiet: React.FC = () => {
           {coDiemUyTin && (
             <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold font-display text-muted uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-muted" />
-                  <span>ĐIỂM UY TÍN KHO MÃ</span>
+                <span className="text-xs font-semibold font-display text-muted uppercase tracking-wider">
+                  ĐIỂM UY TÍN KHO MÃ
                 </span>
                 <NhanTinCay score={trustScore} size="sm" />
               </div>
@@ -2539,7 +2519,6 @@ export const TrangChiTiet: React.FC = () => {
                   onClick={() => setIsSafetyModalOpen(true)}
                   className="btn-tactile text-accent-ai hover:underline text-left text-xs font-semibold mt-1 flex items-center gap-1"
                 >
-                  <Info className="w-3.5 h-3.5" />
                   <span>Xem chi tiết thẩm định rủi ro ({riskItems.length} mục)</span>
                 </button>
               </div>
@@ -2548,9 +2527,8 @@ export const TrangChiTiet: React.FC = () => {
 
           {/* Thẻ Thông Tin Kho Lưu Trữ GitHub */}
           <div className="tactile-card p-5 rounded-2xl flex flex-col gap-3 text-xs">
-            <h4 className="font-semibold font-display text-muted flex items-center gap-2 uppercase tracking-wider">
-              <Github className="w-4 h-4 text-muted" />
-              <span>DỮ LIỆU KHO CHỨA GITHUB</span>
+            <h4 className="font-semibold font-display text-muted uppercase tracking-wider">
+              DỮ LIỆU KHO CHỨA GITHUB
             </h4>
             <div className="flex flex-col gap-2 font-mono text-xs text-secondary">
               <div className="flex justify-between py-1 border-b border-border">
