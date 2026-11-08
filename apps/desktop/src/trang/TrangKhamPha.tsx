@@ -13,6 +13,7 @@ import {
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
 import { ThanhPhanTrang } from '../thanh-phan/dung-chung/ThanhPhanTrang';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
+import { thuNhoAnhDaiDien } from '../thanh-phan/dung-chung/anh-dai-dien.core';
 import {
   KhungXuongCard,
   KhungXuongSpotlight,
@@ -251,8 +252,10 @@ export const TrangKhamPha: React.FC = () => {
                       <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center font-bold text-2xl font-display text-primary shadow-md shrink-0 overflow-hidden">
                         {slideApp.iconUrl ? (
                           <img
-                            src={slideApp.iconUrl}
+                            src={thuNhoAnhDaiDien(slideApp.iconUrl, 128)}
                             alt={slideApp.tenApp}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         ) : (

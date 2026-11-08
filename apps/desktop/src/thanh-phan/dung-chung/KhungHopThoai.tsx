@@ -46,6 +46,8 @@ export interface KhungHopThoaiProps {
  */
 export const KhungHopThoai: React.FC<KhungHopThoaiProps> = ({ dangMo, khiDong, children }) => {
   const nenRef = useRef<HTMLDivElement>(null);
+  const khiDongRef = useRef(khiDong);
+  khiDongRef.current = khiDong;
 
   useEffect(() => {
     if (!dangMo || typeof document === 'undefined') return;
@@ -55,7 +57,7 @@ export const KhungHopThoai: React.FC<KhungHopThoaiProps> = ({ dangMo, khiDong, c
 
     const xuLyPhim = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        khiDong();
+        khiDongRef.current();
       }
     };
     window.addEventListener('keydown', xuLyPhim);
@@ -64,7 +66,7 @@ export const KhungHopThoai: React.FC<KhungHopThoaiProps> = ({ dangMo, khiDong, c
       window.removeEventListener('keydown', xuLyPhim);
       khoiPhucCuon();
     };
-  }, [dangMo, khiDong]);
+  }, [dangMo]);
 
   if (!dangMo) return null;
 
