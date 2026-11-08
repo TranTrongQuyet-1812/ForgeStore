@@ -1,7 +1,8 @@
 # P3B-14.3: tạo tag v* (ví dụ v0.2.0) thì build bộ cài NSIS trên máy Windows của GitHub
 # và đính tệp .exe vào GitHub Releases của tag đó. Không chạy ở các lần push thường.
 # D-37 (P3B-29): bộ cài được ký bằng khóa trong Secret `TAURI_SIGNING_PRIVATE_KEY` và sinh thêm `latest.json`
-# để app Desktop tự báo bản mới. Chỉ cần đẩy tag; GitHub tự đặt bản mới là Latest (trừ khi tạo tay kiểu pre-release).
+# để app Desktop tự báo bản mới. Đẩy tag thì CI đăng bản NHÁP (draft); chỉ khi chủ dự án bấm Publish trên GitHub
+# thì bản đó mới thành Latest và người dùng mới nhận bản cập nhật.
 name: Phát hành bộ cài Desktop
 
 on:
@@ -107,3 +108,6 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
             apps/desktop/src-tauri/target/release/bundle/nsis/latest.json
           generate_release_notes: true
+          # Đăng ở dạng NHÁP: chỉ chủ dự án thấy, người dùng và bộ tự cập nhật chưa nhận. Chủ tải bộ cài từ bản nháp,
+          # cài thử và test tay xong mới bấm "Publish release" (lúc đó mới thành bản Latest). Không đạt thì xóa bản nháp.
+          draft: true
