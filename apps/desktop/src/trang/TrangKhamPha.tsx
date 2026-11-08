@@ -1,6 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Check, RefreshCw, AlertCircle, PackageOpen, Loader2 } from 'lucide-react';
+import {
+  Download,
+  Check,
+  RefreshCw,
+  AlertCircle,
+  PackageOpen,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { TheUngDung, AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
 import { ThanhPhanTrang } from '../thanh-phan/dung-chung/ThanhPhanTrang';
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
@@ -16,24 +25,18 @@ import type { UngDungTomTatDto } from '@forgestore/types';
 
 // Số ứng dụng mỗi trang: đủ để duyệt nhanh nhưng chỉ có chừng này thẻ trên màn hình
 const SO_UNG_DUNG_MOI_TRANG = 30;
+// Số lượng Repo nhiều sao nhất hiển thị trên băng trượt Hero
+const SO_LUONG_HERO_TOP_SAO = 5;
 
-type SpotlightMode = 'trending' | 'curated' | 'security';
 type TimeWindow = 'today' | 'week' | 'month';
 type SortTab = 'trending' | 'stars' | 'recent';
-
-interface SpotlightConfig {
-  app: AppCardData;
-  badge: string;
-  subtitle: string;
-  quote: string;
-  gradient: string;
-}
 
 export const TrangKhamPha: React.FC = () => {
   const queryClient = useQueryClient();
   const { openAppDetail, selectedCategory, setSelectedCategory } = useDieuHuongStore();
   const { layTrangThaiCaiDat } = useDeviceInstalledApps();
-  const [spotlightMode, setSpotlightMode] = useState<SpotlightMode>('trending');
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isHeroPaused, setIsHeroPaused] = useState(false);
   const [activeCategory, setActiveCategory] = useState('Tất cả');
   const [activeSort, setActiveSort] = useState<SortTab>('trending');
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('week');
@@ -128,10 +131,16 @@ export const TrangKhamPha: React.FC = () => {
     void queryClient.prefetchQuery(truyVanTrang(trang + 1));
   }, [isPlaceholderData, trang, tongSoTrang, queryClient, truyVanTrang]);
 
-  // Đấu nối TanStack Query: Nạp các ứng dụng nổi bật (Featured Apps)
-  const { data: featuredAppsData, isLoading: isFeaturedLoading } = useQuery({
-    queryKey: ['featured-apps'],
-    queryFn: () => khoUngDungService.layUngDungNoiBat(),
+  // Đấu nối TanStack Query: Nạp Top 5 Repo nhiều sao nhất thực tế từ hệ thống cho băng trượt Hero
+  const { data: topStarResponse, isLoading: isHeroLoading } = useQuery({
+    queryKey: ['hero-top-stars-apps', 'windows', SO_LUONG_HERO_TOP_SAO],
+    queryFn: () =>
+      khoUngDungService.layDanhSachUngDung({
+        platform: 'windows',
+        sort: 'stars',
+        page: 1,
+        limit: SO_LUONG_HERO_TOP_SAO,
+      }),
     staleTime: 1000 * 60 * 10,
   });
 
@@ -168,60 +177,21 @@ export const TrangKhamPha: React.FC = () => {
     [appsResponse],
   );
 
-  const featuredAppsList = useMemo(() => {
-    if (featuredAppsData && featuredAppsData.length > 0) {
-      return featuredAppsData.map((dto: UngDungTomTatDto) =>
-        khoUngDungService.anhXaDtoSangTheUngDung(dto),
-      );
-    }
-    return [];
-  }, [featuredAppsData]);
+  const heroTopApps: AppCardData[] = useMemo(() => {
+    const list = topStarResponse?.duLieu ?? [];
+    return list
+      .slice(0, SO_LUONG_HERO_TOP_SAO)
+      .map((dto: UngDungTomTatDto) => khoUngDungService.anhXaDtoSangTheUngDung(dto));
+  }, [topStarResponse]);
 
-  // Cấu hình Spotlight tương ứng với 3 chế độ (chỉ khi có featuredAppsList)
-  const spotlightConfigs: Record<SpotlightMode, SpotlightConfig> | null = useMemo(() => {
-    if (featuredAppsList.length === 0) return null;
-
-    // Top app nhiều sao nhất làm quán quân Trending
-    const topStarApp =
-      [...featuredAppsList].sort((a, b) => b.soSaoGithub - a.soSaoGithub)[0] || featuredAppsList[0];
-
-    // App đề xuất (RustDesk hoặc app thứ 2)
-    const curatedApp =
-      featuredAppsList.find((a) => a.repoHandle?.includes('rustdesk')) ||
-      featuredAppsList[1] ||
-      featuredAppsList[0];
-
-    // App uy tín cao nhất (Điểm uy tín >= 97)
-    const securityApp =
-      featuredAppsList.find((a) => (a.diemUyTin ?? 0) >= 97) || featuredAppsList[0];
-
-    return {
-      trending: {
-        app: topStarApp,
-        badge: 'ĐANG ĐƯỢC QUAN TÂM',
-        subtitle: `Dẫn đầu cộng đồng FOSS (${((topStarApp.soSaoGithub || 0) / 1000).toFixed(0)}k sao)`,
-        quote: `"${topStarApp.moTaNgan}"`,
-        gradient: 'from-accent-forge to-warning',
-      },
-      curated: {
-        app: curatedApp,
-        badge: 'FORGE ĐỀ XUẤT • TIÊU ĐIỂM FOSS',
-        subtitle: 'Tuyển chọn chất lượng: mã nguồn minh bạch, hiệu năng cao',
-        quote: `"${curatedApp.moTaNgan}"`,
-        gradient: 'from-accent-ai to-accent-ai',
-      },
-      security: {
-        app: securityApp,
-        badge: `ĐIỂM UY TÍN CAO • ${securityApp.diemUyTin || 100}/100`,
-        subtitle: 'Đánh giá dựa trên lịch sử kho mã và tính minh bạch',
-        quote: `"${securityApp.moTaNgan}"`,
-        gradient: 'from-accent-ai to-accent-ai',
-      },
-    };
-  }, [featuredAppsList]);
-
-  const currentSpotlight = spotlightConfigs ? spotlightConfigs[spotlightMode] : null;
-  const spotlightApp = currentSpotlight?.app;
+  // Tự động trượt ngang qua 5 Repo mỗi 5 giây (tạm dừng khi người dùng rê chuột vào xem)
+  useEffect(() => {
+    if (isHeroPaused || heroTopApps.length <= 1) return;
+    const timer = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % heroTopApps.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [isHeroPaused, heroTopApps.length]);
 
   const formatStars = (stars: number) => {
     if (stars >= 1000) return `${(stars / 1000).toFixed(1)}k`;
@@ -230,184 +200,185 @@ export const TrangKhamPha: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-8 p-6 md:p-8 max-w-7xl mx-auto w-full select-none animate-fade-in">
-      {/* 1. DUAL-LENS INTERACTIVE SPOTLIGHT STAGE (Chỉ hiển thị khi có dữ liệu thật từ Backend) */}
-      {isFeaturedLoading ? (
+      {/* 1. HERO CAROUSEL: BĂNG TRƯỢT NGANG TOP 5 REPO NHIỀU SAO NHẤT TRÊN GITHUB */}
+      {isHeroLoading ? (
         <KhungXuongSpotlight variant="dither" />
-      ) : currentSpotlight && spotlightApp ? (
-        <AsciiReveal key={spotlightMode} preset="dither" duration="fast" origin="center">
-          <section
-            data-ascii="surface"
-            className="surface-card relative overflow-hidden rounded-2xl p-6 md:p-8 border border-border"
+      ) : heroTopApps.length > 0 ? (
+        <section
+          data-ascii="surface"
+          onMouseEnter={() => setIsHeroPaused(true)}
+          onMouseLeave={() => setIsHeroPaused(false)}
+          className="surface-card group relative overflow-hidden rounded-2xl border border-border"
+        >
+          {/* Ánh sáng nền nhẹ tạo chiều sâu cho sân khấu Hero */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-24 -right-24 w-96 h-96 rounded-full bg-accent-forge/10 blur-3xl"
+          />
+
+          {/* Băng trượt ngang 5 Repo */}
+          <div
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${activeSlide * 100}%)` }}
           >
-            <div className="relative z-10 flex flex-col gap-5">
-              {/* Hàng trên: Bộ chọn 3 chế độ Spotlight */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface border border-border">
-                  <button
-                    onClick={() => setSpotlightMode('trending')}
-                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                      spotlightMode === 'trending'
-                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                    }`}
-                  >
-                    <span>Đang được quan tâm</span>
-                  </button>
+            {heroTopApps.map((slideApp) => {
+              const slideTrangThai = layTrangThaiCaiDat(slideApp.id, slideApp.repoHandle);
+              const isInstalled = slideTrangThai.trangThai === 'DA_CAI_DAT';
+              const isProcessing =
+                slideTrangThai.trangThai === 'DANG_TAI' ||
+                slideTrangThai.trangThai === 'XAC_MINH' ||
+                slideTrangThai.trangThai === 'DANG_CAI_DAT';
 
-                  <button
-                    onClick={() => setSpotlightMode('curated')}
-                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                      spotlightMode === 'curated'
-                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                    }`}
-                  >
-                    <span>Forge Đề Xuất</span>
-                  </button>
-
-                  <button
-                    onClick={() => setSpotlightMode('security')}
-                    className={`btn-tactile px-3.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-all outline-none ${
-                      spotlightMode === 'security'
-                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border-focus'
-                        : 'text-secondary hover:text-primary hover:bg-surface-hover border border-transparent'
-                    }`}
-                  >
-                    <span>Điểm uy tín cao</span>
-                  </button>
-                </div>
-
-                <span className="text-xs font-mono text-muted">
-                  {spotlightMode === 'trending' && 'Ứng dụng được cộng đồng quan tâm nhiều nhất'}
-                  {spotlightMode === 'curated' &&
-                    'Tuyển chọn chất lượng: mã nguồn mở, hoạt động ổn định'}
-                  {spotlightMode === 'security' && 'Ứng dụng đạt điểm uy tín cao nhất từ kho mã'}
-                </span>
-              </div>
-
-              {/* Khung nội dung chính của Spotlight với Morphing Fade Animation */}
-              <div
-                key={spotlightMode}
-                className="animate-fade-in flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pt-1"
-              >
-                {/* Cột trái: Thông tin ứng dụng theo chế độ đang chọn */}
-                <div className="flex-1 max-w-2xl flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-accent-forge/20 text-accent-forge-text border border-accent-forge/40 flex items-center gap-1">
-                      <span>{currentSpotlight.badge}</span>
-                    </span>
-                    <span className="text-xs font-mono text-muted">
-                      {currentSpotlight.subtitle}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 mt-1">
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${currentSpotlight.gradient} flex items-center justify-center font-bold text-2xl font-display text-white shadow-lg shrink-0 overflow-hidden`}
-                    >
-                      {spotlightApp.iconUrl ? (
-                        <img
-                          src={spotlightApp.iconUrl}
-                          alt={spotlightApp.tenApp}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        spotlightApp.tenApp.charAt(0)
+              return (
+                <div
+                  key={slideApp.id}
+                  className="w-full shrink-0 p-6 md:p-8 pb-12 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
+                >
+                  {/* Cột trái: Thông tin ứng dụng tiêu điểm */}
+                  <div className="flex-1 max-w-2xl flex flex-col gap-3 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {slideApp.danhMucChinh && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-accent-forge/15 text-accent-forge-text border border-accent-forge/30">
+                          {slideApp.danhMucChinh}
+                        </span>
                       )}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-2xl font-bold font-display text-primary tracking-tight">
-                          {spotlightApp.tenApp}
-                        </h2>
-                      </div>
-                      <p className="text-xs font-mono text-muted">
-                        {spotlightApp.repoHandle} • {formatStars(spotlightApp.soSaoGithub)} sao
-                        GitHub
-                        {spotlightApp.starDelta && (
-                          <span className="text-success font-semibold ml-1.5">
-                            ({spotlightApp.starDelta})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-secondary leading-relaxed mt-1">
-                    {currentSpotlight.quote}
-                  </p>
-
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded bg-surface-elevated text-xs font-mono text-primary border border-border">
-                      {spotlightApp.phienBanMoiNhat} (Mới nhất)
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                      {spotlightApp.kienTruc?.join(' & ') || 'x64'}
-                    </span>
-                    {spotlightApp.kichThuocFile && (
-                      <span className="px-2 py-0.5 rounded bg-surface-elevated/70 text-xs font-mono text-secondary border border-border/60">
-                        {spotlightApp.kichThuocFile}
+                      <span className="text-xs font-mono text-muted">
+                        {formatStars(slideApp.soSaoGithub)} sao trên GitHub
                       </span>
-                    )}
-                    <NhanTinCay score={spotlightApp.diemUyTin} size="sm" showLabel />
+                    </div>
+
+                    <div className="flex items-center gap-3.5 mt-1">
+                      <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center font-bold text-2xl font-display text-primary shadow-md shrink-0 overflow-hidden">
+                        {slideApp.iconUrl ? (
+                          <img
+                            src={slideApp.iconUrl}
+                            alt={slideApp.tenApp}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          slideApp.tenApp.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="text-2xl md:text-3xl font-bold font-display text-primary tracking-tight truncate">
+                          {slideApp.tenApp}
+                        </h2>
+                        <p className="text-xs font-mono text-muted truncate mt-0.5">
+                          {slideApp.repoHandle}
+                          {slideApp.giayPhep ? ` • ${slideApp.giayPhep}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-secondary leading-relaxed mt-1 line-clamp-2">
+                      {slideApp.moTaNgan}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {slideApp.phienBanMoiNhat && (
+                        <span className="px-2.5 py-0.5 rounded-md bg-surface text-xs font-mono text-primary border border-border">
+                          {slideApp.phienBanMoiNhat}
+                        </span>
+                      )}
+                      <span className="px-2.5 py-0.5 rounded-md bg-surface text-xs font-mono text-secondary border border-border">
+                        {slideApp.kienTruc?.join(' & ') || 'x64'}
+                      </span>
+                      {slideApp.kichThuocFile && (
+                        <span className="px-2.5 py-0.5 rounded-md bg-surface text-xs font-mono text-secondary border border-border">
+                          {slideApp.kichThuocFile}
+                        </span>
+                      )}
+                      <NhanTinCay score={slideApp.diemUyTin} size="sm" showLabel />
+                    </div>
+                  </div>
+
+                  {/* Cột phải: Nút hành động */}
+                  <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full lg:w-auto shrink-0">
+                    <button
+                      onClick={() => openAppDetail(slideApp.id)}
+                      className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-md transition-all ${
+                        isInstalled
+                          ? 'bg-success-solid hover:bg-success-solid/90 text-white'
+                          : isProcessing
+                            ? 'bg-accent-forge/80 text-on-accent'
+                            : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent'
+                      }`}
+                    >
+                      {isInstalled ? (
+                        <>
+                          <Check className="w-4 h-4 stroke-[2.5]" />
+                          <span>{slideTrangThai.label}</span>
+                        </>
+                      ) : isProcessing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>{slideTrangThai.label}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>Cài Đặt 1-Click</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => openAppDetail(slideApp.id)}
+                      className="btn-tactile h-10 px-5 rounded-xl bg-surface hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center border border-border transition-colors"
+                    >
+                      <span>Xem chi tiết ứng dụng</span>
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Cột phải: CTA Cài đặt 1-Click / Đã cài & Phân tích (L-02) */}
-                <div className="flex flex-col sm:flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
-                  {(() => {
-                    const spotlightTrangThai = layTrangThaiCaiDat(
-                      spotlightApp.id,
-                      spotlightApp.repoHandle,
-                    );
-                    const isInstalled = spotlightTrangThai.trangThai === 'DA_CAI_DAT';
-                    const isProcessing =
-                      spotlightTrangThai.trangThai === 'DANG_TAI' ||
-                      spotlightTrangThai.trangThai === 'XAC_MINH' ||
-                      spotlightTrangThai.trangThai === 'DANG_CAI_DAT';
+          {/* Cụm 5 chấm chỉ báo (Pagination Dots) + nút tiến/lùi ở đáy Hero */}
+          {heroTopApps.length > 1 && (
+            <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-3 z-20">
+              <button
+                type="button"
+                aria-label="Ứng dụng trước"
+                onClick={() =>
+                  setActiveSlide((prev) => (prev - 1 + heroTopApps.length) % heroTopApps.length)
+                }
+                className="w-6 h-6 rounded-full bg-surface/80 hover:bg-surface-hover border border-border flex items-center justify-center text-muted hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
 
-                    return (
-                      <button
-                        onClick={() => openAppDetail(spotlightApp.id)}
-                        className={`btn-tactile h-11 px-6 rounded-xl font-display font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-                          isInstalled
-                            ? 'bg-success-solid hover:bg-success-solid/90 text-white shadow-black/30'
-                            : isProcessing
-                              ? 'bg-accent-forge/80 text-on-accent shadow-black/30'
-                              : 'bg-accent-forge hover:bg-accent-forge-hover text-on-accent shadow-black/30'
-                        }`}
-                      >
-                        {isInstalled ? (
-                          <>
-                            <Check className="w-4 h-4 stroke-[2.5]" />
-                            <span>{spotlightTrangThai.label}</span>
-                          </>
-                        ) : isProcessing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>{spotlightTrangThai.label}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            <span>Cài Đặt 1-Click</span>
-                          </>
-                        )}
-                      </button>
-                    );
-                  })()}
-
-                  <button
-                    onClick={() => openAppDetail(spotlightApp.id)}
-                    className="btn-tactile h-10 px-5 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary font-medium text-xs flex items-center justify-center gap-1.5 border border-border transition-colors"
-                  >
-                    <span>Xem chi tiết ứng dụng</span>
-                  </button>
-                </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface/80 backdrop-blur-xs border border-border/80">
+                {heroTopApps.map((item, idx) => {
+                  const isCurrent = activeSlide === idx;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-label={`Chuyển tới ${item.tenApp}`}
+                      title={`${item.tenApp} (${formatStars(item.soSaoGithub)} sao)`}
+                      onClick={() => setActiveSlide(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        isCurrent
+                          ? 'w-6 bg-accent-forge shadow-[0_0_8px_rgba(249,115,22,0.5)]'
+                          : 'w-2 bg-border-focus hover:bg-muted'
+                      }`}
+                    />
+                  );
+                })}
               </div>
+
+              <button
+                type="button"
+                aria-label="Ứng dụng tiếp theo"
+                onClick={() => setActiveSlide((prev) => (prev + 1) % heroTopApps.length)}
+                className="w-6 h-6 rounded-full bg-surface/80 hover:bg-surface-hover border border-border flex items-center justify-center text-muted hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </section>
-        </AsciiReveal>
+          )}
+        </section>
       ) : null}
 
       {/* 2. THANH CÔNG CỤ LỌC & SẮP XẾP HỢP NHẤT (P3-05.2 & P3-05.3) */}

@@ -23,15 +23,15 @@ html {
 }
 
 :root {
-  /* Bảng màu Clean Slate Pro (Light Mode hòa quyện cùng hệ sắc độ Dark Mode) */
-  --color-bg-canvas: #f8fafc;
-  --color-bg-surface: #ffffff;
+  /* Bảng màu Clean Slate Pro (Light Mode phân tách rõ 4 lớp chiều sâu) */
+  --color-bg-canvas: #eef2f6;
+  --color-bg-surface: #f8fafc;
   --color-bg-surface-elevated: #ffffff;
-  --color-bg-surface-hover: #f1f5f9;
-  --color-border-subtle: #e2e8f0;
-  --color-border-active: #cbd5e1;
+  --color-bg-surface-hover: #e2e8f0;
+  --color-border-subtle: #d5dde7;
+  --color-border-active: #94a3b8;
   --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
+  --color-text-secondary: #334155;
   --color-text-muted: #64748b;
   --color-text-on-accent: #0f172a;
   /* Màu trạng thái (R G B): thành công, lỗi, cảnh báo */
@@ -39,11 +39,11 @@ html {
   --color-danger: 190 18 60;
   --color-warning: 180 83 9;
   /* Chữ màu cam: sáng dùng cam đậm cho đủ tương phản, tối dùng cam thương hiệu */
-  --color-accent-forge-text: 180 83 9;
-  --card-specular: rgba(255, 255, 255, 0.9);
-  --card-shadow: rgba(15, 23, 42, 0.04);
-  --card-shadow-hover: rgba(15, 23, 42, 0.08);
-  --ambient-glow: rgba(255, 158, 32, 0.03);
+  --color-accent-forge-text: 194 65 12;
+  --card-specular: rgba(255, 255, 255, 0.95);
+  --card-shadow: rgba(15, 23, 42, 0.06);
+  --card-shadow-hover: rgba(15, 23, 42, 0.12);
+  --ambient-glow: rgba(255, 158, 32, 0.04);
   --ascii-font: 'JetBrains Mono', ui-monospace, monospace;
   --ascii-accent: #ff9e20;
   --ars-wave-color: #ff9e20;

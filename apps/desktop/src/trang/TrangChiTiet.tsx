@@ -1230,7 +1230,7 @@ export const TrangChiTiet: React.FC = () => {
               </div>
 
               {/* Nút chuyển đổi song ngữ hai chiều */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-elevated border border-border">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border">
                 <button
                   type="button"
                   onClick={() => setReadmeLang('vi')}

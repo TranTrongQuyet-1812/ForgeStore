@@ -114,9 +114,8 @@ export const TrangDanhMuc: React.FC = () => {
     <div className="flex flex-col gap-6 p-6 max-w-6xl mx-auto w-full select-none">
       {/* Tiêu đề trang */}
       <div className="border-b border-border/60 pb-4">
-        <h1 className="text-xl font-bold font-display text-primary flex items-center gap-2">
-          <LayoutGrid className="w-5 h-5 text-accent-ai" />
-          <span>Danh Mục Ứng Dụng Chuyên Sâu</span>
+        <h1 className="text-xl font-bold font-display text-primary">
+          Danh Mục Ứng Dụng Chuyên Sâu
         </h1>
         <p className="text-xs text-muted mt-1">
           Duyệt kho ứng dụng mã nguồn mở được tuyển chọn và thẩm định an toàn theo lĩnh vực
@@ -191,7 +190,7 @@ export const TrangDanhMuc: React.FC = () => {
                     >
                       <Icon className="w-5 h-5" />
                     </div>
-                    <span className="px-2 py-0.5 rounded-full bg-surface-elevated text-muted text-[11px] font-mono font-medium border border-border/50">
+                    <span className="px-2 py-0.5 rounded-full bg-surface text-muted text-[11px] font-mono font-medium border border-border">
                       {cat.count}
                     </span>
                   </div>
