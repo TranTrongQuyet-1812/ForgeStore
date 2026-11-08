@@ -182,13 +182,11 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
     #[cfg(not(target_os = "windows"))]
     {
         let _ = ten_app;
-        // DELIV-44.4: Bỏ tiền tố DOS device path nếu có để đường dẫn trả về giao diện luôn sạch
-        let clean_safe_path = bo_tien_to_dos_device_path(&safe_path);
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "EXE".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập cài đặt .exe thành công.".to_string(),
-            duong_dan_cai_dat: Some(clean_safe_path.to_string_lossy().to_string()),
+            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
             thong_tin_registry: None,
         })
@@ -279,13 +277,11 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
     #[cfg(not(target_os = "windows"))]
     {
         let _ = ten_app;
-        // DELIV-44.4: Bỏ tiền tố DOS device path nếu có để đường dẫn trả về giao diện luôn sạch
-        let clean_safe_path = bo_tien_to_dos_device_path(&safe_path);
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "MSI".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập chạy msiexec thành công.".to_string(),
-            duong_dan_cai_dat: Some(clean_safe_path.to_string_lossy().to_string()),
+            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
             thong_tin_registry: None,
         })
@@ -1240,6 +1236,49 @@ mod tests {
             assert!(!p.starts_with(r"\\?\"));
         }
         assert!(!exe_path_str.starts_with(r"\\?\"));
+
+        let _ = std::fs::remove_dir_all(&temp_base);
+    }
+
+    #[test]
+    fn test_giai_nen_portable_zip_thuc_te_khong_con_tien_to_dos_device() {
+        // Bản `sharkdp/bat` ở test tay lần 14 là .zip nên cần một ca thật cho đường zip (test 7z ở trên không phủ tới nó)
+        use std::io::Write;
+        let base_dir = std::env::var("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")));
+        let temp_base = base_dir.join("ForgeStore").join("downloads").join(format!("test_zip_real_{}", std::process::id()));
+        let dest_container = temp_base.join("dest_container");
+        let _ = std::fs::remove_dir_all(&temp_base);
+        std::fs::create_dir_all(&dest_container).unwrap();
+
+        // Tạo file .zip thật chứa một file .exe giả lập
+        let archive_zip = temp_base.join("MyZipApp.zip");
+        {
+            let file = std::fs::File::create(&archive_zip).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            zip.start_file("MyZipApp.exe", zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"fake MZ header and code").unwrap();
+            zip.finish().unwrap();
+        }
+
+        // Điều kiện gây lỗi: thư mục đích do người dùng chọn đi qua canonicalize nên mang tiền tố \\?\ trên Windows.
+        // Kiểm điều kiện này để chắc ca test thực sự chạm đúng đường gây lỗi, không đạt vì lý do khác.
+        #[cfg(windows)]
+        assert!(kiem_tra_thu_muc_an_toan(&dest_container).unwrap().to_string_lossy().starts_with(r"\\?\"));
+
+        let res = giai_nen_portable_zip(&archive_zip, "MyZipApp", Some(&dest_container));
+        assert!(res.is_ok(), "Giải nén zip thất bại: {:?}", res.err());
+
+        let ket_qua = res.unwrap();
+        assert!(ket_qua.thanh_cong);
+        assert!(!ket_qua.thong_diep.contains(r"\\?\"));
+        let thu_muc = ket_qua.duong_dan_cai_dat.expect("phải có đường dẫn cài đặt");
+        assert!(!thu_muc.starts_with(r"\\?\"));
+        let exe = ket_qua.duong_dan_thuc_thi.expect("phải có đường dẫn file chạy");
+        assert!(!exe.starts_with(r"\\?\"));
+        assert!(exe.ends_with("MyZipApp.exe"));
+        assert!(Path::new(&exe).exists());
 
         let _ = std::fs::remove_dir_all(&temp_base);
     }
