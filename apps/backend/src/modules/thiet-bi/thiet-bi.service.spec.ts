@@ -771,6 +771,107 @@ describe('ThietBiService', () => {
         ).rejects.toThrow(BadRequestException);
       });
 
+      it('từ chối khi phiên bản chứa ký tự cấm hoặc lệnh chèn (ví dụ 1.0; rm -rf)', async () => {
+        await expect(
+          service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+            maUngDung,
+            trinhQuanLy: 'npm',
+            tenGoi: 'ui-ux-pro-max-cli',
+            phienBan: '1.0; rm -rf',
+          }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('ghi nhận thành công gói npm với phiên bản có chữ v ở đầu (v2.15.0) và chuẩn hóa thành 2.15.0 khi lưu (P3B-30 vòng 3)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'nextlevelbuilder/ui-ux-pro-max-skill',
+        });
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue(null);
+
+        const mockExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        mockPrisma.ungDungDaCai.upsert.mockImplementation(async ({ create }: any) => ({
+          maBanGhi: 'rec-cli-npm-1',
+          maUngDung,
+          maThietBi,
+          phienBanHienTai: create.phienBanHienTai,
+          trinhQuanLyGoi: create.trinhQuanLyGoi,
+          tenGoiCli: create.tenGoiCli,
+          lenhGoCli: create.lenhGoCli,
+          trangThaiXacNhan: create.trangThaiXacNhan,
+          thoiGianHetHan: mockExpiry,
+          ngayCaiDat: new Date(),
+        }));
+
+        const res = await service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+          maUngDung,
+          trinhQuanLy: 'npm',
+          tenGoi: 'ui-ux-pro-max-cli',
+          phienBan: 'v2.15.0',
+        });
+
+        expect(res.trangThaiXacNhan).toBe('CHO_XAC_NHAN');
+        expect(res.phienBan).toBe('2.15.0');
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              phienBanHienTai: '2.15.0',
+              trangThaiXacNhan: 'CHO_XAC_NHAN',
+              tenGoiCli: 'ui-ux-pro-max-cli',
+              trinhQuanLyGoi: 'npm',
+              lenhGoCli: 'npm uninstall -g ui-ux-pro-max-cli',
+            }),
+            update: expect.objectContaining({
+              phienBanHienTai: '2.15.0',
+              trangThaiXacNhan: 'CHO_XAC_NHAN',
+              tenGoiCli: 'ui-ux-pro-max-cli',
+              trinhQuanLyGoi: 'npm',
+              lenhGoCli: 'npm uninstall -g ui-ux-pro-max-cli',
+            }),
+          }),
+        );
+      });
+
+      it('ghi nhận thành công với phiên bản có chữ V hoa (V1.0) và chuẩn hóa thành 1.0 khi lưu (P3B-30 vòng 3)', async () => {
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung,
+          tenRepoDayDu: 'nextlevelbuilder/ui-ux-pro-max-skill',
+        });
+        mockPrisma.ungDungDaCai.findUnique.mockResolvedValue(null);
+
+        mockPrisma.ungDungDaCai.upsert.mockImplementation(async ({ create }: any) => ({
+          maBanGhi: 'rec-cli-npm-2',
+          maUngDung,
+          maThietBi,
+          phienBanHienTai: create.phienBanHienTai,
+          trinhQuanLyGoi: create.trinhQuanLyGoi,
+          tenGoiCli: create.tenGoiCli,
+          lenhGoCli: create.lenhGoCli,
+          trangThaiXacNhan: create.trangThaiXacNhan,
+          thoiGianHetHan: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          ngayCaiDat: new Date(),
+        }));
+
+        const res = await service.ghiNhanCaiDatCli(maNguoiDung, maThietBi, {
+          maUngDung,
+          trinhQuanLy: 'npm',
+          tenGoi: 'ui-ux-pro-max-cli',
+          phienBan: 'V1.0',
+        });
+
+        expect(res.phienBan).toBe('1.0');
+        expect(mockPrisma.ungDungDaCai.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              phienBanHienTai: '1.0',
+            }),
+            update: expect.objectContaining({
+              phienBanHienTai: '1.0',
+            }),
+          }),
+        );
+      });
+
       it('ném NotFoundException nếu không tìm thấy ứng dụng', async () => {
         mockPrisma.ungDung.findUnique.mockResolvedValue(null);
 

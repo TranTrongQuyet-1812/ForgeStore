@@ -479,13 +479,22 @@ export class ThietBiService {
   async ghiNhanCaiDatCli(maNguoiDung: string, maThietBi: string, dto: GhiNhanCaiDatCliDto) {
     await this.kiemTraQuyenSoHuu(maNguoiDung, maThietBi);
 
+    // Chuẩn hóa phiên bản (P3B-30 vòng 3): bỏ tiền tố 'v' hoặc 'V' nếu có (ví dụ 'v2.15.0' -> '2.15.0').
+    // Chuỗi chỉ còn lại rỗng (ví dụ gửi mỗi 'v' hoặc 'V') thì coi như không có phiên bản (undefined).
+    const phienBanChuanHoa = dto.phienBan
+      ? dto.phienBan.trim().replace(/^[vV]/, '') || undefined
+      : undefined;
+
     // Kiểm tra tên gói và phiên bản trước khi ghép lệnh (P3B-16.2)
     if (!kiemTraTenGoiHopLe(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.tenGoi)) {
       throw new BadRequestException(
         `Tên gói [${dto.tenGoi}] không hợp lệ hoặc chứa ký tự bị cấm đối với trình quản lý [${dto.trinhQuanLy}].`,
       );
     }
-    if (dto.phienBan && !kiemTraPhienBanHopLe(dto.trinhQuanLy as MaTrinhQuanLyGoi, dto.phienBan)) {
+    if (
+      phienBanChuanHoa &&
+      !kiemTraPhienBanHopLe(dto.trinhQuanLy as MaTrinhQuanLyGoi, phienBanChuanHoa)
+    ) {
       throw new BadRequestException(
         `Phiên bản [${dto.phienBan}] không hợp lệ hoặc chứa ký tự bị cấm.`,
       );
@@ -503,7 +512,7 @@ export class ThietBiService {
     const ghep = ghepLenhCliAnToan(
       dto.trinhQuanLy as MaTrinhQuanLyGoi,
       dto.tenGoi,
-      dto.phienBan,
+      phienBanChuanHoa,
       dto.cucBo,
     );
     if (!ghep.hopLe || !ghep.lenhGo) {
@@ -543,7 +552,7 @@ export class ThietBiService {
         maNguoiDung,
         maThietBi,
         maUngDung: dto.maUngDung,
-        phienBanHienTai: dto.phienBan || 'latest',
+        phienBanHienTai: phienBanChuanHoa || 'latest',
         trinhQuanLyGoi: dto.trinhQuanLy,
         tenGoiCli: dto.tenGoi,
         lenhGoCli: ghep.lenhGo,
@@ -551,7 +560,7 @@ export class ThietBiService {
         thoiGianHetHan,
       },
       update: {
-        phienBanHienTai: dto.phienBan || undefined,
+        phienBanHienTai: phienBanChuanHoa || undefined,
         trinhQuanLyGoi: dto.trinhQuanLy,
         tenGoiCli: dto.tenGoi,
         lenhGoCli: ghep.lenhGo,
