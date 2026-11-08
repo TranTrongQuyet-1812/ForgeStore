@@ -1265,14 +1265,14 @@ export const TrangThuVien: React.FC = () => {
             </p>
 
             {/* Khung lệnh gỡ */}
-            <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
-              <pre className="p-3.5 pr-28 text-xs font-mono text-danger overflow-x-auto leading-relaxed select-text font-medium">
+            <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
+              <pre className="flex-1 min-w-0 py-0.5 text-xs font-mono text-danger overflow-x-auto leading-relaxed select-text font-medium">
                 <code>{cliUninstallModalApp.lenhGo}</code>
               </pre>
               <button
                 type="button"
                 onClick={() => handleCopyCliCommand(cliUninstallModalApp.lenhGo, 'cli-uninstall')}
-                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm"
+                className="btn-tactile shrink-0 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm whitespace-nowrap"
               >
                 {copiedCliId === 'cli-uninstall' ? (
                   <>
@@ -1355,14 +1355,14 @@ export const TrangThuVien: React.FC = () => {
             </p>
 
             {/* Khung lệnh cập nhật */}
-            <div className="relative group rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
-              <pre className="p-3.5 pr-28 text-xs font-mono text-success overflow-x-auto leading-relaxed select-text font-medium">
+            <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-slate-950/90 border border-border overflow-hidden shadow-inner">
+              <pre className="flex-1 min-w-0 py-0.5 text-xs font-mono text-success overflow-x-auto leading-relaxed select-text font-medium">
                 <code>{cliUpdateModalApp.lenhCapNhatCli}</code>
               </pre>
               <button
                 type="button"
                 onClick={() => handleCopyCliCommand(cliUpdateModalApp.lenhCapNhatCli, 'cli-update')}
-                className="btn-tactile absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm"
+                className="btn-tactile shrink-0 px-2.5 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/[0.08] text-[11px] font-mono flex items-center gap-1.5 shadow-sm whitespace-nowrap"
               >
                 {copiedCliId === 'cli-update' ? (
                   <>
