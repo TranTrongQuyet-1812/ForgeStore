@@ -1,6 +1,7 @@
-//! P3B-16.8 và P3B-30: tự kiểm tra máy đã cài gói chưa, và đọc phiên bản thật của gói, bằng chính trình quản lý
-//! gói (winget, npm, pip). Chỉ đọc, không cài gì. Gọi thẳng chương trình với danh sách đối số (không qua shell),
-//! tên gói kiểm ký tự trước khi chạy nên không chèn được lệnh.
+//! P3B-16.8, P3B-30 và P3B-31: tự kiểm tra máy đã cài gói chưa, đọc phiên bản thật của gói,
+//! và kiểm tra công cụ quản lý gói có trên máy (npm, pip, docker, winget, scoop). Chỉ đọc,
+//! không cài gì. Gọi thẳng chương trình với danh sách đối số cố định (không qua shell),
+//! không nhận tên chương trình từ bên ngoài.
 
 use std::process::Command;
 
@@ -86,6 +87,77 @@ fn chay_chi_doc(chuong_trinh: &str, doi_so: &[&str]) -> Option<String> {
     lenh.creation_flags(CREATE_NO_WINDOW);
     let ket_qua = lenh.output().ok()?;
     Some(String::from_utf8_lossy(&ket_qua.stdout).into_owned())
+}
+
+/// Bảng chương trình và đối số kiểm tra cố định cho từng trình quản lý gói (P3B-31).
+/// Chỉ chấp nhận danh sách cố định, không nhận tên chương trình từ bên ngoài để chống chèn lệnh.
+pub fn chuong_trinh_kiem_cong_cu(trinh_quan_ly: &str) -> Option<(&'static str, Vec<&'static str>)> {
+    match trinh_quan_ly {
+        "npm" => Some(("npm.cmd", vec!["--version"])),
+        "pip" => Some(("pip.exe", vec!["--version"])),
+        "docker" => Some(("docker.exe", vec!["--version"])),
+        "winget" => Some(("winget.exe", vec!["--version"])),
+        "scoop" => Some(("scoop.cmd", vec!["--version"])),
+        _ => None,
+    }
+}
+
+/// Chạy kiểm tra chương trình với thời gian chờ tối đa (P3B-31).
+/// Trả về Some(true) nếu chạy được và thoát mã 0, Some(false) nếu lỗi spawn hoặc mã thoát khác 0,
+/// None nếu quá hạn giờ (tiến trình bị kill để không treo giao diện).
+fn chay_kiem_tra_co_han_gio(
+    chuong_trinh: &str,
+    doi_so: &[&str],
+    thoi_gian_cho: std::time::Duration,
+) -> Option<bool> {
+    let mut lenh = Command::new(chuong_trinh);
+    lenh.args(doi_so);
+    #[cfg(windows)]
+    lenh.creation_flags(CREATE_NO_WINDOW);
+    lenh.stdin(std::process::Stdio::null());
+    lenh.stdout(std::process::Stdio::null());
+    lenh.stderr(std::process::Stdio::null());
+
+    let mut tien_trinh = match lenh.spawn() {
+        Ok(child) => child,
+        Err(_) => return Some(false),
+    };
+
+    let bat_dau = std::time::Instant::now();
+    loop {
+        match tien_trinh.try_wait() {
+            Ok(Some(status)) => return Some(status.success()),
+            Ok(None) => {
+                if bat_dau.elapsed() >= thoi_gian_cho {
+                    let _ = tien_trinh.kill();
+                    let _ = tien_trinh.wait();
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(_) => {
+                let _ = tien_trinh.kill();
+                let _ = tien_trinh.wait();
+                return Some(false);
+            }
+        }
+    }
+}
+
+/// Kiểm tra công cụ quản lý gói có khả dụng trên máy không (P3B-31).
+/// Hạn giờ 3 giây. Trả về Some(true) nếu có, Some(false) nếu thiếu hoặc mã lỗi, None nếu chưa hỗ trợ hoặc quá giờ.
+pub fn kiem_tra_cong_cu(trinh_quan_ly: &str) -> Option<bool> {
+    let (chuong_trinh, doi_so) = chuong_trinh_kiem_cong_cu(trinh_quan_ly)?;
+    let thoi_gian_cho = std::time::Duration::from_secs(3);
+
+    let ket_qua = chay_kiem_tra_co_han_gio(chuong_trinh, &doi_so, thoi_gian_cho);
+
+    // Trường hợp pip: nếu pip.exe không chạy được (Some(false)), thử tiếp python.exe -m pip --version
+    if trinh_quan_ly == "pip" && ket_qua == Some(false) {
+        return chay_kiem_tra_co_han_gio("python.exe", &["-m", "pip", "--version"], thoi_gian_cho);
+    }
+
+    ket_qua
 }
 
 /// Phiên bản hợp lệ để gửi lên máy chủ: khớp luật của backend (chữ, số và `. + _ ~ -`, tối đa 100 ký tự).
@@ -200,5 +272,54 @@ mod tests {
     fn test_trinh_khong_ho_tro_tra_none() {
         assert_eq!(kiem_tra_goi_da_cai("pip", "requests"), Ok(None));
         assert!(kiem_tra_goi_da_cai("winget", "a & b").is_err());
+    }
+
+    #[test]
+    fn test_chuong_trinh_kiem_cong_cu_hop_le() {
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("npm"),
+            Some(("npm.cmd", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("pip"),
+            Some(("pip.exe", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("docker"),
+            Some(("docker.exe", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("winget"),
+            Some(("winget.exe", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("scoop"),
+            Some(("scoop.cmd", vec!["--version"]))
+        );
+    }
+
+    #[test]
+    fn test_chuong_trinh_kiem_cong_cu_khong_ho_tro_va_chuoi_la() {
+        assert_eq!(chuong_trinh_kiem_cong_cu("cargo"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("go"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("npm; calc"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("pip & del C:\\"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu(""), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("winget --help"), None);
+    }
+
+    #[test]
+    fn test_kiem_tra_cong_cu_khong_ho_tro_tra_none() {
+        assert_eq!(kiem_tra_cong_cu("cargo"), None);
+        assert_eq!(kiem_tra_cong_cu("go"), None);
+        assert_eq!(kiem_tra_cong_cu("npm; calc"), None);
+        assert_eq!(kiem_tra_cong_cu(""), None);
+    }
+
+    #[test]
+    fn test_kiem_tra_cong_cu_hop_le_khong_panic() {
+        // Kiểm tra hàm chạy an toàn với công cụ hỗ trợ mà không bị hoảng loạn (panic)
+        let _ = kiem_tra_cong_cu("npm");
+        let _ = kiem_tra_cong_cu("winget");
     }
 }

@@ -361,6 +361,17 @@ async fn doc_phien_ban_goi_da_cai(
     .map_err(|e| e.to_string())?
 }
 
+/// Kiểm tra công cụ quản lý gói có trên máy không (P3B-31, npm, pip, docker, winget, scoop).
+/// Chạy ở luồng nền với hạn giờ 3 giây. Trả về Some(true) nếu có, Some(false) nếu thiếu, None nếu không rõ hoặc quá giờ.
+#[tauri::command]
+async fn kiem_tra_cong_cu_may(trinh_quan_ly: String) -> Result<Option<bool>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(goi_da_cai::kiem_tra_cong_cu(&trinh_quan_ly))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Kiểm tra xem Windows Terminal (wt.exe) có khả dụng trên hệ thống không (D-27)
 #[tauri::command]
 fn kiem_tra_windows_terminal_kha_dung() -> Result<bool, String> {
@@ -412,6 +423,7 @@ pub fn run() {
             kiem_tra_windows_terminal_kha_dung,
             kiem_tra_goi_da_cai,
             doc_phien_ban_goi_da_cai,
+            kiem_tra_cong_cu_may,
             logger::ghi_log_desktop,
             logger::mo_thu_muc_log_cmd,
             logger::lay_duong_dan_tep_log

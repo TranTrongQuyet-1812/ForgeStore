@@ -32,6 +32,7 @@ import {
 import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
 import { NhanDaCaiTrenMay } from '../thanh-phan/dung-chung/NhanDaCaiTrenMay';
+import { CanhBaoThieuCongCu } from '../thanh-phan/dung-chung/CanhBaoThieuCongCu';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
@@ -47,6 +48,7 @@ import { ApiError } from '../dich-vu/api/api-client';
 import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
 import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi-cach-cai.core';
+import { layTrinhQuanLyCachCai } from '../dich-vu/cong-cu-may/cong-cu-may.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
@@ -854,15 +856,8 @@ export const TrangChiTiet: React.FC = () => {
 
     try {
       setIsRecordingCli(true);
-      const nhomLow = ((currentMethod?.nhom || '') as string).toLowerCase();
-      let trinhQuanLy: MaTrinhQuanLyGoi = MaTrinhQuanLyGoi.WINGET;
-      if (nhomLow.includes('winget')) trinhQuanLy = MaTrinhQuanLyGoi.WINGET;
-      else if (nhomLow.includes('scoop')) trinhQuanLy = MaTrinhQuanLyGoi.SCOOP;
-      else if (nhomLow.includes('npm')) trinhQuanLy = MaTrinhQuanLyGoi.NPM;
-      else if (nhomLow.includes('pip')) trinhQuanLy = MaTrinhQuanLyGoi.PIP;
-      else if (nhomLow.includes('docker')) trinhQuanLy = MaTrinhQuanLyGoi.DOCKER;
-      else if (currentMethod?.trinhQuanLy)
-        trinhQuanLy = currentMethod.trinhQuanLy as MaTrinhQuanLyGoi;
+      let trinhQuanLy: MaTrinhQuanLyGoi =
+        (layTrinhQuanLyCachCai(currentMethod) as MaTrinhQuanLyGoi) || MaTrinhQuanLyGoi.WINGET;
 
       let tenGoi = currentMethod?.tenGoi;
       if (!tenGoi && currentMethod?.buoc?.[0]?.lenh) {
@@ -1610,7 +1605,9 @@ export const TrangChiTiet: React.FC = () => {
                             Hệ điều hành: {layNhanHeDieuHanh(currentMethod.heDieuHanh)}
                           </span>
                           <NhanDaCaiTrenMay
-                            trinhQuanLy={currentMethod.trinhQuanLy}
+                            trinhQuanLy={
+                              layTrinhQuanLyCachCai(currentMethod) || currentMethod.trinhQuanLy
+                            }
                             tenGoi={currentMethod.tenGoi}
                           />
                         </div>
@@ -1642,6 +1639,9 @@ export const TrangChiTiet: React.FC = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Cảnh báo thiếu công cụ quản lý gói trước khi chạy lệnh (P3B-31) */}
+                    <CanhBaoThieuCongCu trinhQuanLy={layTrinhQuanLyCachCai(currentMethod)} />
 
                     {/* Danh sách các bước lệnh (loại bỏ viền lồng hộp, phân tách thoáng đãng) */}
                     <div className="flex flex-col gap-4">
