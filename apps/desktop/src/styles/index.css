@@ -191,7 +191,8 @@ textarea,
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    /* Kết thúc bằng none thay vì translateY(0) để thẻ <main> không giữ containing block phá position: fixed */
+    transform: none;
   }
 }
 

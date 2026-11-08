@@ -33,6 +33,7 @@ import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
 import { NhanDaCaiTrenMay } from '../thanh-phan/dung-chung/NhanDaCaiTrenMay';
 import { CanhBaoThieuCongCu } from '../thanh-phan/dung-chung/CanhBaoThieuCongCu';
+import { KhungHopThoai } from '../thanh-phan/dung-chung/KhungHopThoai';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
@@ -2580,101 +2581,105 @@ export const TrangChiTiet: React.FC = () => {
       </div>
 
       {/* 3. MODAL/POPOVER CHI TIẾT THẨM ĐỊNH RỦI RO (P3-06.3) */}
-      {isSafetyModalOpen && coDiemUyTin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="tactile-card w-full max-w-lg p-6 rounded-2xl border border-border shadow-2xl flex flex-col gap-5 bg-surface max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-success" />
-                <h3 className="text-sm font-bold font-display text-primary">
-                  BẢNG ĐÁNH GIÁ ĐIỂM UY TÍN KHO MÃ
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsSafetyModalOpen(false)}
-                className="btn-tactile w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-elevated"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      <KhungHopThoai
+        dangMo={isSafetyModalOpen && coDiemUyTin}
+        khiDong={() => setIsSafetyModalOpen(false)}
+      >
+        <div className="surface-card w-full max-w-lg p-6 rounded-2xl border border-border shadow-2xl flex flex-col gap-5 bg-surface max-h-[85vh] overflow-y-auto overscroll-contain">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-success" />
+              <h3 className="text-sm font-bold font-display text-primary">
+                BẢNG ĐÁNH GIÁ ĐIỂM UY TÍN KHO MÃ
+              </h3>
             </div>
-
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border">
-              <div>
-                <span className="text-xs text-muted font-mono">Điểm uy tín kho mã</span>
-                <div className="flex items-baseline gap-2 mt-0.5">
-                  <span className={`text-2xl font-bold font-mono ${scoreTheme.text}`}>
-                    {trustScore} / 100
-                  </span>
-                  <span className="text-xs font-semibold text-secondary">({scoreTheme.label})</span>
-                </div>
-              </div>
-              <div className="text-right font-mono text-[11px] text-muted">
-                <div>Trạng thái thẩm định</div>
-                <div className="text-primary font-semibold">{trangThaiKiemTraQuyen}</div>
-              </div>
-            </div>
-
-            {/* Danh sách yếu tố rủi ro */}
-            <div className="flex flex-col gap-2.5">
-              <h4 className="text-xs font-bold text-primary uppercase font-mono">
-                Yếu tố xem xét & điểm trừ ({riskItems.length})
-              </h4>
-              {riskItems.length > 0 ? (
-                riskItems.map((risk, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-surface/40 border border-border flex flex-col gap-1 text-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-primary flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-                        <span>{risk.ma}</span>
-                      </span>
-                      <span className="font-mono text-warning font-bold">-{risk.diemTru}đ</span>
-                    </div>
-                    <p className="text-secondary text-[11px] leading-relaxed mt-0.5">{risk.moTa}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 rounded-xl bg-success/10 border border-success/20 text-success text-xs text-center">
-                  Tuyệt vời! Ứng dụng này không có bất kỳ yếu tố rủi ro nào bị phát hiện.
-                </div>
-              )}
-            </div>
-
-            {/* Quyền hạn đã thẩm định (nếu có) */}
-            {appDetail.phanTichAi?.quyenHanDaKiemTra &&
-              appDetail.phanTichAi.quyenHanDaKiemTra.length > 0 && (
-                <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-                  <h4 className="text-xs font-bold text-primary uppercase font-mono">
-                    Quyền hạn hệ thống đã kiểm tra ({appDetail.phanTichAi.quyenHanDaKiemTra.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {appDetail.phanTichAi.quyenHanDaKiemTra.map((perm, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-0.5 rounded bg-surface-elevated text-[11px] font-mono text-muted border border-border"
-                      >
-                        {perm}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
             <button
               onClick={() => setIsSafetyModalOpen(false)}
-              className="btn-tactile w-full h-10 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border mt-2"
+              className="btn-tactile w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface-elevated"
             >
-              Đóng bảng kê khai
+              <X className="w-4 h-4" />
             </button>
           </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border">
+            <div>
+              <span className="text-xs text-muted font-mono">Điểm uy tín kho mã</span>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className={`text-2xl font-bold font-mono ${scoreTheme.text}`}>
+                  {trustScore} / 100
+                </span>
+                <span className="text-xs font-semibold text-secondary">({scoreTheme.label})</span>
+              </div>
+            </div>
+            <div className="text-right font-mono text-[11px] text-muted">
+              <div>Trạng thái thẩm định</div>
+              <div className="text-primary font-semibold">{trangThaiKiemTraQuyen}</div>
+            </div>
+          </div>
+
+          {/* Danh sách yếu tố rủi ro */}
+          <div className="flex flex-col gap-2.5">
+            <h4 className="text-xs font-bold text-primary uppercase font-mono">
+              Yếu tố xem xét & điểm trừ ({riskItems.length})
+            </h4>
+            {riskItems.length > 0 ? (
+              riskItems.map((risk, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl bg-surface/40 border border-border flex flex-col gap-1 text-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-primary flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+                      <span>{risk.ma}</span>
+                    </span>
+                    <span className="font-mono text-warning font-bold">-{risk.diemTru}đ</span>
+                  </div>
+                  <p className="text-secondary text-[11px] leading-relaxed mt-0.5">{risk.moTa}</p>
+                </div>
+              ))
+            ) : (
+              <div className="p-4 rounded-xl bg-success/10 border border-success/20 text-success text-xs text-center">
+                Tuyệt vời! Ứng dụng này không có bất kỳ yếu tố rủi ro nào bị phát hiện.
+              </div>
+            )}
+          </div>
+
+          {/* Quyền hạn đã thẩm định (nếu có) */}
+          {appDetail.phanTichAi?.quyenHanDaKiemTra &&
+            appDetail.phanTichAi.quyenHanDaKiemTra.length > 0 && (
+              <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+                <h4 className="text-xs font-bold text-primary uppercase font-mono">
+                  Quyền hạn hệ thống đã kiểm tra ({appDetail.phanTichAi.quyenHanDaKiemTra.length})
+                </h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {appDetail.phanTichAi.quyenHanDaKiemTra.map((perm, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 rounded bg-surface-elevated text-[11px] font-mono text-muted border border-border"
+                    >
+                      {perm}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          <button
+            onClick={() => setIsSafetyModalOpen(false)}
+            className="btn-tactile w-full h-10 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border mt-2"
+          >
+            Đóng bảng kê khai
+          </button>
         </div>
-      )}
+      </KhungHopThoai>
 
       {/* Modal Cảnh báo bảo mật lệnh CLI rủi ro cao (P3B-18 & Quyết định D-27) */}
-      {terminalWarningModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+      <KhungHopThoai
+        dangMo={Boolean(terminalWarningModal)}
+        khiDong={() => setTerminalWarningModal(null)}
+      >
+        {terminalWarningModal && (
           <div className="w-full max-w-md p-5 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-4">
             <div className="flex items-center gap-3 text-danger">
               <div className="w-10 h-10 rounded-xl bg-danger/10 border border-danger/20 flex items-center justify-center shrink-0">
@@ -2718,8 +2723,8 @@ export const TrangChiTiet: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </KhungHopThoai>
     </div>
   );
 };

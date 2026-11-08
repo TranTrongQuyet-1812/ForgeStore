@@ -40,6 +40,7 @@ import {
 import { timTepTheoMauWildcard, taoMauTenTepWildcard } from '@forgestore/types';
 import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
+import { KhungHopThoai } from '../thanh-phan/dung-chung/KhungHopThoai';
 
 export const TrangThuVien: React.FC = () => {
   const { navigateTo, openAppDetail } = useDieuHuongStore();
@@ -1228,9 +1229,12 @@ export const TrangThuVien: React.FC = () => {
       )}
 
       {/* Modal Lệnh Gỡ Cài Đặt CLI (P3B-16.6) */}
-      {cliUninstallModalApp && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+      <KhungHopThoai
+        dangMo={Boolean(cliUninstallModalApp)}
+        khiDong={() => setCliUninstallModalApp(null)}
+      >
+        {cliUninstallModalApp && (
+          <div className="surface-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-danger/10 border border-danger/20 flex items-center justify-center text-danger">
@@ -1315,13 +1319,13 @@ export const TrangThuVien: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </KhungHopThoai>
 
       {/* Modal Lệnh Cập Nhật CLI (P3B-16.7) */}
-      {cliUpdateModalApp && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="tactile-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+      <KhungHopThoai dangMo={Boolean(cliUpdateModalApp)} khiDong={() => setCliUpdateModalApp(null)}>
+        {cliUpdateModalApp && (
+          <div className="surface-card w-full max-w-lg p-6 rounded-2xl bg-surface-elevated border border-border shadow-2xl flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-warning/10 border border-warning/20 flex items-center justify-center text-warning">
@@ -1395,8 +1399,8 @@ export const TrangThuVien: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </KhungHopThoai>
     </div>
   );
 };
