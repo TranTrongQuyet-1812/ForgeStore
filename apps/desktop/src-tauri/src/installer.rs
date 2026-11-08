@@ -182,11 +182,13 @@ pub fn chay_bo_cai_exe(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
     #[cfg(not(target_os = "windows"))]
     {
         let _ = ten_app;
+        // DELIV-44.4: Bỏ tiền tố DOS device path nếu có để đường dẫn trả về giao diện luôn sạch
+        let clean_safe_path = bo_tien_to_dos_device_path(&safe_path);
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "EXE".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập cài đặt .exe thành công.".to_string(),
-            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+            duong_dan_cai_dat: Some(clean_safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
             thong_tin_registry: None,
         })
@@ -277,11 +279,13 @@ pub fn chay_bo_cai_msi(duong_dan_tep: &Path, ten_app: &str) -> Result<KetQuaCaiD
     #[cfg(not(target_os = "windows"))]
     {
         let _ = ten_app;
+        // DELIV-44.4: Bỏ tiền tố DOS device path nếu có để đường dẫn trả về giao diện luôn sạch
+        let clean_safe_path = bo_tien_to_dos_device_path(&safe_path);
         Ok(KetQuaCaiDat {
             thanh_cong: true,
             loai_cai_dat: "MSI".to_string(),
             thong_diep: "Môi trường không phải Windows, giả lập chạy msiexec thành công.".to_string(),
-            duong_dan_cai_dat: Some(safe_path.to_string_lossy().to_string()),
+            duong_dan_cai_dat: Some(clean_safe_path.to_string_lossy().to_string()),
             duong_dan_thuc_thi: None,
             thong_tin_registry: None,
         })
@@ -578,12 +582,16 @@ pub fn giai_nen_portable_zip(
     let clean_zip_path = bo_tien_to_dos_device_path(&safe_path);
     let _ = std::fs::remove_file(&clean_zip_path);
 
+    // DELIV-44.4: Loại bỏ tiền tố DOS Device Path (\\?\ hoặc \??\) để chuỗi hiển thị trên giao diện thân thiện, không bị lạ mắt
+    let clean_dest_dir = bo_tien_to_dos_device_path(&dest_dir);
+    let clean_potential_exe = potential_exe.as_ref().map(|p| bo_tien_to_dos_device_path(p));
+
     Ok(KetQuaCaiDat {
         thanh_cong: true,
         loai_cai_dat: "PORTABLE_ZIP".to_string(),
-        thong_diep: format!("Đã giải nén bản portable vào '{}' thành công.", dest_dir.display()),
-        duong_dan_cai_dat: Some(dest_dir.to_string_lossy().to_string()),
-        duong_dan_thuc_thi: potential_exe.map(|p| p.to_string_lossy().to_string()),
+        thong_diep: format!("Đã giải nén bản portable vào '{}' thành công.", clean_dest_dir.display()),
+        duong_dan_cai_dat: Some(clean_dest_dir.to_string_lossy().to_string()),
+        duong_dan_thuc_thi: clean_potential_exe.map(|p| p.to_string_lossy().to_string()),
         thong_tin_registry: None,
     })
 }
@@ -804,12 +812,16 @@ pub fn giai_nen_portable_7z(
         p.strip_prefix(&staging_dir).ok().map(|rel| dest_dir.join(rel))
     });
 
+    // DELIV-44.4: Loại bỏ tiền tố DOS Device Path (\\?\ hoặc \??\) để chuỗi hiển thị trên giao diện thân thiện, không bị lạ mắt
+    let clean_dest_dir = bo_tien_to_dos_device_path(&dest_dir);
+    let clean_final_exe = final_exe.as_ref().map(|p| bo_tien_to_dos_device_path(p));
+
     Ok(KetQuaCaiDat {
         thanh_cong: true,
         loai_cai_dat: "PORTABLE_ZIP".to_string(),
-        thong_diep: format!("Đã giải nén bản portable (.7z) vào '{}' thành công.", dest_dir.display()),
-        duong_dan_cai_dat: Some(dest_dir.to_string_lossy().to_string()),
-        duong_dan_thuc_thi: final_exe.map(|p| p.to_string_lossy().to_string()),
+        thong_diep: format!("Đã giải nén bản portable (.7z) vào '{}' thành công.", clean_dest_dir.display()),
+        duong_dan_cai_dat: Some(clean_dest_dir.to_string_lossy().to_string()),
+        duong_dan_thuc_thi: clean_final_exe.map(|p| p.to_string_lossy().to_string()),
         thong_tin_registry: None,
     })
 }
@@ -1050,6 +1062,34 @@ mod tests {
     }
 
     #[test]
+    fn test_bo_tien_to_dos_device_path_cho_duong_dan_giai_nen_portable() {
+        // DELIV-44.4: Mô phỏng lỗi từ test tay lần 14 (bước D01/D02) khi giải nén sharkdp/bat
+        // Đường dẫn trả về từ canonicalize chứa tiền tố \\?\ phải được loại bỏ để hiển thị thân thiện
+        let bat_verbatim = Path::new(r"\\?\C:\Users\trant\Downloads\bat");
+        let bat_clean = bo_tien_to_dos_device_path(bat_verbatim);
+        assert_eq!(
+            bat_clean.to_string_lossy(),
+            r"C:\Users\trant\Downloads\bat"
+        );
+
+        // Mô phỏng đường dẫn file thực thi .exe trong thư mục giải nén
+        let bat_exe_verbatim = Path::new(r"\\?\C:\Users\trant\Downloads\bat\bat.exe");
+        let bat_exe_clean = bo_tien_to_dos_device_path(bat_exe_verbatim);
+        assert_eq!(
+            bat_exe_clean.to_string_lossy(),
+            r"C:\Users\trant\Downloads\bat\bat.exe"
+        );
+
+        // Đường dẫn không có tiền tố DOS Device Path thì phải được giữ nguyên vẹn
+        let normal_dir = Path::new(r"C:\Users\trant\Downloads\bat");
+        let normal_clean = bo_tien_to_dos_device_path(normal_dir);
+        assert_eq!(
+            normal_clean.to_string_lossy(),
+            r"C:\Users\trant\Downloads\bat"
+        );
+    }
+
+    #[test]
     fn test_kiem_tra_thu_muc_an_toan_va_quyen_ghi_windows_tu_choi() {
         // L-07: Chọn C:\Windows hoặc Program Files bị từ chối với thông điệp rõ ràng
         if let Ok(windir) = std::env::var("WINDIR") {
@@ -1193,6 +1233,13 @@ mod tests {
         let exe_path_str = ket_qua.duong_dan_thuc_thi.unwrap();
         assert!(exe_path_str.ends_with("MyRealApp.exe"));
         assert!(Path::new(&exe_path_str).exists());
+
+        // DELIV-44.4: Đảm bảo các chuỗi trả về không còn tiền tố \\?\
+        assert!(!ket_qua.thong_diep.contains(r"\\?\"));
+        if let Some(ref p) = ket_qua.duong_dan_cai_dat {
+            assert!(!p.starts_with(r"\\?\"));
+        }
+        assert!(!exe_path_str.starts_with(r"\\?\"));
 
         let _ = std::fs::remove_dir_all(&temp_base);
     }
