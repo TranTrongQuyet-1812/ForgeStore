@@ -69,11 +69,13 @@ export const BANG_CONG_CU: Record<string, ThongTinCongCu> = {
  * Trích xuất mã trình quản lý gói từ phương thức cài đặt CLI (P3B-31).
  * Gom logic suy luận dùng chung giữa TrangChiTiet, NhanDaCaiTrenMay và CanhBaoThieuCongCu.
  */
-export function layTrinhQuanLyCachCai(phuongThuc?: {
-  nhom?: string;
-  trinhQuanLy?: string;
-  buoc?: Array<{ lenh?: string }>;
-} | null): string | undefined {
+export function layTrinhQuanLyCachCai(
+  phuongThuc?: {
+    nhom?: string;
+    trinhQuanLy?: string;
+    buoc?: Array<{ lenh?: string }>;
+  } | null,
+): string | undefined {
   if (!phuongThuc) return undefined;
 
   if (phuongThuc.trinhQuanLy) {
