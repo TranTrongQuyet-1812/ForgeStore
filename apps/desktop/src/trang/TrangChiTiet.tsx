@@ -2586,7 +2586,7 @@ export const TrangChiTiet: React.FC = () => {
         khiDong={() => setIsSafetyModalOpen(false)}
       >
         <div className="surface-card w-full max-w-lg p-6 rounded-2xl border border-border shadow-2xl flex flex-col gap-5 bg-surface max-h-[85vh] overflow-y-auto overscroll-contain">
-          <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-success" />
               <h3 className="text-sm font-bold font-display text-primary">
@@ -2601,7 +2601,7 @@ export const TrangChiTiet: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border">
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-elevated/70 border border-border shrink-0">
             <div>
               <span className="text-xs text-muted font-mono">Điểm uy tín kho mã</span>
               <div className="flex items-baseline gap-2 mt-0.5">
@@ -2618,7 +2618,7 @@ export const TrangChiTiet: React.FC = () => {
           </div>
 
           {/* Danh sách yếu tố rủi ro */}
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5 shrink-0">
             <h4 className="text-xs font-bold text-primary uppercase font-mono">
               Yếu tố xem xét & điểm trừ ({riskItems.length})
             </h4>
@@ -2648,7 +2648,7 @@ export const TrangChiTiet: React.FC = () => {
           {/* Quyền hạn đã thẩm định (nếu có) */}
           {appDetail.phanTichAi?.quyenHanDaKiemTra &&
             appDetail.phanTichAi.quyenHanDaKiemTra.length > 0 && (
-              <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
+              <div className="flex flex-col gap-2 pt-2 border-t border-border/40 shrink-0">
                 <h4 className="text-xs font-bold text-primary uppercase font-mono">
                   Quyền hạn hệ thống đã kiểm tra ({appDetail.phanTichAi.quyenHanDaKiemTra.length})
                 </h4>
@@ -2667,9 +2667,9 @@ export const TrangChiTiet: React.FC = () => {
 
           <button
             onClick={() => setIsSafetyModalOpen(false)}
-            className="btn-tactile w-full h-10 rounded-xl bg-surface-elevated hover:bg-surface-hover text-primary text-xs font-semibold border border-border mt-2"
+            className="btn-tactile w-full h-10 py-2.5 shrink-0 rounded-xl bg-surface-elevated hover:bg-surface text-primary text-xs font-semibold border border-border mt-2 flex items-center justify-center"
           >
-            Đóng bảng kê khai
+            Đóng bảng đánh giá
           </button>
         </div>
       </KhungHopThoai>
