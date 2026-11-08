@@ -142,7 +142,7 @@ export const ThanhTieuDe: React.FC = () => {
 
       {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh (căn giữa, bề rộng gọn gàng) */}
       <div data-tauri-drag-region className="flex-1 flex justify-center mx-4 min-w-0">
-        <div className="w-full max-w-[420px]">
+        <div className="w-full max-w-[480px]">
           <ThanhTimKiemDropdown />
         </div>
       </div>

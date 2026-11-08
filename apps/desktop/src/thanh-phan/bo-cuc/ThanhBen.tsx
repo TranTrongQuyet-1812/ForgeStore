@@ -61,10 +61,6 @@ export const ThanhBen: React.FC = () => {
             <span className="font-display font-black text-lg text-primary tracking-tight leading-none group-hover:text-accent-forge-text transition-colors">
               ForgeStore
             </span>
-            <span className="text-[10px] font-mono tracking-wider text-muted uppercase font-semibold flex items-center gap-1.5 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-forge shrink-0 shadow-[0_0_6px_rgba(249,115,22,0.7)]" />
-              <span>Kho Mã Nguồn Mở</span>
-            </span>
           </div>
         </button>
       </div>

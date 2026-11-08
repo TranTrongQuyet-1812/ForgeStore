@@ -258,7 +258,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     <div ref={containerRef} data-no-drag className="relative w-full">
       {/* 1. Ô tìm kiếm thật trực tiếp trên Header */}
       <div
-        className={`w-full h-9.5 px-3.5 rounded-xl flex items-center justify-between transition-all text-xs group shadow-xs ${
+        className={`w-full h-10 px-3.5 rounded-xl flex items-center justify-between transition-all text-xs group shadow-xs ${
           isOpen
             ? 'bg-surface-elevated border border-accent-forge/50 ring-2 ring-accent-forge/15 shadow-sm'
             : 'bg-surface-elevated/70 hover:bg-surface-elevated border border-border hover:border-border-focus'
