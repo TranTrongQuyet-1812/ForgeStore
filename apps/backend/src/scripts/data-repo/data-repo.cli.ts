@@ -624,7 +624,7 @@ function docCacLoGocHopNhat(thuMucNguon: string) {
 function docCacLoKhoHopNhat(thuMucNguon: string) {
   const thuMucCao = path.join(thuMucNguon, THU_MUC.daCao);
   const thuMucKiem = path.join(thuMucNguon, THU_MUC.daKiem);
-  const mau = /^dich-g\d{2}-l\d{3}\.jsonl$/;
+  const mau = /^dich(?:-g\d{2}|2)-l\d{3}\.jsonl$/;
   const tepCao = layTepLo(thuMucCao, mau);
   const tepKiem = layTepLo(thuMucKiem, mau);
   if (!tepCao.length || JSON.stringify(tepCao) !== JSON.stringify(tepKiem))
@@ -812,12 +812,27 @@ function docMapNguonKho<T extends { repo: string }>(thuMuc: string): Map<string,
 }
 
 function docNguonDichCuVa2(thuMucNguonGoc: string): Map<string, DongDich> {
+  const nguon = new Map<string, DongDich>();
   const thuMucVa = path.join(thuMucNguonGoc, 'Dot_Va', THU_MUC.daDich);
-  const tuDotVa = docMapNguonKho<DongDich>(thuMucVa);
-  const nguon = new Map(tuDotVa);
+  if (fs.existsSync(thuMucVa)) {
+    for (const [khoa, dong] of docMapNguonKho<DongDich>(thuMucVa)) nguon.set(khoa, dong);
+  }
+  const thuMucTrucTiep = path.join(thuMucNguonGoc, THU_MUC.daDich);
+  if (fs.existsSync(thuMucTrucTiep)) {
+    for (const [khoa, dong] of docMapNguonKho<DongDich>(thuMucTrucTiep)) {
+      if (!nguon.has(khoa)) nguon.set(khoa, dong);
+    }
+  }
+  const thuMucKhoCuoi = path.join(thuMucNguonGoc, 'Kho_Cuoi', THU_MUC.daDich);
+  if (fs.existsSync(thuMucKhoCuoi)) {
+    for (const [khoa, dong] of docMapNguonKho<DongDich>(thuMucKhoCuoi)) {
+      if (!nguon.has(khoa)) nguon.set(khoa, dong);
+    }
+  }
   for (let soNhom = 1; soNhom <= 9; soNhom++) {
     const nhom = `Nhom_${String(soNhom).padStart(2, '0')}`;
     const thuMuc = path.join(thuMucNguonGoc, nhom, THU_MUC.daDich);
+    if (!fs.existsSync(thuMuc)) continue;
     for (const [khoa, dong] of docMapNguonKho<DongDich>(thuMuc)) {
       if (!nguon.has(khoa)) nguon.set(khoa, dong);
     }
@@ -853,7 +868,8 @@ function docMucTaoVa2(
     const readmeMoi = fs.readFileSync(fileReadme, 'utf8');
     if (!row.readmeShaMoi || tinhMaBam(readmeMoi) !== row.readmeShaMoi)
       throw new Error(`SHA README mới không khớp báo cáo cho ${row.repo}.`);
-    const nhom = caoCu.lo.match(/^dich-g(\d{2})-/)?.[1];
+    const nhom =
+      caoCu.lo.match(/^dich-g(\d{2})-/)?.[1] ?? (caoCu.lo.startsWith('dich2-') ? '02' : undefined);
     if (!nhom) throw new Error(`Không suy ra nhóm từ lô ${caoCu.lo} của ${row.repo}.`);
     muc.push({
       nhom,
@@ -1040,10 +1056,11 @@ function lenhHopNhat(): void {
   if (!coCo('thu')) kiemThuMucDauRaHopNhat(thuMucRa);
   const cacLoGoc = docCacLoGocHopNhat(thuMucNguon);
   const cacLoVa = docCacLoVaHopNhat(thuMucVa);
+  const soRepoMongDoi = cacLoGoc.reduce((tong, lo) => tong + lo.cao.length, 0);
   const ketQua = hopNhatKhoCuoi(
     cacLoGoc,
     cacLoVa,
-    817,
+    soRepoMongDoi,
     docDanhSachDoiTenTep(tepDoiTen),
     docRepoLuuTru(thuMucNguon),
   );
@@ -1375,6 +1392,8 @@ function docBanDichCoKyHieu(
 ): Map<string, Array<string | null>> {
   const cacThuMuc = [
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => path.join(thuMucGoc, `Nhom_0${n}`, THU_MUC.daDich)),
+    path.join(thuMucGoc, THU_MUC.daDich),
+    path.join(thuMucGoc, 'Kho_Cuoi', THU_MUC.daDich),
     path.join(thuMucGoc, 'Dot_Va', THU_MUC.daDich),
     path.join(thuMucGoc, 'Dot_Va2', THU_MUC.daDich),
   ];
