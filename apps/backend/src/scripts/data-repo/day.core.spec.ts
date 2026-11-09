@@ -62,11 +62,11 @@ describe('bản dịch có ký hiệu giữ chỗ cho bộ nhớ dịch chung', 
     etagReadme: null,
   };
 
-  function taoDaKiem(viCoKyHieu: Array<string | null>): DongDaKiem {
-    const doanNguon = taoDongChoDich(cao).doan;
+  function taoDaKiem(viCoKyHieu: Array<string | null>, banCao: BanGhiDaCao = cao): DongDaKiem {
+    const doanNguon = taoDongChoDich(banCao).doan;
     return {
-      repo: cao.repo,
-      lo: cao.lo,
+      repo: banCao.repo,
+      lo: banCao.lo,
       moTaEn: null,
       moTaVi: null,
       readmeSha: null,
@@ -103,6 +103,31 @@ describe('bản dịch có ký hiệu giữ chỗ cho bộ nhớ dịch chung', 
 
     expect(ketQua.size).toBeGreaterThan(0);
     expect(coKyHieu).toBe(true);
+  });
+
+  it('không chạy chồng MarkdownMasker.unmask lên đoạn bảng đã có khungGiuNguyen kèm https://⟦Cn⟧', () => {
+    const caoCoBang: BanGhiDaCao = {
+      ...cao,
+      readmeEn:
+        '# Title\n\n| Type | Supported Extensions |\n|---|---|\n| Web | dynamic webpages, https://<anything> |\n',
+    };
+    const doanNguon = taoDongChoDich(caoCoBang).doan;
+    const vi = doanNguon.map((doan) =>
+      doan.canDich
+        ? doan.vanBanDaChe
+            .replace('Supported Extensions', ' Phần mở rộng hỗ trợ')
+            .replace('dynamic webpages', 'trang web động')
+        : null,
+    );
+
+    const ketQua = layBanDichCoKyHieu(caoCoBang, taoDaKiem(vi, caoCoBang), vi);
+    const cacBanDich = [...ketQua.values()];
+
+    expect(
+      cacBanDich.some(
+        (giaTri) => giaTri.includes('https://⟦C4⟧') && giaTri.includes('trang web động'),
+      ),
+    ).toBe(true);
   });
 
   it('dừng nếu bản dịch có ký hiệu không khớp bản đã kiểm', () => {
