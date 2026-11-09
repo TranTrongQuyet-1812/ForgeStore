@@ -1396,7 +1396,11 @@ function docBanDichCoKyHieu(
     path.join(thuMucGoc, 'Kho_Cuoi', THU_MUC.daDich),
     path.join(thuMucGoc, 'Dot_Va', THU_MUC.daDich),
     path.join(thuMucGoc, 'Dot_Va2', THU_MUC.daDich),
-  ];
+    path.join(thuMucGoc, 'Kho_Cuoi_v2', THU_MUC.daDich),
+  ].filter((thuMuc) => fs.existsSync(thuMuc));
+  if (cacThuMuc.length === 0) {
+    throw new Error(`Không tìm thấy thư mục 03_da_dich nào trong: ${thuMucGoc}`);
+  }
   return taoMapBanDichCoKyHieu(
     cacThuMuc.map((thuMuc) =>
       layTepLo(thuMuc, /\.jsonl$/).flatMap((tep) => docJsonl<DongDich>(path.join(thuMuc, tep))),
@@ -1414,14 +1418,14 @@ async function ghiBoNhoDichChung(
   che: Map<string, string>,
   nhan: string,
 ): Promise<void> {
-  for (const d of r.doan) {
+  const data = r.doan.flatMap((d) => {
     const doanDich = che.get(d.maBam);
-    if (!doanDich) continue;
-    await prisma.boNhoDichChung.upsert({
-      where: { maBam_ngonNgu: { maBam: d.maBam, ngonNgu: 'vi' } },
-      create: { maBam: d.maBam, ngonNgu: 'vi', doanGoc: d.goc, doanDich, moHinhDich: nhan },
-      update: {},
-    });
+    return doanDich
+      ? [{ maBam: d.maBam, ngonNgu: 'vi', doanGoc: d.goc, doanDich, moHinhDich: nhan }]
+      : [];
+  });
+  if (data.length > 0) {
+    await prisma.boNhoDichChung.createMany({ data, skipDuplicates: true });
   }
 }
 
@@ -1443,8 +1447,26 @@ async function suaBoNhoDichChung(prisma: PrismaDay, che: Map<string, string>): P
   return soDong;
 }
 
+function moRongDanhSachLo(loDau: string, loCuoi?: string): string[] {
+  if (!loCuoi || loCuoi === loDau) return [loDau];
+  const m1 = loDau.match(/^(.*-l)(\d+)$/);
+  const m2 = loCuoi.match(/^(.*-l)(\d+)$/);
+  if (!m1 || !m2 || m1[1] !== m2[1]) {
+    throw new Error(`--lo (${loDau}) và --den-lo (${loCuoi}) phải cùng tiền tố dạng <ten>-lXXX.`);
+  }
+  const batDau = Number(m1[2]);
+  const ketThuc = Number(m2[2]);
+  const doDai = m1[2]!.length;
+  const kq: string[] = [];
+  for (let i = batDau; i <= ketThuc; i++) {
+    kq.push(`${m1[1]}${String(i).padStart(doDai, '0')}`);
+  }
+  return kq;
+}
+
 async function lenhDay(): Promise<void> {
-  const lo = batBuocLo();
+  const loDau = batBuocLo();
+  const danhSachLo = moRongDanhSachLo(loDau, layThamSo('den-lo'));
   const ghi = coCo('ghi');
   const toiDa = Number(layThamSo('toi-da') ?? '20');
   const thuMucNguonChe = layThamSo('nguon-che');
@@ -1456,67 +1478,57 @@ async function lenhDay(): Promise<void> {
   const viTheoRepo = thuMucNguonChe
     ? docBanDichCoKyHieu(path.resolve(thuMucNguonChe), docDanhSachDoiTenTep(layThamSo('doi-ten')))
     : undefined;
-  const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
   const fileLuuTru = layThamSo('luu-tru');
   const trangThaiLuuTru = fileLuuTru
     ? taoMapTrangThaiLuuTru(
         docJsonl<{ repo: string; loai: string; archived?: boolean }>(path.resolve(fileLuuTru)),
       )
     : undefined;
-  const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
-  const fileLog = duongDan('daDay', lo);
-  const daDay = new Set(
-    docJsonl<{ repo: string; ketQua: string }>(fileLog)
-      .filter((l) => l.ketQua === 'ok')
-      .map((l) => l.repo),
-  );
   const chiRepo = layThamSo('repo')?.toLowerCase();
-  const cho = dsKiem
-    .filter(
-      (r) =>
-        (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
-        (!chiRepo || r.repo.toLowerCase() === chiRepo),
-    )
-    .slice(0, toiDa);
-  console.info(
-    `${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
-  );
-  if (!trangThaiLuuTru) {
-    console.warn('Không truyền --luu-tru <bao_cao.jsonl>; lệnh day sẽ không thay đổi cờ daLuuTru.');
-  } else {
-    const trongLo = cho.filter((row) => layCapNhatLuuTru(row.repo, trangThaiLuuTru).daLuuTru);
-    const tongLuuTru = [...trangThaiLuuTru.values()].filter(Boolean).length;
-    console.info(
-      `Repo archived trong lô này sẽ gắn daLuuTru=true: ${trongLo.length}; tổng trong báo cáo: ${tongLuuTru}.`,
-    );
-    for (const row of trongLo) console.info(`[lưu trữ] ${row.repo}`);
-  }
 
   if (!canKhoiTaoNestDay(ghi, suaBoNho)) {
-    const demDuDoan = { HOAT_DONG: 0, TUY_TEP_CAI: 0, KHONG_CO_BAN_CAO: 0 };
-    for (const row of cho) {
-      const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
-      // Vẫn kiểm bản dịch có ký hiệu khi chạy thử để bắt lệch sớm, trước khi ghi thật.
-      let kiemBanDich = 'chưa kiểm (thiếu --nguon-che)';
-      if (viTheoRepo && caoRow) {
-        try {
-          kiemBanDich = `${layBanDichCoKyHieu(caoRow, row, viTheoRepo.get(row.repo.toLowerCase())).size} đoạn khớp`;
-        } catch (err) {
-          kiemBanDich = `LỆCH: ${String(err).slice(0, 120)}`;
-        }
-      }
-      const duDoan = caoRow
-        ? duDoanTrangThaiTuReadme(caoRow.readmeEn, caoRow.repo)
-        : 'KHONG_CO_BAN_CAO';
-      demDuDoan[duDoan]++;
+    for (const lo of danhSachLo) {
+      const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
+      const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
+      const fileLog = duongDan('daDay', lo);
+      const daDay = new Set(
+        docJsonl<{ repo: string; ketQua: string }>(fileLog)
+          .filter((l) => l.ketQua === 'ok')
+          .map((l) => l.repo),
+      );
+      const cho = dsKiem
+        .filter(
+          (r) =>
+            (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
+            (!chiRepo || r.repo.toLowerCase() === chiRepo),
+        )
+        .slice(0, toiDa);
       console.info(
-        `[thử] ${row.repo}: trạng thái dự kiến ${duDoan} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,
+        `[${lo}] ${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
+      );
+      const demDuDoan = { HOAT_DONG: 0, TUY_TEP_CAI: 0, KHONG_CO_BAN_CAO: 0 };
+      for (const row of cho) {
+        const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
+        let kiemBanDich = 'chưa kiểm (thiếu --nguon-che)';
+        if (viTheoRepo && caoRow) {
+          try {
+            kiemBanDich = `${layBanDichCoKyHieu(caoRow, row, viTheoRepo.get(row.repo.toLowerCase())).size} đoạn khớp`;
+          } catch (err) {
+            kiemBanDich = `LỆCH: ${String(err).slice(0, 120)}`;
+          }
+        }
+        const duDoan = caoRow
+          ? duDoanTrangThaiTuReadme(caoRow.readmeEn, caoRow.repo)
+          : 'KHONG_CO_BAN_CAO';
+        demDuDoan[duDoan]++;
+        console.info(
+          `[thử] ${row.repo}: trạng thái dự kiến ${duDoan} theo README đã cào; bản dịch có ký hiệu ${kiemBanDich}`,
+        );
+      }
+      console.info(
+        `Tổng chạy thử (${lo}): ${demDuDoan.HOAT_DONG} chắc chắn hiện (có lệnh cài), ${demDuDoan.TUY_TEP_CAI} hiện nếu Release có tệp cài (không thì ẩn), ${demDuDoan.KHONG_CO_BAN_CAO} thiếu bản cào.`,
       );
     }
-    // P3B-25.6: tổng để Chủ xem trước số repo sẽ hiện chắc chắn và số phụ thuộc tệp cài, trước khi ghi thật.
-    console.info(
-      `Tổng chạy thử: ${demDuDoan.HOAT_DONG} chắc chắn hiện (có lệnh cài), ${demDuDoan.TUY_TEP_CAI} hiện nếu Release có tệp cài (không thì ẩn), ${demDuDoan.KHONG_CO_BAN_CAO} thiếu bản cào.`,
-    );
     return;
   }
 
@@ -1524,142 +1536,178 @@ async function lenhDay(): Promise<void> {
     const { PrismaService } = await import('../../modules/prisma/prisma.service');
     const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
     const { CacheService } = await import('../../modules/redis/cache.service');
+    const { GithubService } = await import('../../modules/github/github.service');
     const { tinhMaBamMoTa } = await import('./data-repo.core');
     const prisma = app.get(PrismaService);
     const apps = app.get(UngDungService);
     const cache = app.get(CacheService);
-    const nhan = nhanLo(lo);
+    const github = app.get(GithubService);
 
-    for (const r of cho) {
-      const [owner = '', ten = ''] = r.repo.split('/');
-      const ghiLog = (ketQua: string, chiTiet: Record<string, unknown> = {}) =>
-        ghi &&
-        noiThemJsonl(fileLog, {
-          repo: r.repo,
-          luc: new Date().toISOString(),
-          nhan,
-          ketQua,
-          ...chiTiet,
-        });
-      let trangThaiTruoc: string | null = null;
-      let trangThaiSau: string | null = null;
-      try {
-        const ungDungTruoc = await prisma.ungDung.findFirst({
-          where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
-          select: { trangThai: true },
-        });
-        trangThaiTruoc = ungDungTruoc?.trangThai ?? null;
-        const caoRow = dsCao.find((c) => c.repo.toLowerCase() === r.repo.toLowerCase());
-        const che =
-          viTheoRepo && caoRow
-            ? layBanDichCoKyHieu(caoRow, r, viTheoRepo.get(r.repo.toLowerCase()))
-            : undefined;
-        if ((ghi || suaBoNho) && !che)
-          throw new Error('Thiếu --nguon-che hoặc 01_da_cao cho repo này, không ghi bộ nhớ dịch.');
-        if (suaBoNho) {
-          const soMuc = ghi ? await suaBoNhoDichChung(prisma, che!) : 0;
-          console.info(
-            `${ghi ? '✓' : '[thử]'} ${r.repo}: ${che!.size} đoạn có ký hiệu${ghi ? `, sửa ${soMuc} mục bộ nhớ dịch` : ''}`,
-          );
-          continue;
-        }
-        if (!ghi) {
-          console.info(
-            `[thử] ${r.repo}: sẽ dongBoRepo, ghi mô tả ${r.moTaVi ? 'có' : 'không'}, ${r.doan.length} đoạn vào bộ nhớ, ban_dich_readme ${r.readmeVi ? 'có' : 'không'}`,
-          );
-          continue;
-        }
-        await apps.dongBoRepo(owner, ten);
-        const ud = await prisma.ungDung.findFirst({
-          where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
-          select: {
-            maUngDung: true,
-            tenRepoDayDu: true,
-            moTaGocTiengAnh: true,
-            moTaVi: true,
-            trangThai: true,
-          },
-        });
-        if (!ud) throw new Error('Không thấy app sau khi đồng bộ');
-        trangThaiSau = ud.trangThai;
+    for (const lo of danhSachLo) {
+      const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
+      const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
+      const fileLog = duongDan('daDay', lo);
+      const daDay = new Set(
+        docJsonl<{ repo: string; ketQua: string }>(fileLog)
+          .filter((l) => l.ketQua === 'ok')
+          .map((l) => l.repo),
+      );
+      const cho = dsKiem
+        .filter(
+          (r) =>
+            (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
+            (!chiRepo || r.repo.toLowerCase() === chiRepo),
+        )
+        .slice(0, toiDa);
+      console.info(
+        `=== [${lo}] ${ghi ? 'GHI THẬT' : 'CHẠY THỬ'}: ${cho.length}/${dsKiem.length} repo ===`,
+      );
+      if (cho.length === 0) continue;
+      const nhan = nhanLo(lo);
 
-        const data: Record<string, unknown> = {
-          etagRepo: r.etagRepo,
-          etagReleases: r.etagReleases,
-          etagReadme: r.etagReadme,
-          ...layCapNhatLuuTru(r.repo, trangThaiLuuTru),
-        };
-        let moTa = 'bo_qua';
-        if (
-          r.moTaVi &&
-          ud.moTaGocTiengAnh &&
-          tinhMaBamMoTa(ud.moTaGocTiengAnh) === tinhMaBamMoTa(r.moTaEn ?? '')
-        ) {
-          data.moTaVi = r.moTaVi;
-          data.maBamMoTa = tinhMaBamMoTa(ud.moTaGocTiengAnh);
-          moTa = 'da_ghi';
-        } else if (r.moTaVi) {
-          moTa = 'lech_de_BE_tu_dich';
-        }
-        let readme = 'khong_co';
-        if (r.readmeVi && r.readmeSha) {
-          await ghiBoNhoDichChung(prisma, r, che!, nhan);
-          await prisma.banDichReadme.upsert({
-            where: { maUngDung_ngonNgu: { maUngDung: ud.maUngDung, ngonNgu: 'vi' } },
-            create: {
-              maUngDung: ud.maUngDung,
-              ngonNgu: 'vi',
-              readmeSha: r.readmeSha,
-              noiDungDich: r.readmeVi,
-              moHinhDich: nhan,
-              trangThai: 'HOAN_TAT',
-            },
-            update: {
-              readmeSha: r.readmeSha,
-              noiDungDich: r.readmeVi,
-              moHinhDich: nhan,
-              trangThai: 'HOAN_TAT',
-              thoiGianDich: new Date(),
-            },
-          });
-          data.readmeSha = r.readmeSha;
-          readme = 'da_ghi';
-        }
-        await prisma.ungDung.update({ where: { maUngDung: ud.maUngDung }, data });
-        // Xóa cache đúng khóa BE đọc (chi tiết theo mã và theo tên repo, danh sách, danh mục)
-        await cache.xoaTheoPrefix(`fs:apps:detail:${ud.maUngDung}`);
-        await cache.xoaTheoPrefix(`fs:apps:detail:${ud.tenRepoDayDu.toLowerCase()}`);
-        await cache.xoaTheoPrefix('fs:apps:list:');
-        await cache.xoaTheoPrefix('fs:categories:');
-        // Phân tích AI (điểm uy tín, mức an toàn, hướng dẫn CLI, vector tìm kiếm). Không dựa vào "phân tích lười" của BE.
-        let phanTich = 'bo_qua';
-        if (!coCo('bo-qua-phan-tich')) {
-          try {
-            await apps.phanTichUngDung(ud.maUngDung);
-            const pt = await prisma.phanTichAI.findUnique({
-              where: { maUngDung: ud.maUngDung },
-              select: { maPhanTich: true },
-            });
-            phanTich = pt ? 'da_ghi' : 'khong_co_ket_qua';
-          } catch (err) {
-            phanTich = 'loi: ' + String(err).slice(0, 120);
+      for (const r of cho) {
+        if (ghi && !suaBoNho) {
+          const rl = github.getRateLimitInfo();
+          if (rl.remaining !== null && rl.remaining < 100 && rl.reset !== null) {
+            const doiMs = Math.max(5000, rl.reset * 1000 - Date.now() + 5000);
+            console.info(
+              `⏳ Hạn mức GitHub còn ${rl.remaining}, tạm dừng ${Math.ceil(doiMs / 1000)}s chờ hồi hạn mức...`,
+            );
+            await new Promise((res) => setTimeout(res, doiMs));
           }
         }
-        ghiLog('ok', {
-          moTa,
-          readme,
-          phanTich,
-          ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
-        });
-        console.info(
-          `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${trangThaiTruoc ?? 'mới'} → ${trangThaiSau}`,
-        );
-      } catch (err) {
-        ghiLog('loi', {
-          thongBao: String(err).slice(0, 300),
-          ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
-        });
-        console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
+        const [owner = '', ten = ''] = r.repo.split('/');
+        const ghiLog = (ketQua: string, chiTiet: Record<string, unknown> = {}) =>
+          ghi &&
+          noiThemJsonl(fileLog, {
+            repo: r.repo,
+            luc: new Date().toISOString(),
+            nhan,
+            ketQua,
+            ...chiTiet,
+          });
+        let trangThaiTruoc: string | null = null;
+        let trangThaiSau: string | null = null;
+        try {
+          const ungDungTruoc = await prisma.ungDung.findFirst({
+            where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
+            select: { trangThai: true },
+          });
+          trangThaiTruoc = ungDungTruoc?.trangThai ?? null;
+          const caoRow = dsCao.find((c) => c.repo.toLowerCase() === r.repo.toLowerCase());
+          const che =
+            viTheoRepo && caoRow
+              ? layBanDichCoKyHieu(caoRow, r, viTheoRepo.get(r.repo.toLowerCase()))
+              : undefined;
+          if ((ghi || suaBoNho) && !che)
+            throw new Error(
+              'Thiếu --nguon-che hoặc 01_da_cao cho repo này, không ghi bộ nhớ dịch.',
+            );
+          if (suaBoNho) {
+            const soMuc = ghi ? await suaBoNhoDichChung(prisma, che!) : 0;
+            console.info(
+              `${ghi ? '✓' : '[thử]'} ${r.repo}: ${che!.size} đoạn có ký hiệu${ghi ? `, sửa ${soMuc} mục bộ nhớ dịch` : ''}`,
+            );
+            continue;
+          }
+          if (!ghi) {
+            console.info(
+              `[thử] ${r.repo}: sẽ dongBoRepo, ghi mô tả ${r.moTaVi ? 'có' : 'không'}, ${r.doan.length} đoạn vào bộ nhớ, ban_dich_readme ${r.readmeVi ? 'có' : 'không'}`,
+            );
+            continue;
+          }
+          await apps.dongBoRepo(owner, ten);
+          const ud = await prisma.ungDung.findFirst({
+            where: { tenRepoDayDu: { equals: thoatKyTuLike(r.repo), mode: 'insensitive' } },
+            select: {
+              maUngDung: true,
+              tenRepoDayDu: true,
+              moTaGocTiengAnh: true,
+              moTaVi: true,
+              trangThai: true,
+            },
+          });
+          if (!ud) throw new Error('Không thấy app sau khi đồng bộ');
+          trangThaiSau = ud.trangThai;
+
+          const data: Record<string, unknown> = {
+            etagRepo: r.etagRepo,
+            etagReleases: r.etagReleases,
+            etagReadme: r.etagReadme,
+            ...layCapNhatLuuTru(r.repo, trangThaiLuuTru),
+          };
+          let moTa = 'bo_qua';
+          if (
+            r.moTaVi &&
+            ud.moTaGocTiengAnh &&
+            tinhMaBamMoTa(ud.moTaGocTiengAnh) === tinhMaBamMoTa(r.moTaEn ?? '')
+          ) {
+            data.moTaVi = r.moTaVi;
+            data.maBamMoTa = tinhMaBamMoTa(ud.moTaGocTiengAnh);
+            moTa = 'da_ghi';
+          } else if (r.moTaVi) {
+            moTa = 'lech_de_BE_tu_dich';
+          }
+          let readme = 'khong_co';
+          if (r.readmeVi && r.readmeSha) {
+            await ghiBoNhoDichChung(prisma, r, che!, nhan);
+            await prisma.banDichReadme.upsert({
+              where: { maUngDung_ngonNgu: { maUngDung: ud.maUngDung, ngonNgu: 'vi' } },
+              create: {
+                maUngDung: ud.maUngDung,
+                ngonNgu: 'vi',
+                readmeSha: r.readmeSha,
+                noiDungDich: r.readmeVi,
+                moHinhDich: nhan,
+                trangThai: 'HOAN_TAT',
+              },
+              update: {
+                readmeSha: r.readmeSha,
+                noiDungDich: r.readmeVi,
+                moHinhDich: nhan,
+                trangThai: 'HOAN_TAT',
+                thoiGianDich: new Date(),
+              },
+            });
+            data.readmeSha = r.readmeSha;
+            readme = 'da_ghi';
+          }
+          await prisma.ungDung.update({ where: { maUngDung: ud.maUngDung }, data });
+          // Xóa cache đúng khóa BE đọc (chi tiết theo mã và theo tên repo, danh sách, danh mục)
+          await cache.xoaTheoPrefix(`fs:apps:detail:${ud.maUngDung}`);
+          await cache.xoaTheoPrefix(`fs:apps:detail:${ud.tenRepoDayDu.toLowerCase()}`);
+          await cache.xoaTheoPrefix('fs:apps:list:');
+          await cache.xoaTheoPrefix('fs:categories:');
+          // Phân tích AI (điểm uy tín, mức an toàn, hướng dẫn CLI, vector tìm kiếm). Không dựa vào "phân tích lười" của BE.
+          let phanTich = 'bo_qua';
+          if (!coCo('bo-qua-phan-tich')) {
+            try {
+              await apps.phanTichUngDung(ud.maUngDung);
+              const pt = await prisma.phanTichAI.findUnique({
+                where: { maUngDung: ud.maUngDung },
+                select: { maPhanTich: true },
+              });
+              phanTich = pt ? 'da_ghi' : 'khong_co_ket_qua';
+            } catch (err) {
+              phanTich = 'loi: ' + String(err).slice(0, 120);
+            }
+          }
+          ghiLog('ok', {
+            moTa,
+            readme,
+            phanTich,
+            ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
+          });
+          console.info(
+            `✓ ${r.repo}: mô tả ${moTa}, README ${readme}, phân tích ${phanTich}, trạng thái ${trangThaiTruoc ?? 'mới'} → ${trangThaiSau}`,
+          );
+        } catch (err) {
+          ghiLog('loi', {
+            thongBao: String(err).slice(0, 300),
+            ...taoChiTietTrangThaiDay(trangThaiTruoc, trangThaiSau),
+          });
+          console.error(`✗ ${r.repo}: ${String(err).slice(0, 200)}`);
+        }
       }
     }
   });

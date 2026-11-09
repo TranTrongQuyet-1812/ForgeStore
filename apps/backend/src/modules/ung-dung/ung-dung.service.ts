@@ -650,7 +650,10 @@ export class UngDungService {
         this.logger.warn(`Repository [${owner}/${repo}] không có README.`);
         return 'KHONG_CO_BAN_CAI';
       }
-      const huongDan = trichXuatHuongDanCliBangQuyTac(readme);
+      const huongDan = trichXuatHuongDanCliBangQuyTac(
+        readme,
+        `https://github.com/${owner}/${repo}#readme`,
+      );
       return coCachCaiCliHopLe(huongDan) ? 'HOAT_DONG' : 'KHONG_CO_BAN_CAI';
     } catch (error) {
       this.logger.warn(`Lỗi lấy README [${owner}/${repo}]: ${String(error)}`);
