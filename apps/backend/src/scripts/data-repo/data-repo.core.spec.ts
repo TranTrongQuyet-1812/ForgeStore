@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chiaTheoGioiHanTong,
   chiLaChuoiNhan,
   coCauTiengAnh,
   kiemTraDongDaDich,
+  layLoiGhiNhieuLoThieuGioiHan,
+  moRongDanhSachLo,
   phanDoan,
   taoDongChoDich,
   tinhMaBam,
@@ -349,5 +352,70 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(ketQua.loi).toBeNull();
     expect(ketQua.dat?.readmeVi).toContain('### Hàm khởi tạo');
     expect(ketQua.dat?.readmeVi).toContain('- [C99](https://api.c99.nl/) nguồn tên miền phụ.');
+  });
+});
+
+describe('Data_Repo day: danh sách lô và giới hạn tổng', () => {
+  describe('moRongDanhSachLo', () => {
+    it('một lô khi không có --den-lo hoặc trùng lô đầu', () => {
+      expect(moRongDanhSachLo('dich2-l003')).toEqual(['dich2-l003']);
+      expect(moRongDanhSachLo('dich2-l003', 'dich2-l003')).toEqual(['dich2-l003']);
+    });
+
+    it('đi 3 lô giữ nguyên độ dài số (l003 → l005)', () => {
+      expect(moRongDanhSachLo('dich2-l003', 'dich2-l005')).toEqual([
+        'dich2-l003',
+        'dich2-l004',
+        'dich2-l005',
+      ]);
+    });
+
+    it('lỗi khi khác tiền tố', () => {
+      expect(() => moRongDanhSachLo('dich2-l003', 'va2-g02-l005')).toThrow(/cùng tiền tố/);
+    });
+
+    it('lỗi khi lô cuối nhỏ hơn lô đầu', () => {
+      expect(() => moRongDanhSachLo('dich2-l005', 'dich2-l003')).toThrow(/sau hoặc bằng/);
+    });
+  });
+
+  describe('chiaTheoGioiHanTong', () => {
+    it('không giới hạn thì giữ nguyên số repo mỗi lô', () => {
+      expect(chiaTheoGioiHanTong([10, 10, 10])).toEqual([10, 10, 10]);
+    });
+
+    it('giới hạn lớn hơn tổng thì lấy hết', () => {
+      expect(chiaTheoGioiHanTong([10, 10, 10], 100)).toEqual([10, 10, 10]);
+    });
+
+    it('giới hạn cắt giữa lô: 2 lô đủ, lô thứ ba còn 5', () => {
+      expect(chiaTheoGioiHanTong([10, 10, 10], 25)).toEqual([10, 10, 5]);
+    });
+
+    it('giới hạn bằng 0 thì không lấy repo nào', () => {
+      expect(chiaTheoGioiHanTong([10, 10], 0)).toEqual([0, 0]);
+    });
+
+    it('danh sách rỗng thì trả rỗng', () => {
+      expect(chiaTheoGioiHanTong([], 20)).toEqual([]);
+      expect(chiaTheoGioiHanTong([])).toEqual([]);
+    });
+
+    it('lô rỗng ở giữa không ăn vào giới hạn, giới hạn âm coi như 0', () => {
+      expect(chiaTheoGioiHanTong([4, 0, 10], 8)).toEqual([4, 0, 4]);
+      expect(chiaTheoGioiHanTong([5, 5], -3)).toEqual([0, 0]);
+    });
+  });
+
+  describe('layLoiGhiNhieuLoThieuGioiHan', () => {
+    it('từ chối khi ghi thật nhiều lô mà thiếu --toi-da-tong', () => {
+      expect(layLoiGhiNhieuLoThieuGioiHan(5, true, undefined)).toMatch(/--toi-da-tong/);
+    });
+
+    it('cho chạy khi có --toi-da-tong, khi chỉ một lô, hoặc khi chạy thử', () => {
+      expect(layLoiGhiNhieuLoThieuGioiHan(5, true, 50)).toBeNull();
+      expect(layLoiGhiNhieuLoThieuGioiHan(1, true, undefined)).toBeNull();
+      expect(layLoiGhiNhieuLoThieuGioiHan(5, false, undefined)).toBeNull();
+    });
   });
 });

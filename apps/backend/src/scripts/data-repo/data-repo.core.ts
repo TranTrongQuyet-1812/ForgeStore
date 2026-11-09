@@ -301,3 +301,54 @@ export function kiemTraDongDaDich(
     soDoanLoi: 0,
   };
 }
+
+/**
+ * Mở rộng khoảng lô `dich2-l003` → `dich2-l007` thành danh sách từng lô, giữ nguyên độ dài số
+ * (l003, l004...). Lỗi khi khác tiền tố hoặc lô cuối nhỏ hơn lô đầu để không chạy nhầm khoảng rỗng.
+ */
+export function moRongDanhSachLo(loDau: string, loCuoi?: string): string[] {
+  if (!loCuoi || loCuoi === loDau) return [loDau];
+  const m1 = loDau.match(/^(.*-l)(\d+)$/);
+  const m2 = loCuoi.match(/^(.*-l)(\d+)$/);
+  if (!m1 || !m2 || m1[1] !== m2[1]) {
+    throw new Error(`--lo (${loDau}) và --den-lo (${loCuoi}) phải cùng tiền tố dạng <ten>-lXXX.`);
+  }
+  const batDau = Number(m1[2]);
+  const ketThuc = Number(m2[2]);
+  if (ketThuc < batDau) {
+    throw new Error(`--den-lo (${loCuoi}) phải sau hoặc bằng --lo (${loDau}).`);
+  }
+  const doDai = m1[2]!.length;
+  const ketQua: string[] = [];
+  for (let i = batDau; i <= ketThuc; i++) {
+    ketQua.push(`${m1[1]}${String(i).padStart(doDai, '0')}`);
+  }
+  return ketQua;
+}
+
+/**
+ * Chia giới hạn TỔNG cho từng lô theo thứ tự: lô đầu lấy đủ, lô cuối có thể lấy một phần.
+ * `toiDaTong` bỏ trống nghĩa là không giới hạn; giá trị âm coi như 0, không bao giờ trả số âm.
+ */
+export function chiaTheoGioiHanTong(soRepoMoiLo: number[], toiDaTong?: number): number[] {
+  if (toiDaTong === undefined) return [...soRepoMoiLo];
+  let conLai = Math.max(0, toiDaTong);
+  return soRepoMoiLo.map((soRepo) => {
+    const lay = Math.min(Math.max(0, soRepo), conLai);
+    conLai -= lay;
+    return lay;
+  });
+}
+
+/**
+ * Chặn ghi cả đợt bằng một tham số quên đặt: ghi thật nhiều lô mà thiếu `--toi-da-tong` thì từ chối.
+ * Một lô, hoặc chạy thử, không bị chặn. Trả về thông báo lỗi, hoặc null nếu được phép chạy.
+ */
+export function layLoiGhiNhieuLoThieuGioiHan(
+  soLo: number,
+  ghi: boolean,
+  toiDaTong?: number,
+): string | null {
+  if (!ghi || soLo <= 1 || toiDaTong !== undefined) return null;
+  return `Đẩy nhiều lô (${soLo} lô) cần --toi-da-tong <N> để giữ đúng nấc 20/50/100. Không có --toi-da-tong thì chỉ được chạy thử (bỏ --ghi).`;
+}

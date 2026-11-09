@@ -65,7 +65,15 @@ import {
   type KetQuaKiemMotRepo,
   type TienDoKiemTuoi,
 } from './kiem-tuoi.core';
-import { kiemTraDongDaDich, phanDoan, taoDongChoDich, tinhMaBam } from './data-repo.core';
+import {
+  chiaTheoGioiHanTong,
+  kiemTraDongDaDich,
+  layLoiGhiNhieuLoThieuGioiHan,
+  moRongDanhSachLo,
+  phanDoan,
+  taoDongChoDich,
+  tinhMaBam,
+} from './data-repo.core';
 import type { BanGhiDaCao, DongDaKiem, DongDich } from './data-repo.types';
 import {
   canKhoiTaoNestDay,
@@ -1447,28 +1455,95 @@ async function suaBoNhoDichChung(prisma: PrismaDay, che: Map<string, string>): P
   return soDong;
 }
 
-function moRongDanhSachLo(loDau: string, loCuoi?: string): string[] {
-  if (!loCuoi || loCuoi === loDau) return [loDau];
-  const m1 = loDau.match(/^(.*-l)(\d+)$/);
-  const m2 = loCuoi.match(/^(.*-l)(\d+)$/);
-  if (!m1 || !m2 || m1[1] !== m2[1]) {
-    throw new Error(`--lo (${loDau}) và --den-lo (${loCuoi}) phải cùng tiền tố dạng <ten>-lXXX.`);
+interface LoDayDaLap {
+  lo: string;
+  dsCao: BanGhiDaCao[];
+  tongTrongLo: number;
+  fileLog: string;
+  cho: DongDaKiem[];
+}
+
+/** Đọc --toi-da-tong: số nguyên không âm, bỏ trống nghĩa là không giới hạn tổng. */
+function docToiDaTong(): number | undefined {
+  const raw = layThamSo('toi-da-tong');
+  if (raw === undefined) return undefined;
+  const so = Number(raw);
+  if (!Number.isInteger(so) || so < 0) throw new Error('--toi-da-tong phải là số nguyên không âm.');
+  return so;
+}
+
+/**
+ * Lập kế hoạch trước khi chạy: mỗi lô lọc repo chưa đẩy (hoặc đã đẩy nếu --sua-bo-nho), cắt theo --toi-da
+ * của lô, rồi cắt tiếp theo --toi-da-tong cộng dồn qua các lô. Vòng xử lý chỉ đi theo danh sách này.
+ */
+function lapKeHoachDay(
+  danhSachLo: string[],
+  tuyChon: { suaBoNho: boolean; chiRepo?: string; toiDa: number; toiDaTong?: number },
+): LoDayDaLap[] {
+  const theoLo = danhSachLo.map((lo) => {
+    const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
+    const fileLog = duongDan('daDay', lo);
+    const daDay = new Set(
+      docJsonl<{ repo: string; ketQua: string }>(fileLog)
+        .filter((l) => l.ketQua === 'ok')
+        .map((l) => l.repo),
+    );
+    const cho = dsKiem
+      .filter(
+        (r) =>
+          (tuyChon.suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
+          (!tuyChon.chiRepo || r.repo.toLowerCase() === tuyChon.chiRepo),
+      )
+      .slice(0, tuyChon.toiDa);
+    return {
+      lo,
+      dsCao: docJsonl<BanGhiDaCao>(duongDan('daCao', lo)),
+      tongTrongLo: dsKiem.length,
+      fileLog,
+      cho,
+    };
+  });
+  const soLay = chiaTheoGioiHanTong(
+    theoLo.map((l) => l.cho.length),
+    tuyChon.toiDaTong,
+  );
+  return theoLo.map((l, i) => ({ ...l, cho: l.cho.slice(0, soLay[i]) }));
+}
+
+/** In một dòng tổng kết kế hoạch và cảnh báo repo archived, để Chủ thấy trước khi xử lý. */
+function inKeHoachDay(
+  keHoach: LoDayDaLap[],
+  ghi: boolean,
+  toiDaTong: number | undefined,
+  trangThaiLuuTru: ReturnType<typeof taoMapTrangThaiLuuTru> | undefined,
+): void {
+  const loCoViec = keHoach.filter((l) => l.cho.length > 0).length;
+  const tongRepo = keHoach.reduce((tong, l) => tong + l.cho.length, 0);
+  console.info(
+    `${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'} - Kế hoạch: ${loCoViec} lô, ${tongRepo} repo (tối đa tổng ${toiDaTong ?? 'không giới hạn'})`,
+  );
+  if (!trangThaiLuuTru) {
+    console.warn('Không truyền --luu-tru <bao_cao.jsonl>; lệnh day sẽ không thay đổi cờ daLuuTru.');
+    return;
   }
-  const batDau = Number(m1[2]);
-  const ketThuc = Number(m2[2]);
-  const doDai = m1[2]!.length;
-  const kq: string[] = [];
-  for (let i = batDau; i <= ketThuc; i++) {
-    kq.push(`${m1[1]}${String(i).padStart(doDai, '0')}`);
-  }
-  return kq;
+  const trongKeHoach = keHoach
+    .flatMap((l) => l.cho)
+    .filter((row) => layCapNhatLuuTru(row.repo, trangThaiLuuTru).daLuuTru);
+  const tongLuuTru = [...trangThaiLuuTru.values()].filter(Boolean).length;
+  console.info(
+    `Repo archived trong kế hoạch sẽ gắn daLuuTru=true: ${trongKeHoach.length}; tổng trong báo cáo: ${tongLuuTru}.`,
+  );
+  for (const row of trongKeHoach) console.info(`[lưu trữ] ${row.repo}`);
 }
 
 async function lenhDay(): Promise<void> {
-  const loDau = batBuocLo();
-  const danhSachLo = moRongDanhSachLo(loDau, layThamSo('den-lo'));
+  const danhSachLo = moRongDanhSachLo(batBuocLo(), layThamSo('den-lo'));
   const ghi = coCo('ghi');
   const toiDa = Number(layThamSo('toi-da') ?? '20');
+  const toiDaTong = docToiDaTong();
+  // Chặn trước khi đọc dữ liệu hay mở kết nối DB: ghi nhiều lô mà thiếu giới hạn tổng là ghi cả đợt.
+  const loiChan = layLoiGhiNhieuLoThieuGioiHan(danhSachLo.length, ghi, toiDaTong);
+  if (loiChan) throw new Error(loiChan);
   const thuMucNguonChe = layThamSo('nguon-che');
   const suaBoNho = coCo('sua-bo-nho');
   if (ghi && !thuMucNguonChe)
@@ -1484,28 +1559,17 @@ async function lenhDay(): Promise<void> {
         docJsonl<{ repo: string; loai: string; archived?: boolean }>(path.resolve(fileLuuTru)),
       )
     : undefined;
-  const chiRepo = layThamSo('repo')?.toLowerCase();
+  const keHoach = lapKeHoachDay(danhSachLo, {
+    suaBoNho,
+    chiRepo: layThamSo('repo')?.toLowerCase(),
+    toiDa,
+    toiDaTong,
+  });
+  inKeHoachDay(keHoach, ghi, toiDaTong, trangThaiLuuTru);
 
   if (!canKhoiTaoNestDay(ghi, suaBoNho)) {
-    for (const lo of danhSachLo) {
-      const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
-      const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
-      const fileLog = duongDan('daDay', lo);
-      const daDay = new Set(
-        docJsonl<{ repo: string; ketQua: string }>(fileLog)
-          .filter((l) => l.ketQua === 'ok')
-          .map((l) => l.repo),
-      );
-      const cho = dsKiem
-        .filter(
-          (r) =>
-            (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
-            (!chiRepo || r.repo.toLowerCase() === chiRepo),
-        )
-        .slice(0, toiDa);
-      console.info(
-        `[${lo}] ${ghi ? 'GHI THẬT' : 'CHẠY THỬ (không ghi)'}: ${cho.length}/${dsKiem.length} repo, tối đa ${toiDa}`,
-      );
+    for (const { lo, dsCao, tongTrongLo, cho } of keHoach) {
+      console.info(`[${lo}] ${cho.length}/${tongTrongLo} repo, tối đa ${toiDa} mỗi lô`);
       const demDuDoan = { HOAT_DONG: 0, TUY_TEP_CAI: 0, KHONG_CO_BAN_CAO: 0 };
       for (const row of cho) {
         const caoRow = dsCao.find((c) => c.repo.toLowerCase() === row.repo.toLowerCase());
@@ -1543,25 +1607,8 @@ async function lenhDay(): Promise<void> {
     const cache = app.get(CacheService);
     const github = app.get(GithubService);
 
-    for (const lo of danhSachLo) {
-      const dsCao = docJsonl<BanGhiDaCao>(duongDan('daCao', lo));
-      const dsKiem = docJsonl<DongDaKiem>(duongDan('daKiem', lo));
-      const fileLog = duongDan('daDay', lo);
-      const daDay = new Set(
-        docJsonl<{ repo: string; ketQua: string }>(fileLog)
-          .filter((l) => l.ketQua === 'ok')
-          .map((l) => l.repo),
-      );
-      const cho = dsKiem
-        .filter(
-          (r) =>
-            (suaBoNho ? daDay.has(r.repo) : !daDay.has(r.repo)) &&
-            (!chiRepo || r.repo.toLowerCase() === chiRepo),
-        )
-        .slice(0, toiDa);
-      console.info(
-        `=== [${lo}] ${ghi ? 'GHI THẬT' : 'CHẠY THỬ'}: ${cho.length}/${dsKiem.length} repo ===`,
-      );
+    for (const { lo, dsCao, tongTrongLo, fileLog, cho } of keHoach) {
+      console.info(`=== [${lo}] ${cho.length}/${tongTrongLo} repo ===`);
       if (cho.length === 0) continue;
       const nhan = nhanLo(lo);
 
