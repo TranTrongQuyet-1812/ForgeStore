@@ -94,10 +94,10 @@ export function layBanDichCoKyHieu(
     if (!vi?.trim()) throw new Error(`${cao.repo} đoạn ${doan.stt} chưa có bản dịch có ký hiệu.`);
     const goc = cauTruc[index]!;
     const viSach = StructureValidator.cleanOutput(vi, doan.vanBanDaChe);
-    const { placeholderMap } = MarkdownMasker.mask(
-      Object.keys(goc.khungGiuNguyen).length === 0 ? goc.vanBanDaChe : doan.vanBanDaChe,
-    );
-    const viCheKhung = MarkdownMasker.unmask(viSach, placeholderMap);
+    const viCheKhung =
+      Object.keys(goc.khungGiuNguyen).length === 0
+        ? MarkdownMasker.unmask(viSach, MarkdownMasker.mask(goc.vanBanDaChe).placeholderMap)
+        : viSach;
     if (goKhungGiuNguyen(goc, viCheKhung).trim() !== daKiem.doan[index]!.dich.trim())
       throw new Error(`${cao.repo} đoạn ${doan.stt}: bản dịch có ký hiệu không khớp bản đã kiểm.`);
     ketQua.set(doan.maBam, viCheKhung);
