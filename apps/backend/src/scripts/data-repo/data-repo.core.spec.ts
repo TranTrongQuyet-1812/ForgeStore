@@ -284,6 +284,9 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
     expect(coCauTiengAnh('DevNation RedHat Developer: ⟦C1⟧Twitter⟦C2⟧')).toBe(false);
     expect(coCauTiengAnh('HarryChen0506 ⟦C1⟧github/HarryChen0506⟦C2⟧')).toBe(false);
     expect(
+      coCauTiengAnh('⟦C1⟧manage.py⟦C2⟧docker exec -it trendradar python manage.py start⟦C3⟧'),
+    ).toBe(false);
+    expect(
       coCauTiengAnh('Use ⟦C1⟧npm⟦C2⟧ to install the package and then run ⟦C3⟧init⟦C4⟧ now'),
     ).toBe(true);
     expect(coCauTiengAnh('Download the latest ⟦C1⟧release⟦C2⟧.')).toBe(true);
@@ -313,5 +316,38 @@ describe('Data_Repo core (khớp hàm của BE)', () => {
   it('không có bản cào tương ứng thì lỗi khong_co_ban_cao', () => {
     const dong = taoDongChoDich(banCao());
     expect(kiemTraDongDaDich(undefined, dong, 'x').loi!.loiMoTa).toBe('khong_co_ban_cao');
+  });
+
+  it('không vướng Object.prototype.constructor, nhãn [C99] gốc hay URL trong đoạn giữ nguyên', () => {
+    const readme = [
+      '### Constructor',
+      '',
+      '- [C99](https://api.c99.nl/) subdomain source.',
+      '',
+      '## Sponsors',
+      '',
+      '<a href="https://simpleshow.com">https://simpleshow.com</a> <a href="https://notably.ai">https://notably.ai</a>',
+    ].join('\n');
+    const cao = banCao(readme);
+    const choDich = taoDongChoDich(cao);
+    expect(choDich.doan[0]?.vanBanDaChe).toBe('Constructor');
+    expect(choDich.doan[0]?.canDich).toBe(true);
+
+    const daDich: DongDich = {
+      ...choDich,
+      moTaVi: 'Công cụ kiểm thử',
+      doan: choDich.doan.map((d) => ({
+        ...d,
+        vi: d.canDich
+          ? d.vanBanDaChe
+              .replace('Constructor', 'Hàm khởi tạo')
+              .replace('subdomain source.', 'nguồn tên miền phụ.')
+          : d.vanBanDaChe,
+      })),
+    };
+    const ketQua = kiemTraDongDaDich(cao, daDich, 'x');
+    expect(ketQua.loi).toBeNull();
+    expect(ketQua.dat?.readmeVi).toContain('### Hàm khởi tạo');
+    expect(ketQua.dat?.readmeVi).toContain('- [C99](https://api.c99.nl/) nguồn tên miền phụ.');
   });
 });

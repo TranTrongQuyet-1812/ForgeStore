@@ -289,7 +289,11 @@ function layTieuDeTieuChuan(text: string): string {
 }
 
 function layTieuDeCoDinh(text: string): string | undefined {
-  const banDich = TU_KHOA_TIEU_DE_CO_DINH[layTieuDeTieuChuan(text)];
+  const khoa = layTieuDeTieuChuan(text);
+  // Dùng Object.hasOwn để tiêu đề "Constructor" / "toString" không tra nhầm vào Object.prototype
+  const banDich = Object.hasOwn(TU_KHOA_TIEU_DE_CO_DINH, khoa)
+    ? TU_KHOA_TIEU_DE_CO_DINH[khoa]
+    : undefined;
   if (!banDich) return undefined;
   const tienTo =
     text.match(
@@ -1228,7 +1232,10 @@ export function kiemBatBienReadme(
     beforeRows.some((row, index) => row.split('|').length !== afterRows[index]?.split('|').length)
   )
     warnings.push('so_cot_bang_thay_doi');
-  if (/⟦C\d+⟧|\[C\d+\]/.test(dich)) warnings.push('con_ma_che');
+  // Chỉ báo sót mã che khi ký hiệu không có sẵn trong README gốc (ví dụ liên kết "[C99](https://api.c99.nl/)")
+  const maCheNguon = new Set(goc.match(/⟦C\d+⟧|\[C\d+\]/g) ?? []);
+  if ((dich.match(/⟦C\d+⟧|\[C\d+\]/g) ?? []).some((ma) => !maCheNguon.has(ma)))
+    warnings.push('con_ma_che');
   const vanGoc = (tuyChon.doan ?? [{ goc, dich }]).map((segment) => segment.goc).join('\n');
   const vanDich = (tuyChon.doan ?? [{ goc, dich }]).map((segment) => segment.dich).join('\n');
   const cacDoanSoSanhChuHan = tuyChon.doan ?? [{ goc, dich }];

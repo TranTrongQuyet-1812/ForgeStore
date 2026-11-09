@@ -88,7 +88,9 @@ const TU_NOI_TIENG_ANH = new RegExp(`^${TU_CAU_TIENG_ANH.source.replace(/\\b/g, 
  */
 export function coCauTiengAnh(daChe: string): boolean {
   if (/^\s*\$\s/.test(daChe)) return false;
-  const viTri = /(?=(\b[A-Za-z]{2,}\b[ \t]+\b[A-Za-z]{2,}\b[ \t]+\b[A-Za-z]{2,}\b))/g;
+  // Không coi cờ lệnh (-it, --in) hoặc tên tệp (manage.py) là từ nối tiếng Anh trong câu văn
+  const tuThuan = String.raw`(?<![-.])\b[A-Za-z]{2,}\b(?![-.])`;
+  const viTri = new RegExp(`(?=(${tuThuan}[ \\t]+${tuThuan}[ \\t]+${tuThuan}))`, 'g');
   return daChe
     .replace(/⟦C\d+⟧/g, '|')
     .split('\n')
@@ -103,7 +105,12 @@ export function coCauTiengAnh(daChe: string): boolean {
 export function taoDongChoDich(cao: BanGhiDaCao): DongDich {
   const doan: DoanChoDich[] = phanTichReadme(cao.readmeEn ?? '').doan.map((nut, i) => {
     const goc = nut.vanBanGoc;
-    const { maskedText: vanBanDaChe } = MarkdownMasker.mask(nut.vanBanDaChe);
+    // Chỉ chạy MarkdownMasker khi đoạn chưa có khungGiuNguyen (ví dụ alt của thẻ <img> chứa URL trần)
+    // để không sinh trùng ký hiệu ⟦C1⟧ đè lên khungGiuNguyen có sẵn.
+    const coKhungGiuNguyen = Object.keys(nut.khungGiuNguyen).length > 0;
+    const { maskedText: vanBanDaChe } = coKhungGiuNguyen
+      ? { maskedText: nut.vanBanDaChe }
+      : MarkdownMasker.mask(nut.vanBanDaChe);
     const canDich = nut.canDich && conChuCanDich(vanBanDaChe);
     const maskedText = canDich ? vanBanDaChe : nut.vanBanDaChe;
     return {
@@ -189,10 +196,10 @@ export function kiemTraDongDaDich(
       return ketQua;
     }
     const doanNguon = cauTruc.doan[i]!;
-    const { placeholderMap } = MarkdownMasker.mask(
-      Object.keys(doanNguon.khungGiuNguyen).length === 0 ? doanNguon.vanBanDaChe : c.vanBanDaChe,
-    );
-    const viDayChe = MarkdownMasker.unmask(viSach, placeholderMap);
+    const viDayChe =
+      c.canDich && Object.keys(doanNguon.khungGiuNguyen).length === 0
+        ? MarkdownMasker.unmask(viSach, MarkdownMasker.mask(doanNguon.vanBanDaChe).placeholderMap)
+        : viSach;
     let viDay: string;
     try {
       viDay = goKhungGiuNguyen(cauTruc.doan[i]!, viDayChe);
