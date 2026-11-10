@@ -575,7 +575,15 @@ export function locVaChuanHoaHuongDanCaiDat(
     const nhomSuyDuan = nhanDienNhomLenh(buocHopLe[0]?.lenh || '') || cach.nhom;
 
     // P3B-16.3: Bóc tách tên gói và ghép lệnh cập nhật/gỡ từ manifest
-    const pkgInfo = trichTenGoiDaChuanHoa(buocHopLe[0]?.lenh || '');
+    let pkgInfo = trichTenGoiDaChuanHoa(buocHopLe[0]?.lenh || '');
+    // P3B-33 (D-38): Với lệnh npx, bắt buộc tên gói/skill phải khớp tên repo để không nhận nhầm lệnh dev
+    if (pkgInfo && pkgInfo.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+      const tenRepo = layTenRepoTuDuongDan(duongDanReadmeGoc);
+      const khop = tenRepo && pkgInfo.tenGoi ? tenGoiKhopTenRepo(pkgInfo.tenGoi, tenRepo) : false;
+      if (!khop) {
+        pkgInfo = null;
+      }
+    }
     const trinhQuanLy = pkgInfo?.trinhQuanLy || cach.trinhQuanLy;
     const tenGoi = pkgInfo?.tenGoi || cach.tenGoi;
     let lenhCapNhat = cach.lenhCapNhat;
@@ -771,7 +779,14 @@ export function bocTachHuongDanTuCodeBlocks(
       };
     });
 
-    const pkgInfo = trichTenGoiDaChuanHoa(items[0]?.lenh || '');
+    let pkgInfo = trichTenGoiDaChuanHoa(items[0]?.lenh || '');
+    // P3B-33 (D-38): Với lệnh npx, bắt buộc tên gói/skill phải khớp tên repo để không nhận nhầm lệnh dev
+    if (pkgInfo && pkgInfo.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+      const khop = tenRepo && pkgInfo.tenGoi ? tenGoiKhopTenRepo(pkgInfo.tenGoi, tenRepo) : false;
+      if (!khop) {
+        pkgInfo = null;
+      }
+    }
     let lenhCapNhat: string | undefined;
     let lenhGo: string | undefined;
     if (pkgInfo) {

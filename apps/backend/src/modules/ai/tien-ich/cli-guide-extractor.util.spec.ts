@@ -908,3 +908,103 @@ pip install my-tool
     );
   });
 });
+
+describe('P3B-33: Nhóm skill trợ lý AI cài bằng npx (D-38)', () => {
+  it('nhận đúng 3 repo skill AI: mattpocock/skills, pbakaus/impeccable, cloudflare/security-audit-skill', () => {
+    // 1. mattpocock/skills: npx skills add ...
+    const mdSkills = `
+# Skills
+A collection of skills for AI coding agents.
+
+## Installation
+\`\`\`bash
+npx skills add mattpocock/skills
+\`\`\`
+`;
+    const resSkills = trichXuatHuongDanCliBangQuyTac(
+      mdSkills,
+      'https://github.com/mattpocock/skills',
+    );
+    expect(resSkills).not.toBeNull();
+    expect(coCachCaiCliHopLe(resSkills)).toBe(true);
+    expect(resSkills?.cachCai[0]?.tenGoi).toBe('mattpocock/skills');
+
+    // 2. pbakaus/impeccable: npx impeccable install
+    const mdImpeccable = `
+# Impeccable
+Design guidance for AI agents and code generators.
+
+## Setup
+\`\`\`bash
+npx impeccable install
+\`\`\`
+`;
+    const resImpeccable = trichXuatHuongDanCliBangQuyTac(
+      mdImpeccable,
+      'https://github.com/pbakaus/impeccable',
+    );
+    expect(resImpeccable).not.toBeNull();
+    expect(coCachCaiCliHopLe(resImpeccable)).toBe(true);
+    expect(resImpeccable?.cachCai[0]?.tenGoi).toBe('impeccable');
+
+    // 3. cloudflare/security-audit-skill: npx skills add cloudflare/security-audit-skill
+    const mdCloudflare = `
+# Security Audit Skill
+Claude Code and Codex skill for cloud security audits.
+
+## Install
+\`\`\`bash
+npx skills add cloudflare/security-audit-skill
+\`\`\`
+`;
+    const resCloudflare = trichXuatHuongDanCliBangQuyTac(
+      mdCloudflare,
+      'https://github.com/cloudflare/security-audit-skill',
+    );
+    expect(resCloudflare).not.toBeNull();
+    expect(coCachCaiCliHopLe(resCloudflare)).toBe(true);
+    expect(resCloudflare?.cachCai[0]?.tenGoi).toBe('cloudflare/security-audit-skill');
+  });
+
+  it('vẫn loại trừ lệnh chạy dev (npx vite, npx create-react-app)', () => {
+    // A. npx vite
+    const mdVite = `
+## Getting Started
+\`\`\`bash
+npx vite
+\`\`\`
+`;
+    const resVite = trichXuatHuongDanCliBangQuyTac(mdVite, 'https://github.com/vitejs/vite');
+    expect(coCachCaiCliHopLe(resVite)).toBe(false);
+
+    // B. npx create-react-app my-app ở repo khác
+    const mdCra = `
+## Quick Start
+\`\`\`bash
+npx create-react-app my-app
+\`\`\`
+`;
+    const resCra = trichXuatHuongDanCliBangQuyTac(mdCra, 'https://github.com/owner/some-tutorial');
+    expect(coCachCaiCliHopLe(resCra)).toBe(false);
+  });
+
+  it('vẫn loại trừ repo chỉ chạy từ mã nguồn kiểu OpenManus (git clone + pip install -r)', () => {
+    const mdOpenManus = `
+# OpenManus
+An open-source replication of Manus AI.
+
+## Installation
+\`\`\`bash
+git clone https://github.com/FoundationAgents/OpenManus.git
+cd OpenManus
+pip install -r requirements.txt
+python main.py
+\`\`\`
+`;
+    const resOpenManus = trichXuatHuongDanCliBangQuyTac(
+      mdOpenManus,
+      'https://github.com/FoundationAgents/OpenManus',
+    );
+    expect(coCachCaiCliHopLe(resOpenManus)).toBe(false);
+  });
+});

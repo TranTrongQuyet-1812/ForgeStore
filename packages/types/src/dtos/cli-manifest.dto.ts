@@ -13,6 +13,7 @@ export const MaTrinhQuanLyGoi = {
   NPM: 'npm',
   PIP: 'pip',
   DOCKER: 'docker',
+  NPX: 'npx',
 } as const;
 
 export type MaTrinhQuanLyGoi = (typeof MaTrinhQuanLyGoi)[keyof typeof MaTrinhQuanLyGoi];
@@ -110,6 +111,17 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     // Thẻ định danh ảnh Docker (Docker Image Tag - VD: ghcr.io/open-webui/open-webui:main, nginx:latest, postgres:16-alpine)
     regexTenGoi:
       '^(?:(?:[a-zA-Z0-9][a-zA-Z0-9_.-]*(?:\\:[0-9]+)?\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*\\/)?[a-zA-Z0-9][a-zA-Z0-9_.-]*(?::[a-zA-Z0-9_.-]+)?$',
+    kieuSoPhienBan: KieuSoPhienBan.SEMVER,
+  },
+  [MaTrinhQuanLyGoi.NPX]: {
+    ma: MaTrinhQuanLyGoi.NPX,
+    tenHienThi: 'Node Package Execute (npx)',
+    bieuTuong: 'Terminal',
+    mauLenhCai: 'npx {tenGoi}',
+    mauLenhCapNhat: 'npx {tenGoi}',
+    mauLenhGo: '',
+    // Hỗ trợ cả tên gói npm đơn lẻ, scoped package hoặc repo slug của nhóm skill (D-38)
+    regexTenGoi: '^(?:@[a-z0-9][a-z0-9_.-]*\\/)?[A-Za-z0-9][A-Za-z0-9_.-]*(?:\\/[A-Za-z0-9_.-]+)?$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
   },
 };
@@ -515,6 +527,27 @@ export function trichTenGoiTuLenhTho(
       ) {
         return { trinhQuanLy: MaTrinhQuanLyGoi.DOCKER, tenGoi: candidateImage };
       }
+    }
+  }
+
+  // 6. NPX / Skill (D-38 & P3B-33)
+  // Dạng 1: npx skills add <target> hoặc npx skills install <target>
+  if (/^npx\s+skills\s+(?:add|install)\b/i.test(l)) {
+    const tokens = l.split(/\s+/);
+    const target = tokens[3]?.trim();
+    if (target && !target.startsWith('-') && !laKyTuDocHai(target)) {
+      if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, target)) {
+        return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: target };
+      }
+    }
+  }
+
+  // Dạng 2: npx <tên-gói> install hoặc npx <tên-gói> add
+  const matchNpx = l.match(/^npx\s+([@a-zA-Z0-9_.-]+)\s+(?:install|add)\b/i);
+  if (matchNpx && matchNpx[1]) {
+    const pkg = matchNpx[1];
+    if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, pkg)) {
+      return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: pkg };
     }
   }
 
