@@ -167,6 +167,18 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
     };
   }
 
+  return {
+    dinhDang,
+    kienTruc: suyKienTrucTuTenTep(lowerName, dinhDang),
+    boQua: false,
+  };
+}
+
+/**
+ * Suy kiến trúc chip từ tên tệp (đã hạ chữ thường). Tách riêng khỏi `phanLoaiTep` để luật ZIP duy nhất
+ * (P3B-36) dùng lại đúng cùng một cách suy, không chép lại.
+ */
+function suyKienTrucTuTenTep(lowerName: string, dinhDang: DinhDangTep): KienTrucChip {
   // 5. Xác định kiến trúc chip (Chip Architecture)
   // ⚠️ QUY TẮC SỐNG CÒN CỦA P2-22: PHẢI KIỂM TRA x86_64 TRƯỚC x86!
   let kienTruc: KienTrucChip = KienTrucChip.KHONG_XAC_DINH;
@@ -238,11 +250,52 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
     }
   }
 
-  return {
-    dinhDang,
-    kienTruc,
+  return kienTruc;
+}
+
+// Dấu hiệu hệ điều hành khác dùng riêng cho luật ZIP duy nhất (P3B-36). Gồm mẫu PATTERN_OS_BO_QUA có sẵn
+// và thêm android (ZIP của Android không chạy được trên Windows). Không đổi PATTERN_OS_BO_QUA để khỏi lệch hành vi cũ.
+const PATTERN_OS_KHAC_CHO_ZIP_DUY_NHAT = /(?:^|[-_.])android(?:[-_.]|$)/i;
+const PATTERN_ZIP_BO_CAI = /(?:^|[-_.])(installer|setup)(?:[-_.]|$)/i;
+
+const laTepNen = (ten: string) => /\.(zip|7z)$/i.test(ten.trim());
+
+/** ZIP/7z này có thể là bản chạy chung cho mọi nền tảng không (không phải mã nguồn, không ghi hệ điều hành khác)? */
+function zipKhongGhiHeDieuHanhKhac(tenTep: string): boolean {
+  const lower = tenTep.trim().toLowerCase();
+  return (
+    !PATTERN_SOURCE_CODE.test(lower) &&
+    !PATTERN_OS_BO_QUA.test(lower) &&
+    !PATTERN_OS_KHAC_CHO_ZIP_DUY_NHAT.test(lower) &&
+    !PATTERN_ZIP_BO_CAI.test(lower)
+  );
+}
+
+/**
+ * P3B-36: phân loại cả danh sách tệp của MỘT bản phát hành.
+ * Luật mới: nếu bản phát hành không có tệp cài nào khác (EXE/MSI/APK/ZIP có chữ Windows) và chỉ có ĐÚNG MỘT tệp
+ * ZIP/7z (không tính mã nguồn GitHub tự sinh), tên không ghi hệ điều hành khác, thì nhận ZIP đó là ZIP_PORTABLE
+ * (ví dụ NationalSecurityAgency/ghidra chỉ phát hành một ZIP không ghi Windows).
+ * Hàm này tách khỏi `phanLoaiTep(tenTep)` vì luật cần nhìn cả danh sách; nơi chỉ có một tên tệp lẻ vẫn gọi `phanLoaiTep`.
+ */
+export function phanLoaiCacTepBanPhatHanh(tenCacTep: string[]): KetQuaPhanLoaiTep[] {
+  const ketQua = tenCacTep.map((ten) => phanLoaiTep(ten));
+  const coTepCaiKhac = ketQua.some((k) => !k.boQua && k.dinhDang !== null);
+  if (coTepCaiKhac) return ketQua;
+
+  // Đếm mọi ZIP/7z không phải mã nguồn (kể cả ZIP ghi linux/mac) để hai ZIP cùng lúc thì không còn "duy nhất"
+  const chiSoZip = tenCacTep
+    .map((ten, i) => ({ ten, i }))
+    .filter(({ ten }) => laTepNen(ten) && !PATTERN_SOURCE_CODE.test(ten.toLowerCase()));
+  const duyNhat = chiSoZip.length === 1 ? chiSoZip[0] : undefined;
+  if (!duyNhat || !zipKhongGhiHeDieuHanhKhac(duyNhat.ten)) return ketQua;
+
+  ketQua[duyNhat.i] = {
+    dinhDang: DinhDangTep.ZIP_PORTABLE,
+    kienTruc: suyKienTrucTuTenTep(duyNhat.ten.trim().toLowerCase(), DinhDangTep.ZIP_PORTABLE),
     boQua: false,
   };
+  return ketQua;
 }
 
 export interface ThongTinDiemUuTien {
@@ -429,8 +482,8 @@ export interface TepCaiDaLoc<A> {
  * bộ cài GUI chính quy thì bỏ bản CLI và Debug (V2).
  */
 export function locTepCaiCuaBanPhatHanh<A extends { name: string }>(assets: A[]): TepCaiDaLoc<A>[] {
-  const daPhanLoai = assets.flatMap((asset) => {
-    const phanLoai = phanLoaiTep(asset.name);
+  const daPhanLoai = phanLoaiCacTepBanPhatHanh(assets.map((a) => a.name)).flatMap((phanLoai, i) => {
+    const asset = assets[i]!;
     if (phanLoai.boQua || !phanLoai.dinhDang) return [];
     return [
       { asset, tenTep: asset.name, dinhDang: phanLoai.dinhDang, kienTruc: phanLoai.kienTruc },

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { phanLoaiTep, hauXuLyKienTrucBanPhatHanh, tinhDiemUuTienTep } from './phan-loai-tep.util';
+import {
+  phanLoaiTep,
+  phanLoaiCacTepBanPhatHanh,
+  hauXuLyKienTrucBanPhatHanh,
+  tinhDiemUuTienTep,
+} from './phan-loai-tep.util';
 import { DinhDangTep, KienTrucChip } from '@forgestore/types';
 
 describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
@@ -417,5 +422,66 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
       expect(generic7z.boQua).toBe(true);
       expect(generic7z.dinhDang).toBeNull();
     });
+  });
+});
+
+describe('P3B-36: phanLoaiCacTepBanPhatHanh (ZIP duy nhất không ghi hệ điều hành)', () => {
+  it('Ghidra: chỉ một ZIP không có chỉ báo hệ điều hành thì nhận là ZIP_PORTABLE', () => {
+    const kq = phanLoaiCacTepBanPhatHanh(['ghidra_12.2_PUBLIC_20261016.zip']);
+    expect(kq[0]?.boQua).toBe(false);
+    expect(kq[0]?.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+  });
+
+  it('không thay đổi hành vi của phanLoaiTep(tên lẻ): ZIP lẻ vẫn bị loại ở nơi chỉ có một tên', () => {
+    expect(phanLoaiTep('ghidra_12.2_PUBLIC_20261016.zip').boQua).toBe(true);
+  });
+
+  it('bỏ qua tệp checksum, chữ ký và mã nguồn khi đếm "duy nhất"', () => {
+    const kq = phanLoaiCacTepBanPhatHanh([
+      'tool-1.0.zip',
+      'tool-1.0.zip.sha256',
+      'tool-1.0.zip.sig',
+      'Source code (zip)',
+      'tool-1.0-source.zip',
+    ]);
+    expect(kq[0]?.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+    expect(kq.slice(1).every((k) => k.boQua)).toBe(true);
+  });
+
+  it('có thêm tệp .exe thì giữ hành vi cũ: ZIP không ghi hệ điều hành vẫn bị loại', () => {
+    const kq = phanLoaiCacTepBanPhatHanh(['tool-1.0.zip', 'tool-setup-win-x64.exe']);
+    expect(kq[0]?.boQua).toBe(true);
+    expect(kq[1]?.dinhDang).toBe(DinhDangTep.EXE);
+  });
+
+  it('ZIP ghi linux/mac/osx/android bị loại dù là tệp duy nhất', () => {
+    for (const ten of [
+      'tool-1.0-linux.zip',
+      'tool-1.0-macos.zip',
+      'tool-1.0-osx.zip',
+      'tool-1.0-android.zip',
+    ]) {
+      expect(phanLoaiCacTepBanPhatHanh([ten])[0]?.boQua, ten).toBe(true);
+    }
+  });
+
+  it('ZIP chỉ có mã nguồn bị loại', () => {
+    expect(phanLoaiCacTepBanPhatHanh(['tool-1.0-source.zip'])[0]?.boQua).toBe(true);
+    expect(phanLoaiCacTepBanPhatHanh(['Source code (zip)'])[0]?.boQua).toBe(true);
+  });
+
+  it('hai ZIP cùng lúc (không còn duy nhất) đều bị loại, kể cả khi một cái ghi linux', () => {
+    const haiZip = phanLoaiCacTepBanPhatHanh(['tool-1.0.zip', 'tool-1.0-extra.zip']);
+    expect(haiZip.every((k) => k.boQua)).toBe(true);
+    const motLinux = phanLoaiCacTepBanPhatHanh(['tool-1.0.zip', 'tool-1.0-linux.zip']);
+    expect(motLinux.every((k) => k.boQua)).toBe(true);
+  });
+
+  it('ZIP chứa installer/setup vẫn bị loại (L-04)', () => {
+    expect(phanLoaiCacTepBanPhatHanh(['tool-setup.zip'])[0]?.boQua).toBe(true);
+  });
+
+  it('danh sách rỗng trả về rỗng', () => {
+    expect(phanLoaiCacTepBanPhatHanh([])).toEqual([]);
   });
 });

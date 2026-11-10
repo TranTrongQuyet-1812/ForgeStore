@@ -40,7 +40,7 @@ import { ApkInspectorService } from '../ai/services/apk-inspector.service';
 import { MO_HINH_EMBEDDING, SemanticSearchService } from '../ai/services/semantic-search.service';
 import { SearchTranslatorService } from '../ai/services/search-translator.service';
 import {
-  phanLoaiTep,
+  phanLoaiCacTepBanPhatHanh,
   locTepCaiCuaBanPhatHanh,
   tinhDiemUuTienTep,
 } from './tien-ich/phan-loai-tep.util';
@@ -2320,8 +2320,9 @@ export class UngDungService {
     const assets = latestRelease.assets || [];
 
     // 3.3: Kiểm tra tệp cài đặt phù hợp với nền tảng (P2-41.3, Post-Review #14)
-    const coFileHopLe = assets.some((a) => {
-      const classified = phanLoaiTep(a.name);
+    // P3B-36: phân loại cả danh sách để nhận ZIP duy nhất không ghi hệ điều hành (đường dán link)
+    const cacTepPhanLoai = phanLoaiCacTepBanPhatHanh(assets.map((a) => a.name));
+    const coFileHopLe = cacTepPhanLoai.some((classified) => {
       if (!classified || classified.boQua) return false;
 
       if (dto.nenTang === 'ANDROID') {

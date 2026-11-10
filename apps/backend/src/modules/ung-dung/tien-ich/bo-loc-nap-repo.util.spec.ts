@@ -86,6 +86,18 @@ describe('danhGiaRelease (bộ lọc 8 và 9)', () => {
     const kq = danhGiaRelease([rel({ assets: [{ name: 'app-linux-amd64.tar.gz' }] })], NOW);
     expect(kq.lyDo).toBe('KHONG_CO_FILE_CAI');
   });
+  it('P3B-36: Ghidra chỉ có một ZIP không ghi hệ điều hành thì đạt; hai ZIP thì vẫn bị loại', () => {
+    const ghidra = danhGiaRelease(
+      [rel({ assets: [{ name: 'ghidra_12.2_PUBLIC_20261016.zip' }] })],
+      NOW,
+    );
+    expect(ghidra.dat).toBe(true);
+    const haiZip = danhGiaRelease(
+      [rel({ assets: [{ name: 'tool-1.0.zip' }, { name: 'tool-1.0-extra.zip' }] })],
+      NOW,
+    );
+    expect(haiZip.lyDo).toBe('KHONG_CO_FILE_CAI');
+  });
   it('chỉ có APK thì đạt nhưng đánh dấu chiCoApk', () => {
     const kq = danhGiaRelease([rel({ assets: [{ name: 'app-1.0.apk' }] })], NOW);
     expect(kq.dat).toBe(true);

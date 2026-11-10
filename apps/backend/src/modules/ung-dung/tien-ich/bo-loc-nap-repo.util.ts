@@ -1,7 +1,7 @@
 import { DinhDangTep } from '@prisma/client';
 import { coCachCaiCliHopLe } from '@forgestore/types';
 import { trichXuatHuongDanCliBangQuyTac } from '../../ai/tien-ich/cli-guide-extractor.util';
-import { phanLoaiTep } from './phan-loai-tep.util';
+import { phanLoaiCacTepBanPhatHanh } from './phan-loai-tep.util';
 
 /**
  * Bộ lọc ứng viên repo (P3B-06.3), hàm thuần dùng chung cho Data_Repo (lệnh `kham-pha`)
@@ -146,9 +146,10 @@ export function danhGiaRelease(
     )[0];
   if (!chinhThuc) return { dat: false, lyDo: 'KHONG_CO_BAN_PHAT_HANH' };
 
-  const tep = (chinhThuc.assets ?? [])
-    .map((a) => phanLoaiTep(a.name))
-    .filter((k) => !k.boQua && k.dinhDang !== null && DINH_DANG_HOP_LE.includes(k.dinhDang));
+  // P3B-36: phân loại cả danh sách để nhận ZIP duy nhất không ghi hệ điều hành (Ghidra)
+  const tep = phanLoaiCacTepBanPhatHanh((chinhThuc.assets ?? []).map((a) => a.name)).filter(
+    (k) => !k.boQua && k.dinhDang !== null && DINH_DANG_HOP_LE.includes(k.dinhDang),
+  );
   if (tep.length === 0) return { dat: false, lyDo: 'KHONG_CO_FILE_CAI' };
 
   const tuoiThang = soThangTu(chinhThuc.published_at, now);
