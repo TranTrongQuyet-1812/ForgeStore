@@ -608,7 +608,12 @@ export function trichTenGoiTuLenhTho(
       }
 
       if (targetToken) {
-        const target = targetToken.trim().replace(/^['"]|['"]$/g, '');
+        let target = targetToken.trim().replace(/^['"]|['"]$/g, '');
+        // Chuẩn hóa đích dạng URL GitHub: https://github.com/<owner>/<repo>(.git) -> <owner>/<repo> (P3B-33)
+        target = target
+          .replace(/^https?:\/\/github\.com\//i, '')
+          .replace(/\.git$/i, '')
+          .replace(/\/$/, '');
         if (!laKyTuDocHai(target) && kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, target)) {
           return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: target };
         }

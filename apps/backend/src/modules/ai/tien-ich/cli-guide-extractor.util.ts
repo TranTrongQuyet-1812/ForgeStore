@@ -824,10 +824,13 @@ function laCachCaiHopLe(huongDan: HuongDanCaiDatDto): boolean {
   return coCachCaiCliHopLe(huongDan);
 }
 
-/** Lấy tên repo từ đường dẫn README gốc (https://github.com/owner/repo#readme). */
+/** Lấy tên repo từ đường dẫn README gốc (https://github.com/owner/repo#readme hoặc owner/repo). */
 function layTenRepoTuDuongDan(duongDan?: string): string | null {
-  const m = duongDan?.match(/github\.com\/[^/\s]+\/([^/#?\s]+)/i);
-  return m?.[1] ?? null;
+  if (!duongDan) return null;
+  const m = duongDan.match(/github\.com\/[^/\s]+\/([^/#?\s]+)/i);
+  if (m?.[1]) return m[1];
+  const mSlug = duongDan.match(/^[^/\s]+\/([^/#?\s]+)$/);
+  return mSlug?.[1] ?? null;
 }
 
 function chuanHoaTenSoSanh(ten: string): string {

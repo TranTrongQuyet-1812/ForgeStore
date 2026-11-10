@@ -985,14 +985,21 @@ npx impeccable install
     expect(coCachCaiCliHopLe(resImpeccable)).toBe(true);
     expect(resImpeccable?.cachCai[0]?.tenGoi).toBe('impeccable');
 
-    // 3. cloudflare/security-audit-skill: npx skills add cloudflare/security-audit-skill
+    // 3. cloudflare/security-audit-skill: npx skills add https://github.com/... \
     const mdCloudflare = `
-# Security Audit Skill
-Claude Code and Codex skill for cloud security audits.
+Install the skill with the [Skills CLI](https://skills.sh):
 
-## Install
 \`\`\`bash
-npx skills add cloudflare/security-audit-skill
+npx skills add https://github.com/cloudflare/security-audit-skill \\
+  --skill security-audit
+\`\`\`
+
+Use \`--global\` for a user-level installation:
+
+\`\`\`bash
+npx skills add https://github.com/cloudflare/security-audit-skill \\
+  --skill security-audit \\
+  --global
 \`\`\`
 `;
     const resCloudflare = trichXuatHuongDanCliBangQuyTac(
@@ -1002,6 +1009,13 @@ npx skills add cloudflare/security-audit-skill
     expect(resCloudflare).not.toBeNull();
     expect(coCachCaiCliHopLe(resCloudflare)).toBe(true);
     expect(resCloudflare?.cachCai[0]?.tenGoi).toBe('cloudflare/security-audit-skill');
+
+    // Chốt chặn D-38: URL của repo khác trong README bị từ chối
+    const resKhac = trichXuatHuongDanCliBangQuyTac(
+      mdCloudflare,
+      'https://github.com/someone-else/different-repo',
+    );
+    expect(coCachCaiCliHopLe(resKhac)).toBe(false);
   });
 
   it('vẫn loại trừ lệnh chạy dev (npx vite, npx create-react-app)', () => {

@@ -359,6 +359,26 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         tenGoi: 'mattpocock/skills',
       });
     });
+
+    it('P3B-33: trích xuất đúng tên gói từ npx skills add với đích URL GitHub và lệnh nối dòng \\ (cloudflare/security-audit-skill)', () => {
+      const cmdCloudflare = `npx skills add https://github.com/cloudflare/security-audit-skill \\
+  --skill security-audit`;
+      const res = trichTenGoiTuLenhTho(cmdCloudflare);
+      expect(res).toEqual({
+        trinhQuanLy: 'npx',
+        tenGoi: 'cloudflare/security-audit-skill',
+      });
+
+      // Kèm .git và cờ --global
+      expect(
+        trichTenGoiTuLenhTho(
+          'npx skills add https://github.com/cloudflare/security-audit-skill.git --skill security-audit --global',
+        ),
+      ).toEqual({
+        trinhQuanLy: 'npx',
+        tenGoi: 'cloudflare/security-audit-skill',
+      });
+    });
   });
 
   describe('P3B-16 & D-23: coCachCaiCliHopLe', () => {
