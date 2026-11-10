@@ -5,6 +5,7 @@ import {
   PhanCungYeuCau,
   boDauNhacShell,
   trichTenGoiTuLenhTho,
+  coCachCaiCliHopLe,
 } from '@forgestore/types';
 import {
   bocTachHuongDanTuCodeBlocks,
@@ -699,5 +700,211 @@ describe('P3B-25.12: quét cả README nhưng chỉ nhận gói có tên khớp 
     expect(tenGoiKhopTenRepo('BurntSushi.ripgrep.MSVC', 'ripgrep')).toBe(true);
     expect(tenGoiKhopTenRepo('torch', 'ComfyUI')).toBe(false);
     expect(tenGoiKhopTenRepo('go', 'golang')).toBe(false);
+  });
+});
+
+describe('P3B-34: docker run nhiều dòng (AutoGPT)', () => {
+  it('nhận docker run nhiều dòng có \\ cuối dòng (AutoGPT)', () => {
+    const md = `
+# AutoGPT
+An autonomous GPT-4 experiment.
+
+## Installation
+
+\`\`\`bash
+docker run -d \\
+  -p 3000:3000 \\
+  significantgravitas/autogpt:latest
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(
+      md,
+      'https://github.com/Significant-Gravitas/AutoGPT',
+    );
+    expect(res).not.toBeNull();
+    const dockerCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.DOCKER);
+    expect(dockerCach).toBeDefined();
+    expect(dockerCach?.tenGoi).toBe('significantgravitas/autogpt:latest');
+    expect(dockerCach?.trinhQuanLy).toBe('docker');
+    expect(dockerCach?.buoc[0]?.lenh).toContain('significantgravitas/autogpt:latest');
+  });
+
+  it('nhận docker run nhiều dòng bản dài có --name, -v, -p', () => {
+    const md = `
+## Setup
+\`\`\`bash
+docker run -d \\
+  --name autogpt \\
+  -p 3000:3000 \\
+  -v ./data:/app/data \\
+  significantgravitas/autogpt:latest
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(
+      md,
+      'https://github.com/Significant-Gravitas/AutoGPT',
+    );
+    expect(res).not.toBeNull();
+    const dockerCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.DOCKER);
+    expect(dockerCach?.tenGoi).toBe('significantgravitas/autogpt:latest');
+  });
+
+  it('nhận docker run nối dòng bằng backtick PowerShell', () => {
+    const md = `
+## Quick Start
+\`\`\`powershell
+docker run -d \`
+  -p 8080:80 \`
+  nginx:alpine
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/nginx/nginx');
+    expect(res).not.toBeNull();
+    const dockerCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.DOCKER);
+    expect(dockerCach?.tenGoi).toBe('nginx:alpine');
+  });
+
+  it('không nhận nhầm docker exec hoặc các lệnh nhiều dòng khác', () => {
+    const md = `
+## Debug
+\`\`\`bash
+docker exec -it \\
+  my-container \\
+  sh
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/test/repo');
+    expect(res).toBeNull();
+  });
+});
+
+describe('P3B-35: pip/uv ghim phiên bản, [extras], và nhãn hệ điều hành chuẩn', () => {
+  it('bóc tên gói PIP khi ghim phiên bản ==, >=, <=, ~=, != và có dấu nháy (browser-use)', () => {
+    const mau = [
+      ["pip install 'browser-use==1.0.1'", 'browser-use'],
+      ['pip install "browser-use==1.0.1"', 'browser-use'],
+      ['pip install browser-use==1.0.1', 'browser-use'],
+      ["uv add 'browser-use==1.0.1'", 'browser-use'],
+      ['uv tool install browser-use==1.0.1', 'browser-use'],
+      ['pip install pkg>=2.0.0,<=3.0.0', 'pkg'],
+      ['pip install "pkg~=1.4.2"', 'pkg'],
+      ["pip install 'pkg!=1.0.0'", 'pkg'],
+    ];
+
+    for (const [lenh, tenGoiMongDoi] of mau) {
+      const md = `## Installation\n\`\`\`bash\n${lenh}\n\`\`\``;
+      const res = trichXuatHuongDanCliBangQuyTac(md);
+      expect(res).not.toBeNull();
+      const pipCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+      expect(pipCach?.trinhQuanLy).toBe('pip');
+      expect(pipCach?.tenGoi).toBe(tenGoiMongDoi);
+      // Lệnh hiển thị cho người dùng giữ nguyên chuỗi gốc
+      expect(pipCach?.buoc[0]?.lenh).toBe(lenh);
+    }
+  });
+
+  it('bóc tên gói PIP khi có [extras] kèm hoặc không kèm phiên bản (pr-agent)', () => {
+    const mau = [
+      ['pip install "pr-agent[github]"', 'pr-agent'],
+      ["pip install 'pr-agent[github]'", 'pr-agent'],
+      ['pip install pr-agent[github]', 'pr-agent'],
+      ['pip install "pkg[extra]==1.0"', 'pkg'],
+      ["pip install 'pkg[extra1,extra2]>=2.0'", 'pkg'],
+    ];
+
+    for (const [lenh, tenGoiMongDoi] of mau) {
+      const md = `## Installation\n\`\`\`bash\n${lenh}\n\`\`\``;
+      const res = trichXuatHuongDanCliBangQuyTac(md);
+      expect(res).not.toBeNull();
+      const pipCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+      expect(pipCach?.tenGoi).toBe(tenGoiMongDoi);
+      expect(pipCach?.buoc[0]?.lenh).toBe(lenh);
+    }
+  });
+
+  it('vẫn loại trừ lệnh phát triển pip install -r requirements.txt và pip install .', () => {
+    const md = `## Installation\n\`\`\`bash\npip install -r requirements.txt\npip install .\n\`\`\``;
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/owner/repo');
+    // Không có cách cài nào hợp lệ (không có trinhQuanLy và tenGoi)
+    expect(coCachCaiCliHopLe(res)).toBe(false);
+  });
+
+  it('README pr-agent đầy đủ không bị nhãn YAML CI/CD kéo sang LINUX_MAC (ra DUNG_CHUNG)', () => {
+    const prAgentReadme = `
+# PR-Agent
+An AI-powered tool for automated pull request review.
+
+## CI/CD Workflow
+\`\`\`yaml
+name: Test
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+\`\`\`
+
+## Installation
+
+\`\`\`bash
+pip install "pr-agent[github]"
+\`\`\`
+
+## Configuration
+Set OPENAI_KEY in your env.
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(
+      prAgentReadme,
+      'https://github.com/The-PR-Agent/pr-agent',
+    );
+    expect(res).not.toBeNull();
+    const pipCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+    expect(pipCach).toBeDefined();
+    expect(pipCach?.tenGoi).toBe('pr-agent');
+    // Phải là DUNG_CHUNG, không được bị runs-on: ubuntu-latest kéo sang LINUX_MAC
+    expect(pipCach?.heDieuHanh).toBe(HeDieuHanhCli.DUNG_CHUNG);
+  });
+
+  it('lệnh WINGET và SCOOP luôn mang nhãn WINDOWS kể cả khi ngữ cảnh có chữ Linux/Ubuntu', () => {
+    const md = `
+## Installation for Linux, Ubuntu and Windows
+
+\`\`\`bash
+winget install Fastfetch-cli.Fastfetch
+scoop install fastfetch
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/fastfetch-cli/fastfetch');
+    expect(res).not.toBeNull();
+    for (const cach of res?.cachCai || []) {
+      expect(cach.heDieuHanh).toBe(HeDieuHanhCli.WINDOWS);
+    }
+  });
+
+  it('lệnh dưới tiêu đề Linux / macOS nhận nhãn LINUX_MAC chuẩn xác', () => {
+    const md = `
+## Installation
+
+### Linux / macOS
+\`\`\`bash
+pip install my-tool
+\`\`\`
+
+### Windows
+\`\`\`powershell
+pip install my-tool
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/owner/my-tool');
+    expect(res).not.toBeNull();
+    // Tiêu đề Linux / macOS -> LINUX_MAC
+    expect(
+      xacDinhHeDieuHanhLenh('pip install my-tool', '### Linux / macOS\npip install my-tool'),
+    ).toBe(HeDieuHanhCli.LINUX_MAC);
+    // Tiêu đề Windows -> WINDOWS
+    expect(xacDinhHeDieuHanhLenh('pip install my-tool', '### Windows\npip install my-tool')).toBe(
+      HeDieuHanhCli.WINDOWS,
+    );
   });
 });

@@ -10,6 +10,7 @@ import {
   boDauNhacShell,
   ghepLenhCliAnToan,
   laLenhNpmCucBo,
+  MaTrinhQuanLyGoi,
 } from '@forgestore/types';
 
 /**
@@ -205,27 +206,38 @@ export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
 }
 
 /**
- * Xác định nhãn hệ điều hành phù hợp cho câu lệnh (Section 3.2).
+ * Xác định nhãn hệ điều hành phù hợp cho câu lệnh (Section 3.2, P3B-35).
+ * - WINGET và SCOOP chỉ có trên Windows nên luôn gắn WINDOWS.
+ * - Các lệnh Linux/macOS đặc thù (apt, brew...) luôn gắn LINUX_MAC.
+ * - Chỉ xét chữ chỉ hệ điều hành trong ngữ cảnh hẹp (khối lệnh hoặc dòng tiêu đề ngay trước nó),
+ *   không quét tràn cả README để tránh YAML CI/CD (như runs-on: ubuntu-latest) kéo nhãn sai.
  */
 export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDieuHanhCli {
   const l = (lenh || '').toLowerCase();
   const ctx = (contextText || '').toLowerCase();
 
-  // LINUX_MAC: apt, brew, yum, pacman, dnf, zypper, hoặc context có Linux/macOS
+  // 1. WINDOWS đặc thù: winget, scoop, choco luôn là Windows (P3B-35)
   if (
-    /\b(apt|apt-get|brew|yum|pacman|dnf|zypper|apk\s+add|systemctl)\b/.test(l) ||
-    (/\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/.test(ctx) &&
-      !/\bwindows\b/.test(ctx))
+    /\b(winget|scoop|choco|chocolatey|powershell|pwsh)\b/.test(l) ||
+    /\.(bat|ps1|cmd)\b/.test(l)
+  ) {
+    return HeDieuHanhCli.WINDOWS;
+  }
+
+  // 2. LINUX_MAC đặc thù từ câu lệnh
+  if (/\b(apt|apt-get|brew|yum|pacman|dnf|zypper|apk\s+add|systemctl)\b/.test(l)) {
+    return HeDieuHanhCli.LINUX_MAC;
+  }
+
+  // 3. Xét ngữ cảnh tiêu đề / khối lệnh hẹp (nếu câu lệnh đa nền tảng như pip, npm, docker, cargo, go)
+  if (
+    /\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/.test(ctx) &&
+    !/\bwindows\b/.test(ctx)
   ) {
     return HeDieuHanhCli.LINUX_MAC;
   }
 
-  // WINDOWS: winget, scoop, choco, .bat, .ps1, powershell, hoặc context có Windows
-  if (
-    /\b(winget|scoop|choco|chocolatey|powershell|pwsh)\b/.test(l) ||
-    /\.(bat|ps1|cmd)\b/.test(l) ||
-    (/\bwindows\b/.test(ctx) && !/\b(linux|macos)\b/.test(ctx))
-  ) {
+  if (/\bwindows\b/.test(ctx) && !/\b(linux|macos|darwin|ubuntu)\b/.test(ctx)) {
     return HeDieuHanhCli.WINDOWS;
   }
 
@@ -331,32 +343,92 @@ function chuanHoaDongLenh(line: string): string {
   return l;
 }
 
-/** Chuẩn hóa cú pháp trình cài đặt và thẻ phiên bản trước khi dùng bộ kiểm gói hiện có. */
+/**
+ * Ghép các dòng lệnh nối bằng `\` (hoặc PowerShell backtick ` hoặc ^) thành một dòng lệnh phẳng (P3B-34).
+ * Dùng trước khi nhận diện nhóm lệnh và bóc tên gói, nhưng giữ nguyên chuỗi gốc cho hiển thị.
+ */
+export function ghepCacDongNoiLenh(lenh: string): string {
+  if (!lenh || typeof lenh !== 'string') return '';
+  return lenh
+    .replace(/(?:\\|`|\^)\s*\r?\n\s*/g, ' ')
+    .replace(/(?:\\|`|\^)\s*$/g, '')
+    .trim();
+}
+
+/**
+ * Chuẩn hóa cú pháp trình cài đặt, phiên bản và thẻ trước khi dùng bộ kiểm gói hiện có (P3B-34, P3B-35).
+ * - Ghép các dòng nối bằng \, `, ^ (P3B-34 AutoGPT).
+ * - Bóc tên gói PIP khi có phiên bản (==, >=, <=, ~=, !=, <, >), dấu nháy bao quanh, hoặc [extras] (P3B-35 browser-use, pr-agent).
+ * - Hỗ trợ uv add và uv tool install về nhóm PIP hợp lệ.
+ */
 function chuanHoaLenhDeBocGoi(lenh: string): string {
-  const sach = boDauNhacShell(lenh).replace(/^#\s*/, '').trim();
+  // 1. Ghép dòng nối bằng \, `, ^ trước khi phân tích
+  const lenhPhang = ghepCacDongNoiLenh(lenh);
+  const sach = boDauNhacShell(lenhPhang).replace(/^#\s*/, '').trim();
+
+  // Chuẩn hóa tiền tố cài đặt Python / uv về dạng pip install
   const pipLenh = sach.replace(/^(?:python\d*|py)\s+-m\s+pip\s+install\b/i, 'pip install');
   const pipUv = pipLenh.replace(/^uv\s+tool\s+install\b/i, 'pip install');
   const pipx = pipUv.replace(/^pipx\s+install\b/i, 'pip install');
-  const uv = pipx.replace(/^uv\s+pip\s+install\b/i, 'pip install');
+  const uvPip = pipx.replace(/^uv\s+pip\s+install\b/i, 'pip install');
+  const uvAdd = uvPip.replace(/^uv\s+add\b/i, 'pip install');
+
   const nhanDien = nhanDienNhomLenh(sach);
-  if (!nhanDien || (!/^(?:npm|pnpm|yarn|bun)\b/i.test(sach) && nhanDien !== NhomCachCai.PIP)) {
-    return sach;
+  // Docker: trả về chuỗi phẳng sạch sẽ không còn ký tự nối dòng \ để trichTenGoiTuLenhTho bóc image (P3B-34)
+  if (nhanDien === NhomCachCai.DOCKER) {
+    return uvAdd;
   }
 
-  const dauLenh = uv.match(/^(?:pip|npm|pnpm|yarn|bun)\s+(?:install|i|add)\b/i);
-  if (!dauLenh?.[0]) return sach;
-  const truoc = uv.slice(0, dauLenh[0].length);
-  const tokens = uv.slice(dauLenh[0].length).trim().split(/\s+/);
+  if (!nhanDien || (!/^(?:npm|pnpm|yarn|bun)\b/i.test(sach) && nhanDien !== NhomCachCai.PIP)) {
+    return uvAdd;
+  }
+
+  const dauLenh = uvAdd.match(/^(?:pip|npm|pnpm|yarn|bun)\s+(?:install|i|add)\b/i);
+  if (!dauLenh?.[0]) return uvAdd;
+  const truoc = uvAdd.slice(0, dauLenh[0].length);
+  const phanSau = uvAdd.slice(dauLenh[0].length).trim();
+  const tokens = phanSau.split(/\s+/);
   for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (!token || token.startsWith('-')) continue;
-    const viTriTag = token.startsWith('@')
-      ? token.indexOf('@', token.indexOf('/') + 1)
-      : token.lastIndexOf('@');
+    const rawToken = tokens[i];
+    if (!rawToken || rawToken.startsWith('-')) continue;
+
+    // A. Bóc tách và làm sạch cho PIP (P3B-35)
+    if (nhanDien === NhomCachCai.PIP) {
+      // 1. Bỏ dấu nháy bao quanh: 'pkg', "pkg"
+      let token = rawToken.replace(/^['"]|['"]$/g, '');
+
+      // 2. Bỏ ghim phiên bản (==, >=, <=, ~=, !=, <, >, ===):
+      // Ví dụ: browser-use==1.0.1 -> browser-use, pkg>=2.0.0 -> pkg
+      const idxOp = token.search(/(?:===|==|>=|<=|~=|!=|<|>)/);
+      if (idxOp !== -1) {
+        token = token.slice(0, idxOp).trim();
+      }
+
+      // 3. Bỏ [extras]:
+      // Ví dụ: pr-agent[github] -> pr-agent, pkg[extra1,extra2] -> pkg
+      token = token.replace(/\[[^\]]*\]/g, '').trim();
+
+      // 4. Bỏ @tag phiên bản nếu có (ví dụ: uv tool install ruff@latest)
+      const viTriTag = token.lastIndexOf('@');
+      if (viTriTag > 0) {
+        token = token.slice(0, viTriTag).trim();
+      }
+
+      // Bỏ nháy còn sót nếu có
+      token = token.replace(/^['"]|['"]$/g, '');
+
+      tokens[i] = token;
+      break;
+    }
+
+    // B. Bóc tách cho NPM (@tag)
+    const viTriTag = rawToken.startsWith('@')
+      ? rawToken.indexOf('@', rawToken.indexOf('/') + 1)
+      : rawToken.lastIndexOf('@');
     if (viTriTag <= 0) break;
-    const tag = token.slice(viTriTag + 1);
+    const tag = rawToken.slice(viTriTag + 1);
     if (!/^(?:latest|next|beta|alpha|canary|\d+(?:\.[0-9A-Za-z_-]+)*)$/i.test(tag)) return sach;
-    tokens[i] = token.slice(0, viTriTag);
+    tokens[i] = rawToken.slice(0, viTriTag);
     break;
   }
   return `${truoc} ${tokens.join(' ')}`.trim();
@@ -517,10 +589,21 @@ export function locVaChuanHoaHuongDanCaiDat(
       }
     }
 
+    // P3B-35: WINGET và SCOOP là trình quản lý gói chỉ có trên Windows, luôn gán WINDOWS
+    let heDieuHanh = cach.heDieuHanh || HeDieuHanhCli.DUNG_CHUNG;
+    if (
+      trinhQuanLy === MaTrinhQuanLyGoi.WINGET ||
+      trinhQuanLy === MaTrinhQuanLyGoi.SCOOP ||
+      nhomSuyDuan === NhomCachCai.WINGET ||
+      nhomSuyDuan === NhomCachCai.SCOOP
+    ) {
+      heDieuHanh = HeDieuHanhCli.WINDOWS;
+    }
+
     cachCaiHopLe.push({
       ten: cach.ten?.trim() || `Cài đặt (${nhomSuyDuan})`,
       nhom: nhomSuyDuan,
-      heDieuHanh: cach.heDieuHanh || HeDieuHanhCli.DUNG_CHUNG,
+      heDieuHanh,
       phanCung: cach.phanCung || PhanCungYeuCau.KHONG_RO,
       yeuCau: Array.isArray(cach.yeuCau)
         ? cach.yeuCau.map((y) => String(y).trim()).filter(Boolean)
@@ -589,50 +672,78 @@ export function bocTachHuongDanTuCodeBlocks(
   // Tìm tất cả các code blocks: ```[lang]\n[code]\n```
   const codeBlockRegex = /```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
-  const cacLenh: { lenh: string; nhom: NhomCachCai; os: HeDieuHanhCli }[] = [];
+  const cacLenh: { lenh: string; lenhGoc: string; nhom: NhomCachCai; os: HeDieuHanhCli }[] = [];
 
   while ((match = codeBlockRegex.exec(rawInstallSection)) !== null) {
     const blockContent = match[1]?.trim() || '';
-    // ARCH-04: Nối các dòng có ký tự ngắt dòng (\, ^, `) để không cắt cụt câu lệnh
+    const matchIndex = match.index;
+
+    // P3B-35: Lấy tiêu đề / dòng mô tả ngay trước code block, tránh quét tràn cả README
+    const textTruoc = rawInstallSection.slice(0, matchIndex);
+    const cacDongTruoc = textTruoc
+      .split(/\r?\n/)
+      .map((d) => d.trim())
+      .filter(Boolean);
+    let tieuDeGanNhat = '';
+    const doanGan = cacDongTruoc.slice(-10);
+    for (let i = doanGan.length - 1; i >= 0; i--) {
+      if (/^#{1,6}\s+/.test(doanGan[i]!)) {
+        tieuDeGanNhat = doanGan[i]!;
+        break;
+      }
+    }
+    const dongMoTaTruoc = cacDongTruoc.slice(-2).join('\n');
+    const nguCanhHep = `${tieuDeGanNhat}\n${dongMoTaTruoc}\n${blockContent}`;
+
+    // ARCH-04 & P3B-34: Nối các dòng có ký tự ngắt dòng (\, ^, `) để không cắt cụt câu lệnh
     const rawLines = blockContent
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith('#'));
 
-    const lines: string[] = [];
-    let currentLine = '';
+    const lines: { lenhPhang: string; lenhGoc: string }[] = [];
+    let currentPhang = '';
+    let currentGoc = '';
 
     for (const rawLine of rawLines) {
-      if (!currentLine) {
-        currentLine = rawLine;
+      if (!currentPhang) {
+        currentPhang = rawLine;
+        currentGoc = rawLine;
       } else {
-        currentLine += ' ' + rawLine;
+        currentPhang += ' ' + rawLine;
+        currentGoc += '\n' + rawLine;
       }
 
-      if (currentLine.endsWith('\\') || currentLine.endsWith('^') || currentLine.endsWith('`')) {
-        currentLine = currentLine.slice(0, -1).trim();
+      if (currentPhang.endsWith('\\') || currentPhang.endsWith('^') || currentPhang.endsWith('`')) {
+        currentPhang = currentPhang.slice(0, -1).trim();
       } else {
-        lines.push(currentLine);
-        currentLine = '';
+        lines.push({ lenhPhang: currentPhang, lenhGoc: currentGoc });
+        currentPhang = '';
+        currentGoc = '';
       }
     }
-    if (currentLine) {
-      lines.push(currentLine);
+    if (currentPhang) {
+      lines.push({ lenhPhang: currentPhang, lenhGoc: currentGoc });
     }
 
-    for (const dongGoc of lines) {
+    for (const item of lines) {
       // Bỏ dấu nhắc shell (`$ `, `> `, `PS> `) để lệnh lưu và gói bóc tách là lệnh sạch
-      const line = boDauNhacShell(dongGoc) || dongGoc;
+      const linePhang = boDauNhacShell(item.lenhPhang) || item.lenhPhang;
       // Lệnh chỉ cài công cụ đóng gói (`pip install -U pip`, `npm i -g pnpm`) không phải lệnh cài app; để lại thì
       // nó đứng đầu nhóm và tên gói bị đọc thành "pip"/"pnpm" (aqtinstall, etherpad). Trừ khi chính repo là công
       // cụ đó (pnpm/pnpm, astral-sh/uv); không biết repo thì giữ nguyên như cũ.
-      if (tenRepo && laLenhCaiCongCu(line) && !lenhNhacTenRepo(line, tenRepo)) continue;
-      const nhom = nhanDienNhomLenh(line);
+      if (tenRepo && laLenhCaiCongCu(linePhang) && !lenhNhacTenRepo(linePhang, tenRepo)) continue;
+      const nhom = nhanDienNhomLenh(linePhang);
+      const lineGocSach = item.lenhGoc
+        .split('\n')
+        .map((l) => boDauNhacShell(l) || l)
+        .join('\n');
       if (nhom) {
         cacLenh.push({
-          lenh: line,
+          lenh: linePhang,
+          lenhGoc: lineGocSach,
           nhom,
-          os: xacDinhHeDieuHanhLenh(line, rawInstallSection),
+          os: xacDinhHeDieuHanhLenh(linePhang, nguCanhHep),
         });
       }
     }
@@ -641,10 +752,10 @@ export function bocTachHuongDanTuCodeBlocks(
   if (cacLenh.length === 0) return null;
 
   // Gom nhóm theo tiền tố
-  const mapNhom = new Map<NhomCachCai, { lenh: string; os: HeDieuHanhCli }[]>();
+  const mapNhom = new Map<NhomCachCai, { lenh: string; lenhGoc: string; os: HeDieuHanhCli }[]>();
   for (const item of cacLenh) {
     const list = mapNhom.get(item.nhom) || [];
-    list.push({ lenh: item.lenh, os: item.os });
+    list.push({ lenh: item.lenh, lenhGoc: item.lenhGoc, os: item.os });
     mapNhom.set(item.nhom, list);
   }
 
@@ -654,7 +765,7 @@ export function bocTachHuongDanTuCodeBlocks(
       const rr = kiemTraRuiRoCao(it.lenh);
       return {
         moTa: `Chạy lệnh ${it.lenh.split(' ')[0] || ''}`,
-        lenh: it.lenh,
+        lenh: it.lenhGoc,
         ruiRoCao: rr.ruiRoCao,
         canhBaoRuiRo: rr.lyDo,
       };
@@ -741,7 +852,26 @@ function trichTheoTenRepoTrongToanReadme(
 
   const ungVien = new Set<string>();
   for (const khoi of rawReadme.matchAll(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/g)) {
-    for (const dong of (khoi[1] ?? '').split(/\r?\n/)) if (dong.trim()) ungVien.add(dong.trim());
+    const rawLines = (khoi[1] ?? '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'));
+
+    let current = '';
+    for (const rawLine of rawLines) {
+      if (!current) {
+        current = rawLine;
+      } else {
+        current += ' ' + rawLine;
+      }
+      if (current.endsWith('\\') || current.endsWith('^') || current.endsWith('`')) {
+        current = current.slice(0, -1).trim();
+      } else {
+        ungVien.add(current);
+        current = '';
+      }
+    }
+    if (current) ungVien.add(current);
   }
   for (const dong of rawReadme.split(/\r?\n/)) {
     for (const m of dong.matchAll(/`([^`]{5,200})`/g)) if (m[1]) ungVien.add(m[1].trim());
