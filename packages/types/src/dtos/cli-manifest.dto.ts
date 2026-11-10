@@ -488,24 +488,61 @@ export function trichTenGoiTuLenhTho(
       '--publish',
       '-v',
       '--volume',
+      '--mount',
       '-e',
       '--env',
       '--env-file',
       '--network',
+      '--net',
       '--restart',
       '-w',
       '--workdir',
       '-u',
       '--user',
+      '--group-add',
       '--entrypoint',
-      '--mount',
+      '--shm-size',
+      '--ulimit',
+      '--log-driver',
+      '--log-opt',
+      '-m',
+      '--memory',
+      '--memory-swap',
+      '--memory-reservation',
+      '--cpus',
+      '--cpu-shares',
+      '--cpuset-cpus',
+      '--gpus',
+      '--cap-add',
+      '--cap-drop',
+      '--add-host',
+      '-l',
+      '--label',
+      '--label-file',
+      '-h',
+      '--hostname',
+      '--platform',
+      '--pull',
+      '--runtime',
+      '--device',
+      '--dns',
+      '--dns-search',
+      '--dns-option',
+      '--tmpfs',
+      '--security-opt',
+      '--ip',
+      '--ip6',
+      '--link',
+      '--expose',
+      '--stop-signal',
+      '--stop-timeout',
     ]);
 
     let candidateIdx = -1;
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
       if (!token) continue;
-      if (token.startsWith('--') && token.includes('=')) continue;
+      if (token.startsWith('-') && token.includes('=')) continue;
       if (dockerRunFlagsWithArgs.has(token.toLowerCase())) {
         i++; // Nhảy qua giá trị của cờ
         continue;

@@ -310,6 +310,35 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         tenGoi: 'ghcr.io/open-webui/open-webui:main',
       });
     });
+
+    it('P3B-34: trích xuất đúng image từ lệnh docker run nhiều cờ của AutoGPT và từ chối khi có tham số sau image', () => {
+      const cmdAutoGpt = `docker run -d \\
+  --name autogpt \\
+  --restart unless-stopped \\
+  --shm-size 2g \\
+  --ulimit nofile=65536:65536 \\
+  --log-driver json-file \\
+  --log-opt max-size=50m \\
+  --log-opt max-file=5 \\
+  -p 127.0.0.1:3000:3000 \\
+  -e AUTOGPT_PUBLIC_URL=http://localhost:3000 \\
+  -v autogpt-data:/data \\
+  significantgravitas/autogpt:latest`;
+      const cmdFlat = cmdAutoGpt.replace(/\\\s*\r?\n\s*/g, ' ');
+      const res = trichTenGoiTuLenhTho(cmdFlat);
+      expect(res).toEqual({
+        trinhQuanLy: 'docker',
+        tenGoi: 'significantgravitas/autogpt:latest',
+      });
+
+      // Có lệnh chương trình sau image -> BỊ TỪ CHỐI
+      expect(trichTenGoiTuLenhTho('docker run -d alpine sh')).toBeNull();
+      expect(
+        trichTenGoiTuLenhTho(
+          'docker run -d --name test redis:7-alpine redis-server --protected-mode no',
+        ),
+      ).toBeNull();
+    });
   });
 
   describe('P3B-16 & D-23: coCachCaiCliHopLe', () => {

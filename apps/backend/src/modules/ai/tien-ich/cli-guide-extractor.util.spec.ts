@@ -729,6 +729,38 @@ docker run -d \\
     expect(dockerCach?.buoc[0]?.lenh).toContain('significantgravitas/autogpt:latest');
   });
 
+  it('nhận đúng khối docker run nguyên văn của AutoGPT (kèm --shm-size, --ulimit, --log-driver, --log-opt)', () => {
+    const mdAutoGpt = `
+### Self-host AutoGPT
+
+The quickest way to self-host is the single-container image on
+Docker Hub, [\`significantgravitas/autogpt\`](https://hub.docker.com/r/significantgravitas/autogpt):
+
+\`\`\`bash
+docker run -d \\
+  --name autogpt \\
+  --restart unless-stopped \\
+  --shm-size 2g \\
+  --ulimit nofile=65536:65536 \\
+  --log-driver json-file \\
+  --log-opt max-size=50m \\
+  --log-opt max-file=5 \\
+  -p 127.0.0.1:3000:3000 \\
+  -e AUTOGPT_PUBLIC_URL=http://localhost:3000 \\
+  -v autogpt-data:/data \\
+  significantgravitas/autogpt:latest
+\`\`\`
+`;
+    const res = trichXuatHuongDanCliBangQuyTac(
+      mdAutoGpt,
+      'https://github.com/Significant-Gravitas/AutoGPT',
+    );
+    expect(res).not.toBeNull();
+    expect(coCachCaiCliHopLe(res)).toBe(true);
+    const dockerCach = res?.cachCai.find((c) => c.nhom === NhomCachCai.DOCKER);
+    expect(dockerCach?.tenGoi).toBe('significantgravitas/autogpt:latest');
+  });
+
   it('nhận docker run nhiều dòng bản dài có --name, -v, -p', () => {
     const md = `
 ## Setup
