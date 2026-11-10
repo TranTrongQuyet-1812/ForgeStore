@@ -206,38 +206,70 @@ export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
 }
 
 /**
- * Xác định nhãn hệ điều hành phù hợp cho câu lệnh (Section 3.2, P3B-35).
- * - WINGET và SCOOP chỉ có trên Windows nên luôn gắn WINDOWS.
- * - Các lệnh Linux/macOS đặc thù (apt, brew...) luôn gắn LINUX_MAC.
- * - Chỉ xét chữ chỉ hệ điều hành trong ngữ cảnh hẹp (khối lệnh hoặc dòng tiêu đề ngay trước nó),
- *   không quét tràn cả README để tránh YAML CI/CD (như runs-on: ubuntu-latest) kéo nhãn sai.
+ * Xác định nhãn hệ điều hành phù hợp cho câu lệnh (Section 3.2, P3B-35 & review 11/11).
+ * Chuẩn hóa luật 2 chiều:
+ * (a) Lệnh đa nền tảng (pip, npm, docker, cargo, go, conda, npx...) KHÔNG BAO GIỜ nhận LINUX_MAC từ ngữ cảnh.
+ * (b) Lệnh có dấu hiệu Unix (| sh, | bash, | sudo, .sh, sudo, chmod, apt, brew...) LUÔN là LINUX_MAC bất kể ngữ cảnh.
+ * (c) Dấu hiệu Unix ở (b) thắng dấu hiệu Windows khi cùng một dòng (ví dụ: `brew install --cask powershell` ra LINUX_MAC).
+ * Ngữ cảnh hẹp chỉ áp dụng cho nhóm NGUON hoặc lệnh không rõ.
  */
 export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDieuHanhCli {
   const l = (lenh || '').toLowerCase();
   const ctx = (contextText || '').toLowerCase();
 
-  // 1. WINDOWS đặc thù: winget, scoop, choco luôn là Windows (P3B-35)
-  if (
-    /\b(winget|scoop|choco|chocolatey|powershell|pwsh)\b/.test(l) ||
-    /\.(bat|ps1|cmd)\b/.test(l)
-  ) {
+  // 1. Dấu hiệu Unix trên chính câu lệnh: luôn LINUX_MAC (P3B-35 & Mục 5, 7 review 11/11)
+  const coDauHieuUnix =
+    /\|\s*(?:sudo\s+)?(?:\/(?:usr\/)?(?:local\/)?(?:s?bin\/))?(?:(?:ba)?sh|zsh|dash|ash)\b/i.test(
+      l,
+    ) ||
+    /\|\s*sudo\b/i.test(l) ||
+    /\b(?:sudo|chmod|systemctl)\b/i.test(l) ||
+    /\b(?:apt|apt-get|brew|yum|dnf|pacman|zypper)\b/i.test(l) ||
+    /\bapk\s+add\b/i.test(l) ||
+    /(?:^|\s)(?:\.\/|(?:ba)?sh\s+|source\s+)\S+\.sh\b/i.test(l) ||
+    /\binstall\.sh\b/i.test(l);
+
+  if (coDauHieuUnix) {
+    return HeDieuHanhCli.LINUX_MAC;
+  }
+
+  // 2. Dấu hiệu Windows trên chính câu lệnh (chỉ khi không có dấu hiệu Unix)
+  const coDauHieuWindows =
+    /\b(winget|scoop|choco|chocolatey|powershell|pwsh)\b/i.test(l) || /\.(bat|ps1|cmd)\b/i.test(l);
+
+  if (coDauHieuWindows) {
     return HeDieuHanhCli.WINDOWS;
   }
 
-  // 2. LINUX_MAC đặc thù từ câu lệnh
-  if (/\b(apt|apt-get|brew|yum|pacman|dnf|zypper|apk\s+add|systemctl)\b/.test(l)) {
-    return HeDieuHanhCli.LINUX_MAC;
+  // 3. Trình quản lý gói đa nền tảng (pip, npm, docker, cargo, go, conda, npx):
+  // Tuyệt đối KHÔNG nhận nhãn LINUX_MAC từ ngữ cảnh xung quanh (tránh YAML CI/CD hoặc tiêu đề Linux kéo sai)
+  const laTrinhQuanLyDaNenTang =
+    /^(?:pip\d*|python\d*\s+-m\s+pip|py\s+-m\s+pip|uv\s+pip|uv\s+tool|uv\s+add|pipx|npm|pnpm|yarn|bun|npx|docker|cargo|go\s+install|conda|mamba)\b/i.test(
+      l,
+    );
+
+  if (laTrinhQuanLyDaNenTang) {
+    if (
+      /\bwindows\b/i.test(ctx) &&
+      !/\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/i.test(ctx)
+    ) {
+      return HeDieuHanhCli.WINDOWS;
+    }
+    return HeDieuHanhCli.DUNG_CHUNG;
   }
 
-  // 3. Xét ngữ cảnh tiêu đề / khối lệnh hẹp (nếu câu lệnh đa nền tảng như pip, npm, docker, cargo, go)
+  // 4. Các lệnh nhóm NGUON hoặc lệnh không rõ: xét ngữ cảnh hẹp
   if (
-    /\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/.test(ctx) &&
-    !/\bwindows\b/.test(ctx)
+    /\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/i.test(ctx) &&
+    !/\bwindows\b/i.test(ctx)
   ) {
     return HeDieuHanhCli.LINUX_MAC;
   }
 
-  if (/\bwindows\b/.test(ctx) && !/\b(linux|macos|darwin|ubuntu)\b/.test(ctx)) {
+  if (
+    /\bwindows\b/i.test(ctx) &&
+    !/\b(linux|macos|mac\s*os|darwin|ubuntu|debian|fedora|arch)\b/i.test(ctx)
+  ) {
     return HeDieuHanhCli.WINDOWS;
   }
 

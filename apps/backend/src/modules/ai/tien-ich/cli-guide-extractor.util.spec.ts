@@ -147,17 +147,47 @@ MIT
   });
 
   describe('xacDinhHeDieuHanhLenh', () => {
-    it('gắn nhãn LINUX_MAC cho lệnh quản lý gói Linux/macOS', () => {
+    it('gắn nhãn LINUX_MAC cho lệnh quản lý gói Linux/macOS và dấu hiệu Unix thắng Windows khi cùng dòng (Mục 5)', () => {
       expect(xacDinhHeDieuHanhLenh('sudo apt-get install ffmpeg')).toBe(HeDieuHanhCli.LINUX_MAC);
       expect(xacDinhHeDieuHanhLenh('brew install ffmpeg')).toBe(HeDieuHanhCli.LINUX_MAC);
       expect(xacDinhHeDieuHanhLenh('pacman -S git')).toBe(HeDieuHanhCli.LINUX_MAC);
       expect(xacDinhHeDieuHanhLenh('make install', 'Linux / macOS setup guide')).toBe(
         HeDieuHanhCli.LINUX_MAC,
       );
+
+      // Mục 5: brew/apt cài powershell -> dấu hiệu Unix thắng, luôn ra LINUX_MAC
+      expect(xacDinhHeDieuHanhLenh('brew install --cask powershell')).toBe(HeDieuHanhCli.LINUX_MAC);
+      expect(xacDinhHeDieuHanhLenh('sudo apt-get install -y powershell')).toBe(
+        HeDieuHanhCli.LINUX_MAC,
+      );
     });
 
-    it('gắn nhãn WINDOWS cho lệnh Windows', () => {
+    it('gắn nhãn LINUX_MAC cho các lệnh chỉ chạy trên Unix bất kể ngữ cảnh (Mục 7)', () => {
+      // nvm-sh/nvm
+      expect(
+        xacDinhHeDieuHanhLenh(
+          'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash',
+        ),
+      ).toBe(HeDieuHanhCli.LINUX_MAC);
+      // seaweedfs
+      expect(
+        xacDinhHeDieuHanhLenh(
+          'curl -fsSL https://raw.githubusercontent.com/seaweedfs/seaweedfs/master/docker/install.sh | sh',
+        ),
+      ).toBe(HeDieuHanhCli.LINUX_MAC);
+      // runanywhere-sdks
+      expect(xacDinhHeDieuHanhLenh('curl -sSL https://raw.githubusercontent.com/... | bash')).toBe(
+        HeDieuHanhCli.LINUX_MAC,
+      );
+      // wei-shaw/sub2api
+      expect(
+        xacDinhHeDieuHanhLenh('curl -fsSL https://sub2api.example.com/install | sudo bash'),
+      ).toBe(HeDieuHanhCli.LINUX_MAC);
+    });
+
+    it('gắn nhãn WINDOWS cho lệnh Windows đặc thù', () => {
       expect(xacDinhHeDieuHanhLenh('winget install Git.Git')).toBe(HeDieuHanhCli.WINDOWS);
+      expect(xacDinhHeDieuHanhLenh('scoop install ffmpeg')).toBe(HeDieuHanhCli.WINDOWS);
       expect(xacDinhHeDieuHanhLenh('choco install ffmpeg')).toBe(HeDieuHanhCli.WINDOWS);
       expect(xacDinhHeDieuHanhLenh('.\\install.bat')).toBe(HeDieuHanhCli.WINDOWS);
       expect(xacDinhHeDieuHanhLenh('git clone ...', 'Windows PowerShell instructions')).toBe(
@@ -165,9 +195,36 @@ MIT
       );
     });
 
-    it('gắn nhãn DUNG_CHUNG cho lệnh cross-platform', () => {
-      expect(xacDinhHeDieuHanhLenh('pip install open-webui')).toBe(HeDieuHanhCli.DUNG_CHUNG);
-      expect(xacDinhHeDieuHanhLenh('docker run hello-world')).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    it('lệnh đa nền tảng KHÔNG nhận LINUX_MAC từ ngữ cảnh, chỉ nhận WINDOWS khi ngữ cảnh chỉ định Windows (Mục 7)', () => {
+      // 3b1b/manim (pip)
+      expect(
+        xacDinhHeDieuHanhLenh('pip install manimgl', 'runs-on: ubuntu-latest\nLinux setup'),
+      ).toBe(HeDieuHanhCli.DUNG_CHUNG);
+      // kilo-org/kilocode (npm)
+      expect(
+        xacDinhHeDieuHanhLenh('npm install -g @kilocode/cli', 'Ubuntu Debian Linux guide'),
+      ).toBe(HeDieuHanhCli.DUNG_CHUNG);
+      // sharkdp/fd (npm)
+      expect(xacDinhHeDieuHanhLenh('npm install -g fd-find', 'Linux distributions')).toBe(
+        HeDieuHanhCli.DUNG_CHUNG,
+      );
+      // unslothai/unsloth (uv pip)
+      expect(xacDinhHeDieuHanhLenh('uv pip install unsloth', 'Linux / MacOS instructions')).toBe(
+        HeDieuHanhCli.DUNG_CHUNG,
+      );
+      // mempalace/mempalace (docker pull)
+      expect(xacDinhHeDieuHanhLenh('docker pull mempalace/mempalace', 'Ubuntu 22.04 LTS')).toBe(
+        HeDieuHanhCli.DUNG_CHUNG,
+      );
+      // OpenHands/OpenHands (docker run)
+      expect(xacDinhHeDieuHanhLenh('docker run -it -p 3000:3000 openhands', 'Linux setup')).toBe(
+        HeDieuHanhCli.DUNG_CHUNG,
+      );
+
+      // Khi ngữ cảnh chỉ định rõ ràng Windows (không có Linux) -> gán WINDOWS
+      expect(xacDinhHeDieuHanhLenh('pip install manimgl', '### Windows\npip install manimgl')).toBe(
+        HeDieuHanhCli.WINDOWS,
+      );
     });
   });
 
@@ -989,13 +1046,17 @@ pip install my-tool
 `;
     const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/owner/my-tool');
     expect(res).not.toBeNull();
-    // Tiêu đề Linux / macOS -> LINUX_MAC
+    // Tiêu đề Linux / macOS -> DUNG_CHUNG vì pip là trình quản lý đa nền tảng (Mục 7 review 11/11)
     expect(
       xacDinhHeDieuHanhLenh('pip install my-tool', '### Linux / macOS\npip install my-tool'),
-    ).toBe(HeDieuHanhCli.LINUX_MAC);
+    ).toBe(HeDieuHanhCli.DUNG_CHUNG);
     // Tiêu đề Windows -> WINDOWS
     expect(xacDinhHeDieuHanhLenh('pip install my-tool', '### Windows\npip install my-tool')).toBe(
       HeDieuHanhCli.WINDOWS,
+    );
+    // Lệnh nguồn make install -> nhận LINUX_MAC từ tiêu đề Linux
+    expect(xacDinhHeDieuHanhLenh('make install', '### Linux / macOS\nmake install')).toBe(
+      HeDieuHanhCli.LINUX_MAC,
     );
   });
 });
