@@ -574,23 +574,24 @@ export function locVaChuanHoaHuongDanCaiDat(
     // Xác định nhóm chuẩn xác nếu AI phân loại sai
     const nhomSuyDuan = nhanDienNhomLenh(buocHopLe[0]?.lenh || '') || cach.nhom;
 
-    // P3B-16.3: Bóc tách tên gói và ghép lệnh cập nhật/gỡ từ manifest
-    let pkgInfo = trichTenGoiDaChuanHoa(buocHopLe[0]?.lenh || '');
-    // P3B-33 (D-38): Với lệnh npx, bắt buộc tên gói/skill phải khớp tên repo để không nhận nhầm lệnh dev
-    if (pkgInfo && pkgInfo.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
-      const tenRepo = layTenRepoTuDuongDan(duongDanReadmeGoc);
-      const khop = tenRepo && pkgInfo.tenGoi ? tenGoiKhopTenRepo(pkgInfo.tenGoi, tenRepo) : false;
-      if (!khop) {
-        pkgInfo = null;
-      }
-    }
+    // P3B-16.3 & P3B-35: Bóc tách tên gói tối ưu, ưu tiên gói khớp repo và coi torch là bước chuẩn bị
+    const tenRepo = layTenRepoTuDuongDan(duongDanReadmeGoc);
+    const { pkgInfo, lenhChinh } = timThongTinGoiToiUu(
+      buocHopLe.map((b) => b.lenh),
+      tenRepo,
+    );
     const trinhQuanLy = pkgInfo?.trinhQuanLy || cach.trinhQuanLy;
     const tenGoi = pkgInfo?.tenGoi || cach.tenGoi;
     let lenhCapNhat = cach.lenhCapNhat;
     let lenhGo = cach.lenhGo;
 
     if (trinhQuanLy && tenGoi) {
-      const ghep = ghepLenhCliAnToan(trinhQuanLy, tenGoi);
+      const ghep = ghepLenhCliAnToan(
+        trinhQuanLy,
+        tenGoi,
+        undefined,
+        laLenhNpmCucBo(lenhChinh || buocHopLe[0]?.lenh),
+      );
       if (ghep.hopLe) {
         lenhCapNhat = lenhCapNhat || ghep.lenhCapNhat;
         lenhGo = lenhGo || ghep.lenhGo;
@@ -664,6 +665,117 @@ function lenhNhacTenRepo(lenh: string, tenRepo: string): boolean {
     .slice(viTri + 1)
     .filter((t) => t && !t.startsWith('-'))
     .some((goi) => tenGoiKhopTenRepo(goi.replace(/@[^/]*$/, ''), tenRepo));
+}
+
+/**
+ * Kiểm tra xem lệnh pip có phải là bước chuẩn bị môi trường / thư viện nền tảng (P3B-35)
+ * như PyTorch, TensorFlow, JAX, NumPy đi kèm index-url hoặc bản ghim GPU (+cu, +rocm) hay không.
+ */
+function laBuocChuanBiMoiTruong(lenh: string, tenRepo?: string): boolean {
+  if (!lenh || typeof lenh !== 'string') return false;
+  // Nếu chính repo là pytorch/tensorflow/jax/numpy thì không coi là bước chuẩn bị
+  if (tenRepo && /^(?:pytorch|torch|tensorflow|jax|numpy)$/i.test(tenRepo)) {
+    return false;
+  }
+  const l = lenh.toLowerCase();
+  const thuVienNenTang =
+    /\b(?:torch|torchaudio|torchvision|tensorflow|jax|jaxlib|numpy|triton|xformers|flash-attn|flashinfer)\b/i;
+  if (!thuVienNenTang.test(l)) return false;
+
+  // Dấu hiệu rõ ràng của bước chuẩn bị:
+  // - Có cờ chỉ định index phụ: --index-url hoặc --extra-index-url
+  // - Hoặc có phiên bản ghim GPU/tăng tốc: +cu, +rocm, +xpu, +cpu
+  if (/--(?:extra-)?index-url\b/i.test(l) || /\+(?:cu\d+|rocm\d*(?:\.\d+)*|xpu|cpu)\b/i.test(l)) {
+    return true;
+  }
+
+  // Nếu lệnh chỉ cài đặt thuần túy torch/torchaudio/torchvision mà repo không khớp tên
+  const pkg = trichTenGoiDaChuanHoa(lenh);
+  if (pkg && pkg.trinhQuanLy === MaTrinhQuanLyGoi.PIP) {
+    if (
+      ['torch', 'torchaudio', 'torchvision', 'tensorflow', 'jax', 'jaxlib', 'numpy'].includes(
+        pkg.tenGoi.toLowerCase(),
+      )
+    ) {
+      if (!tenRepo || !tenGoiKhopTenRepo(pkg.tenGoi, tenRepo)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Tìm thông tin gói tối ưu nhất và lệnh đại diện từ danh sách các câu lệnh trong nhóm (P3B-35).
+ * Ưu tiên:
+ * 1. Gói có tên khớp với tên repo (ví dụ: pip install omnivoice khớp omnivoice).
+ * 2. Gói không phải là bước chuẩn bị môi trường (torch, cuda...) và không phải lệnh cài công cụ (pip, setuptools...).
+ * 3. Fallback lấy lệnh đầu tiên bóc được gói hợp lệ.
+ */
+function timThongTinGoiToiUu(
+  danhSachLenh: string[],
+  tenRepo?: string | null,
+): { pkgInfo: { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string } | null; lenhChinh: string } {
+  if (!danhSachLenh || danhSachLenh.length === 0) {
+    return { pkgInfo: null, lenhChinh: '' };
+  }
+
+  let ungVienTotNhat: {
+    pkgInfo: { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string };
+    lenh: string;
+    diem: number;
+  } | null = null;
+
+  for (const lenh of danhSachLenh) {
+    const pkg = trichTenGoiDaChuanHoa(lenh);
+    if (!pkg) continue;
+
+    // Kiểm tra NPX: chỉ nhận khi khớp tên repo
+    if (pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+      const khop = tenRepo && pkg.tenGoi ? tenGoiKhopTenRepo(pkg.tenGoi, tenRepo) : false;
+      if (!khop) continue;
+    }
+
+    let diem = 10; // Điểm cơ sở khi bóc được gói hợp lệ
+
+    // Ưu tiên 1: Tên gói khớp trực tiếp tên repo (P3B-35)
+    if (tenRepo && tenGoiKhopTenRepo(pkg.tenGoi, tenRepo)) {
+      diem += 100;
+    }
+
+    // Trừ điểm mạnh nếu là bước chuẩn bị môi trường (torch, cuda...)
+    if (laBuocChuanBiMoiTruong(lenh, tenRepo || undefined)) {
+      diem -= 50;
+    }
+
+    // Trừ điểm nếu là lệnh cài công cụ (pip, setuptools, pnpm...)
+    if (laLenhCaiCongCu(lenh)) {
+      diem -= 40;
+    }
+
+    if (!ungVienTotNhat || diem > ungVienTotNhat.diem) {
+      ungVienTotNhat = { pkgInfo: pkg, lenh, diem };
+    }
+  }
+
+  if (ungVienTotNhat && ungVienTotNhat.diem > 0) {
+    return { pkgInfo: ungVienTotNhat.pkgInfo, lenhChinh: ungVienTotNhat.lenh };
+  }
+
+  // Fallback: Lấy lệnh đầu tiên có thể bóc được gói
+  for (const lenh of danhSachLenh) {
+    const pkg = trichTenGoiDaChuanHoa(lenh);
+    if (pkg) {
+      if (pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+        const khop = tenRepo && pkg.tenGoi ? tenGoiKhopTenRepo(pkg.tenGoi, tenRepo) : false;
+        if (!khop) continue;
+      }
+      return { pkgInfo: pkg, lenhChinh: lenh };
+    }
+  }
+
+  return { pkgInfo: null, lenhChinh: danhSachLenh[0] || '' };
 }
 
 /**
@@ -779,14 +891,11 @@ export function bocTachHuongDanTuCodeBlocks(
       };
     });
 
-    let pkgInfo = trichTenGoiDaChuanHoa(items[0]?.lenh || '');
-    // P3B-33 (D-38): Với lệnh npx, bắt buộc tên gói/skill phải khớp tên repo để không nhận nhầm lệnh dev
-    if (pkgInfo && pkgInfo.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
-      const khop = tenRepo && pkgInfo.tenGoi ? tenGoiKhopTenRepo(pkgInfo.tenGoi, tenRepo) : false;
-      if (!khop) {
-        pkgInfo = null;
-      }
-    }
+    // P3B-16.3 & P3B-35: Bóc tách tên gói tối ưu, ưu tiên gói khớp repo và coi torch là bước chuẩn bị
+    const { pkgInfo, lenhChinh } = timThongTinGoiToiUu(
+      items.map((it) => it.lenh),
+      tenRepo,
+    );
     let lenhCapNhat: string | undefined;
     let lenhGo: string | undefined;
     if (pkgInfo) {
@@ -794,7 +903,7 @@ export function bocTachHuongDanTuCodeBlocks(
         pkgInfo.trinhQuanLy,
         pkgInfo.tenGoi,
         undefined,
-        laLenhNpmCucBo(items[0]?.lenh),
+        laLenhNpmCucBo(lenhChinh || items[0]?.lenh),
       );
       if (ghep.hopLe) {
         lenhCapNhat = ghep.lenhCapNhat;
@@ -802,10 +911,12 @@ export function bocTachHuongDanTuCodeBlocks(
       }
     }
 
+    const itemChinh = items.find((it) => it.lenh === lenhChinh) || items[0];
+
     cachCai.push({
       ten: `Cài đặt qua ${nhom}`,
       nhom,
-      heDieuHanh: items[0]?.os || HeDieuHanhCli.DUNG_CHUNG,
+      heDieuHanh: itemChinh?.os || HeDieuHanhCli.DUNG_CHUNG,
       phanCung: PhanCungYeuCau.KHONG_RO,
       yeuCau: [],
       buoc,

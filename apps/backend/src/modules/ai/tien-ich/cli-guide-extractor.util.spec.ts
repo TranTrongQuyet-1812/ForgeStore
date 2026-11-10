@@ -761,6 +761,65 @@ docker run -d \\
     expect(dockerCach?.tenGoi).toBe('significantgravitas/autogpt:latest');
   });
 
+  it('P3B-35: ưu tiên gói khớp tên repo và coi torch==... là bước chuẩn bị (k2-fsa/OmniVoice và SWivid/F5-TTS)', () => {
+    // 1. k2-fsa/OmniVoice: có pip install torch==2.8.0+cu128 ... trước dòng pip install omnivoice
+    const mdOmniVoice = `
+## Installation
+
+Choose **one** of the following methods: **pip** or **uv**.
+
+### pip
+
+**Step 1**: Install PyTorch
+
+\`\`\`bash
+# Install pytorch with your CUDA version, e.g.
+pip install torch==2.8.0+cu128 torchaudio==2.8.0+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+\`\`\`
+
+**Step 2**: Install OmniVoice (choose one)
+
+\`\`\`bash
+# From PyPI (stable release)
+pip install omnivoice
+
+# From the latest source on GitHub (no need to clone)
+pip install git+https://github.com/k2-fsa/OmniVoice.git
+\`\`\`
+`;
+    const resOmni = trichXuatHuongDanCliBangQuyTac(
+      mdOmniVoice,
+      'https://github.com/k2-fsa/OmniVoice',
+    );
+    expect(resOmni).not.toBeNull();
+    expect(coCachCaiCliHopLe(resOmni)).toBe(true);
+    const pipOmni = resOmni?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+    expect(pipOmni?.tenGoi).toBe('omnivoice');
+
+    // 2. SWivid/F5-TTS: có pip install torch==... trước pip install f5-tts
+    const mdF5 = `
+## Installation
+
+### Install PyTorch with matched device
+
+\`\`\`bash
+# Install pytorch with your CUDA version, e.g.
+pip install torch==2.8.0+cu128 torchaudio==2.8.0+cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+\`\`\`
+
+### Then you can choose one from below:
+
+\`\`\`bash
+pip install f5-tts
+\`\`\`
+`;
+    const resF5 = trichXuatHuongDanCliBangQuyTac(mdF5, 'https://github.com/SWivid/F5-TTS');
+    expect(resF5).not.toBeNull();
+    expect(coCachCaiCliHopLe(resF5)).toBe(true);
+    const pipF5 = resF5?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+    expect(pipF5?.tenGoi).toBe('f5-tts');
+  });
+
   it('nhận docker run nhiều dòng bản dài có --name, -v, -p', () => {
     const md = `
 ## Setup
