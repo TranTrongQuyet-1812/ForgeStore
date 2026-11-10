@@ -92,10 +92,11 @@ describe('lapKeHoachDoLai và inKeHoachDoLai', () => {
     expect(kh.soLuotGithubUocToiDa).toBe(6);
   });
 
-  it('dòng in ra nêu rõ chưa gọi mạng', () => {
+  it('dòng in ra nêu rõ chưa gọi mạng và ghi chú chưa qua locCucBo', () => {
     const chu = inKeHoachDoLai(lapKeHoachDoLai(ungVien)).join('\n');
     expect(chu).toContain('4 repo riêng');
     expect(chu).toContain('Chưa gọi mạng');
+    expect(chu).toContain('chưa qua kiểm tra locCucBo');
   });
 });
 

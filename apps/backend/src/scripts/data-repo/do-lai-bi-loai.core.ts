@@ -138,6 +138,7 @@ export function inKeHoachDoLai(kh: KeHoachDoLai): string[] {
   dong.push(
     `Ước lượt gọi GitHub (cận trên): ${kh.soLuotGithubUocToiDa} = ${kh.soLuotReadme} lượt README + tối đa ${kh.soLuotReleaseToiDa} lượt danh sách Release.`,
     'Chưa gọi mạng. Thêm --goi-github [--toi-da N] [--sao-tu M] để dò thật (tốn hạn mức GitHub, cần lệnh của Chủ).',
+    'Ghi chú: Danh sách dò lại này chưa qua kiểm tra locCucBo (archived, ngày push cuối); khi chạy lệnh "cao" hệ thống sẽ tự động kiểm tra lại các điều kiện này.',
   );
   return dong;
 }

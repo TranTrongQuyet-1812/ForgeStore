@@ -2320,7 +2320,9 @@ async function doLaiBangGithub(thuMucDs: string, ungVien: UngVienDoLai[]): Promi
     soVot++;
     noiThemJsonl(fileRa, { repo: uv.repo, sao: uv.sao, lyDoCu: uv.cacLyDo, nhom: kq.nhom });
   }
-  console.info(`Đã xét ${soXet} repo, vớt ${soVot} → ${fileRa} (chưa đưa repo nào vào DB).`);
+  console.info(
+    `Đã xét ${soXet} repo, vớt ${soVot} → ${fileRa} (chưa đưa repo nào vào DB).\nGhi chú: Danh sách vớt chưa qua locCucBo (archived, ngày push cuối); bước "cao" sẽ tự động kiểm tra lại.`,
+  );
 }
 
 async function main(): Promise<void> {
