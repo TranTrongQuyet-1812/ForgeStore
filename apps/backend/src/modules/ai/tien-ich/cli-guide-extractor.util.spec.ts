@@ -951,14 +951,12 @@ describe('P3B-33: Nhóm skill trợ lý AI cài bằng npx (D-38)', () => {
   });
 
   it('nhận đúng 3 repo skill AI: mattpocock/skills, pbakaus/impeccable, cloudflare/security-audit-skill', () => {
-    // 1. mattpocock/skills: npx skills add ...
+    // 1. mattpocock/skills: npx skills@latest add mattpocock/skills -a <agent>  # ...
     const mdSkills = `
-# Skills
-A collection of skills for AI coding agents.
+<summary><strong>Any other agent, or editable files</strong> (manual updates)</summary>
 
-## Installation
 \`\`\`bash
-npx skills add mattpocock/skills
+npx skills@latest add mattpocock/skills -a <agent>  # cursor, opencode, devin, windsurf, amp, pi; omit -a to choose
 \`\`\`
 `;
     const resSkills = trichXuatHuongDanCliBangQuyTac(

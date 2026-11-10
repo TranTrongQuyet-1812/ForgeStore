@@ -348,11 +348,25 @@ export function trichTenGoiTuLenhTho(
   lenhThoGoc: string,
 ): { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string; phienBan?: string } | null {
   if (!lenhThoGoc || typeof lenhThoGoc !== 'string') return null;
-  const lenhTho = boDauNhacShell(lenhThoGoc);
+
+  // ARCH-04 & P3B-34: Ghép các dòng nối bằng \, `, ^
+  let lenhTho = lenhThoGoc.replace(/(?:\\|`|\^)\s*\r?\n\s*/g, ' ').trim();
+  lenhTho = boDauNhacShell(lenhTho);
+
+  // Bỏ chú thích shell cuối dòng (bắt đầu bằng # sau khoảng trắng)
+  // Ví dụ: `npx skills@latest add mattpocock/skills -a <agent>  # cursor, opencode...`
+  lenhTho = lenhTho.replace(/\s+#.*$/, '').trim();
+
+  // Chuẩn hóa placeholder tài liệu dạng <placeholder> đi sau cờ (ví dụ: -a <agent>, --skill <name>)
+  // để không bị chốt chặn shell redirection (<, >) chặn nhầm
+  const lenhKiemTra = lenhTho.replace(
+    /(^|\s)(-[a-zA-Z0-9_-]+)\s+<[a-zA-Z0-9_.-]+>/g,
+    '$1$2 placeholder',
+  );
 
   // Chốt chặn 1: Nếu toàn bộ dòng lệnh thô chứa bất kỳ ký tự shell injection nào => TỪ CHỐI 100%
-  if (KY_TU_DOC_HAI_REGEX.test(lenhTho)) return null;
-  if (/\$\(/.test(lenhTho) || /\$\{/.test(lenhTho)) return null;
+  if (KY_TU_DOC_HAI_REGEX.test(lenhKiemTra)) return null;
+  if (/\$\(/.test(lenhKiemTra) || /\$\{/.test(lenhKiemTra)) return null;
 
   const l = lenhTho.trim().replace(/^[$#>]\s*/, '');
 
@@ -570,13 +584,34 @@ export function trichTenGoiTuLenhTho(
   }
 
   // 6. NPX / Skill (D-38 & P3B-33)
-  // Dạng 1: npx skills add <target> hoặc npx skills install <target>
-  if (/^npx\s+skills\s+(?:add|install)\b/i.test(l)) {
+  // Dạng 1: npx skills@<tag> add|install <target> [flags]
+  if (/^npx\s+skills(?:@[a-zA-Z0-9_.-]+)?\s+(?:add|install)\b/i.test(l)) {
     const tokens = l.split(/\s+/);
-    const target = tokens[3]?.trim();
-    if (target && !target.startsWith('-') && !laKyTuDocHai(target)) {
-      if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, target)) {
-        return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: target };
+    const actionIdx = tokens.findIndex((t) => /^(?:add|install)$/i.test(t));
+    if (actionIdx !== -1) {
+      const sauAction = tokens.slice(actionIdx + 1);
+      const skillsFlagsWithArgs = new Set(['-a', '--agent', '-s', '--skill']);
+      let targetToken: string | undefined;
+
+      for (let i = 0; i < sauAction.length; i++) {
+        const token = sauAction[i];
+        if (!token) continue;
+        if (token.startsWith('--') && token.includes('=')) continue;
+        if (skillsFlagsWithArgs.has(token.toLowerCase())) {
+          i++; // Nhảy qua đối số của cờ (ví dụ: <agent>, security-audit)
+          continue;
+        }
+        if (token.startsWith('-')) continue; // Cờ boolean như -y, -g, --global, --yes
+
+        targetToken = token;
+        break;
+      }
+
+      if (targetToken) {
+        const target = targetToken.trim().replace(/^['"]|['"]$/g, '');
+        if (!laKyTuDocHai(target) && kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, target)) {
+          return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: target };
+        }
       }
     }
   }

@@ -339,6 +339,26 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         ),
       ).toBeNull();
     });
+
+    it('P3B-33: trích xuất đúng tên gói từ npx skills@latest add với cờ tùy chọn và chú thích cuối dòng (mattpocock/skills)', () => {
+      const lineMatt =
+        'npx skills@latest add mattpocock/skills -a <agent>  # cursor, opencode, devin, windsurf, amp, pi; omit -a to choose';
+      const res = trichTenGoiTuLenhTho(lineMatt);
+      expect(res).toEqual({
+        trinhQuanLy: 'npx',
+        tenGoi: 'mattpocock/skills',
+      });
+
+      // Hỗ trợ cờ -y, -g
+      expect(trichTenGoiTuLenhTho('npx skills@1.2.3 add mattpocock/skills -y')).toEqual({
+        trinhQuanLy: 'npx',
+        tenGoi: 'mattpocock/skills',
+      });
+      expect(trichTenGoiTuLenhTho('npx skills install mattpocock/skills --global')).toEqual({
+        trinhQuanLy: 'npx',
+        tenGoi: 'mattpocock/skills',
+      });
+    });
   });
 
   describe('P3B-16 & D-23: coCachCaiCliHopLe', () => {
