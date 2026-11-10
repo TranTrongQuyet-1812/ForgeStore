@@ -2,6 +2,8 @@
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
+ *   pnpm data-repo do-lai-bi-loai [--sao-tu M]  # CHỈ ĐỌC, không gọi mạng: in kế hoạch dò lại repo bị loại (D-38)
+ *   pnpm data-repo do-lai-bi-loai --goi-github [--ten lan-1] [--toi-da N] [--sao-tu M] [--du-tru 1000] # dò thật qua GitHub, xuất 00_danh_sach/do-lai-<ten>.jsonl
  *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
  *   pnpm data-repo kiem-trung                       # báo cáo repo trùng (id GitHub, tên, README giống hệt), không tự xóa
  *   pnpm data-repo chia --lo dot-01 [--moi-lo 30]   # cắt đợt đã cào thành lô nhỏ cho Anti (dot-01-l001, ...)
@@ -57,6 +59,15 @@ import {
 } from './hop-nhat.core';
 import { ghepBanDichDaNhap, taoRepoVa2, type KetQuaRepoVa2 } from './va-tach-doan2.core';
 import { doBocTach, duDoanTrangThaiTuReadme } from './do-boc-tach.core';
+import {
+  danhGiaRepoDoLai,
+  docNhatKyDoLai,
+  inKeHoachDoLai,
+  lapKeHoachDoLai,
+  layUngVienDoLai,
+  repoCanXemRelease,
+  type UngVienDoLai,
+} from './do-lai-bi-loai.core';
 import { DAI_SAO, CHU_DE_KHAM_PHA } from '../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util';
 import {
   chayKiemTuoi,
@@ -2219,9 +2230,104 @@ async function lenhThongKeAi(): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------- DÒ LẠI REPO BỊ LOẠI (D-38, P3B-33.3)
+type DuLieuGithubDoLai = { readme: string | null; releases: ReleaseDoLai[] | null; dung: boolean };
+type ReleaseDoLai = import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util').ReleaseUngVien;
+
+/** Lấy README (và danh sách Release nếu cần) của một repo; `dung = true` khi hạn mức GitHub xuống dưới mức dự trữ. */
+async function layDuLieuGithubDoLai(
+  repo: string,
+  canRelease: boolean,
+  headers: Record<string, string>,
+  duTru: number,
+): Promise<DuLieuGithubDoLai> {
+  const resReadme = await fetch(`https://api.github.com/repos/${repo}/readme`, {
+    headers,
+    signal: AbortSignal.timeout(30000),
+  });
+  let dung = Number(resReadme.headers.get('x-ratelimit-remaining') ?? '5000') < duTru;
+  let readme: string | null = null;
+  if (resReadme.ok) {
+    const d = (await resReadme.json()) as { content?: string; encoding?: string };
+    readme =
+      d.content && d.encoding === 'base64'
+        ? Buffer.from(d.content, 'base64').toString('utf-8')
+        : null;
+  }
+  let releases: ReleaseDoLai[] | null = null;
+  if (canRelease && !dung) {
+    const resRel = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=10`, {
+      headers,
+      signal: AbortSignal.timeout(30000),
+    });
+    dung = Number(resRel.headers.get('x-ratelimit-remaining') ?? '5000') < duTru;
+    if (resRel.ok) releases = (await resRel.json()) as ReleaseDoLai[];
+  }
+  return { readme, releases, dung };
+}
+
+/**
+ * P3B-33.3: dò lại repo từng bị loại bằng bộ lọc đã sửa (P3B-33 đến P3B-36). CHỈ ĐỌC: không ghi DB, không đẩy repo nào.
+ * Mặc định chỉ in kế hoạch từ nhật ký cục bộ, KHÔNG gọi mạng. Thêm --goi-github để lấy lại README/Release (tốn hạn mức).
+ */
+async function lenhDoLaiBiLoai(): Promise<void> {
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const { cacBanGhi, daNhan } = docNhatKyDoLai(thuMucDs);
+  const saoTu = Number(layThamSo('sao-tu') ?? '0');
+  const ungVien = layUngVienDoLai(cacBanGhi, daNhan).filter((u) => u.sao >= saoTu);
+  for (const dong of inKeHoachDoLai(lapKeHoachDoLai(ungVien))) console.info(dong);
+  console.info(
+    `(Đối chiếu số đo thô, chưa loại repo chặn/không giấy phép: ${layUngVienDoLai(cacBanGhi, daNhan, false).length})`,
+  );
+  if (!coCo('goi-github')) return;
+  await doLaiBangGithub(thuMucDs, ungVien);
+}
+
+/** Chế độ --goi-github: sao giảm dần, có --toi-da, chạy tiếp được nhờ tệp .da-xet.jsonl, xuất tệp repo được vớt. */
+async function doLaiBangGithub(thuMucDs: string, ungVien: UngVienDoLai[]): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  const ten = layThamSo('ten') ?? 'lan-1';
+  const toiDa = Number(layThamSo('toi-da') ?? '0') || Infinity;
+  const duTru = Number(layThamSo('du-tru') ?? '1000');
+  const fileRa = path.join(thuMucDs, `do-lai-${ten}.jsonl`);
+  const fileDaXet = path.join(thuMucDs, `do-lai-${ten}.da-xet.jsonl`);
+  const daXet = new Set(docJsonl<{ repo: string }>(fileDaXet).map((b) => b.repo.toLowerCase()));
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${token}`,
+  };
+  let soXet = 0;
+  let soVot = 0;
+  for (const uv of ungVien) {
+    if (soXet >= toiDa || daXet.has(uv.repo.toLowerCase())) continue;
+    const du = await layDuLieuGithubDoLai(uv.repo, repoCanXemRelease(uv), headers, duTru);
+    if (du.dung) {
+      console.warn(`Dừng: hạn mức GitHub xuống dưới ${duTru}. Chạy lại đúng lệnh này để tiếp tục.`);
+      break;
+    }
+    const kq = danhGiaRepoDoLai(uv.repo, du.readme, du.releases);
+    noiThemJsonl(fileDaXet, { repo: uv.repo, vot: kq.vot });
+    soXet++;
+    if (!kq.vot) continue;
+    soVot++;
+    noiThemJsonl(fileRa, { repo: uv.repo, sao: uv.sao, lyDoCu: uv.cacLyDo, nhom: kq.nhom });
+  }
+  console.info(`Đã xét ${soXet} repo, vớt ${soVot} → ${fileRa} (chưa đưa repo nào vào DB).`);
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'do-lai-bi-loai':
+      return lenhDoLaiBiLoai();
     case 'quet-lai-cli':
       return lenhQuetLaiCli();
     case 'kiem-trung':
@@ -2264,7 +2370,7 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }
