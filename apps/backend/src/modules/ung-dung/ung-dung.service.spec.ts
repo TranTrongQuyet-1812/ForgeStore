@@ -529,6 +529,178 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
         }),
       );
     });
+
+    describe('P3B-32: suy nenTangHoTro chính xác theo tệp cài thay vì topic', () => {
+      const taoMockAppBanGhi = (uuid: string, platform: NenTangHoTro) => ({
+        maUngDung: uuid,
+        tenRepoDayDu: 'test/test',
+        chuSoHuu: 'test',
+        tenKhoChua: 'test',
+        duongDanGithub: 'https://github.com/test/test',
+        moTaGocTiengAnh: 'desc',
+        duongDanIcon: null,
+        soSaoGithub: 100,
+        soLuotFork: 10,
+        loaiGiayPhep: 'MIT',
+        ngonNguChinh: 'Rust',
+        danhSachChuDe: [],
+        danhMucChinh: 'Khac',
+        nenTangHoTro: platform,
+        tenGoiAndroid: null,
+        duocNoiBat: false,
+        daXacMinh: false,
+        trangThai: 'HOAT_DONG',
+        dongBoLanCuoi: new Date(),
+        ngayTao: new Date(),
+        phanTichAI: null,
+        danhSachPhatHanh: [],
+      });
+
+      beforeEach(() => {
+        mockPrisma.banPhatHanh.upsert.mockResolvedValue({ maPhatHanh: 'rel-uuid' });
+        mockPrisma.tepCaiDat.findMany.mockResolvedValue([]);
+      });
+
+      it('repo không có tệp cài nhưng có topic android thì gán WINDOWS (không gán nhầm ANDROID)', async () => {
+        const appRecord = taoMockAppBanGhi('rea-uuid', NenTangHoTro.WINDOWS);
+        mockGithubService.layRepo.mockResolvedValueOnce({
+          id: 9991,
+          name: 'rea',
+          full_name: 'morluto/rea',
+          owner: { login: 'morluto', avatar_url: '' },
+          html_url: 'https://github.com/morluto/rea',
+          description: 'Reverse engineering tool',
+          stargazers_count: 445000,
+          forks_count: 1000,
+          license: { key: 'mit', name: 'MIT', spdx_id: 'MIT' },
+          language: 'Rust',
+          topics: ['android', 'reverse-engineering', 'rust'],
+        });
+        mockGithubService.layDanhSachRelease.mockResolvedValueOnce([]);
+        mockPrisma.ungDung.findUnique.mockResolvedValueOnce(null);
+        mockGithubService.layReadme.mockResolvedValueOnce('## Usage\n`cargo install rea`');
+        mockPrisma.ungDung.upsert.mockResolvedValueOnce(appRecord);
+        mockPrisma.ungDung.findFirst.mockResolvedValueOnce(appRecord);
+
+        await service.dongBoRepo('morluto', 'rea');
+
+        expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.WINDOWS,
+            }),
+            update: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.WINDOWS,
+            }),
+          }),
+        );
+      });
+
+      it('repo chỉ có tệp APK thì gán ANDROID', async () => {
+        const appRecord = taoMockAppBanGhi('apk-uuid', NenTangHoTro.ANDROID);
+        mockGithubService.layRepo.mockResolvedValueOnce({
+          id: 9992,
+          name: 'app-apk',
+          full_name: 'owner/app-apk',
+          owner: { login: 'owner', avatar_url: '' },
+          html_url: 'https://github.com/owner/app-apk',
+          description: 'Android app only',
+          stargazers_count: 5000,
+          forks_count: 100,
+          license: { key: 'mit', name: 'MIT', spdx_id: 'MIT' },
+          language: 'Kotlin',
+          topics: ['android'],
+        });
+        mockGithubService.layDanhSachRelease.mockResolvedValueOnce([
+          {
+            id: 888,
+            tag_name: 'v1.0.0',
+            draft: false,
+            prerelease: false,
+            assets: [
+              {
+                id: 11,
+                name: 'app-v1.0.apk',
+                size: 10000000,
+                browser_download_url:
+                  'https://github.com/owner/app-apk/releases/download/v1.0.0/app-v1.0.apk',
+              },
+            ],
+          },
+        ]);
+        mockPrisma.ungDung.upsert.mockResolvedValueOnce(appRecord);
+        mockPrisma.ungDung.findFirst.mockResolvedValueOnce(appRecord);
+
+        await service.dongBoRepo('owner', 'app-apk');
+
+        expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.ANDROID,
+            }),
+            update: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.ANDROID,
+            }),
+          }),
+        );
+      });
+
+      it('repo có cả EXE và APK thì gán DA_NEN_TANG', async () => {
+        const appRecord = taoMockAppBanGhi('multi-uuid', NenTangHoTro.DA_NEN_TANG);
+        mockGithubService.layRepo.mockResolvedValueOnce({
+          id: 9993,
+          name: 'multi-app',
+          full_name: 'owner/multi-app',
+          owner: { login: 'owner', avatar_url: '' },
+          html_url: 'https://github.com/owner/multi-app',
+          description: 'Cross-platform app',
+          stargazers_count: 5000,
+          forks_count: 100,
+          license: { key: 'mit', name: 'MIT', spdx_id: 'MIT' },
+          language: 'C++',
+          topics: ['tools'],
+        });
+        mockGithubService.layDanhSachRelease.mockResolvedValueOnce([
+          {
+            id: 889,
+            tag_name: 'v1.0.0',
+            draft: false,
+            prerelease: false,
+            assets: [
+              {
+                id: 12,
+                name: 'app-setup.exe',
+                size: 20000000,
+                browser_download_url:
+                  'https://github.com/owner/multi-app/releases/download/v1.0.0/app-setup.exe',
+              },
+              {
+                id: 13,
+                name: 'app.apk',
+                size: 15000000,
+                browser_download_url:
+                  'https://github.com/owner/multi-app/releases/download/v1.0.0/app.apk',
+              },
+            ],
+          },
+        ]);
+        mockPrisma.ungDung.upsert.mockResolvedValueOnce(appRecord);
+        mockPrisma.ungDung.findFirst.mockResolvedValueOnce(appRecord);
+
+        await service.dongBoRepo('owner', 'multi-app');
+
+        expect(mockPrisma.ungDung.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
+            }),
+            update: expect.objectContaining({
+              nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
+            }),
+          }),
+        );
+      });
+    });
   });
 
   describe('layDanhSachApps (P2-23)', () => {

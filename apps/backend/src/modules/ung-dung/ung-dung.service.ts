@@ -372,10 +372,8 @@ export class UngDungService {
       // P3B-16 trước đây dùng cờ laUngDungCli từ caller; nay suy từ README để mọi luồng đồng bộ thống nhất.
       // Khi thiếu bộ cài desktop, README là nguồn xác định ứng dụng CLI có thể dùng được.
       trangThai = await this.suyTrangThaiKhongCoTepCai(owner, repo, ungDungHienTai);
-      const topics = (repoData.topics || []).map((t) => t.toLowerCase());
-      if (topics.includes('android')) {
-        nenTangHoTro = NenTangHoTro.ANDROID;
-      }
+      // P3B-32: Chỉ gán ANDROID khi có APK (hasAndroid). Không có tệp cài thì mặc định WINDOWS
+      // (lệnh cài dòng lệnh chạy được trên Windows), không gán ANDROID chỉ vì topic 'android'.
     }
 
     // 4. Ánh xạ danh mục chính từ topics và mô tả (P2-21.5, N2)
