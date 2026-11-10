@@ -910,6 +910,14 @@ pip install my-tool
 });
 
 describe('P3B-33: Nhóm skill trợ lý AI cài bằng npx (D-38)', () => {
+  it('npx không sinh lệnh cập nhật/gỡ giả (npx <gói> là lệnh CHẠY gói, không phải cập nhật)', () => {
+    const md = '## Installation\n```bash\nnpx skills add mattpocock/skills\n```\n';
+    const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/mattpocock/skills');
+    const cach = res?.cachCai[0];
+    expect(cach?.lenhCapNhat || '').toBe('');
+    expect(cach?.lenhGo || '').toBe('');
+  });
+
   it('nhận đúng 3 repo skill AI: mattpocock/skills, pbakaus/impeccable, cloudflare/security-audit-skill', () => {
     // 1. mattpocock/skills: npx skills add ...
     const mdSkills = `

@@ -117,8 +117,10 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     ma: MaTrinhQuanLyGoi.NPX,
     tenHienThi: 'Node Package Execute (npx)',
     bieuTuong: 'Terminal',
-    mauLenhCai: 'npx {tenGoi}',
-    mauLenhCapNhat: 'npx {tenGoi}',
+    // npx chỉ chạy gói rồi thôi, không có khái niệm cập nhật hay gỡ chung. Để rỗng để không bao giờ hiện
+    // `npx <tên-gói>` như một lệnh cập nhật (đó là lệnh CHẠY gói, không phải cập nhật). Người dùng chép lệnh gốc từ README.
+    mauLenhCai: '',
+    mauLenhCapNhat: '',
     mauLenhGo: '',
     // Hỗ trợ cả tên gói npm đơn lẻ, scoped package hoặc repo slug của nhóm skill (D-38)
     regexTenGoi: '^(?:@[a-z0-9][a-z0-9_.-]*\\/)?[A-Za-z0-9][A-Za-z0-9_.-]*(?:\\/[A-Za-z0-9_.-]+)?$',

@@ -23,7 +23,9 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.NPM);
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.PIP);
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.DOCKER);
-      expect(cacTrinh).toHaveLength(5);
+      // D-38 (P3B-33): thêm npx cho nhóm skill AI, tổng 6 trình quản lý
+      expect(cacTrinh).toContain(MaTrinhQuanLyGoi.NPX);
+      expect(cacTrinh).toHaveLength(6);
     });
 
     it('mỗi manifest có đầy đủ mẫu lệnh cài, cập nhật, gỡ và regex tên gói', () => {
@@ -31,6 +33,14 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         const manifest = DANH_SACH_TRINH_QUAN_LY_GOI[key];
         expect(manifest.ma).toBe(key);
         expect(manifest.tenHienThi).toBeTruthy();
+        expect(manifest.regexTenGoi).toBeTruthy();
+        // npx chỉ chạy gói, không có lệnh cài/cập nhật/gỡ chung: ba mẫu để rỗng có chủ ý (D-38)
+        if (key === MaTrinhQuanLyGoi.NPX) {
+          expect(manifest.mauLenhCai).toBe('');
+          expect(manifest.mauLenhCapNhat).toBe('');
+          expect(manifest.mauLenhGo).toBe('');
+          continue;
+        }
         expect(manifest.mauLenhCai).toContain('{tenGoi}');
         expect(manifest.mauLenhCapNhat).toContain('{tenGoi}');
         if (key === MaTrinhQuanLyGoi.DOCKER) {
@@ -38,7 +48,6 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         } else {
           expect(manifest.mauLenhGo).toContain('{tenGoi}');
         }
-        expect(manifest.regexTenGoi).toBeTruthy();
       }
     });
 
