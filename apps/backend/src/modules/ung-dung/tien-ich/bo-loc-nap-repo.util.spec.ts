@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   coLenhCaiTuReadme,
   danhGiaRelease,
+  laThuVienLapTrinh,
   locCucBo,
   trongDanhSachChan,
   type RepoUngVien,
@@ -134,5 +135,55 @@ describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
   it('README rỗng hoặc null thì loại', () => {
     expect(coLenhCaiTuReadme('', 'o/foo')).toBe(false);
     expect(coLenhCaiTuReadme(null, 'o/foo')).toBe(false);
+  });
+
+  it('Luật 2: loại thư viện lập trình thuần (transformers, fastapi, scikit-learn, scrapy, langchain, autogen)', () => {
+    const transformers =
+      '# Transformers\n```bash\npip install transformers\n```\n```python\nfrom transformers import pipeline\nclassifier = pipeline("sentiment-analysis")\n```';
+    expect(coLenhCaiTuReadme(transformers, 'huggingface/transformers')).toBe(false);
+
+    const fastapi =
+      '# FastAPI\n```bash\npip install fastapi\n```\n```python\nfrom fastapi import FastAPI\napp = FastAPI()\n```\n```bash\nfastapi dev main.py\n```';
+    expect(coLenhCaiTuReadme(fastapi, 'fastapi/fastapi')).toBe(false);
+
+    const scikitLearn =
+      '# scikit-learn\n```bash\npip install scikit-learn\n```\n```python\nfrom sklearn import datasets\n```';
+    expect(coLenhCaiTuReadme(scikitLearn, 'scikit-learn/scikit-learn')).toBe(false);
+
+    const scrapy =
+      '# Scrapy\n```bash\npip install scrapy\n```\n```python\nimport scrapy\nclass S(scrapy.Spider):\n  pass\n```\n```bash\nscrapy crawl quotes\n```';
+    expect(coLenhCaiTuReadme(scrapy, 'scrapy/scrapy')).toBe(false);
+
+    const langchain =
+      '# LangChain\n```bash\nuv add langchain\n```\n```python\nfrom langchain import LLMChain\n```';
+    expect(coLenhCaiTuReadme(langchain, 'langchain-ai/langchain')).toBe(false);
+
+    const autogen =
+      '# AutoGen\n```bash\npip install pyautogen\n```\n```python\nfrom autogen import AssistantAgent\n```';
+    expect(coLenhCaiTuReadme(autogen, 'microsoft/autogen')).toBe(false);
+  });
+
+  it('Luật 2: giữ các ứng dụng chạy được như chương trình (py-spy, mycli, litellm, nocodb, private-gpt, browser-use)', () => {
+    const pySpy =
+      '# py-spy\n```bash\npip install py-spy\n```\nRun:\n```bash\npy-spy record -o profile.svg --pid 1234\n```';
+    expect(coLenhCaiTuReadme(pySpy, 'benfred/py-spy')).toBe(true);
+
+    const mycli = '# mycli\n```bash\npip install mycli\n```\n```bash\nmycli -u root\n```';
+    expect(coLenhCaiTuReadme(mycli, 'dbcli/mycli')).toBe(true);
+
+    const litellm =
+      '# LiteLLM\n```bash\npip install litellm\n```\n```bash\nlitellm --model gpt-4\n```';
+    expect(coLenhCaiTuReadme(litellm, 'BerriAI/litellm')).toBe(true);
+
+    const nocodb = '# NocoDB\n```bash\ndocker run -d -p 8080:8080 nocodb/nocodb\n```';
+    expect(coLenhCaiTuReadme(nocodb, 'nocodb/nocodb')).toBe(true);
+
+    const privateGpt =
+      '# PrivateGPT\n```bash\npip install private-gpt\n```\n```bash\npython -m private_gpt\n```';
+    expect(coLenhCaiTuReadme(privateGpt, 'zylon-ai/private-gpt')).toBe(true);
+
+    const browserUse =
+      '<!-- mcp-name: com.browser-use/browser-use -->\n# Browser Use\n```bash\npip install browser-use\n```\n```python\nfrom browser_use import Agent\n```';
+    expect(coLenhCaiTuReadme(browserUse, 'browser-use/browser-use')).toBe(true);
   });
 });

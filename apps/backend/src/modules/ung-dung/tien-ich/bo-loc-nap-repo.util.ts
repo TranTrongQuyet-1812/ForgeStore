@@ -165,15 +165,158 @@ export function danhGiaRelease(
   };
 }
 
+function thoatKyTuRegex(chuoi: string): string {
+  return chuoi.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * Bộ lọc 10 (P3B-06.3): repo không có tệp cài nhưng README có lệnh cài hợp lệ (winget, scoop, npm, pip, docker…)
- * vẫn được nhận. Dùng đúng bộ trích bằng quy tắc của BE (không AI).
+ * Kiểm tra xem một repo/README có phải là thư viện lập trình thuần không (Luật 2, Quyết định 11/11/2026).
+ * Tiêu chí:
+ * - Thứ để chạy như một chương trình (dòng lệnh, giao diện, máy chủ) thì nhận (trả về false).
+ * - Thứ chỉ để import vào mã của người khác thì loại (trả về true).
+ */
+export function laThuVienLapTrinh(
+  readme: string | null | undefined,
+  fullName: string,
+  cachCai?: Array<{
+    nhom?: string;
+    trinhQuanLy?: string;
+    tenGoi?: string;
+    buoc?: Array<{ lenh: string }>;
+  }> | null,
+): boolean {
+  if (!readme || !cachCai || cachCai.length === 0) return false;
+
+  // 1. Nếu có cách cài nào thuộc WINGET, SCOOP, CHOCO, DOCKER -> Là ứng dụng
+  const nhomHopLe = new Set(cachCai.map((c) => c.nhom));
+  if (
+    nhomHopLe.has('WINGET') ||
+    nhomHopLe.has('SCOOP') ||
+    nhomHopLe.has('CHOCO') ||
+    nhomHopLe.has('DOCKER')
+  ) {
+    return false;
+  }
+
+  // 2. Nếu có cờ mcp / skill / agent -> Là ứng dụng / skill AI
+  if (/<!--\s*mcp-name:/i.test(readme) || nhomHopLe.has('NPX')) {
+    return false;
+  }
+
+  // 3. Nếu có Docker trong README -> Ứng dụng
+  if (/\bdocker\s+(run|compose)\b/i.test(readme)) {
+    return false;
+  }
+
+  // 4. Nếu có lệnh cài toàn cục (pipx install, uv tool install, npm -g, cargo install, go install) -> Là ứng dụng CLI
+  let coCaiDatToanCuc = false;
+  for (const c of cachCai) {
+    for (const b of c.buoc ?? []) {
+      const l = b.lenh.trim();
+      if (
+        /\b(?:pipx\s+install|uv\s+tool\s+install)\b/i.test(l) ||
+        /\b(?:npm|pnpm|yarn|bun)\s+(?:i|install|add)\s+.*-(?:g|-global)\b/i.test(l) ||
+        /\b(?:cargo|go)\s+install\b/i.test(l)
+      ) {
+        coCaiDatToanCuc = true;
+        break;
+      }
+    }
+    if (coCaiDatToanCuc) break;
+  }
+  if (coCaiDatToanCuc) {
+    return false;
+  }
+
+  // 5. Kiểm tra dấu hiệu import code thật trong các khối code
+  let coCodeImport = false;
+  const codeImportBlockRegex = /```[a-zA-Z0-9_+-]*[ \t]*\r?\n([\s\S]*?)```/gi;
+  for (const m of readme.matchAll(codeImportBlockRegex)) {
+    const block = m[1];
+    if (
+      /(?:^|\n)\s*(?:from\s+[\w.]+\s+import\s+|import\s+[\w.]+(?:\s+as\s+\w+)?)/.test(block) ||
+      /(?:^|\n)\s*(?:import\s+(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]+['"]|const\s+.*?=\s*require\(['"][^'"]+['"]\))/.test(
+        block,
+      ) ||
+      /(?:^|\n)\s*(?:use\s+[\w:]+;|extern\s+crate\s+\w+;)/.test(block) ||
+      /(?:^|\n)\s*(?:import\s+(?:\([^)]*\)|"[^"]+"))/.test(block) ||
+      /(?:^|\n)\s*#include\s+[<"][^>"]+[>"]/.test(block)
+    ) {
+      coCodeImport = true;
+      break;
+    }
+  }
+
+  // Nếu không có bất kỳ khối code import nào, thì không phải là thư viện thuần
+  if (!coCodeImport) {
+    return false;
+  }
+
+  // 6. Kiểm tra các framework/thư viện phát triển nổi tiếng luôn bị loại dù có CLI dev
+  const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
+  const cacGoi = cachCai
+    .map((c) => c.tenGoi)
+    .filter(Boolean)
+    .map((g) => (g as string).toLowerCase());
+  const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
+
+  const FRAMEWORK_DEV_LOAI = new Set([
+    'fastapi',
+    'scrapy',
+    'transformers',
+    'langchain',
+    'autogen',
+    'scikit-learn',
+    'torch',
+    'tensorflow',
+  ]);
+  if (danhSachTen.some((t) => FRAMEWORK_DEV_LOAI.has(t))) {
+    return true;
+  }
+
+  let coLenhChayChuongTrinh = false;
+
+  // Dò lệnh CLI bằng regex dòng lệnh
+  for (const t of danhSachTen) {
+    if (!t || t.length < 2) continue;
+    const re = new RegExp(`(?:^|\\n)\\s*(?:[$#>]\s*)?${thoatKyTuRegex(t)}(?:\\.exe)?\\s+`, 'm');
+    const match = readme.match(re);
+    if (match) {
+      const idx = match.index ?? 0;
+      const dong = readme.substring(idx, readme.indexOf('\n', idx + 1) || undefined).trim();
+      if (!/^(?:pip|pip3|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i.test(dong.replace(/^[$#>]\s*/, ''))) {
+        coLenhChayChuongTrinh = true;
+        break;
+      }
+    }
+  }
+
+  // 7. Kiểm tra các lệnh chạy server / runner độc lập
+  if (
+    /\b(?:streamlit\s+run|gradio|python\d*\s+-m\s+[\w.]+|pipx\s+run|uvx\s+|npx\s+)\b/i.test(
+      readme,
+    )
+  ) {
+    coLenhChayChuongTrinh = true;
+  }
+
+  if (coLenhChayChuongTrinh) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Bộ lọc 10 (P3B-06.3 & Luật 2 ngày 11/11/2026): repo không có tệp cài nhưng README có lệnh cài hợp lệ
+ * (winget, scoop, npm, pip, docker…) vẫn được nhận, TRỪ KHI là thư viện lập trình thuần (chỉ để import).
  */
 export function coLenhCaiTuReadme(readme: string | null | undefined, fullName: string): boolean {
   if (!readme) return false;
-  return coCachCaiCliHopLe(
-    trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullName}#readme`),
-  );
+  const huongDan = trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullName}#readme`);
+  if (!coCachCaiCliHopLe(huongDan)) return false;
+  if (laThuVienLapTrinh(readme, fullName, huongDan.cachCai)) return false;
+  return true;
 }
 
 /** Dùng chung cho lệnh `kham-pha` của Data_Repo và tầng khám phá của backend (P3B-06.1).

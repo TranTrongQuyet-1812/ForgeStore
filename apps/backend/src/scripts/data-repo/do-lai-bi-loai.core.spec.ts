@@ -187,4 +187,47 @@ describe('danhGiaRepoDoLai (bộ lọc đã sửa trên dữ liệu giả, khôn
     const dev = '## Usage\n```bash\nnpx vite\nnpx create-react-app my-app\n```\n';
     expect(danhGiaRepoDoLai('a/app', dev, []).vot).toBe(false);
   });
+
+  it('Luật 2: thư viện lập trình thuần (transformers, fastapi, scikit-learn, scrapy, langchain, autogen) không được vớt', () => {
+    const transformers =
+      '# Transformers\n```bash\npip install transformers\n```\n```python\nfrom transformers import pipeline\n```';
+    expect(danhGiaRepoDoLai('huggingface/transformers', transformers, null).vot).toBe(false);
+
+    const fastapi =
+      '# FastAPI\n```bash\npip install fastapi\n```\n```python\nfrom fastapi import FastAPI\napp = FastAPI()\n```';
+    expect(danhGiaRepoDoLai('fastapi/fastapi', fastapi, null).vot).toBe(false);
+
+    const scikitLearn =
+      '# scikit-learn\n```bash\npip install scikit-learn\n```\n```python\nfrom sklearn import datasets\n```';
+    expect(danhGiaRepoDoLai('scikit-learn/scikit-learn', scikitLearn, null).vot).toBe(false);
+
+    const scrapy =
+      '# Scrapy\n```bash\npip install scrapy\n```\n```python\nimport scrapy\n```';
+    expect(danhGiaRepoDoLai('scrapy/scrapy', scrapy, null).vot).toBe(false);
+
+    const langchain =
+      '# LangChain\n```bash\nuv add langchain\n```\n```python\nfrom langchain import LLMChain\n```';
+    expect(danhGiaRepoDoLai('langchain-ai/langchain', langchain, null).vot).toBe(false);
+
+    const autogen =
+      '# AutoGen\n```bash\npip install pyautogen\n```\n```python\nfrom autogen import AssistantAgent\n```';
+    expect(danhGiaRepoDoLai('microsoft/autogen', autogen, null).vot).toBe(false);
+  });
+
+  it('Luật 2: giữ các ứng dụng chạy được như chương trình (browser-use, AutoGPT, py-spy, mycli, litellm)', () => {
+    const browserUse =
+      '<!-- mcp-name: com.browser-use/browser-use -->\n# Browser Use\n```bash\npip install browser-use\n```\n```python\nfrom browser_use import Agent\n```';
+    expect(danhGiaRepoDoLai('browser-use/browser-use', browserUse, null).vot).toBe(true);
+
+    const pySpy =
+      '# py-spy\n```bash\npip install py-spy\n```\nRun:\n```bash\npy-spy record -o profile.svg --pid 1234\n```';
+    expect(danhGiaRepoDoLai('benfred/py-spy', pySpy, null).vot).toBe(true);
+
+    const mycli = '# mycli\n```bash\npip install mycli\n```\n```bash\nmycli -u root\n```';
+    expect(danhGiaRepoDoLai('dbcli/mycli', mycli, null).vot).toBe(true);
+
+    const litellm =
+      '# LiteLLM\n```bash\npip install litellm\n```\n```bash\nlitellm --model gpt-4\n```';
+    expect(danhGiaRepoDoLai('BerriAI/litellm', litellm, null).vot).toBe(true);
+  });
 });
