@@ -1302,4 +1302,125 @@ python main.py
     );
     expect(coCachCaiCliHopLe(resOpenManus)).toBe(false);
   });
+
+  describe('P3B-35 & D-40: Nhãn nhóm hỗn hợp Unix + Windows', () => {
+    it('gán nhãn DUNG_CHUNG cho nhóm NGUON của astral-sh/uv (curl | sh và powershell irm | iex)', () => {
+      // Chép nguyên văn từ Data_Repo/01_da_cao (astral-sh/uv)
+      const mdUv = `
+## Installation
+
+Install uv with our standalone installers:
+
+\`\`\`bash
+# On macOS and Linux.
+curl -LsSf https://astral.sh/uv/install.sh | sh
+\`\`\`
+
+\`\`\`bash
+# On Windows.
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+\`\`\`
+
+Or, from [PyPI](https://pypi.org/project/uv/):
+
+\`\`\`bash
+# With pip.
+pip install uv
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(mdUv, 'https://github.com/astral-sh/uv');
+      expect(res).not.toBeNull();
+      const nhomNguon = res?.cachCai.find((c) => c.nhom === NhomCachCai.NGUON);
+      expect(nhomNguon).toBeDefined();
+      expect(nhomNguon?.heDieuHanh).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    });
+
+    it('gán nhãn DUNG_CHUNG cho nhóm NGUON của denoland/deno (curl | sh và irm | iex)', () => {
+      // Chép nguyên văn từ Data_Repo/01_da_cao (denoland/deno)
+      const mdDeno = `
+Installation
+
+Install the Deno runtime on your system using one of the commands below.
+
+Shell (Mac, Linux):
+
+\`\`\`sh
+curl -fsSL https://deno.land/install.sh | sh
+\`\`\`
+
+PowerShell (Windows):
+
+\`\`\`powershell
+irm https://deno.land/install.ps1 | iex
+\`\`\`
+
+[Homebrew](https://formulae.brew.sh/formula/deno) (Mac):
+
+\`\`\`sh
+brew install deno
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(mdDeno, 'https://github.com/denoland/deno');
+      expect(res).not.toBeNull();
+      const nhomNguon = res?.cachCai.find((c) => c.nhom === NhomCachCai.NGUON);
+      expect(nhomNguon).toBeDefined();
+      expect(nhomNguon?.heDieuHanh).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    });
+
+    it('gán nhãn DUNG_CHUNG cho nhóm NGUON của openai/codex (curl | sh và powershell irm | iex)', () => {
+      // Chép nguyên văn từ Data_Repo/01_da_cao (openai/codex)
+      const mdCodex = `
+### Installing and running Codex CLI
+
+Run the following on Mac or Linux to install Codex CLI:
+
+\`\`\`shell
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+\`\`\`
+
+Run the following on Windows to install Codex CLI:
+
+\`\`\`shell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(mdCodex, 'https://github.com/openai/codex');
+      expect(res).not.toBeNull();
+      const nhomNguon = res?.cachCai.find((c) => c.nhom === NhomCachCai.NGUON);
+      expect(nhomNguon).toBeDefined();
+      expect(nhomNguon?.heDieuHanh).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    });
+
+    it('gán nhãn DUNG_CHUNG cho nhóm NGUON hỗn hợp của boyter/scc (chứa cả lệnh Unix và Windows)', () => {
+      // Chép nguyên văn từ Data_Repo/01_da_cao (boyter/scc)
+      const mdNguonHonHop = `
+\`\`\`bash
+# Homebrew or build on Unix
+./build.sh
+# Windows batch
+./build.bat
+\`\`\`
+`;
+      const resNguon = bocTachHuongDanTuCodeBlocks(mdNguonHonHop, mdNguonHonHop, 'boyter/scc');
+      expect(resNguon?.cachCai[0]?.heDieuHanh).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    });
+
+    it('giữ nguyên nhãn thuần Unix là LINUX_MAC và thuần Windows là WINDOWS', () => {
+      const mdUnix = `
+\`\`\`bash
+curl -fsSL https://example.com/install.sh | sh
+\`\`\`
+`;
+      const resUnix = bocTachHuongDanTuCodeBlocks(mdUnix, mdUnix, 'owner/unix-app');
+      expect(resUnix?.cachCai[0]?.heDieuHanh).toBe(HeDieuHanhCli.LINUX_MAC);
+
+      const mdWin = `
+\`\`\`powershell
+irm https://example.com/install.ps1 | iex
+\`\`\`
+`;
+      const resWin = bocTachHuongDanTuCodeBlocks(mdWin, mdWin, 'owner/win-app');
+      expect(resWin?.cachCai[0]?.heDieuHanh).toBe(HeDieuHanhCli.WINDOWS);
+    });
+  });
 });

@@ -951,10 +951,18 @@ export function bocTachHuongDanTuCodeBlocks(
 
     const itemChinh = items.find((it) => it.lenh === lenhChinh) || items[0];
 
+    // P3B-35 & D-40: Nhom hon hop co ca lenh Unix (LINUX_MAC) va Windows thi nhan nhom la DUNG_CHUNG
+    const coLinuxMac = items.some((it) => it.os === HeDieuHanhCli.LINUX_MAC);
+    const coWindows = items.some((it) => it.os === HeDieuHanhCli.WINDOWS);
+    const heDieuHanhNhom =
+      coLinuxMac && coWindows
+        ? HeDieuHanhCli.DUNG_CHUNG
+        : itemChinh?.os || HeDieuHanhCli.DUNG_CHUNG;
+
     cachCai.push({
       ten: `Cài đặt qua ${nhom}`,
       nhom,
-      heDieuHanh: itemChinh?.os || HeDieuHanhCli.DUNG_CHUNG,
+      heDieuHanh: heDieuHanhNhom,
       phanCung: PhanCungYeuCau.KHONG_RO,
       yeuCau: [],
       buoc,
