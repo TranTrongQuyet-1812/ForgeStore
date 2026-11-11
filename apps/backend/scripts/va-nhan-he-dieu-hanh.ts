@@ -1,8 +1,6 @@
-import { NestFactory } from '@nestjs/core';
+import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/modules/prisma/prisma.service';
 
 /**
  * Định nghĩa cấu trúc JSON của huongDanCaiDat trong CSDL.
@@ -466,7 +464,7 @@ export async function thucThiVaNhan(
   console.info(`\n✅ HOÀN TẤT: Đã ghi thành công ${daGhiThanhCong} ứng dụng vào CSDL.`);
   console.info(`Tổng số cách cài đặt đã vá nhãn: ${tongCachCaiDuKienVa}`);
   console.info(
-    `Nếu cần trả lại trạng thái cũ, chạy: pnpm ts-node scripts/va-nhan-he-dieu-hanh.ts --hoan-tac "${duongDanRollback}" --ghi`,
+    `Nếu cần trả lại trạng thái cũ, chạy: pnpm exec ts-node --transpile-only scripts/va-nhan-he-dieu-hanh.ts --hoan-tac "${duongDanRollback}" --ghi`,
   );
 
   return {
@@ -485,7 +483,7 @@ async function main() {
 
   if (args.includes('--help') || args.includes('-h') || args.length === 0) {
     console.info(`
-Sử dụng: pnpm tsx scripts/va-nhan-he-dieu-hanh.ts [tùy chọn]
+Sử dụng: pnpm exec ts-node --transpile-only scripts/va-nhan-he-dieu-hanh.ts [tùy chọn]
 
 Tùy chọn:
   --tep <đường dẫn>       Đường dẫn tệp JSON chứa danh sách vá nhãn (mảng { repo, nhom, lenh, db, moi })
@@ -495,13 +493,13 @@ Tùy chọn:
 
 Ví dụ:
   # Chạy thử kiểm tra kế hoạch (chỉ đọc SELECT):
-  pnpm tsx scripts/va-nhan-he-dieu-hanh.ts --tep "E:/Du_An_Ca_Nhan/BaocaoForgeStore/Ra_nhan_DB_11-11/lech_nhan.json"
+  pnpm exec ts-node --transpile-only scripts/va-nhan-he-dieu-hanh.ts --tep "E:/Du_An_Ca_Nhan/BaocaoForgeStore/Ra_nhan_DB_11-11/lech_nhan_loc.json"
 
   # Thực thi ghi CSDL thật:
-  pnpm tsx scripts/va-nhan-he-dieu-hanh.ts --tep "E:/Du_An_Ca_Nhan/BaocaoForgeStore/Ra_nhan_DB_11-11/lech_nhan.json" --ghi
+  pnpm exec ts-node --transpile-only scripts/va-nhan-he-dieu-hanh.ts --tep "E:/Du_An_Ca_Nhan/BaocaoForgeStore/Ra_nhan_DB_11-11/lech_nhan_loc.json" --ghi
 
   # Hoàn tác trạng thái cũ:
-  pnpm tsx scripts/va-nhan-he-dieu-hanh.ts --hoan-tac "duong-dan-hoan-tac.json" --ghi
+  pnpm exec ts-node --transpile-only scripts/va-nhan-he-dieu-hanh.ts --hoan-tac "duong-dan-hoan-tac.json" --ghi
     `);
     return;
   }
@@ -523,10 +521,9 @@ Ví dụ:
     process.exit(1);
   }
 
-  const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['error', 'warn'],
-  });
-  const prisma = app.get(PrismaService);
+  // Dùng PrismaClient trực tiếp, không mở AppModule: AppModule khởi động các cron của backend
+  // trong khi .env đang trỏ vào CSDL production.
+  const prisma = new PrismaClient();
 
   try {
     await thucThiVaNhan(prisma, {
@@ -535,7 +532,7 @@ Ví dụ:
       laHoanTac,
     });
   } finally {
-    await app.close();
+    await prisma.$disconnect();
   }
 }
 
