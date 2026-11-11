@@ -6,6 +6,7 @@ import {
   danhGiaRelease,
   locCucBo,
   trongDanhSachChan,
+  zipLaUngDungDesktop,
   type RepoUngVien,
 } from './bo-loc-nap-repo.util';
 
@@ -226,5 +227,84 @@ describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
     expect(
       cachCaiThuocRepo('foo/bar', [{ nhom: 'PIP', tenGoi: 'torch' }, { nhom: 'DOCKER' }]),
     ).toBe(true);
+  });
+});
+
+describe('laThuVienLapTrinh: dấu hiệu import ngoài khối mã và dòng lệnh thật (12/11/2026)', () => {
+  // Đoạn chép nguyên văn từ README axios/axios (thư viện): import nằm ở dòng đầu, không có lệnh chạy "axios ..."
+  const readmeAxios = [
+    '$ npm install axios',
+    "import axios from 'axios';",
+    "const axios = require('axios');",
+  ].join('\n');
+  // Đoạn chép nguyên văn từ README pndurette/gTTS: khối thụt đầu dòng kiểu RST, có lệnh gtts-cli thật
+  const readmeGtts = [
+    '    $ pip install gTTS',
+    "    $ gtts-cli 'hello' --output hello.mp3",
+    '    >>> from gtts import gTTS',
+  ].join('\n');
+
+  it('README chỉ dạy import thì là thư viện', () => {
+    const cach = [
+      { nhom: 'NPM', trinhQuanLy: 'NPM', tenGoi: 'axios', buoc: [{ lenh: 'npm install axios' }] },
+    ];
+    expect(laThuVienLapTrinh(readmeAxios, 'axios/axios', cach)).toBe(true);
+  });
+
+  it('README có dòng lệnh gtts-cli (khối thụt đầu dòng, dấu nhắc $) thì không phải thư viện thuần', () => {
+    const cach = [
+      { nhom: 'PIP', trinhQuanLy: 'PIP', tenGoi: 'gTTS', buoc: [{ lenh: 'pip install gTTS' }] },
+    ];
+    expect(laThuVienLapTrinh(readmeGtts, 'pndurette/gTTS', cach)).toBe(false);
+  });
+
+  it('python -m của gói khác (pip, venv) không tính là chạy chương trình', () => {
+    const readme = ['python -m pip install axios', "import axios from 'axios';"].join('\n');
+    const cach = [{ nhom: 'NPM', tenGoi: 'axios', buoc: [{ lenh: 'npm install axios' }] }];
+    expect(laThuVienLapTrinh(readme, 'axios/axios', cach)).toBe(true);
+  });
+});
+
+describe('zipLaUngDungDesktop (Luật 1 bổ sung, 12/11/2026)', () => {
+  // Đoạn đầu README thật của NationalSecurityAgency/ghidra và Raphire/Win11Debloat
+  const readmeGhidra =
+    'Ghidra is a software reverse engineering (SRE) framework created and maintained by the National Security Agency Research Directorate. Platforms including Windows, macOS, and Linux.';
+  const readmeWin11Debloat =
+    'Win11Debloat is a lightweight, easy to use PowerShell script that allows you to quickly declutter and customize your Windows experience, no installation required.';
+  // Dòng thật từ README jordanbaird/Ice (ứng dụng chỉ có cho macOS)
+  const readmeIce = [
+    '![Platform](https://img.shields.io/badge/platform-macOS-blue?style=flat-square)',
+    '![Requirements](https://img.shields.io/badge/requirements-macOS%2014%2B-fa4e49?style=flat-square)',
+    'brew install --cask jordanbaird-ice',
+  ].join('\n');
+
+  it('nhận ghidra và Win11Debloat', () => {
+    expect(zipLaUngDungDesktop(readmeGhidra, ['ghidra_12.2_PUBLIC_20261016.zip'])).toBe(true);
+    expect(zipLaUngDungDesktop(readmeWin11Debloat, ['Win11Debloat.zip', 'Get.ps1'])).toBe(true);
+  });
+
+  it('nhận ZIP khi README không nhắc hệ điều hành nào (FModel, GeekDesk là app Windows thật)', () => {
+    expect(zipLaUngDungDesktop('FModel is a viewer for game archives.', ['FModel.zip'])).toBe(true);
+  });
+
+  it('loại ứng dụng chỉ có cho macOS', () => {
+    expect(zipLaUngDungDesktop(readmeIce, ['Ice.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop('Hello', ['KeyCastr.app.zip'])).toBe(false);
+  });
+
+  it('loại gói thư viện và plugin theo tên tệp cùng bản phát hành', () => {
+    expect(zipLaUngDungDesktop('', ['Bogus.35.6.5.nupkg', 'Bogus.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop('', ['Nimble.xcframework.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop('', ['main.js', 'manifest.json', 'plugin-0.8.7.zip'])).toBe(false);
+  });
+
+  it('loại thư viện có lệnh thêm vào dự án, bộ chữ và tiện ích trình duyệt', () => {
+    expect(zipLaUngDungDesktop('Install-Package Bogus', ['Bogus.zip'])).toBe(false);
+    expect(
+      zipLaUngDungDesktop('Inter font family. Download the font files. Use the font on web.', [
+        'Inter-4.1.zip',
+      ]),
+    ).toBe(false);
+    expect(zipLaUngDungDesktop('Install from the Chrome Web Store.', ['build.zip'])).toBe(false);
   });
 });

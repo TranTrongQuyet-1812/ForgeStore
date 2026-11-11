@@ -251,62 +251,109 @@ export function laThuVienLapTrinh(
     return true;
   }
 
-  // 6. Kiểm tra dấu hiệu import code thật trong các khối code
-  let coCodeImport = false;
-  const codeImportBlockRegex = /```[a-zA-Z0-9_+-]*[ \t]*\r?\n([\s\S]*?)```/gi;
-  for (const m of readme.matchAll(codeImportBlockRegex)) {
-    const block = m[1];
-    if (!block) continue;
-    if (
-      /(?:^|\n)\s*(?:from\s+[\w.]+\s+import\s+|import\s+[\w.]+(?:\s+as\s+\w+)?)/.test(block) ||
-      /(?:^|\n)\s*(?:import\s+(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]+['"]|const\s+.*?=\s*require\(['"][^'"]+['"]\))/.test(
-        block,
-      ) ||
-      /(?:^|\n)\s*(?:use\s+[\w:]+;|extern\s+crate\s+\w+;)/.test(block) ||
-      /(?:^|\n)\s*(?:import\s+(?:\([^)]*\)|"[^"]+"))/.test(block) ||
-      /(?:^|\n)\s*#include\s+[<"][^>"]+[>"]/.test(block)
-    ) {
-      coCodeImport = true;
-      break;
-    }
-  }
+  // 6. Dấu hiệu import code thật ở BẤT KỲ đâu trong README (kể cả README RST, dòng nhắc ">>>" hay thụt đầu dòng,
+  // không chỉ trong khối ```). Trước đây chỉ xét khối ``` nên README viết kiểu khác lọt luật thư viện.
+  const coCodeImport = MAU_IMPORT_CODE.some((re) => re.test(readme));
+  // Nếu không có dấu hiệu import nào, thì không phải là thư viện thuần
+  if (!coCodeImport) return false;
 
-  // Nếu không có bất kỳ khối code import nào, thì không phải là thư viện thuần
-  if (!coCodeImport) {
-    return false;
-  }
+  // Dòng lệnh chạy chính gói đó như một chương trình (`<gói> --help`, `<gói> <lệnh con>`): chỉ tính dòng nằm trong
+  // khối mã hoặc sau dấu `$`. Câu văn mở đầu bằng tên repo ("Faker is a Python package...") không phải lệnh.
+  const dongLenh = layCacDongLenhTrongReadme(readme);
+  // Tên lệnh thường là tên gói, hoặc thêm đuôi -cli (gtts-cli, vd. gTTS)
+  const reLenhChinhGoi = new RegExp(
+    `^(?:${danhSachTen
+      .filter((t) => t.length >= 2)
+      .map((t) => `${thoatKyTuRegex(t)}(?:[-_]?cli)?`)
+      .join('|')})(?:\\.exe)?\\s+(?![=(:,.])\\S`, // loại phép gán/gọi hàm trong mã (faker = Faker())
+    'i',
+  );
+  const lenhBoQua = /^(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i;
+  if (dongLenh.some((l) => !lenhBoQua.test(l) && reLenhChinhGoi.test(l))) return false;
 
-  let coLenhChayChuongTrinh = false;
-
-  // Dò lệnh CLI bằng regex dòng lệnh
-  for (const t of danhSachTen) {
-    if (!t || t.length < 2) continue;
-    const re = new RegExp(`(?:^|\\n)\\s*(?:[$#>]\\s*)?${thoatKyTuRegex(t)}(?:\\.exe)?\\s+`, 'm');
-    const match = readme.match(re);
-    if (match) {
-      const idx = match.index ?? 0;
-      const dong = readme.substring(idx, readme.indexOf('\n', idx + 1) || undefined).trim();
-      if (
-        !/^(?:pip|pip3|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i.test(dong.replace(/^[$#>]\s*/, ''))
-      ) {
-        coLenhChayChuongTrinh = true;
-        break;
-      }
-    }
-  }
-
-  // 7. Kiểm tra các lệnh chạy server / runner độc lập
+  // 7. Lệnh chạy runner độc lập của CHÍNH gói này. `python -m pip`, `npx create-react-app`... là việc khác, không tính.
+  const tenGoiRegex = danhSachTen
+    .filter((t) => t.length >= 2)
+    .map((t) => thoatKyTuRegex(t).replace(/[-_]/g, '[-_]'))
+    .join('|');
   if (
-    /\b(?:streamlit\s+run|gradio|python\d*\s+-m\s+[\w.]+|pipx\s+run|uvx\s+|npx\s+)\b/i.test(readme)
+    tenGoiRegex &&
+    new RegExp(
+      `\\b(?:python\\d*\\s+-m|pipx\\s+run|uvx|npx(?:\\s+-y)?)\\s+(?:@[\\w.-]+/)?(?:${tenGoiRegex})\\b`,
+      'i',
+    ).test(readme)
   ) {
-    coLenhChayChuongTrinh = true;
-  }
-
-  if (coLenhChayChuongTrinh) {
     return false;
   }
+  if (/\bstreamlit\s+run\b/i.test(readme)) return false;
 
   return true;
+}
+
+/** Mẫu "import" của các ngôn ngữ phổ biến, bám đầu dòng (cho phép thụt lề và dấu nhắc `>>>`). */
+const MAU_IMPORT_CODE: RegExp[] = [
+  /(?:^|\n)[ \t]*(?:>>>\s*)?(?:from\s+[\w.]+\s+import\s+|import\s+[\w.]+(?:\s+as\s+\w+)?(?:\s*,\s*[\w.]+)*\s*(?:\r?\n|$))/,
+  /(?:^|\n)[ \t]*(?:import\s+(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]+['"]|const\s+.*?=\s*require\(['"][^'"]+['"]\))/,
+  /(?:^|\n)[ \t]*(?:use\s+[\w:]+;|extern\s+crate\s+\w+;)/,
+  /(?:^|\n)[ \t]*(?:import\s+(?:\([^)]*\)|"[^"]+"))/,
+  /(?:^|\n)[ \t]*#include\s+[<"][^>"]+[>"]/,
+  /(?:^|\n)[ \t]*using\s+[A-Z][\w.]+;/,
+];
+
+/** Các dòng có thể là lệnh gõ vào terminal: dòng trong khối ``` và dòng bắt đầu bằng `$`, đã bỏ dấu nhắc. */
+function layCacDongLenhTrongReadme(readme: string): string[] {
+  const dong: string[] = [];
+  for (const m of readme.matchAll(/```[^\n]*\n([\s\S]*?)```/g))
+    dong.push(...(m[1] ?? '').split('\n'));
+  // Dòng sau `$` và dòng thụt 4 khoảng trắng/tab (khối mã kiểu RST, Markdown cũ)
+  dong.push(...readme.split('\n').filter((l) => /^\s*\$\s+\S/.test(l) || /^(?: {4}|\t)\S/.test(l)));
+  return dong
+    .map((l) =>
+      l
+        .trim()
+        .replace(/^[$#>]\s*/, '')
+        .replace(/^usage:\s*/i, ''),
+    )
+    .filter(Boolean);
+}
+
+const MAU_TEP_KHONG_PHAI_APP_DESKTOP =
+  /\.(?:app\.zip|ipa|nupkg|snupkg|aar|vsix|epub|fpk)$|\.xcframework(?:\.zip)?$|\.fb2\.zip$/i;
+const MAU_README_THU_VIEN_PHU_THUOC =
+  /dotnet\s+add\s+package|Install-Package|PackageReference|composer\s+require|vcpkg\s+install|conan\s+install|cargo\s+add|<artifactId>|\bimplementation\s*[("']|\bpod\s+['"]|\.package\(url:|FetchContent_Declare|find_package\(/i;
+const MAU_README_PLUGIN_CUA_APP_KHAC =
+  /\b(?:obsidian|typora|wordpress|home assistant|hacs|decky|godot|unity|unreal|blender)\b[^\n]{0,30}\b(?:plugin|add-?on|extension|integration)s?\b|\b(?:plugin|add-?on|extension|integration)s? for (?:obsidian|typora|wordpress|home assistant|godot|unity|unreal|blender)\b|SKILL\.md|\.claude\/skills/i;
+
+const MAU_README_TIEN_ICH_TRINH_DUYET =
+  /chrome web store|addons\.mozilla\.org|chrome\.google\.com\/webstore|(?:browser|chrome|firefox|chromium) (?:extension|add-?on)/i;
+
+/**
+ * Luật 1 bổ sung (12/11/2026): tên ZIP lẻ không đủ để biết nó là ứng dụng chạy trên Windows/Linux, nên xét thêm
+ * README và tên các tệp cùng bản phát hành. Loại khi: (1) có tệp gói thư viện/ứng dụng nền tảng khác (.nupkg, .ipa,
+ * .aar, .xcframework, .app.zip...) hoặc cặp main.js + manifest.json của plugin; (2) README nói về macOS nhiều hơn hẳn
+ * Windows/Linux; (3) README dạy thêm thư viện vào dự án (dotnet add package, composer require, vcpkg...); (4) README
+ * nói đây là plugin/tích hợp/skill của ứng dụng khác (Obsidian, Home Assistant, Claude skill...).
+ * Đo trên bản lưu 335 repo: README không nhắc hệ điều hành nào vẫn được nhận (FModel, GeekDesk là app Windows thật).
+ */
+export function zipLaUngDungDesktop(
+  readme: string | null | undefined,
+  tenCacTep: string[],
+): boolean {
+  const ten = tenCacTep.map((t) => t.trim().toLowerCase());
+  if (ten.some((t) => MAU_TEP_KHONG_PHAI_APP_DESKTOP.test(t))) return false;
+  if (ten.includes('main.js') && ten.includes('manifest.json')) return false;
+  const vb = readme ?? '';
+  if (MAU_README_THU_VIEN_PHU_THUOC.test(vb) || MAU_README_PLUGIN_CUA_APP_KHAC.test(vb))
+    return false;
+  if (MAU_README_TIEN_ICH_TRINH_DUYET.test(vb)) return false;
+  const dem = (re: RegExp) => (vb.match(re) ?? []).length;
+  if (dem(/\b(?:font|typeface)s?\b/gi) >= 3) return false; // bộ chữ, không phải ứng dụng
+  const win = dem(/\bwindows\b|\.exe\b|\bwin(?:32|64)\b/gi);
+  const linux = dem(/\blinux\b|\bubuntu\b|\bdebian\b/gi);
+  const mac = dem(
+    /\bmac(?:os)?\b|\bos\s?x\b|\bdarwin\b|\bhomebrew\b|\bxcode\b|\bapple silicon\b/gi,
+  );
+  return !(mac >= 2 && mac > 2 * (win + linux));
 }
 
 /**

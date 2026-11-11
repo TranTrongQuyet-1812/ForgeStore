@@ -6,6 +6,7 @@ import {
   danhGiaRelease,
   cachCaiThuocRepo,
   laThuVienLapTrinh,
+  zipLaUngDungDesktop,
   type ReleaseUngVien,
 } from '../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util';
 import { phanLoaiTep } from '../../modules/ung-dung/tien-ich/phan-loai-tep.util';
@@ -192,17 +193,20 @@ function nhanNhomTuHuongDan(huongDan: HuongDanCaiDatDto): NhomVotDoLai[] {
   return [...nhom];
 }
 
-/** ZIP duy nhất: danhGiaRelease đạt nhưng không có tệp nào đạt theo luật cũ (xét từng tên lẻ). */
-function laNhomZipDuyNhat(releases: ReleaseUngVien[]): boolean {
-  const kq = danhGiaRelease(releases);
-  if (!kq.dat) return false;
+/** Tên các tệp của Release chính thức mới nhất (bỏ nháp và pre-release). */
+function tenTepBanChinhThuc(releases: ReleaseUngVien[]): string[] {
   const chinhThuc = releases
     .filter((r) => !r.draft && !r.prerelease)
     .sort(
       (a, b) => new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime(),
     )[0];
-  const theoLuatCu = (chinhThuc?.assets ?? []).some((a) => !phanLoaiTep(a.name).boQua);
-  return !theoLuatCu;
+  return (chinhThuc?.assets ?? []).map((a) => a.name);
+}
+
+/** ZIP duy nhất: danhGiaRelease đạt nhưng không có tệp nào đạt theo luật cũ (xét từng tên lẻ). */
+function laNhomZipDuyNhat(releases: ReleaseUngVien[]): boolean {
+  if (!danhGiaRelease(releases).dat) return false;
+  return !tenTepBanChinhThuc(releases).some((ten) => !phanLoaiTep(ten).boQua);
 }
 
 /**
@@ -231,11 +235,16 @@ export function danhGiaRepoDoLai(
       nhom.push(...nhanNhomTuHuongDan(huongDan));
     }
   }
-  if (releases && laNhomZipDuyNhat(releases)) {
-    vot = true;
-    nhom.push('ZIP_DUY_NHAT');
-  } else if (releases && danhGiaRelease(releases).dat) {
-    vot = true;
+  if (releases) {
+    if (laNhomZipDuyNhat(releases)) {
+      // ZIP lẻ cần thêm bằng chứng từ README và tên các tệp cùng bản (Luật 1 bổ sung, 12/11/2026)
+      if (zipLaUngDungDesktop(readme, tenTepBanChinhThuc(releases))) {
+        vot = true;
+        nhom.push('ZIP_DUY_NHAT');
+      }
+    } else if (danhGiaRelease(releases).dat) {
+      vot = true;
+    }
   }
   return { vot, nhom };
 }
