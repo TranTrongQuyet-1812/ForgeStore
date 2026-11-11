@@ -615,6 +615,7 @@ export function locVaChuanHoaHuongDanCaiDat(
     const { pkgInfo, lenhChinh } = timThongTinGoiToiUu(
       buocHopLe.map((b) => b.lenh),
       tenRepo,
+      layChuRepoTuDuongDan(duongDanReadmeGoc),
     );
     const trinhQuanLy = pkgInfo?.trinhQuanLy || cach.trinhQuanLy;
     const tenGoi = pkgInfo?.tenGoi || cach.tenGoi;
@@ -753,6 +754,7 @@ function laBuocChuanBiMoiTruong(lenh: string, tenRepo?: string): boolean {
 function timThongTinGoiToiUu(
   danhSachLenh: string[],
   tenRepo?: string | null,
+  chuRepo?: string | null,
 ): { pkgInfo: { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string } | null; lenhChinh: string } {
   if (!danhSachLenh || danhSachLenh.length === 0) {
     return { pkgInfo: null, lenhChinh: '' };
@@ -769,7 +771,7 @@ function timThongTinGoiToiUu(
     for (const lenh of danhSachLenh) {
       const pkg = trichTenGoiDaChuanHoa(lenh);
       if (!pkg) continue;
-      if (!tenGoiKhopTenRepo(pkg.tenGoi, tenRepo)) continue;
+      if (!goiKhopRepo(pkg, tenRepo, chuRepo)) continue;
 
       let diem = 110;
 
@@ -924,6 +926,7 @@ export function bocTachHuongDanTuCodeBlocks(
     const { pkgInfo, lenhChinh } = timThongTinGoiToiUu(
       items.map((it) => it.lenh),
       tenRepo,
+      layChuRepoTuDuongDan(duongDanReadmeGoc),
     );
     let lenhCapNhat: string | undefined;
     let lenhGo: string | undefined;
@@ -990,9 +993,54 @@ export function tenGoiKhopTenRepo(tenGoi: string, tenRepo: string): boolean {
   return goi.includes(repo) || repo.includes(goi);
 }
 
-function locCachCaiKhopTenRepo(huongDan: HuongDanCaiDatDto | null, tenRepo: string): CachCaiDto[] {
+/** Lấy chủ sở hữu (owner) từ đường dẫn README gốc (https://github.com/owner/repo#readme hoặc owner/repo). */
+function layChuRepoTuDuongDan(duongDan?: string): string | null {
+  if (!duongDan) return null;
+  const m = duongDan.match(/github\.com\/([^/\s]+)\/[^/#?\s]+/i);
+  if (m?.[1]) return m[1];
+  const mSlug = duongDan.match(/^([^/\s]+)\/[^/#?\s]+$/);
+  return mSlug?.[1] ?? null;
+}
+
+/**
+ * Chốt chặn D-38 cho đích dạng owner/name của 
+px skills add owner/name: bắt buộc owner trùng chủ repo
+ * (không phân biệt hoa thường) và name bằng tên repo hoặc bắt đầu bằng <tên-repo>- (rendercv/rendercv-skill).
+ * So khớp kiểu "chứa" từng nhận nhầm ttacker/bar cho repo oo/bar và PicGo/skills cho Molunerfinn/PicGo.
+ */
+export function dichNpxKhopRepo(tenGoi: string, tenRepo: string, chuRepo?: string | null): boolean {
+  const phan = tenGoi.trim().split('/');
+  if (phan.length !== 2 || !phan[0] || !phan[1]) return tenGoiKhopTenRepo(tenGoi, tenRepo);
+  if (!chuRepo || phan[0].toLowerCase() !== chuRepo.toLowerCase()) return false;
+  const name = phan[1].toLowerCase();
+  const repo = tenRepo.toLowerCase();
+  return name === repo || name.startsWith(repo + '-');
+}
+
+/** Gói khớp repo: riêng nhóm npx (đích owner/name) phải qua chốt chặn chủ sở hữu, các nhóm khác so theo tên. */
+function goiKhopRepo(
+  pkg: { trinhQuanLy: string; tenGoi: string },
+  tenRepo: string,
+  chuRepo?: string | null,
+): boolean {
+  return pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX
+    ? dichNpxKhopRepo(pkg.tenGoi, tenRepo, chuRepo)
+    : tenGoiKhopTenRepo(pkg.tenGoi, tenRepo);
+}
+
+function locCachCaiKhopTenRepo(
+  huongDan: HuongDanCaiDatDto | null,
+  tenRepo: string,
+  chuRepo?: string | null,
+): CachCaiDto[] {
   return (huongDan?.cachCai ?? []).filter(
-    (c) => Boolean(c.trinhQuanLy && c.tenGoi) && tenGoiKhopTenRepo(String(c.tenGoi), tenRepo),
+    (c) =>
+      Boolean(c.trinhQuanLy && c.tenGoi) &&
+      goiKhopRepo(
+        { trinhQuanLy: String(c.trinhQuanLy), tenGoi: String(c.tenGoi) },
+        tenRepo,
+        chuRepo,
+      ),
   );
 }
 
@@ -1044,7 +1092,11 @@ function trichTheoTenRepoTrongToanReadme(
       rawReadme,
       duongDanReadmeGoc,
     );
-    for (const cach of locCachCaiKhopTenRepo(ketQua, tenRepo)) {
+    for (const cach of locCachCaiKhopTenRepo(
+      ketQua,
+      tenRepo,
+      layChuRepoTuDuongDan(duongDanReadmeGoc),
+    )) {
       const khoa = `${cach.trinhQuanLy}:${cach.tenGoi}`;
       if (timThay.has(khoa)) continue;
       timThay.set(khoa, cach);

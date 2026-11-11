@@ -1216,6 +1216,32 @@ npx skills add https://github.com/cloudflare/security-audit-skill \\
     expect(coCachCaiCliHopLe(resKhac)).toBe(false);
   });
 
+  it('Mục B review lần 3: đích owner/name bắt buộc trùng chủ repo (D-38)', () => {
+    const cach = (lenh: string, repo: string) =>
+      trichXuatHuongDanCliBangQuyTac(
+        `## Installation\n\`\`\`bash\n${lenh}\n\`\`\`\n`,
+        `https://github.com/${repo}#readme`,
+      );
+    // Giữ được: README thật của các repo skill
+    expect(
+      cach('npx skills add debpalash/VoiceStudio', 'debpalash/VoiceStudio')?.cachCai[0]?.tenGoi,
+    ).toBe('debpalash/VoiceStudio');
+    expect(
+      cach('npx skills add longbridge/gpui-kit', 'longbridge/gpui-kit')?.cachCai[0]?.tenGoi,
+    ).toBe('longbridge/gpui-kit');
+    expect(
+      cach('npx skills add rendercv/rendercv-skill', 'rendercv/rendercv')?.cachCai[0]?.tenGoi,
+    ).toBe('rendercv/rendercv-skill');
+    // Phải loại: repo khác chủ hoặc tên chỉ chứa nhau
+    expect(coCachCaiCliHopLe(cach('npx skills add attacker/bar', 'foo/bar'))).toBe(false);
+    expect(coCachCaiCliHopLe(cach('npx skills add PicGo/skills', 'Molunerfinn/PicGo'))).toBe(false);
+    expect(
+      coCachCaiCliHopLe(cach('npx skills add vercel-labs/agent-skills', 'vercel-labs/skills')),
+    ).toBe(false);
+    expect(
+      coCachCaiCliHopLe(cach('npx skills add https://github.com/attacker/bar-skills', 'foo/bar')),
+    ).toBe(false);
+  });
   it('vẫn loại trừ lệnh chạy dev (npx vite, npx create-react-app)', () => {
     // A. npx vite
     const mdVite = `
