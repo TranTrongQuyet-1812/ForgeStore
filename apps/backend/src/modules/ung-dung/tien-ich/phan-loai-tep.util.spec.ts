@@ -484,4 +484,65 @@ describe('P3B-36: phanLoaiCacTepBanPhatHanh (ZIP duy nhất không ghi hệ đi�
   it('danh sách rỗng trả về rỗng', () => {
     expect(phanLoaiCacTepBanPhatHanh([])).toEqual([]);
   });
+
+  describe('Luật 1 (11/11/2026): ZIP lẻ chỉ nhận khi là bản dùng cho Windows hoặc Linux', () => {
+    it('Nhận Ghidra: ghidra_12.2_PUBLIC_20261016.zip là bản chạy được cho Windows/Linux', () => {
+      const kq = phanLoaiCacTepBanPhatHanh(['ghidra_12.2_PUBLIC_20261016.zip']);
+      expect(kq[0]?.boQua).toBe(false);
+      expect(kq[0]?.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+    });
+
+    it('Nhận Win11Debloat: Win11Debloat.zip cạnh Get.ps1', () => {
+      const kq = phanLoaiCacTepBanPhatHanh(['Win11Debloat.zip', 'Get.ps1']);
+      expect(kq[0]?.boQua).toBe(false);
+      expect(kq[0]?.dinhDang).toBe(DinhDangTep.ZIP_PORTABLE);
+      expect(kq[1]?.boQua).toBe(true);
+    });
+
+    it('Loại apple/container: container-1.7.1-installer-signed.pkg, container-dSYM.zip (chỉ Mac & dSYM)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh([
+        'container-1.7.1-installer-signed.pkg',
+        'container-dSYM.zip',
+      ]);
+      expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+
+    it('Loại nlohmann/json: include.zip, json.hpp, json.tar.xz (thư viện C++, tên include)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh(['include.zip', 'json.hpp', 'json.tar.xz']);
+      expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+
+    it('Loại curl/curl: curl-8.23.0.zip cạnh các tệp .tar.* cùng tên gốc (bản mã nguồn)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh([
+        'curl-8.23.0.zip',
+        'curl-8.23.0.tar.gz',
+        'curl-8.23.0.tar.xz',
+        'curl-8.23.0.tar.bz2',
+      ]);
+      expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+
+    it('Loại payloadcms/payload: payload-sboms-3.93.0.zip (danh sách thành phần sbom)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh(['payload-sboms-3.93.0.zip']);
+      expect(kq[0]?.boQua).toBe(true);
+    });
+
+    it('Loại gorhill/uBlock: uBlock0_1.76.0.chromium.zip, .crx, .firefox.signed.xpi (tiện ích trình duyệt)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh([
+        'uBlock0_1.76.0.chromium.zip',
+        'uBlock0_1.76.0.crx',
+        'uBlock0_1.76.0.firefox.signed.xpi',
+      ]);
+      expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+
+    it('Loại Panniantong/Agent-Reach: agent-reach.zip cạnh .whl và .tar.gz (gói Python, không phải portable)', () => {
+      const kq = phanLoaiCacTepBanPhatHanh([
+        'agent-reach.zip',
+        'agent_reach-1.6.1-py3-none-any.whl',
+        'agent_reach-1.6.1.tar.gz',
+      ]);
+      expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+  });
 });

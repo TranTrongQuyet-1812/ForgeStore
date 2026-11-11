@@ -260,6 +260,68 @@ const PATTERN_ZIP_BO_CAI = /(?:^|[-_.])(installer|setup)(?:[-_.]|$)/i;
 
 const laTepNen = (ten: string) => /\.(zip|7z)$/i.test(ten.trim());
 
+/**
+ * P3B-36 & Luật 1 (11/11/2026): Kiểm tra xem ZIP duy nhất trong bản phát hành có phải là bản ứng dụng
+ * chạy cho Windows hoặc Linux hay không.
+ *
+ * Tiêu chí loại trừ theo chỉ đạo của Chủ dự án:
+ * (a) Bản phát hành có tệp Mac-only (.pkg, .dmg) mà không có tệp Windows/Linux khác.
+ * (b) Tên ZIP là mã nguồn, ký hiệu gỡ lỗi, tài liệu, danh sách thành phần:
+ *     src, source, include, sbom, dSYM, symbols, docs.
+ * (c) Có tệp nén mã nguồn (.tar.*, .tgz) cùng tên gốc (ZIP chỉ là bản nén khác của mã nguồn).
+ * (d) Tên hoặc bản phát hành chứa tiện ích trình duyệt: chromium, firefox, crx, xpi.
+ * (e) Có tệp gói Python wheel (.whl) (ví dụ Agent-Reach là gói Python, không phải portable Windows).
+ */
+export function laZipUngDungHopLe(tenZip: string, tatCaTepTrongRelease: string[]): boolean {
+  const lowerZip = tenZip.trim().toLowerCase();
+
+  // (b) Tên ZIP là mã nguồn, ký hiệu gỡ lỗi, tài liệu, danh sách thành phần
+  const PATTERN_TEN_ZIP_LOAI_TRU =
+    /(?:^|[-_.])(src|source|sources|include|includes|sbom|sboms|dsym|symbols|symbol|docs|documentation|doc)(?:[-_.]|$)/i;
+  if (PATTERN_TEN_ZIP_LOAI_TRU.test(lowerZip)) return false;
+
+  // (d) Tiện ích trình duyệt (chromium, firefox, crx, xpi, extension, addon)
+  const PATTERN_TIEN_ICH_TRINH_DUYET =
+    /(?:^|[-_.])(chromium|chrome|firefox|crx|xpi|extension|addon)(?:[-_.]|$)/i;
+  if (PATTERN_TIEN_ICH_TRINH_DUYET.test(lowerZip)) return false;
+
+  // Lọc các tệp khác trong cùng bản phát hành
+  const danhSachKhac = tatCaTepTrongRelease
+    .filter((t) => t.trim().toLowerCase() !== lowerZip)
+    .map((t) => t.trim().toLowerCase());
+
+  // (a) Release có tệp Mac-only (.pkg, .dmg)
+  const coMacOnly = danhSachKhac.some((t) => t.endsWith('.pkg') || t.endsWith('.dmg'));
+  if (coMacOnly) return false;
+
+  // Release có tiện ích trình duyệt (.crx, .xpi)
+  const coTepTienIchTrinhDuyet = danhSachKhac.some((t) => t.endsWith('.crx') || t.endsWith('.xpi'));
+  if (coTepTienIchTrinhDuyet) return false;
+
+  // Release có tệp gói Python wheel (.whl) -> phân phối thư viện/gói Python
+  const coPythonWheel = danhSachKhac.some((t) => t.endsWith('.whl'));
+  if (coPythonWheel) return false;
+
+  // (c) Có tệp .tar.* cùng tên gốc (ZIP là bản nén khác của mã nguồn)
+  const tenGocZip = lowerZip.replace(/\.(zip|7z)$/i, '');
+  const baseZipChuanHoa = tenGocZip.replace(/[^a-z0-9]/g, '');
+
+  for (const t of danhSachKhac) {
+    if (/\.(tar|tar\.gz|tar\.xz|tar\.bz2|tgz)$/i.test(t)) {
+      const tenGocTar = t.replace(/\.(tar(\.(gz|xz|bz2))?|tgz)$/i, '');
+      const baseTarChuanHoa = tenGocTar.replace(/[^a-z0-9]/g, '');
+      if (
+        baseZipChuanHoa === baseTarChuanHoa ||
+        (baseZipChuanHoa.length >= 4 && baseTarChuanHoa.startsWith(baseZipChuanHoa))
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 /** ZIP/7z này có thể là bản chạy chung cho mọi nền tảng không (không phải mã nguồn, không ghi hệ điều hành khác)? */
 function zipKhongGhiHeDieuHanhKhac(tenTep: string): boolean {
   const lower = tenTep.trim().toLowerCase();
@@ -289,6 +351,11 @@ export function phanLoaiCacTepBanPhatHanh(tenCacTep: string[]): KetQuaPhanLoaiTe
     .filter(({ ten }) => laTepNen(ten) && !PATTERN_SOURCE_CODE.test(ten.toLowerCase()));
   const duyNhat = chiSoZip.length === 1 ? chiSoZip[0] : undefined;
   if (!duyNhat || !zipKhongGhiHeDieuHanhKhac(duyNhat.ten)) return ketQua;
+
+  // Luật 1 (11/11/2026): ZIP lẻ chỉ nhận khi là bản dùng cho Windows hoặc Linux
+  if (!laZipUngDungHopLe(duyNhat.ten, tenCacTep)) {
+    return ketQua;
+  }
 
   ketQua[duyNhat.i] = {
     dinhDang: DinhDangTep.ZIP_PORTABLE,
