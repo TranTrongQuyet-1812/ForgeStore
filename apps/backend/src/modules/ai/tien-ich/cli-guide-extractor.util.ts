@@ -214,8 +214,14 @@ export function nhanDienNhomLenh(lenh: string): NhomCachCai | null {
  * Ngữ cảnh hẹp chỉ áp dụng cho nhóm NGUON hoặc lệnh không rõ.
  */
 export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDieuHanhCli {
-  const l = (lenh || '').toLowerCase();
+  // Bóc chú thích cuối dòng (` # or: brew install ...`) trước khi dò dấu hiệu: chú thích không phải lệnh chạy
+  const l = (lenh || '').replace(/\s+#.*$/gm, '').toLowerCase();
   const ctx = (contextText || '').toLowerCase();
+
+  // Ranh giới chữ: không khớp trong tên gói/đường dẫn có gạch ngang (pip install sudo-tool, sameersbn/apt-cacher-ng)
+  const TRUOC = String.raw`(?<![\w./-])`;
+  const SAU = String.raw`(?![\w-])`;
+  const tuKhoa = (ds: string) => new RegExp(TRUOC + '(?:' + ds + ')' + SAU, 'i').test(l);
 
   // 1. Dấu hiệu Unix trên chính câu lệnh: luôn LINUX_MAC (P3B-35 & Mục 5, 7 review 11/11)
   const coDauHieuUnix =
@@ -223,9 +229,9 @@ export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDie
       l,
     ) ||
     /\|\s*sudo\b/i.test(l) ||
-    /\b(?:sudo|chmod|systemctl)\b/i.test(l) ||
-    /\b(?:apt|apt-get|brew|yum|dnf|pacman|zypper)\b/i.test(l) ||
-    /\bapk\s+add\b/i.test(l) ||
+    tuKhoa('sudo|chmod|systemctl') ||
+    tuKhoa('apt|apt-get|brew|yum|dnf|pacman|zypper') ||
+    tuKhoa('apk(?=\s+add\b)') ||
     /(?:^|\s)(?:\.\/|(?:ba)?sh\s+|source\s+)\S+\.sh\b/i.test(l) ||
     /\binstall\.sh\b/i.test(l);
 
@@ -235,7 +241,7 @@ export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDie
 
   // 2. Dấu hiệu Windows trên chính câu lệnh (chỉ khi không có dấu hiệu Unix)
   const coDauHieuWindows =
-    /\b(winget|scoop|choco|chocolatey|powershell|pwsh)\b/i.test(l) || /\.(bat|ps1|cmd)\b/i.test(l);
+    tuKhoa('winget|scoop|choco|chocolatey|powershell|pwsh') || /\.(bat|ps1|cmd)\b/i.test(l);
 
   if (coDauHieuWindows) {
     return HeDieuHanhCli.WINDOWS;

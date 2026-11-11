@@ -1108,6 +1108,25 @@ scoop install fastfetch
     }
   });
 
+  it('Mục C review lần 3: bỏ chú thích cuối dòng và dùng ranh giới chữ chặt cho nhãn hệ điều hành', () => {
+    // PerryTS/perry: chú thích "# or: brew install ..." không được kéo nhãn sang LINUX_MAC
+    expect(
+      xacDinhHeDieuHanhLenh(
+        'npm install -g @perryts/perry     # or: brew install perryts/perry/perry',
+      ),
+    ).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    // Tên gói / đường dẫn có gạch ngang không phải lệnh Unix
+    expect(xacDinhHeDieuHanhLenh('pip install sudo-tool')).toBe(HeDieuHanhCli.DUNG_CHUNG);
+    expect(xacDinhHeDieuHanhLenh('docker run sameersbn/apt-cacher-ng')).toBe(
+      HeDieuHanhCli.DUNG_CHUNG,
+    );
+    // Lệnh Unix thật vẫn đúng nhãn, kể cả khi có từ powershell
+    expect(xacDinhHeDieuHanhLenh('brew install --cask powershell')).toBe(HeDieuHanhCli.LINUX_MAC);
+    expect(xacDinhHeDieuHanhLenh('sudo apt install git build-essential')).toBe(
+      HeDieuHanhCli.LINUX_MAC,
+    );
+    expect(xacDinhHeDieuHanhLenh('winget install Foo.Bar')).toBe(HeDieuHanhCli.WINDOWS);
+  });
   it('lệnh dưới tiêu đề Linux / macOS nhận nhãn LINUX_MAC chuẩn xác', () => {
     const md = `
 ## Installation
