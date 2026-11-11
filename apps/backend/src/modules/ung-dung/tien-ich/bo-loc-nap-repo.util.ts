@@ -310,6 +310,44 @@ export function laThuVienLapTrinh(
 }
 
 /**
+ * Luật 4 (Chủ chốt 12/11/2026): gói cài phải là gói CỦA CHÍNH REPO. README hay dạy cài thêm gói phụ
+ * (`pip install pypdf`, `pip install torch`, `npm install react`), nếu lấy đó làm cách cài thì Desktop
+ * theo dõi và cập nhật nhầm gói. Nhận khi có cách cài không phụ thuộc tên gói (winget, scoop, choco, docker,
+ * npx, conda) hoặc có gói pip/npm/cargo/go mà tên khớp tên repo, chủ repo, hoặc chung một từ chính với tên repo.
+ * Lệnh cài từ URL bản phát hành của chính repo (Luật 3) có tên gói dạng `owner/repo` nên cũng khớp.
+ */
+export function cachCaiThuocRepo(
+  fullName: string,
+  cachCai: Array<{ nhom?: string; tenGoi?: string }> | null | undefined,
+): boolean {
+  const ds = cachCai ?? [];
+  if (
+    ds.some((c) => ['WINGET', 'SCOOP', 'CHOCO', 'DOCKER', 'NPX', 'CONDA'].includes(c.nhom ?? ''))
+  ) {
+    return true;
+  }
+  const goi = ds.filter((c) => ['PIP', 'NPM', 'CARGO', 'GO'].includes(c.nhom ?? '') && c.tenGoi);
+  if (goi.length === 0) return true; // không có gói nào để so (ví dụ chỉ có cài từ mã nguồn): không phán ở luật này
+  const [chu = '', ten = ''] = fullName.toLowerCase().split('/');
+  const chuan = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tu = (x: string) =>
+    x
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 4);
+  const tenRepo = chuan(ten);
+  const tenChu = chuan(chu);
+  const tuRepo = tu(ten);
+  return goi.some((c) => {
+    const g = chuan(c.tenGoi as string);
+    if (!g || !tenRepo) return false;
+    if (g.includes(tenRepo) || tenRepo.includes(g) || (tenChu && g.includes(tenChu))) return true;
+    const tuGoi = new Set(tu(c.tenGoi as string));
+    return tuRepo.some((t) => tuGoi.has(t));
+  });
+}
+
+/**
  * Bộ lọc 10 (P3B-06.3 & Luật 2 ngày 11/11/2026): repo không có tệp cài nhưng README có lệnh cài hợp lệ
  * (winget, scoop, npm, pip, docker…) vẫn được nhận, TRỪ KHI là thư viện lập trình thuần (chỉ để import).
  */
@@ -318,6 +356,7 @@ export function coLenhCaiTuReadme(readme: string | null | undefined, fullName: s
   const huongDan = trichXuatHuongDanCliBangQuyTac(readme, `https://github.com/${fullName}#readme`);
   if (!coCachCaiCliHopLe(huongDan)) return false;
   if (laThuVienLapTrinh(readme, fullName, huongDan.cachCai)) return false;
+  if (!cachCaiThuocRepo(fullName, huongDan.cachCai)) return false;
   return true;
 }
 

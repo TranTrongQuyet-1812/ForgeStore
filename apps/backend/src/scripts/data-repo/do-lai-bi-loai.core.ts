@@ -4,6 +4,7 @@ import { coCachCaiCliHopLe, MaTrinhQuanLyGoi, type HuongDanCaiDatDto } from '@fo
 import { trichXuatHuongDanCliBangQuyTac } from '../../modules/ai/tien-ich/cli-guide-extractor.util';
 import {
   danhGiaRelease,
+  cachCaiThuocRepo,
   laThuVienLapTrinh,
   type ReleaseUngVien,
 } from '../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util';
@@ -221,7 +222,11 @@ export function danhGiaRepoDoLai(
       readme,
       `https://github.com/${fullName}#readme`,
     );
-    if (coCachCaiCliHopLe(huongDan) && !laThuVienLapTrinh(readme, fullName, huongDan.cachCai)) {
+    if (
+      coCachCaiCliHopLe(huongDan) &&
+      !laThuVienLapTrinh(readme, fullName, huongDan.cachCai) &&
+      cachCaiThuocRepo(fullName, huongDan.cachCai)
+    ) {
       vot = true;
       nhom.push(...nhanNhomTuHuongDan(huongDan));
     }

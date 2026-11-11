@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   coLenhCaiTuReadme,
+  cachCaiThuocRepo,
   laThuVienLapTrinh,
   danhGiaRelease,
   locCucBo,
@@ -199,5 +200,31 @@ describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
       },
     ];
     expect(laThuVienLapTrinh(readme, 'scikit-learn/scikit-learn', cachCai)).toBe(true);
+  });
+
+  it('Luật 4: gói phụ trong bảng yêu cầu của README (ai-job-search, pip install pypdf) không phải cách cài của repo', () => {
+    const readme = [
+      '| **Python 3.10+** | For the tools in `tools/`. |',
+      '| **[Bun](https://bun.sh)** | Runs the job search CLI tools. |',
+      "| **pypdf** *(optional)* | `pip install pypdf` for `/apply`'s ATS parseability check. |",
+    ].join('\n');
+    expect(coLenhCaiTuReadme(readme, 'MadsLorentzen/ai-job-search')).toBe(false);
+  });
+
+  it('Luật 4: cachCaiThuocRepo nhận gói khớp tên repo, từ chính, chủ repo; loại gói công cụ phụ', () => {
+    const pip = (tenGoi: string) => [{ nhom: 'PIP', tenGoi }];
+    expect(cachCaiThuocRepo('browser-use/browser-use', pip('browser-use'))).toBe(true);
+    expect(cachCaiThuocRepo('Kilo-Org/kilocode', [{ nhom: 'NPM', tenGoi: '@kilocode/cli' }])).toBe(
+      true,
+    );
+    expect(cachCaiThuocRepo('Panniantong/Agent-Reach', pip('Panniantong/Agent-Reach'))).toBe(true);
+    expect(cachCaiThuocRepo('karpathy/nanoGPT', pip('torch'))).toBe(false);
+    expect(cachCaiThuocRepo('babysor/MockingBird', pip('pyqt5'))).toBe(false);
+    expect(cachCaiThuocRepo('excalidraw/excalidraw', [{ nhom: 'NPM', tenGoi: 'react' }])).toBe(
+      false,
+    );
+    expect(
+      cachCaiThuocRepo('foo/bar', [{ nhom: 'PIP', tenGoi: 'torch' }, { nhom: 'DOCKER' }]),
+    ).toBe(true);
   });
 });
