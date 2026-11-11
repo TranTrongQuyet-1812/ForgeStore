@@ -2299,6 +2299,14 @@ async function doLaiBangGithub(thuMucDs: string, ungVien: UngVienDoLai[]): Promi
   const fileRa = path.join(thuMucDs, `do-lai-${ten}.jsonl`);
   const fileDaXet = path.join(thuMucDs, `do-lai-${ten}.da-xet.jsonl`);
   const daXet = new Set(docJsonl<{ repo: string }>(fileDaXet).map((b) => b.repo.toLowerCase()));
+  // --chi-repo <tệp jsonl>: chỉ xét các repo có trong tệp (dùng để kiểm lại danh sách đã vớt sau khi siết luật).
+  const tepChiRepo = layThamSo('chi-repo');
+  const chiRepo = tepChiRepo
+    ? new Set(docJsonl<{ repo: string }>(tepChiRepo).map((b) => b.repo.toLowerCase()))
+    : null;
+  // --luu-nguon <thư mục>: lưu README và Release đã lấy để chỉnh luật rồi chạy lại ngoại tuyến, khỏi gọi GitHub lần nữa.
+  const thuMucNguon = layThamSo('luu-nguon');
+  if (thuMucNguon) fs.mkdirSync(thuMucNguon, { recursive: true });
   const headers = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'ForgeStore-DataRepo',
@@ -2308,10 +2316,17 @@ async function doLaiBangGithub(thuMucDs: string, ungVien: UngVienDoLai[]): Promi
   let soVot = 0;
   for (const uv of ungVien) {
     if (soXet >= toiDa || daXet.has(uv.repo.toLowerCase())) continue;
+    if (chiRepo && !chiRepo.has(uv.repo.toLowerCase())) continue;
     const du = await layDuLieuGithubDoLai(uv.repo, repoCanXemRelease(uv), headers, duTru);
     if (du.dung) {
       console.warn(`Dừng: hạn mức GitHub xuống dưới ${duTru}. Chạy lại đúng lệnh này để tiếp tục.`);
       break;
+    }
+    if (thuMucNguon) {
+      fs.writeFileSync(
+        path.join(thuMucNguon, `${uv.repo.replace('/', '__')}.json`),
+        JSON.stringify({ repo: uv.repo, readme: du.readme, releases: du.releases }),
+      );
     }
     const kq = danhGiaRepoDoLai(uv.repo, du.readme, du.releases);
     noiThemJsonl(fileDaXet, { repo: uv.repo, vot: kq.vot });
