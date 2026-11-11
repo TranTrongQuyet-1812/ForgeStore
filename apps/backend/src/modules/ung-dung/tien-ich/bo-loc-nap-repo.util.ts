@@ -233,6 +233,7 @@ export function laThuVienLapTrinh(
   const codeImportBlockRegex = /```[a-zA-Z0-9_+-]*[ \t]*\r?\n([\s\S]*?)```/gi;
   for (const m of readme.matchAll(codeImportBlockRegex)) {
     const block = m[1];
+    if (!block) continue;
     if (
       /(?:^|\n)\s*(?:from\s+[\w.]+\s+import\s+|import\s+[\w.]+(?:\s+as\s+\w+)?)/.test(block) ||
       /(?:^|\n)\s*(?:import\s+(?:\{[^}]*\}|[\w*\s,]+)\s+from\s+['"][^'"]+['"]|const\s+.*?=\s*require\(['"][^'"]+['"]\))/.test(
