@@ -97,7 +97,8 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     mauLenhCapNhat: 'pip install --upgrade {tenGoi}',
     mauLenhGo: 'pip uninstall -y {tenGoi}',
     // Tên gói Python theo chuẩn PEP 508 hoặc slug owner/repo từ release URL của GitHub (D-38 & Luật 3)
-    regexTenGoi: '^(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?|[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+)$',
+    regexTenGoi:
+      '^(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?|[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+)$',
     regexPhienBan: '^[0-9]+(?:\\.[0-9a-zA-Z._-]+)*$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
   },
@@ -241,11 +242,7 @@ export function kiemTraTenGoiHopLe(trinhQuanLy: MaTrinhQuanLyGoi, tenGoi: string
     if (trimmed.includes('/') && !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmed)) {
       return false;
     }
-    if (
-      trimmed === '.' ||
-      trimmed.startsWith('./') ||
-      trimmed.includes('\\')
-    ) {
+    if (trimmed === '.' || trimmed.startsWith('./') || trimmed.includes('\\')) {
       return false;
     }
   }
@@ -349,7 +346,9 @@ export function ghepLenhCliAnToan(
   // Gói PIP cài từ URL GitHub release/git (Luật 3, 11/11/2026): không có tên gói PyPI, không sinh lệnh cập nhật hay gỡ giả (làm giống npx)
   const laPipUrlRelease = trinhQuanLy === MaTrinhQuanLyGoi.PIP && cleanTenGoi.includes('/');
   const duocCucBo = cucBo && trinhQuanLy === MaTrinhQuanLyGoi.NPM;
-  const lenhCapNhat = (laPipUrlRelease ? '' : duocCucBo ? 'npm update {tenGoi}' : manifest.mauLenhCapNhat)
+  const lenhCapNhat = (
+    laPipUrlRelease ? '' : duocCucBo ? 'npm update {tenGoi}' : manifest.mauLenhCapNhat
+  )
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');

@@ -201,8 +201,7 @@ describe('danhGiaRepoDoLai (bộ lọc đã sửa trên dữ liệu giả, khôn
       '# scikit-learn\n```bash\npip install scikit-learn\n```\n```python\nfrom sklearn import datasets\n```';
     expect(danhGiaRepoDoLai('scikit-learn/scikit-learn', scikitLearn, null).vot).toBe(false);
 
-    const scrapy =
-      '# Scrapy\n```bash\npip install scrapy\n```\n```python\nimport scrapy\n```';
+    const scrapy = '# Scrapy\n```bash\npip install scrapy\n```\n```python\nimport scrapy\n```';
     expect(danhGiaRepoDoLai('scrapy/scrapy', scrapy, null).vot).toBe(false);
 
     const langchain =

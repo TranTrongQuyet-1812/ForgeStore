@@ -279,12 +279,14 @@ export function laThuVienLapTrinh(
   // Dò lệnh CLI bằng regex dòng lệnh
   for (const t of danhSachTen) {
     if (!t || t.length < 2) continue;
-    const re = new RegExp(`(?:^|\\n)\\s*(?:[$#>]\s*)?${thoatKyTuRegex(t)}(?:\\.exe)?\\s+`, 'm');
+    const re = new RegExp(`(?:^|\\n)\\s*(?:[$#>]\\s*)?${thoatKyTuRegex(t)}(?:\\.exe)?\\s+`, 'm');
     const match = readme.match(re);
     if (match) {
       const idx = match.index ?? 0;
       const dong = readme.substring(idx, readme.indexOf('\n', idx + 1) || undefined).trim();
-      if (!/^(?:pip|pip3|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i.test(dong.replace(/^[$#>]\s*/, ''))) {
+      if (
+        !/^(?:pip|pip3|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i.test(dong.replace(/^[$#>]\s*/, ''))
+      ) {
         coLenhChayChuongTrinh = true;
         break;
       }
@@ -293,9 +295,7 @@ export function laThuVienLapTrinh(
 
   // 7. Kiểm tra các lệnh chạy server / runner độc lập
   if (
-    /\b(?:streamlit\s+run|gradio|python\d*\s+-m\s+[\w.]+|pipx\s+run|uvx\s+|npx\s+)\b/i.test(
-      readme,
-    )
+    /\b(?:streamlit\s+run|gradio|python\d*\s+-m\s+[\w.]+|pipx\s+run|uvx\s+|npx\s+)\b/i.test(readme)
   ) {
     coLenhChayChuongTrinh = true;
   }

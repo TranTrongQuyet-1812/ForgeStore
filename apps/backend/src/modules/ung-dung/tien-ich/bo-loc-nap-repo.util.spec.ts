@@ -140,6 +140,7 @@ describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
   it('Luật 2: loại thư viện lập trình thuần (transformers, fastapi, scikit-learn, scrapy, langchain, autogen)', () => {
     const transformers =
       '# Transformers\n```bash\npip install transformers\n```\n```python\nfrom transformers import pipeline\nclassifier = pipeline("sentiment-analysis")\n```';
+    expect(laThuVienLapTrinh(transformers, 'huggingface/transformers')).toBe(true);
     expect(coLenhCaiTuReadme(transformers, 'huggingface/transformers')).toBe(false);
 
     const fastapi =
