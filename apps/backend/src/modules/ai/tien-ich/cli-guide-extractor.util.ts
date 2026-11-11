@@ -231,7 +231,7 @@ export function xacDinhHeDieuHanhLenh(lenh: string, contextText?: string): HeDie
     /\|\s*sudo\b/i.test(l) ||
     tuKhoa('sudo|chmod|systemctl') ||
     tuKhoa('apt|apt-get|brew|yum|dnf|pacman|zypper') ||
-    tuKhoa('apk(?=\s+add\b)') ||
+    tuKhoa('apk(?=\\s+add\\b)') ||
     /(?:^|\s)(?:\.\/|(?:ba)?sh\s+|source\s+)\S+\.sh\b/i.test(l) ||
     /\binstall\.sh\b/i.test(l);
 
@@ -1009,10 +1009,9 @@ function layChuRepoTuDuongDan(duongDan?: string): string | null {
 }
 
 /**
- * Chốt chặn D-38 cho đích dạng owner/name của 
-px skills add owner/name: bắt buộc owner trùng chủ repo
+ * Chốt chặn D-38 cho đích dạng owner/name của lệnh npx skills add owner/name: bắt buộc owner trùng chủ repo
  * (không phân biệt hoa thường) và name bằng tên repo hoặc bắt đầu bằng <tên-repo>- (rendercv/rendercv-skill).
- * So khớp kiểu "chứa" từng nhận nhầm ttacker/bar cho repo oo/bar và PicGo/skills cho Molunerfinn/PicGo.
+ * So khớp kiểu chứa từng nhận nhầm attacker/bar cho repo foo/bar và PicGo/skills cho Molunerfinn/PicGo.
  */
 export function dichNpxKhopRepo(tenGoi: string, tenRepo: string, chuRepo?: string | null): boolean {
   const phan = tenGoi.trim().split('/');
