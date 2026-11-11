@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   coLenhCaiTuReadme,
+  laThuVienLapTrinh,
   danhGiaRelease,
   locCucBo,
   trongDanhSachChan,
@@ -184,5 +185,19 @@ describe('coLenhCaiTuReadme (bộ lọc 10)', () => {
     const browserUse =
       '<!-- mcp-name: com.browser-use/browser-use -->\n# Browser Use\n```bash\npip install browser-use\n```\n```python\nfrom browser_use import Agent\n```';
     expect(coLenhCaiTuReadme(browserUse, 'browser-use/browser-use')).toBe(true);
+  });
+
+  it('Luật 2: README viết bằng RST (không có khối ```) của framework nổi tiếng vẫn bị coi là thư viện', () => {
+    const readme =
+      'scikit-learn\n============\n\nInstall\n-------\n\n    pip install -U scikit-learn\n\n.. code:: python\n\n    from sklearn import svm\n';
+    const cachCai = [
+      {
+        nhom: 'PIP',
+        trinhQuanLy: 'pip',
+        tenGoi: 'scikit-learn',
+        buoc: [{ lenh: 'pip install -U scikit-learn' }],
+      },
+    ];
+    expect(laThuVienLapTrinh(readme, 'scikit-learn/scikit-learn', cachCai)).toBe(true);
   });
 });

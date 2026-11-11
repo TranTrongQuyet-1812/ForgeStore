@@ -228,7 +228,30 @@ export function laThuVienLapTrinh(
     return false;
   }
 
-  // 5. Kiểm tra dấu hiệu import code thật trong các khối code
+  // 5. Framework/thư viện phát triển nổi tiếng luôn bị loại dù có CLI dev. Kiểm TRƯỚC khối code import vì README
+  // viết bằng RST (scikit-learn, scrapy) không có khối ``` nên sẽ lọt nếu chỉ dựa vào dấu hiệu import.
+  const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
+  const cacGoi = cachCai
+    .map((c) => c.tenGoi)
+    .filter(Boolean)
+    .map((g) => (g as string).toLowerCase());
+  const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
+
+  const FRAMEWORK_DEV_LOAI = new Set([
+    'fastapi',
+    'scrapy',
+    'transformers',
+    'langchain',
+    'autogen',
+    'scikit-learn',
+    'torch',
+    'tensorflow',
+  ]);
+  if (danhSachTen.some((t) => FRAMEWORK_DEV_LOAI.has(t))) {
+    return true;
+  }
+
+  // 6. Kiểm tra dấu hiệu import code thật trong các khối code
   let coCodeImport = false;
   const codeImportBlockRegex = /```[a-zA-Z0-9_+-]*[ \t]*\r?\n([\s\S]*?)```/gi;
   for (const m of readme.matchAll(codeImportBlockRegex)) {
@@ -251,28 +274,6 @@ export function laThuVienLapTrinh(
   // Nếu không có bất kỳ khối code import nào, thì không phải là thư viện thuần
   if (!coCodeImport) {
     return false;
-  }
-
-  // 6. Kiểm tra các framework/thư viện phát triển nổi tiếng luôn bị loại dù có CLI dev
-  const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
-  const cacGoi = cachCai
-    .map((c) => c.tenGoi)
-    .filter(Boolean)
-    .map((g) => (g as string).toLowerCase());
-  const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
-
-  const FRAMEWORK_DEV_LOAI = new Set([
-    'fastapi',
-    'scrapy',
-    'transformers',
-    'langchain',
-    'autogen',
-    'scikit-learn',
-    'torch',
-    'tensorflow',
-  ]);
-  if (danhSachTen.some((t) => FRAMEWORK_DEV_LOAI.has(t))) {
-    return true;
   }
 
   let coLenhChayChuongTrinh = false;
