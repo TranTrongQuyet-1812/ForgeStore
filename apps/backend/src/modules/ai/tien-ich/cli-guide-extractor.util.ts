@@ -407,8 +407,12 @@ function chuanHoaLenhDeBocGoi(lenh: string): string {
 
   const nhanDien = nhanDienNhomLenh(sach);
   // Docker: trả về chuỗi phẳng sạch sẽ không còn ký tự nối dòng \ để trichTenGoiTuLenhTho bóc image (P3B-34)
+  // Đồng thời chuẩn hóa tham số mount thư mục hiện tại (-v "$PWD":...) để không bị từ chối nhầm ở dòng đầu (vlang/v)
   if (nhanDien === NhomCachCai.DOCKER) {
-    return uvAdd;
+    return uvAdd.replace(
+      /(-v|--volume)\s+(?:"\$PWD"|'\$PWD'|\$PWD|"\$\{PWD\}"|\$\{PWD\}|"\$\(pwd\)"|\$\(pwd\))(?=[:/])/gi,
+      '$1 .',
+    );
   }
 
   if (!nhanDien || (!/^(?:npm|pnpm|yarn|bun)\b/i.test(sach) && nhanDien !== NhomCachCai.PIP)) {
@@ -741,9 +745,10 @@ function laBuocChuanBiMoiTruong(lenh: string, tenRepo?: string): boolean {
 /**
  * Tìm thông tin gói tối ưu nhất và lệnh đại diện từ danh sách các câu lệnh trong nhóm (P3B-35).
  * Ưu tiên:
- * 1. Gói có tên khớp với tên repo (ví dụ: pip install omnivoice khớp omnivoice).
- * 2. Gói không phải là bước chuẩn bị môi trường (torch, cuda...) và không phải lệnh cài công cụ (pip, setuptools...).
- * 3. Fallback lấy lệnh đầu tiên bóc được gói hợp lệ.
+ * 1. Khi có gói khớp tên repo (ví dụ: pip install omnivoice, f5-tts, funasr): chọn gói khớp tên repo
+ *    (trừ điểm bước chuẩn bị môi trường như torch, cuda... và lệnh cài công cụ pip, setuptools...).
+ * 2. Khi không có gói nào khớp tên repo: chỉ chấp nhận gói của dòng đầu tiên trong nhóm (như bản gốc).
+ *    Nếu dòng đầu không bóc được gói thì nhóm không có tenGoi để đường tìm theo tên repo trong toàn README chạy.
  */
 function timThongTinGoiToiUu(
   danhSachLenh: string[],
@@ -753,61 +758,53 @@ function timThongTinGoiToiUu(
     return { pkgInfo: null, lenhChinh: '' };
   }
 
-  let ungVienTotNhat: {
-    pkgInfo: { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string };
-    lenh: string;
-    diem: number;
-  } | null = null;
+  // 1. Khi có gói khớp tên repo trong nhóm: giữ cách chọn tối ưu theo điểm
+  if (tenRepo) {
+    let ungVienKhopRepo: {
+      pkgInfo: { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string };
+      lenh: string;
+      diem: number;
+    } | null = null;
 
-  for (const lenh of danhSachLenh) {
-    const pkg = trichTenGoiDaChuanHoa(lenh);
-    if (!pkg) continue;
+    for (const lenh of danhSachLenh) {
+      const pkg = trichTenGoiDaChuanHoa(lenh);
+      if (!pkg) continue;
+      if (!tenGoiKhopTenRepo(pkg.tenGoi, tenRepo)) continue;
 
-    // Kiểm tra NPX: chỉ nhận khi khớp tên repo
-    if (pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
-      const khop = tenRepo && pkg.tenGoi ? tenGoiKhopTenRepo(pkg.tenGoi, tenRepo) : false;
-      if (!khop) continue;
-    }
+      let diem = 110;
 
-    let diem = 10; // Điểm cơ sở khi bóc được gói hợp lệ
-
-    // Ưu tiên 1: Tên gói khớp trực tiếp tên repo (P3B-35)
-    if (tenRepo && tenGoiKhopTenRepo(pkg.tenGoi, tenRepo)) {
-      diem += 100;
-    }
-
-    // Trừ điểm mạnh nếu là bước chuẩn bị môi trường (torch, cuda...)
-    if (laBuocChuanBiMoiTruong(lenh, tenRepo || undefined)) {
-      diem -= 50;
-    }
-
-    // Trừ điểm nếu là lệnh cài công cụ (pip, setuptools, pnpm...)
-    if (laLenhCaiCongCu(lenh)) {
-      diem -= 40;
-    }
-
-    if (!ungVienTotNhat || diem > ungVienTotNhat.diem) {
-      ungVienTotNhat = { pkgInfo: pkg, lenh, diem };
-    }
-  }
-
-  if (ungVienTotNhat && ungVienTotNhat.diem > 0) {
-    return { pkgInfo: ungVienTotNhat.pkgInfo, lenhChinh: ungVienTotNhat.lenh };
-  }
-
-  // Fallback: Lấy lệnh đầu tiên có thể bóc được gói
-  for (const lenh of danhSachLenh) {
-    const pkg = trichTenGoiDaChuanHoa(lenh);
-    if (pkg) {
-      if (pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
-        const khop = tenRepo && pkg.tenGoi ? tenGoiKhopTenRepo(pkg.tenGoi, tenRepo) : false;
-        if (!khop) continue;
+      // Trừ điểm mạnh nếu là bước chuẩn bị môi trường (torch, cuda...)
+      if (laBuocChuanBiMoiTruong(lenh, tenRepo || undefined)) {
+        diem -= 50;
       }
-      return { pkgInfo: pkg, lenhChinh: lenh };
+
+      // Trừ điểm nếu là lệnh cài công cụ (pip, setuptools, pnpm...)
+      if (laLenhCaiCongCu(lenh)) {
+        diem -= 40;
+      }
+
+      if (!ungVienKhopRepo || diem > ungVienKhopRepo.diem) {
+        ungVienKhopRepo = { pkgInfo: pkg, lenh, diem };
+      }
+    }
+
+    if (ungVienKhopRepo) {
+      return { pkgInfo: ungVienKhopRepo.pkgInfo, lenhChinh: ungVienKhopRepo.lenh };
     }
   }
 
-  return { pkgInfo: null, lenhChinh: danhSachLenh[0] || '' };
+  // 2. Khi không có gói nào khớp tên repo: chỉ chấp nhận gói của dòng đầu tiên trong nhóm (như bản gốc).
+  const lenhDau = danhSachLenh[0] || '';
+  const pkgDau = trichTenGoiDaChuanHoa(lenhDau);
+  if (pkgDau) {
+    // Kiểm tra NPX: chỉ nhận khi khớp tên repo (D-38)
+    if (pkgDau.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+      return { pkgInfo: null, lenhChinh: lenhDau };
+    }
+    return { pkgInfo: pkgDau, lenhChinh: lenhDau };
+  }
+
+  return { pkgInfo: null, lenhChinh: lenhDau };
 }
 
 /**

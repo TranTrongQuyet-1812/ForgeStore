@@ -877,6 +877,84 @@ pip install f5-tts
     expect(pipF5?.tenGoi).toBe('f5-tts');
   });
 
+  it('P3B-35 (Mục A review lần 3): khi không có gói khớp tên repo, chỉ nhận gói ở dòng đầu (ChatTTS, vlang/v, Mouser)', () => {
+    // 1. 2noise/ChatTTS: mục Install requirements có dòng đầu pip install --upgrade -r requirements.txt
+    // và dòng sau pip install safetensors vllm==0.2.7 torchaudio -> không nhận safetensors, để quét toàn README lấy ChatTTS
+    const mdChatTTS = `
+### Install requirements
+#### 1. Install Directly
+\`\`\`bash
+pip install --upgrade -r requirements.txt
+\`\`\`
+
+#### 2. Install from conda
+\`\`\`bash
+conda create -n chattts python=3.11
+conda activate chattts
+pip install -r requirements.txt
+\`\`\`
+
+#### Optional: Install vLLM (Linux only)
+\`\`\`bash
+pip install safetensors vllm==0.2.7 torchaudio
+\`\`\`
+
+## Usage
+\`\`\`bash
+pip install ChatTTS
+\`\`\`
+`;
+    const resChatTTS = trichXuatHuongDanCliBangQuyTac(
+      mdChatTTS,
+      'https://github.com/2noise/ChatTTS#readme',
+    );
+    expect(coCachCaiCliHopLe(resChatTTS)).toBe(true);
+    const pipChatTTS = resChatTTS?.cachCai.find((c) => c.nhom === NhomCachCai.PIP);
+    expect(pipChatTTS?.tenGoi).toBe('ChatTTS');
+
+    // 2. vlang/v: nhóm Docker có dòng đầu thevlang/vlang:latest kèm -v "$PWD":/src và dòng thứ hai vlang:latest
+    const mdVlang = `
+## Installing V from source
+
+### Docker
+
+Official images for V are published as [\`thevlang/vlang\`](https://hub.docker.com/r/thevlang/vlang),
+built from [\`vlang/docker\`](https://github.com/vlang/docker):
+
+\`\`\`bash
+docker run --rm -it -v "$PWD":/src -w /src thevlang/vlang:latest
+\`\`\`
+
+To build one locally instead:
+
+\`\`\`bash
+git clone --depth=1 https://github.com/vlang/v
+cd v
+docker build -t vlang .
+docker run --rm -it vlang:latest
+\`\`\`
+`;
+    const resVlang = trichXuatHuongDanCliBangQuyTac(mdVlang, 'https://github.com/vlang/v#readme');
+    expect(coCachCaiCliHopLe(resVlang)).toBe(true);
+    const dockerVlang = resVlang?.cachCai.find((c) => c.nhom === NhomCachCai.DOCKER);
+    expect(dockerVlang?.tenGoi).toBe('thevlang/vlang:latest');
+
+    // 3. TomBadash/Mouser: dòng đầu pip install -r requirements.txt, dòng sau pip install pyinstaller -> không nhận pyinstaller
+    const mdMouser = `
+## Getting Started
+
+\`\`\`bash
+pip install -r requirements.txt
+pip install pyinstaller
+\`\`\`
+`;
+    const resMouser = trichXuatHuongDanCliBangQuyTac(
+      mdMouser,
+      'https://github.com/TomBadash/Mouser#readme',
+    );
+    expect(coCachCaiCliHopLe(resMouser)).toBe(false);
+  });
+
   it('nhận docker run nhiều dòng bản dài có --name, -v, -p', () => {
     const md = `
 ## Setup
