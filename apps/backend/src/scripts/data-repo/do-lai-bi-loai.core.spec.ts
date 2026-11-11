@@ -230,4 +230,16 @@ describe('danhGiaRepoDoLai (bộ lọc đã sửa trên dữ liệu giả, khôn
       '# LiteLLM\n```bash\npip install litellm\n```\n```bash\nlitellm --model gpt-4\n```';
     expect(danhGiaRepoDoLai('BerriAI/litellm', litellm, null).vot).toBe(true);
   });
+
+  it('Luật 3: Panniantong/Agent-Reach được vớt từ URL bản phát hành release asset', () => {
+    const md = `
+# Agent-Reach
+## Installation
+\`\`\`bash
+uv tool install https://github.com/Panniantong/Agent-Reach/releases/latest/download/agent-reach.zip
+\`\`\`
+`;
+    const kq = danhGiaRepoDoLai('Panniantong/Agent-Reach', md, null);
+    expect(kq.vot).toBe(true);
+  });
 });

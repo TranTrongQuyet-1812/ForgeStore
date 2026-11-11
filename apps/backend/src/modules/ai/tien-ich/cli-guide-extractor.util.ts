@@ -805,8 +805,11 @@ function timThongTinGoiToiUu(
   const lenhDau = danhSachLenh[0] || '';
   const pkgDau = trichTenGoiDaChuanHoa(lenhDau);
   if (pkgDau) {
-    // Kiểm tra NPX: chỉ nhận khi khớp tên repo (D-38)
-    if (pkgDau.trinhQuanLy === MaTrinhQuanLyGoi.NPX) {
+    // Kiểm tra NPX hoặc gói PIP từ URL release/git (có chứa /): chỉ nhận khi khớp tên repo (D-38 & Luật 3)
+    if (
+      pkgDau.trinhQuanLy === MaTrinhQuanLyGoi.NPX ||
+      (pkgDau.trinhQuanLy === MaTrinhQuanLyGoi.PIP && pkgDau.tenGoi.includes('/'))
+    ) {
       return { pkgInfo: null, lenhChinh: lenhDau };
     }
     return { pkgInfo: pkgDau, lenhChinh: lenhDau };
@@ -1030,13 +1033,14 @@ export function dichNpxKhopRepo(tenGoi: string, tenRepo: string, chuRepo?: strin
   return name === repo || name.startsWith(repo + '-');
 }
 
-/** Gói khớp repo: riêng nhóm npx (đích owner/name) phải qua chốt chặn chủ sở hữu, các nhóm khác so theo tên. */
+/** Gói khớp repo: nhóm npx hoặc gói PIP từ URL git/release (có chứa /) phải qua chốt chặn chủ sở hữu, các nhóm khác so theo tên. */
 function goiKhopRepo(
   pkg: { trinhQuanLy: string; tenGoi: string },
   tenRepo: string,
   chuRepo?: string | null,
 ): boolean {
-  return pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX
+  return pkg.trinhQuanLy === MaTrinhQuanLyGoi.NPX ||
+    (pkg.trinhQuanLy === MaTrinhQuanLyGoi.PIP && pkg.tenGoi.includes('/'))
     ? dichNpxKhopRepo(pkg.tenGoi, tenRepo, chuRepo)
     : tenGoiKhopTenRepo(pkg.tenGoi, tenRepo);
 }

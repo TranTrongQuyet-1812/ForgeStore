@@ -96,8 +96,8 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     mauLenhCai: 'pip install {tenGoi}',
     mauLenhCapNhat: 'pip install --upgrade {tenGoi}',
     mauLenhGo: 'pip uninstall -y {tenGoi}',
-    // Tên gói Python theo chuẩn PEP 508 (VD: open-webui, yt-dlp, black, torch)
-    regexTenGoi: '^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$',
+    // Tên gói Python theo chuẩn PEP 508 hoặc slug owner/repo từ release URL của GitHub (D-38 & Luật 3)
+    regexTenGoi: '^(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?|[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+)$',
     regexPhienBan: '^[0-9]+(?:\\.[0-9a-zA-Z._-]+)*$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
   },
@@ -168,6 +168,60 @@ export function laKyTuDocHai(val: string): boolean {
   return false;
 }
 
+export interface ThongTinUrlReleasePip {
+  owner: string;
+  repo: string;
+  tep?: string;
+  tag?: string;
+}
+
+/**
+ * Kiểm tra URL bản phát hành hoặc git URL của repo cho lệnh cài PIP/UV (Luật 3, 11/11/2026).
+ * Tiêu chí hợp lệ:
+ * - https://github.com/<owner>/<repo>/releases/(latest/)download/<tệp> (.zip, .whl, .tar.gz)
+ * - git+https://github.com/<owner>/<repo>(.git)?(@<tag>)?
+ * Không nhận http://, host khác, user:pass@, query parameter / token.
+ */
+export function kiemTraUrlReleasePipHopLe(url: string): ThongTinUrlReleasePip | null {
+  if (!url || typeof url !== 'string') return null;
+
+  const trimmed = url.trim().replace(/^['"]|['"]$/g, '');
+
+  // Cấm http://
+  if (/^http:\/\//i.test(trimmed)) return null;
+
+  // Cấm user:pass@ hoặc query token
+  const truocHost = trimmed.match(/https?:\/\/([^/]+)/i);
+  if (truocHost?.[1]?.includes('@')) return null;
+  if (/\?[^\s]*token=/i.test(trimmed)) return null;
+
+  // Dạng 1: https://github.com/<owner>/<repo>/releases/(latest/)download/(<tag>/)?<tệp> (.zip, .whl, .tar.gz)
+  const matchRelease = trimmed.match(
+    /^https:\/\/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/releases\/(?:latest\/)?download\/(?:[a-zA-Z0-9_.-]+\/)?([a-zA-Z0-9_.-]+\.(?:zip|whl|tar\.gz))$/i,
+  );
+  if (matchRelease && matchRelease[1] && matchRelease[2]) {
+    return {
+      owner: matchRelease[1],
+      repo: matchRelease[2],
+      tep: matchRelease[3],
+    };
+  }
+
+  // Dạng 2: git+https://github.com/<owner>/<repo>(.git)?(@<tag>)?
+  const matchGit = trimmed.match(
+    /^git\+https:\/\/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:@([a-zA-Z0-9_.-]+))?$/i,
+  );
+  if (matchGit && matchGit[1] && matchGit[2]) {
+    return {
+      owner: matchGit[1],
+      repo: matchGit[2],
+      tag: matchGit[3],
+    };
+  }
+
+  return null;
+}
+
 /**
  * Kiểm tra tính hợp lệ của tên gói theo manifest tương ứng.
  */
@@ -183,11 +237,13 @@ export function kiemTraTenGoiHopLe(trinhQuanLy: MaTrinhQuanLyGoi, tenGoi: string
   if (trinhQuanLy === MaTrinhQuanLyGoi.PIP) {
     // Tên gói Python trên PyPI không bao giờ là tệp mở rộng (.txt, .py, .whl, .tar.gz, etc.)
     if (/\.(?:txt|py|whl|tar\.gz|zip|toml|cfg|md|json)$/i.test(trimmed)) return false;
-    // Không phải đường dẫn tương đối/tuyệt đối
+    // Không phải đường dẫn tương đối/tuyệt đối, chỉ cho phép slug owner/repo hợp lệ (Luật 3)
+    if (trimmed.includes('/') && !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+      return false;
+    }
     if (
       trimmed === '.' ||
       trimmed.startsWith('./') ||
-      trimmed.includes('/') ||
       trimmed.includes('\\')
     ) {
       return false;
@@ -290,12 +346,14 @@ export function ghepLenhCliAnToan(
     .replaceAll('{phienBan}', cleanPhienBan || '');
   // Thư viện npm cài vào dự án (`npm install x`, không -g): lệnh cập nhật và gỡ phải cùng phạm vi cục bộ, nếu không
   // sẽ gỡ nhầm bản toàn máy (D-36 vẫn nhận các thư viện này vào kho)
+  // Gói PIP cài từ URL GitHub release/git (Luật 3, 11/11/2026): không có tên gói PyPI, không sinh lệnh cập nhật hay gỡ giả (làm giống npx)
+  const laPipUrlRelease = trinhQuanLy === MaTrinhQuanLyGoi.PIP && cleanTenGoi.includes('/');
   const duocCucBo = cucBo && trinhQuanLy === MaTrinhQuanLyGoi.NPM;
-  const lenhCapNhat = (duocCucBo ? 'npm update {tenGoi}' : manifest.mauLenhCapNhat)
+  const lenhCapNhat = (laPipUrlRelease ? '' : duocCucBo ? 'npm update {tenGoi}' : manifest.mauLenhCapNhat)
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
-  const lenhGo = (duocCucBo ? 'npm uninstall {tenGoi}' : manifest.mauLenhGo)
+  const lenhGo = (laPipUrlRelease ? '' : duocCucBo ? 'npm uninstall {tenGoi}' : manifest.mauLenhGo)
     .replaceAll('{tenGoi}', cleanTenGoi)
     .replaceAll('{tenContainer}', cleanTenContainer)
     .replaceAll('{phienBan}', cleanPhienBan || '');
@@ -475,8 +533,21 @@ export function trichTenGoiTuLenhTho(
         break;
       }
 
-      if (pkgToken && kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, pkgToken)) {
-        return { trinhQuanLy: MaTrinhQuanLyGoi.PIP, tenGoi: pkgToken };
+      if (pkgToken) {
+        // Luật 3: Kiểm tra nếu là URL release asset / git URL của GitHub
+        const urlInfo = kiemTraUrlReleasePipHopLe(pkgToken);
+        if (urlInfo) {
+          // Kiểm tra không có cờ cấm: --index-url, --extra-index-url
+          const coCoCam = sauInstall.some((t) => /^--(?:extra-)?index-url\b/i.test(t));
+          if (!coCoCam) {
+            return {
+              trinhQuanLy: MaTrinhQuanLyGoi.PIP,
+              tenGoi: `${urlInfo.owner}/${urlInfo.repo}`,
+            };
+          }
+        } else if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.PIP, pkgToken)) {
+          return { trinhQuanLy: MaTrinhQuanLyGoi.PIP, tenGoi: pkgToken };
+        }
       }
     }
   }

