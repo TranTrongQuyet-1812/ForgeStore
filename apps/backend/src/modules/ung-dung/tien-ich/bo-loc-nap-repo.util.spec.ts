@@ -308,3 +308,98 @@ describe('zipLaUngDungDesktop (Luật 1 bổ sung, 12/11/2026)', () => {
     expect(zipLaUngDungDesktop('Install from the Chrome Web Store.', ['build.zip'])).toBe(false);
   });
 });
+
+describe('Luật ZIP lẻ và thư viện sau kiểm tay 339 repo (12/11/2026)', () => {
+  // Các đoạn dưới đây là phần mở đầu README thật của từng repo.
+  const readmeFModel =
+    "FModel is an archive explorer for Unreal Engine games. It opens UE4 and UE5 game archives so you can browse their packages. It's built on two projects: [CUE4Parse](https://github.com/FabianFG/CUE4Parse), the library that parses UE archives.";
+  const readmeEpubcheck =
+    'EPUBCheck is the official conformance checker for EPUB publications. EPUBCheck can be run as a standalone command line tool or used as a Java library.';
+  const readmeFmt =
+    '{fmt} is an open source formatting library providing a fast and safe alternative to C stdio.';
+  const readmeTypecho =
+    'Typecho is a PHP based blog software and is designed to be the most powerful blog engine in the world.';
+  const readmeLoop =
+    'Loop is a macOS app that simplifies window management. Compatible with macOS 13 and later. Download for macOS.';
+
+  it('nhận app có nhắc thư viện mà nó DÙNG (FModel) và công cụ độc lập có thể dùng như thư viện (epubcheck)', () => {
+    expect(zipLaUngDungDesktop(readmeFModel, ['FModel.zip'])).toBe(true);
+    expect(zipLaUngDungDesktop(readmeEpubcheck, ['epubcheck-5.4.0.zip'])).toBe(true);
+  });
+
+  it('loại ZIP của thư viện tự nhận, web PHP tự host và app Mac nói về cửa sổ (Loop)', () => {
+    expect(zipLaUngDungDesktop(readmeFmt, ['fmt-12.2.1.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop(readmeTypecho, ['typecho.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop(readmeLoop, ['Loop.zip'])).toBe(false);
+  });
+
+  it('loại ZIP theo tên gói phụ, bản -src đi kèm, tệp sách/ảnh đĩa/firmware và bộ dữ liệu', () => {
+    expect(zipLaUngDungDesktop('', ['specs.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop('', ['moonfire-nvr-ui-v0.7.33.zip'])).toBe(false);
+    expect(zipLaUngDungDesktop('', ['WinSparkle-0.9.4-src.zip', 'WinSparkle-0.9.4.zip'])).toBe(
+      false,
+    );
+    expect(zipLaUngDungDesktop('', ['Happy-LLM.pdf', 'happy-llm-ppt.zip'])).toBe(false);
+    expect(
+      zipLaUngDungDesktop('', ['hedgehog-26.10.0.iso.01', 'hedgehog-26.10.0.iso.02', 'x.zip']),
+    ).toBe(false);
+    expect(zipLaUngDungDesktop('', ['a.bin', 'b.bin', 'c.bin', 'fw.zip'])).toBe(false);
+    expect(
+      zipLaUngDungDesktop('', ['apple-cn.txt', 'china-list.txt', 'direct-list.txt', 'rules.zip']),
+    ).toBe(false);
+  });
+
+  it('nhận công cụ độc lập gắn vào game (UEVR) nhưng loại plugin của app khác (FlowGraph)', () => {
+    expect(
+      zipLaUngDungDesktop(
+        'UEVR\n\nUniversal Unreal Engine VR Mod (4/5)\n\nDownload for Windows x64.',
+        ['UEVR.zip'],
+      ),
+    ).toBe(true);
+    expect(
+      zipLaUngDungDesktop(
+        'Flow plug-in for Unreal Engine is a design agnostic event node editor.',
+        ['Flow_v2.3_5.8.zip'],
+      ),
+    ).toBe(false);
+  });
+
+  it('README tự mô tả là gói Python thì là thư viện, kể cả khi có vài lệnh CLI phụ (faker)', () => {
+    const readme = [
+      'Faker is a Python package that generates fake data for you. Whether you need to bootstrap your database.',
+      '$ pip install Faker',
+      'faker address',
+    ].join('\n');
+    const cach = [
+      { nhom: 'PIP', trinhQuanLy: 'PIP', tenGoi: 'Faker', buoc: [{ lenh: 'pip install Faker' }] },
+    ];
+    expect(laThuVienLapTrinh(readme, 'joke2k/faker', cach)).toBe(true);
+  });
+
+  it('vừa là thư viện vừa là công cụ dòng lệnh thì vẫn nhận (gTTS), thư viện để xây CLI thì loại (typer)', () => {
+    const cach = [{ nhom: 'PIP', tenGoi: 'gTTS', buoc: [{ lenh: 'pip install gTTS' }] }];
+    expect(
+      laThuVienLapTrinh(
+        'gTTS is a Python library and CLI tool to interface with Google Translate text-to-speech API.',
+        'pndurette/gTTS',
+        cach,
+      ),
+    ).toBe(false);
+    expect(
+      laThuVienLapTrinh(
+        'Typer is a library for building CLI applications that users will love using.',
+        'fastapi/typer',
+        [{ nhom: 'PIP', tenGoi: 'typer', buoc: [{ lenh: 'pip install typer' }] }],
+      ),
+    ).toBe(true);
+  });
+
+  it('gói trùng chữ với tên chủ repo nhưng là gói khác thì không nhận (twilio-cli)', () => {
+    expect(
+      cachCaiThuocRepo('twilio/twilio-video-app-react', [{ nhom: 'NPM', tenGoi: 'twilio-cli' }]),
+    ).toBe(false);
+    expect(
+      cachCaiThuocRepo('browser-use/browser-harness', [{ nhom: 'PIP', tenGoi: 'browser-use' }]),
+    ).toBe(true);
+  });
+});

@@ -228,6 +228,19 @@ export function laThuVienLapTrinh(
     return false;
   }
 
+  // 4b. README tự mô tả "X is a Python package/library/module/ORM/adapter" ở phần mở đầu thì là thư viện, kể cả khi không
+  // có khối import và có vài lệnh CLI phụ (faker, typer, sympy, psycopg2). Đo trên kiểm tay 339 repo vớt 12/11/2026.
+  // Ngoại lệ: phần mở đầu nói rõ đây cũng là công cụ dòng lệnh/tiện ích/giao diện (gTTS, isort, jc), theo luật "chạy được như
+  // một chương trình thì nhận". Chữ CLI trong "thư viện để xây CLI" (typer) không tính.
+  const moDauThuVien = phanDauReadme(readme, 900);
+  if (
+    (MAU_TU_MO_TA_LA_THU_VIEN.test(moDauThuVien) ||
+      MAU_MO_DAU_CUM_THU_VIEN.test(moDauThuVien.slice(0, 260))) &&
+    !MAU_MO_DAU_LA_CONG_CU.test(moDauThuVien.slice(0, 500))
+  ) {
+    return true;
+  }
+
   // 5. Framework/thư viện phát triển nổi tiếng luôn bị loại dù có CLI dev. Kiểm TRƯỚC khối code import vì README
   // viết bằng RST (scikit-learn, scrapy) không có khối ``` nên sẽ lọt nếu chỉ dựa vào dấu hiệu import.
   const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
@@ -317,23 +330,59 @@ function layCacDongLenhTrongReadme(readme: string): string[] {
     .filter(Boolean);
 }
 
+// ---------------------------------------------------------------- LUẬT 1 BỔ SUNG: ZIP LẺ PHẢI LÀ ỨNG DỤNG
+// Mỗi mẫu dưới đây rút từ ca thật khi kiểm tay 339 repo vớt (12/11/2026), xem _chuan/nhan_tay_12-11.json.
+
+/** Tệp cùng bản phát hành cho biết đây không phải ứng dụng Windows/Linux: gói thư viện, ứng dụng Mac/iOS, sách, ảnh đĩa, firmware. */
 const MAU_TEP_KHONG_PHAI_APP_DESKTOP =
-  /\.(?:app\.zip|ipa|nupkg|snupkg|aar|vsix|epub|fpk)$|\.xcframework(?:\.zip)?$|\.fb2\.zip$/i;
+  /\.(?:app\.zip|ipa|nupkg|snupkg|aar|vsix|epub|pdf|iso|fpk)$|\.xcframework(?:\.zip)?$|\.fb2\.zip$|\.img(?:\.xz)?(?:\.\d+)?$|\.iso\.\d+$/i;
+/** Tên ZIP chung chung kiểu gói web, dữ liệu, bản chụp mã (web.zip, specs.zip, frontend.zip, repo-git.zip). */
+const MAU_TEN_ZIP_GOI_PHU =
+  /^(?:web|frontend|html5?|public|build|specs?|deps|resources|skills?|dist|assets|data)(?:[-_.\d].*)?\.(?:zip|7z)$|(?:^|[-_.])(?:web|ui|frontend|html5?)(?:[-_.]|$)|[-_.]git\.(?:zip|7z)$/i;
 const MAU_README_THU_VIEN_PHU_THUOC =
   /dotnet\s+add\s+package|Install-Package|PackageReference|composer\s+require|vcpkg\s+install|conan\s+install|cargo\s+add|<artifactId>|\bimplementation\s*[("']|\bpod\s+['"]|\.package\(url:|FetchContent_Declare|find_package\(/i;
 const MAU_README_PLUGIN_CUA_APP_KHAC =
-  /\b(?:obsidian|typora|wordpress|home assistant|hacs|decky|godot|unity|unreal|blender)\b[^\n]{0,30}\b(?:plugin|add-?on|extension|integration)s?\b|\b(?:plugin|add-?on|extension|integration)s? for (?:obsidian|typora|wordpress|home assistant|godot|unity|unreal|blender)\b|SKILL\.md|\.claude\/skills/i;
-
+  /\b(?:obsidian|typora|wordpress|home assistant|hacs|decky|godot|unity|unreal|blender|jetbrains|intellij)\b[^\n]{0,30}\b(?:plug-?in|add-?on|extension|integration)s?\b|\b(?:plug-?in|add-?on|extension|integration)s? for (?:obsidian|typora|wordpress|home assistant|godot|unity|unreal|blender|jetbrains|intellij)\b|SKILL\.md|\.claude\/skills|beacon object file|cobalt strike/i;
 const MAU_README_TIEN_ICH_TRINH_DUYET =
   /chrome web store|addons\.mozilla\.org|chrome\.google\.com\/webstore|(?:browser|chrome|firefox|chromium) (?:extension|add-?on)/i;
+/**
+ * Câu tự mô tả "X là một <vài từ> <loại>" ở phần mở đầu README. Chỉ bắt dạng copula, không bắt từ "library" rải rác, vì README
+ * ứng dụng hay nhắc thư viện mà nó DÙNG (FModel: "CUE4Parse, the library that parses UE archives"). Không bắt "X is a package of
+ * python tools" (oletools là bộ công cụ, không phải thư viện).
+ */
+const MAU_TU_MO_TA_LA_GOI_PHU_TRO =
+  /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|plug-?in|add-?on|extension|theme|template|boilerplate|dataset|firmware|wrapper|bindings|cms|operating system|language server)\b/i;
+/** Như trên, thêm các loại gói mã chỉ để import (dùng cho đường vớt README, nơi đã có cách cài pip/npm). */
+const MAU_TU_MO_TA_LA_THU_VIEN =
+  /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|package(?!\s+of\b)|module|adapter|orm|wrapper|bindings|framework for)\b/i;
+/** Tiêu đề kiểu cụm danh từ ("Python GraphQL library", "database adapter for Python", "collection of widgets") ở ~260 ký tự đầu. */
+const MAU_MO_DAU_CUM_THU_VIEN =
+  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
+/** Phần mở đầu nói đây là công cụ dòng lệnh/tiện ích/ứng dụng; không tính "để xây/viết/tạo CLI". */
+const MAU_MO_DAU_LA_CONG_CU =
+  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)\b(?:cli|command[- ]line|utility|terminal|gui|desktop|app)\b/i;
+/** Dấu hiệu không nhập nhằng ở phần mở đầu: web tự host, tài liệu học, bộ cấu hình, framework đặc thù. */
+const MAU_MO_DAU_KHONG_PHAI_APP =
+  /\b(?:php|laravel|wordpress|self[- ]hosted|web[- ]based|web interface|in the browser|for the web|e-?commerce|tutorials?|courses?|exercises|katas|prompts?|skills?|graphic packs?|configs?|configuration files?|systemless module|home assistant|components for|operating system|framework for (?:wpf|\.net|react|vue|angular|android|ios|unity|godot|unreal)|language server|add-?on|gdextension|our research)\b|\b(?:development|testing|debugging|database|web|application|mobile|ui|test) framework\b|插件|主题|模板|配置|教程|课程|扩展/i;
+
+/** README đã bỏ ảnh, liên kết, thẻ HTML, ký hiệu; cắt `n` ký tự đầu. */
+function phanDauReadme(readme: string, n: number): string {
+  return readme
+    .replace(/!\[[^\]]*\]\([^)]*\)|<[^>]*>/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[#*_`>|=-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, n);
+}
 
 /**
  * Luật 1 bổ sung (12/11/2026): tên ZIP lẻ không đủ để biết nó là ứng dụng chạy trên Windows/Linux, nên xét thêm
- * README và tên các tệp cùng bản phát hành. Loại khi: (1) có tệp gói thư viện/ứng dụng nền tảng khác (.nupkg, .ipa,
- * .aar, .xcframework, .app.zip...) hoặc cặp main.js + manifest.json của plugin; (2) README nói về macOS nhiều hơn hẳn
- * Windows/Linux; (3) README dạy thêm thư viện vào dự án (dotnet add package, composer require, vcpkg...); (4) README
- * nói đây là plugin/tích hợp/skill của ứng dụng khác (Obsidian, Home Assistant, Claude skill...).
- * Đo trên bản lưu 335 repo: README không nhắc hệ điều hành nào vẫn được nhận (FModel, GeekDesk là app Windows thật).
+ * README và tên các tệp cùng bản phát hành. Loại khi: (1) tệp cùng bản là gói thư viện, ảnh đĩa, sách, firmware,
+ * ứng dụng Mac/iOS, cặp main.js + manifest.json của plugin, hoặc có bản `-src` đi kèm; (2) tên ZIP chung chung kiểu gói
+ * web/dữ liệu; (3) README dạy thêm thư viện vào dự án; (4) README nói đây là plugin/skill của ứng dụng khác;
+ * (5) phần mở đầu README tự nhận là thư viện/plugin/web tự host/bộ cấu hình...; (6) README nói về macOS nhiều hơn hẳn
+ * Windows/Linux, hoặc chỉ nhắc macOS. README không nhắc hệ điều hành nào vẫn được nhận (FModel, GeekDesk là app Windows thật).
  */
 export function zipLaUngDungDesktop(
   readme: string | null | undefined,
@@ -342,13 +391,31 @@ export function zipLaUngDungDesktop(
   const ten = tenCacTep.map((t) => t.trim().toLowerCase());
   if (ten.some((t) => MAU_TEP_KHONG_PHAI_APP_DESKTOP.test(t))) return false;
   if (ten.includes('main.js') && ten.includes('manifest.json')) return false;
+  if (ten.filter((t) => t.endsWith('.bin')).length >= 3) return false; // firmware
+  if (ten.filter((t) => /\.(?:txt|dat|csv|list)$/.test(t)).length >= 3) return false; // bộ dữ liệu
+  if (ten.some((t) => /(?:^|[-_.])(?:src|source)(?:[-_.]|$)/.test(t) && /\.(?:zip|7z)$/.test(t)))
+    return false;
+  const zip = ten.find((t) => /\.(?:zip|7z)$/.test(t));
+  if (zip && MAU_TEN_ZIP_GOI_PHU.test(zip)) return false;
+
   const vb = readme ?? '';
   if (MAU_README_THU_VIEN_PHU_THUOC.test(vb) || MAU_README_PLUGIN_CUA_APP_KHAC.test(vb))
     return false;
   if (MAU_README_TIEN_ICH_TRINH_DUYET.test(vb)) return false;
+  const moDau = phanDauReadme(vb, 600);
+  if (
+    MAU_TU_MO_TA_LA_GOI_PHU_TRO.test(moDau) ||
+    MAU_MO_DAU_KHONG_PHAI_APP.test(moDau.slice(0, 350))
+  )
+    return false;
+
   const dem = (re: RegExp) => (vb.match(re) ?? []).length;
   if (dem(/\b(?:font|typeface)s?\b/gi) >= 3) return false; // bộ chữ, không phải ứng dụng
-  const win = dem(/\bwindows\b|\.exe\b|\bwin(?:32|64)\b/gi);
+  if (dem(/\bphp\b/gi) >= 2) return false; // web PHP tự host
+  // "windows" đứng một mình hay trùng với "quản lý cửa sổ", nên Windows chỉ tính khi đi với phiên bản/ngữ cảnh cài đặt
+  const win = dem(
+    /\bwindows\s*(?:\d+|xp|vista|server)\b|\.exe\b|\bwin(?:32|64)\b|\bfor windows\b|\bwindows[,/ ]+(?:and |or )?(?:linux|macos|mac)\b|\b(?:linux|macos|mac)[,/ ]+(?:and |or )?windows\b|\bmicrosoft windows\b/gi,
+  );
   const linux = dem(/\blinux\b|\bubuntu\b|\bdebian\b/gi);
   const mac = dem(
     /\bmac(?:os)?\b|\bos\s?x\b|\bdarwin\b|\bhomebrew\b|\bxcode\b|\bapple silicon\b/gi,
@@ -385,12 +452,15 @@ export function cachCaiThuocRepo(
   const tenRepo = chuan(ten);
   const tenChu = chuan(chu);
   const tuRepo = tu(ten);
+  const tuChu = new Set(tu(chu));
   return goi.some((c) => {
     const g = chuan(c.tenGoi as string);
     if (!g || !tenRepo) return false;
-    if (g.includes(tenRepo) || tenRepo.includes(g) || (tenChu && g.includes(tenChu))) return true;
+    // Gói trùng tên chủ repo chỉ nhận khi TRÙNG HẲN (browser-use/...→browser-use). "twilio-cli" của repo twilio-video-app-react
+    // chỉ chung chữ twilio với chủ repo, là gói khác (kiểm tay 339 repo vớt, 12/11/2026).
+    if (g.includes(tenRepo) || tenRepo.includes(g) || (tenChu && g === tenChu)) return true;
     const tuGoi = new Set(tu(c.tenGoi as string));
-    return tuRepo.some((t) => tuGoi.has(t));
+    return tuRepo.some((t) => tuGoi.has(t) && !tuChu.has(t));
   });
 }
 
