@@ -63,3 +63,53 @@ describe('mucUuTien (1 = AI, 2 = cài trực tiếp/portable, 3 = còn lại)', 
     expect(mucUuTien(meta('a/b', 'A fast video downloader'))).toBe(3);
   });
 });
+
+describe('lyDoBoTheoSieuDuLieu sau kiểm tay mẫu 12/11/2026', () => {
+  it('giữ ứng dụng chạy được dù cũng có chủ đề library hay chrome-extension (graphtage, altair)', () => {
+    expect(
+      lyDoBoTheoSieuDuLieu(
+        meta('trailofbits/graphtage', 'A semantic diff utility and library for tree-like files', [
+          'command-line-tool',
+          'diff',
+          'library',
+        ]),
+      ),
+    ).toBeNull();
+    expect(
+      lyDoBoTheoSieuDuLieu(
+        meta('altair-graphql/altair', 'A feature-rich GraphQL Client for all platforms.', [
+          'chrome-extension',
+          'desktop-apps',
+          'electron',
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  it('bỏ repo mồi phần mềm lậu và nghiên cứu/sách/hội nghị', () => {
+    expect(
+      lyDoBoTheoSieuDuLieu(
+        meta(
+          'x/reason-14-installer',
+          'reason-14: Full Working Installer for Professional Desktop Software, Ready to Run in 2026',
+        ),
+      ),
+    ).toBe('mo-ta:rac-hoac-nghien-cuu');
+    expect(
+      lyDoBoTheoSieuDuLieu(
+        meta('a/scaling-book', 'a short blog-style textbook about scaling LLMs on TPUs'),
+      ),
+    ).not.toBeNull();
+    expect(
+      lyDoBoTheoSieuDuLieu(
+        meta('a/p', '[NeurIPS 2025] Open-source Multi-agent Poster Generation from Papers'),
+      ),
+    ).not.toBeNull();
+  });
+
+  it('awesome vẫn bị bỏ dù có chủ đề desktop', () => {
+    expect(lyDoBoTheoSieuDuLieu(meta('a/awesome-x', 'x', ['awesome', 'desktop']))).toBe(
+      'chu-de:awesome',
+    );
+  });
+});

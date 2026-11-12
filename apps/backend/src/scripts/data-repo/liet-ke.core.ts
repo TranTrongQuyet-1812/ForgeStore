@@ -55,12 +55,59 @@ const CHU_DE_BO = new Set([
 const MAU_MO_TA_BO =
   /(?:^|\b(?:is|are)\s+)(?:an?|the)\s+(?:[\w.+#-]+\s+){0,4}(?:library|libraries|framework|sdk|toolkit|bindings|plug-?in|boilerplate|compiler|interpreter|transpiler)\b|^(?:[\w.+#-]+\s+){0,3}(?:library|framework|sdk|toolkit|bindings|boilerplate|template|starter)\b|\b(?:programming|scripting) language\b|\bawesome (?:list|collection)\b|\bcurated list\b|\b(?:tutorial|course|cheat ?sheet)s?\b|\bcomponent library\b|\bui kit\b|\bdesign system\b/i;
 
-/** Lý do bỏ (để thống kê) hoặc null nếu giữ. */
+/** Chủ đề cho biết repo là một ứng dụng chạy được (giao diện hoặc dòng lệnh), dù cũng có chủ đề "library" hay "extension". */
+const CHU_DE_LA_UNG_DUNG = new Set([
+  'cli',
+  'command-line',
+  'command-line-tool',
+  'command-line-interface',
+  'terminal',
+  'desktop',
+  'desktop-app',
+  'desktop-apps',
+  'desktop-application',
+  'electron',
+  'tauri',
+  'gui',
+  'windows',
+  'self-hosted',
+]);
+
+/** Chủ đề bỏ vô điều kiện: tài liệu học, danh sách, bộ mẫu, ngôn ngữ/trình biên dịch. */
+const CHU_DE_BO_CHAC = new Set([
+  'awesome',
+  'awesome-list',
+  'tutorial',
+  'tutorials',
+  'course',
+  'cheatsheet',
+  'interview',
+  'roadmap',
+  'book',
+  'dotfiles',
+  'boilerplate',
+  'starter',
+  'starter-kit',
+  'template',
+  'programming-language',
+  'compiler',
+  'interpreter',
+  'transpiler',
+]);
+
+/** Mô tả của repo mồi (phần mềm lậu, bản cài giả) và nghiên cứu/sách/hội nghị: bỏ vô điều kiện. */
+const MAU_MO_TA_BO_CHAC =
+  /\b(?:full working installer|ready to run in 20\d\d|free download|download free|cracked?|keygen|activator|serial key|license key|premium unlocked|mod apk)\b|\b(?:paper|benchmark|survey|textbook|dataset|reading list|call for (?:papers|reviewers)|NeurIPS|ICML|ICLR|CVPR|ACL|arxiv)\b/i;
+
+/** Lý do bỏ (để thống kê) hoặc null nếu giữ. Ứng dụng chạy được (CLI/desktop) không bị bỏ chỉ vì cũng là thư viện/tiện ích. */
 export function lyDoBoTheoSieuDuLieu(m: MetaRepo): string | null {
-  for (const t of m.topics ?? [])
-    if (CHU_DE_BO.has(t.toLowerCase())) return `chu-de:${t.toLowerCase()}`;
+  const chuDe = (m.topics ?? []).map((t) => t.toLowerCase());
   const mota = (m.description ?? '').trim();
-  if (mota && MAU_MO_TA_BO.test(mota)) return 'mo-ta:thu-vien-framework-ngon-ngu';
+  for (const t of chuDe) if (CHU_DE_BO_CHAC.has(t)) return 'chu-de:' + t;
+  if (mota && MAU_MO_TA_BO_CHAC.test(mota)) return 'mo-ta:rac-hoac-nghien-cuu';
+  const laUngDung = chuDe.some((t) => CHU_DE_LA_UNG_DUNG.has(t));
+  for (const t of chuDe) if (CHU_DE_BO.has(t) && !laUngDung) return 'chu-de:' + t;
+  if (mota && MAU_MO_TA_BO.test(mota) && !laUngDung) return 'mo-ta:thu-vien-framework-ngon-ngu';
   return null;
 }
 

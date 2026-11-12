@@ -2357,6 +2357,8 @@ async function layTapRepoDaBiet(thuMucDs: string): Promise<Set<string>> {
     await prisma.$disconnect();
   }
   for (const t of fs.readdirSync(thuMucDs)) {
+    // Bỏ các tệp của chính lệnh liệt kê, nếu không mọi repo vừa liệt kê đều thành "đã biết"
+    if (t.startsWith('liet-ke-')) continue;
     const p = path.join(thuMucDs, t);
     if (t.endsWith('.txt')) for (const r of docDanhSachRepo(p)) daBiet.add(r.toLowerCase());
     else if (t.endsWith('.jsonl'))
