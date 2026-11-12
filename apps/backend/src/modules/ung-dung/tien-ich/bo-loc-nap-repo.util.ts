@@ -523,9 +523,9 @@ export function readmeChiChoMacTheoMoDau(vb: string): boolean {
   );
 }
 
-/** Không nên nhận: công cụ gian lận game (aimbot...), tạo tài khoản hàng loạt, module Xposed/Magisk (chỉ chạy bên trong Android đã root). */
+/** Không nên nhận: công cụ gian lận game (cùng nhóm "cheat" của danh sách chặn cũ, hay kèm mã độc), module Xposed/Magisk (chỉ chạy bên trong Android đã root). */
 export function laCongCuKhongNenNhan(readme: string | null | undefined): boolean {
-  return /\b(?:aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?|cheat engine|account (?:generator|creator)|(?:xposed|lsposed|magisk) module|systemless module)\b/i.test(
+  return /\b(?:aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?|cheat engine|(?:xposed|lsposed|magisk) module|systemless module)\b/i.test(
     phanDauReadme(readme ?? '', 900),
   );
 }

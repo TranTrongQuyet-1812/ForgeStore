@@ -5,6 +5,7 @@
  *   pnpm data-repo dem-kho  # ĐẾM KHÔ lô repo mới (D-39): chỉ đọc total_count của Search, chưa tải repo, kết quả ở 00_danh_sach/kham-pha-ke-hoach.json
  *   pnpm data-repo liet-ke [--chi-loc]  # liệt kê lô repo mới theo kế hoạch dem-kho (chỉ Search), lọc cục bộ, xếp hạng ưu tiên; chưa lấy README/release
  *   pnpm data-repo thu-lo-moi [--ten thu-300] [--so 300]  # thử nhỏ lô repo mới: 300 repo phân tầng từ hạng 1+2, lấy README+release, chấm luật, lưu _nguon_moi
+ *   pnpm data-repo chia-tin-hieu [--moi-lo 60]  # gom repo đã qua, chia nhóm MẠNH/YẾU theo tín hiệu cài đặt, chia nhóm YẾU thành lô tóm tắt _kiem_tay để Claude kiểm tay
  *   pnpm data-repo do-lai-bi-loai [--sao-tu M]  # CHỈ ĐỌC, không gọi mạng: in kế hoạch dò lại repo bị loại (D-38)
  *   pnpm data-repo do-lai-bi-loai --goi-github [--ten lan-1] [--toi-da N] [--sao-tu M] [--du-tru 1000] # dò thật qua GitHub, xuất 00_danh_sach/do-lai-<ten>.jsonl
  *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
@@ -2713,9 +2714,100 @@ async function lenhThuLoMoi(): Promise<void> {
   void soVot;
 }
 
+// ---------------------------------------------------------------- CHIA NHÓM TÍN HIỆU CÀI ĐẶT (D-42)
+/**
+ * Gom mọi repo đã qua của các lần `thu-lo-moi`, chia nhóm MẠNH/YẾU theo tín hiệu cài đặt (đo: lọt ~5% và ~20%), ghi
+ * `tin-hieu-manh.jsonl` và `tin-hieu-yeu.jsonl`, và chia nhóm YẾU thành lô tóm tắt `_kiem_tay/lo-NNN.txt` (hạng 1 trước,
+ * sao giảm dần) để Claude kiểm tay. Đọc lại bản gốc ở `_nguon_moi/`, không gọi mạng.
+ */
+async function lenhChiaTinHieu(): Promise<void> {
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const moiLo = Number(layThamSo('moi-lo') ?? '60');
+  const { trichXuatHuongDanCliBangQuyTac } =
+    await import('../../modules/ai/tien-ich/cli-guide-extractor.util');
+  const { nhomTinHieuCai, taoTomTatKiemTay } = await import('./tin-hieu-cai.core');
+  type Qua = { repo: string; sao: number; hang: number; nhom: string[] };
+  const daGap = new Set<string>();
+  const qua: Qua[] = [];
+  for (const t of fs.readdirSync(thuMucDs)) {
+    if (
+      !/^thu-lo-moi-.+\.jsonl$/.test(t) ||
+      t.endsWith('.mau.jsonl') ||
+      t.endsWith('.da-xet.jsonl')
+    )
+      continue;
+    for (const r of docJsonl<Qua>(path.join(thuMucDs, t))) {
+      if (daGap.has(r.repo.toLowerCase())) continue;
+      daGap.add(r.repo.toLowerCase());
+      qua.push(r);
+    }
+  }
+  // Repo đã được Claude kiểm tay (các tệp nhãn trong _chuan và _kiem_tay/da-kiem.json) thì không đưa vào lô nữa
+  const daKiem = new Set<string>();
+  const tepNhan = [
+    ...[
+      'nhan_thu_lo_moi_300.json',
+      'nhan_thu_lo_moi_700_mau60.json',
+      'nhan_thu_lo_moi_700_mau40b.json',
+    ].map((t) => path.join(thuMucDs, '_chuan', t)),
+    path.join(thuMucDs, '_kiem_tay', 'da-kiem.json'),
+  ];
+  for (const t of tepNhan) {
+    if (!fs.existsSync(t)) continue;
+    const nhan = JSON.parse(fs.readFileSync(t, 'utf8')) as Record<string, unknown>;
+    for (const khoa of ['loai', 'giu', 'chuaRo'])
+      for (const r of (nhan[khoa] as string[] | undefined) ?? []) daKiem.add(r.toLowerCase());
+  }
+  const manh: Qua[] = [];
+  const yeu: Array<Qua & { tomTat: string }> = [];
+  let soDaKiem = 0;
+  for (const r of qua) {
+    const tep = path.join(thuMucDs, '_nguon_moi', `${r.repo.replace('/', '__')}.json`);
+    if (!fs.existsSync(tep)) continue;
+    const d = JSON.parse(fs.readFileSync(tep, 'utf8')) as {
+      readme: string | null;
+      releases: never[] | null;
+    };
+    const cach = d.readme
+      ? (trichXuatHuongDanCliBangQuyTac(d.readme, `https://github.com/${r.repo}#readme`)?.cachCai ??
+        [])
+      : [];
+    if (nhomTinHieuCai(r.repo, d.releases, cach) === 'MANH') manh.push(r);
+    else if (daKiem.has(r.repo.toLowerCase())) soDaKiem++;
+    else yeu.push({ ...r, tomTat: taoTomTatKiemTay(r, d.readme, d.releases, cach) });
+  }
+  yeu.sort((a, b) => a.hang - b.hang || b.sao - a.sao);
+  fs.writeFileSync(
+    path.join(thuMucDs, 'tin-hieu-manh.jsonl'),
+    manh.map((m) => JSON.stringify(m)).join('\n') + '\n',
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(thuMucDs, 'tin-hieu-yeu.jsonl'),
+    yeu.map(({ tomTat: _bo, ...r }) => JSON.stringify(r)).join('\n') + '\n',
+    'utf8',
+  );
+  const thuMucLo = path.join(thuMucDs, '_kiem_tay');
+  fs.mkdirSync(thuMucLo, { recursive: true });
+  for (let i = 0; i * moiLo < yeu.length; i++) {
+    const lo = yeu.slice(i * moiLo, (i + 1) * moiLo);
+    const ten = `lo-${String(i + 1).padStart(3, '0')}.txt`;
+    fs.writeFileSync(
+      path.join(thuMucLo, ten),
+      lo.map((r, j) => `${i * moiLo + j + 1} ${r.tomTat}`).join('\n') + '\n',
+      'utf8',
+    );
+  }
+  console.info(
+    `Đã qua ${qua.length} repo: MẠNH ${manh.length}, YẾU đã kiểm ${soDaKiem}, YẾU chưa kiểm ${yeu.length} (chia ${Math.ceil(yeu.length / moiLo)} lô ${moiLo} repo ở ${thuMucLo}).`,
+  );
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'chia-tin-hieu':
+      return lenhChiaTinHieu();
     case 'thu-lo-moi':
       return lenhThuLoMoi();
     case 'liet-ke':
@@ -2766,7 +2858,7 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: dem-kho | liet-ke | thu-lo-moi | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: dem-kho | liet-ke | thu-lo-moi | chia-tin-hieu | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }
