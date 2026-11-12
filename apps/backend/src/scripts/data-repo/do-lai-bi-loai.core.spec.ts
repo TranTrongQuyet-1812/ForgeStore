@@ -152,7 +152,8 @@ describe('danhGiaRepoDoLai (bộ lọc đã sửa trên dữ liệu giả, khôn
   });
 
   it('README pip có [extras] được vớt, gắn PIP_GHIM', () => {
-    const md = '## Installation\n```bash\npip install "pr-agent[github]"\n```\n';
+    const md =
+      '## Installation\n```bash\npip install "pr-agent[github]"\npython -m pr_agent.cli --pr_url=<url> review\n```\n';
     const kq = danhGiaRepoDoLai('The-PR-Agent/pr-agent', md, null);
     expect(kq.vot).toBe(true);
     expect(kq.nhom).toContain('PIP_GHIM');

@@ -8,7 +8,7 @@ import {
   trongDanhSachChan,
   zipLaUngDungDesktop,
   readmeChiChoMacTheoMoDau,
-  laCongCuGianLan,
+  laCongCuKhongNenNhan,
   type RepoUngVien,
 } from './bo-loc-nap-repo.util';
 
@@ -382,7 +382,7 @@ describe('Luật ZIP lẻ và thư viện sau kiểm tay 339 repo (12/11/2026)',
     const cach = [{ nhom: 'PIP', tenGoi: 'gTTS', buoc: [{ lenh: 'pip install gTTS' }] }];
     expect(
       laThuVienLapTrinh(
-        'gTTS is a Python library and CLI tool to interface with Google Translate text-to-speech API.',
+        "gTTS is a Python library and CLI tool to interface with Google Translate text-to-speech API.\n    $ gtts-cli 'hello' --output hello.mp3",
         'pndurette/gTTS',
         cach,
       ),
@@ -519,8 +519,8 @@ describe('Thử nhỏ lô repo mới: luật vá sau kiểm tay 107 repo qua (12
   });
 
   it('nhận ra công cụ gian lận game (Aimmy) và README chỉ nói về Mac (terminal-mac)', () => {
-    expect(laCongCuGianLan(readmeAimmy)).toBe(true);
-    expect(laCongCuGianLan('A fast video downloader built with Go')).toBe(false);
+    expect(laCongCuKhongNenNhan(readmeAimmy)).toBe(true);
+    expect(laCongCuKhongNenNhan('A fast video downloader built with Go')).toBe(false);
     expect(readmeChiChoMacTheoMoDau(readmeTerminalMac)).toBe(true);
     // app đa nền tảng có đoạn cài cho Mac (browser-use, aws-shell) thì không bị coi là chỉ cho Mac
     expect(

@@ -287,21 +287,8 @@ export function laThuVienLapTrinh(
 
   if (coLenhChayChinhGoi(readme, danhSachTen)) return false;
 
-  // 7. Lệnh chạy runner độc lập của CHÍNH gói này. `python -m pip`, `npx create-react-app`... là việc khác, không tính.
-  const tenGoiRegex = danhSachTen
-    .filter((t) => t.length >= 2)
-    .map((t) => thoatKyTuRegex(t).replace(/[-_]/g, '[-_]'))
-    .join('|');
-  if (
-    tenGoiRegex &&
-    new RegExp(
-      `\\b(?:python\\d*\\s+-m|pipx\\s+run|uvx|npx(?:\\s+-y)?)\\s+(?:@[\\w.-]+/)?(?:${tenGoiRegex})\\b`,
-      'i',
-    ).test(readme)
-  ) {
-    return false;
-  }
-  if (/\bstreamlit\s+run\b/i.test(readme)) return false;
+  // 7. Lệnh chạy runner độc lập của CHÍNH gói này (python -m <gói>, uvx <gói>, npx <gói>...), hoặc streamlit run
+  if (coLenhRunnerChinhGoi(readme, danhSachTen)) return false;
 
   return true;
 }
@@ -368,7 +355,13 @@ const MAU_MO_DAU_TIEU_DE_THU_VIEN =
   /^(?:[\w.:-]+\s+){1,3}(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:framework|library|package|toolkit|sdk)\b/i;
 /** Tiêu đề kiểu cụm danh từ ("Python GraphQL library", "database adapter for Python", "collection of widgets") ở ~260 ký tự đầu. */
 const MAU_MO_DAU_CUM_THU_VIEN =
-  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\b(?:multi-?agent|agent|web|ai|python|javascript|typescript)\s+framework\b|\b(?:react|vue|angular|svelte|solid|jquery)\s+(?:component|plugin|hook)s?\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
+  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\b(?:multi-?agent|agent|web|ai|python|javascript|typescript|automation|testing|browser|application)\s+framework\b|\bpython apis?\b|\bimplementation of\b|\b(?:development|developer) kit\b|\b(?:react|vue|angular|svelte|solid|jquery)\s+(?:component|plugin|hook)s?\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
+/**
+ * Bản hẹp của mẫu trên cho đường ZIP: bỏ "collection of" (retoolkit: "collection of tools") và "framework for" (monkey365:
+ * "assessment framework for Microsoft 365"), vì ZIP lẻ của công cụ Windows hay mô tả như vậy. Kiểm tay 12/11/2026.
+ */
+const MAU_MO_DAU_CUM_THU_VIEN_ZIP =
+  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper)\s+(?:for|to)\b|\bpython apis?\b|\bimplementation of\b|\b(?:development|developer) kit\b/i;
 /** npm/pnpm/yarn/bun cài MỘT gói có tên (cho phép cờ trước tên). "pnpm install" trần (chạy từ mã nguồn) không khớp. */
 const MAU_NPM_CAI_GOI_CO_TEN =
   /\b(?:npm|pnpm|yarn|bun)\s+(?:i|install|add)\s+(?:-{1,2}[\w-]+(?:=\S+)?\s+)*(?!-)[@\w.][^\s]*/;
@@ -398,6 +391,24 @@ function chiCaiNhuPhuThuocDuAn(
   return coNpmCoTen;
 }
 
+/** Lệnh chạy runner của CHÍNH gói (python -m pip, npx create-react-app... là việc khác, không tính). */
+function coLenhRunnerChinhGoi(readme: string, danhSachTen: string[]): boolean {
+  const tenGoiRegex = danhSachTen
+    .filter((t) => t.length >= 2)
+    .map((t) => thoatKyTuRegex(t).replace(/[-_]/g, '[-_]'))
+    .join('|');
+  if (
+    tenGoiRegex &&
+    new RegExp(
+      String.raw`\b(?:python\d*\s+-m|pipx\s+run|uvx|npx(?:\s+-y)?)\s+(?:@[\w.-]+/)?(?:${tenGoiRegex})\b`,
+      'i',
+    ).test(readme)
+  ) {
+    return true;
+  }
+  return /\bstreamlit\s+run\b/i.test(readme);
+}
+
 /**
  * README có dòng lệnh chạy CHÍNH gói đó như một chương trình (`<gói> --help`, `<gói> <lệnh con>`): chỉ tính dòng nằm trong
  * khối mã hoặc sau dấu `$`. Câu văn mở đầu bằng tên repo ("Faker is a Python package...") không phải lệnh.
@@ -407,7 +418,7 @@ function coLenhChayChinhGoi(readme: string, danhSachTen: string[]): boolean {
   const ten = danhSachTen.filter((t) => t.length >= 2);
   if (ten.length === 0) return false;
   const reLenhChinhGoi = new RegExp(
-    `^(?:${ten.map((t) => `${thoatKyTuRegex(t)}(?:[-_]?cli)?`).join('|')})(?:\\.exe)?\\s+(?![=(:,.])\\S`, // loại phép gán/gọi hàm trong mã (faker = Faker())
+    `^(?:${ten.map((t) => `${thoatKyTuRegex(t)}(?:[-_]?cli)?`).join('|')})(?:\\.exe)?(?:\\s+(?![=(:,.])\\S|$)`, // loại phép gán/gọi hàm trong mã (faker = Faker())
     'i',
   );
   const lenhBoQua = /^(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i;
@@ -471,12 +482,14 @@ export function zipLaUngDungDesktop(
   // Mở đầu tự nhận là thư viện/plugin/web tự host... thì loại, trừ khi mở đầu nói rõ đây là công cụ/tiện ích/dòng lệnh (SchemaCrawler)
   if (
     !tuNhanLaCongCu &&
-    (MAU_TU_MO_TA_LA_GOI_PHU_TRO.test(moDau) || MAU_MO_DAU_KHONG_PHAI_APP.test(moDau.slice(0, 350)))
+    (MAU_TU_MO_TA_LA_GOI_PHU_TRO.test(moDau) ||
+      MAU_MO_DAU_KHONG_PHAI_APP.test(moDau.slice(0, 350)) ||
+      MAU_MO_DAU_CUM_THU_VIEN_ZIP.test(moDau.slice(0, 260)))
   )
     return false;
 
   const dem = (re: RegExp) => (vb.match(re) ?? []).length;
-  if (readmeChiChoMac(vb) || laCongCuGianLan(vb)) return false;
+  if (readmeChiChoMac(vb) || laCongCuKhongNenNhan(vb)) return false;
   if (dem(/\b(?:font|typeface)s?\b/gi) >= 3) return false; // bộ chữ, không phải ứng dụng
   if (dem(/\bphp\b/gi) >= 2) return false; // web PHP tự host
   return true;
@@ -510,9 +523,9 @@ export function readmeChiChoMacTheoMoDau(vb: string): boolean {
   );
 }
 
-/** Công cụ gian lận game (aimbot...) hoặc tạo tài khoản hàng loạt, nhận ra ở phần mở đầu README. */
-export function laCongCuGianLan(readme: string | null | undefined): boolean {
-  return /\b(?:aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?|cheat engine|account (?:generator|creator))\b/i.test(
+/** Không nên nhận: công cụ gian lận game (aimbot...), tạo tài khoản hàng loạt, module Xposed/Magisk (chỉ chạy bên trong Android đã root). */
+export function laCongCuKhongNenNhan(readme: string | null | undefined): boolean {
+  return /\b(?:aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?|cheat engine|account (?:generator|creator)|(?:xposed|lsposed|magisk) module|systemless module)\b/i.test(
     phanDauReadme(readme ?? '', 900),
   );
 }
@@ -568,7 +581,7 @@ export function coLenhCaiTuReadme(readme: string | null | undefined, fullName: s
   if (!coCachCaiCliHopLe(huongDan)) return false;
   if (laThuVienLapTrinh(readme, fullName, huongDan.cachCai)) return false;
   if (!cachCaiThuocRepo(fullName, huongDan.cachCai)) return false;
-  if (readmeChiChoMacTheoMoDau(readme) || laCongCuGianLan(readme)) return false;
+  if (readmeChiChoMacTheoMoDau(readme) || laCongCuKhongNenNhan(readme)) return false;
   return true;
 }
 

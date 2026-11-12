@@ -53,7 +53,7 @@ const CHU_DE_BO = new Set([
 
 /** Mô tả tự nhận là thư viện/framework/SDK/ngôn ngữ: "X là một <vài từ> library", hoặc cụm danh từ ở đầu mô tả. */
 const MAU_MO_TA_BO =
-  /(?:^|\b(?:is|are)\s+)(?:an?|the)\s+(?:[\w.+#-]+\s+){0,4}(?:library|libraries|framework|sdk|toolkit|bindings|plug-?in|boilerplate|compiler|interpreter|transpiler)\b|^(?:[\w.+#-]+\s+){0,3}(?:library|framework|sdk|toolkit|bindings|boilerplate|template|starter)\b|\b(?:programming|scripting) language\b|\bawesome (?:list|collection)\b|\bcurated list\b|\b(?:tutorial|course|cheat ?sheet)s?\b|\bcomponent library\b|\bui kit\b|\bdesign system\b/i;
+  /(?:^|\b(?:is|are)\s+)(?:an?|the)\s+(?:[\w.+#-]+\s+){0,4}(?:library|libraries|framework|sdk|toolkit|bindings|plug-?in|boilerplate|compiler|interpreter|transpiler)\b|^(?:[\w.+#-]+\s+){0,3}(?:library|framework|sdk|toolkit|bindings|boilerplate|template|starter)\b|\b(?:programming|scripting) language\b|\bawesome (?:list|collection)\b|\bcurated list\b|\b(?:tutorial|course|cheat ?sheet)s?\b|\bcomponent library\b|\bimplementation of\b|\bpython apis?\b|\b(?:serialization|data) format\b|\bxposed\b|(?:magisk|lsposed) module|\bui kit\b|\bdesign system\b/i;
 
 /** Chủ đề cho biết repo là một ứng dụng chạy được (giao diện hoặc dòng lệnh), dù cũng có chủ đề "library" hay "extension". */
 const CHU_DE_LA_UNG_DUNG = new Set([

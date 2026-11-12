@@ -2656,8 +2656,15 @@ async function lenhThuLoMoi(): Promise<void> {
 
   type UngVien = { repo: string; sao: number; hang: 1 | 2 | 3 };
   if (!fs.existsSync(fileMau)) {
+    // --bo-qua thu-300,thu-700: bỏ các repo đã xét ở nấc trước để nấc mới lấy mẫu từ phần chưa xét
+    const daXetNacTruoc = new Set<string>();
+    for (const nac of (layThamSo('bo-qua') ?? '').split(',').filter(Boolean))
+      for (const m of docJsonl<{ repo: string }>(
+        path.join(thuMucDs, `thu-lo-moi-${nac}.mau.jsonl`),
+      ))
+        daXetNacTruoc.add(m.repo.toLowerCase());
     const ds = docJsonl<UngVien>(path.join(thuMucDs, 'liet-ke-ung-vien.jsonl')).filter(
-      (r) => r.hang <= 2,
+      (r) => r.hang <= 2 && !daXetNacTruoc.has(r.repo.toLowerCase()),
     );
     const chon: UngVien[] = [];
     for (const h of [1, 2]) {

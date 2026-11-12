@@ -8,7 +8,7 @@ import {
   laThuVienLapTrinh,
   zipLaUngDungDesktop,
   readmeChiChoMacTheoMoDau,
-  laCongCuGianLan,
+  laCongCuKhongNenNhan,
   type ReleaseUngVien,
 } from '../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util';
 import { phanLoaiTep } from '../../modules/ung-dung/tien-ich/phan-loai-tep.util';
@@ -233,7 +233,7 @@ export function danhGiaRepoDoLai(
       !laThuVienLapTrinh(readme, fullName, huongDan.cachCai) &&
       cachCaiThuocRepo(fullName, huongDan.cachCai) &&
       !readmeChiChoMacTheoMoDau(readme) &&
-      !laCongCuGianLan(readme)
+      !laCongCuKhongNenNhan(readme)
     ) {
       vot = true;
       nhom.push(...nhanNhomTuHuongDan(huongDan));
