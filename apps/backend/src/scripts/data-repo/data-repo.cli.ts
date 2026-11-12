@@ -2,6 +2,7 @@
  * CLI Data_Repo: chuẩn bị trước bản dịch cho kho (P3B-06/07). Chạy từ apps/backend:
  *
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
+ *   pnpm data-repo dem-kho  # ĐẾM KHÔ lô repo mới (D-39): chỉ đọc total_count của Search, chưa tải repo, kết quả ở 00_danh_sach/kham-pha-ke-hoach.json
  *   pnpm data-repo do-lai-bi-loai [--sao-tu M]  # CHỈ ĐỌC, không gọi mạng: in kế hoạch dò lại repo bị loại (D-38)
  *   pnpm data-repo do-lai-bi-loai --goi-github [--ten lan-1] [--toi-da N] [--sao-tu M] [--du-tru 1000] # dò thật qua GitHub, xuất 00_danh_sach/do-lai-<ten>.jsonl
  *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
@@ -2340,9 +2341,121 @@ async function doLaiBangGithub(thuMucDs: string, ungVien: UngVienDoLai[]): Promi
   );
 }
 
+// ---------------------------------------------------------------- ĐẾM KHÔ KHO REPO MỚI (D-39, P3B-37.2)
+/** Tên mọi repo đã biết: trong DB (chỉ SELECT), mọi danh sách đã nhận, đã loại, đã dò lại trong Data_Repo. */
+async function layTapRepoDaBiet(thuMucDs: string): Promise<Set<string>> {
+  const daBiet = new Set<string>();
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  try {
+    for (const r of await prisma.ungDung.findMany({ select: { tenRepoDayDu: true } }))
+      daBiet.add(r.tenRepoDayDu.toLowerCase());
+    for (const r of await prisma.ungVienRepo.findMany({ select: { tenRepoDayDu: true } }))
+      daBiet.add(r.tenRepoDayDu.toLowerCase());
+  } finally {
+    await prisma.$disconnect();
+  }
+  for (const t of fs.readdirSync(thuMucDs)) {
+    const p = path.join(thuMucDs, t);
+    if (t.endsWith('.txt')) for (const r of docDanhSachRepo(p)) daBiet.add(r.toLowerCase());
+    else if (t.endsWith('.jsonl'))
+      for (const b of docJsonl<{ repo?: string }>(p)) if (b.repo) daBiet.add(b.repo.toLowerCase());
+  }
+  return daBiet;
+}
+
+/**
+ * P3B-37.2: đếm khô. CHỈ đọc `total_count` của Search (per_page=1), không tải repo, không đụng lượt gọi từng repo.
+ * Chia khoảng sao thích ứng (P3B-37.1) tới khi mọi khoảng ≤ 1.000, rồi ước số repo mới so với repo đã biết.
+ * Kết quả lưu ở 00_danh_sach/kham-pha-ke-hoach.json cho bước thu thập sau (cần lệnh riêng của Chủ).
+ */
+async function lenhDemKho(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  const { chiaKhoangSaoThichUng } = await import('./chia-khoang-sao.core');
+  const { NGUONG_LOC_MAC_DINH } =
+    await import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util');
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const fileDem = path.join(thuMucDs, '_dem_kho_cache.json');
+  const boNho: Record<string, number> = fs.existsSync(fileDem)
+    ? (JSON.parse(fs.readFileSync(fileDem, 'utf8')) as Record<string, number>)
+    : {};
+  const ngayPush = new Date(Date.now() - NGUONG_LOC_MAC_DINH.maxPushThang * 30.4375 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${token}`,
+  };
+  const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let soGoi = 0;
+
+  const demTong = async (tu: number, den: number): Promise<number> => {
+    const khoa = `${tu}..${den}|${ngayPush}`;
+    if (boNho[khoa] !== undefined) return boNho[khoa];
+    const q = `stars:${tu}..${den} archived:false fork:false pushed:>=${ngayPush}`;
+    for (let lan = 1; lan <= 5; lan++) {
+      await ngu(2500); // Search tối đa 30 lượt mỗi phút
+      const res = await fetch(
+        `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&per_page=1`,
+        { headers, signal: AbortSignal.timeout(30000) },
+      );
+      soGoi++;
+      if (res.ok) {
+        const tong = ((await res.json()) as { total_count: number }).total_count;
+        boNho[khoa] = tong;
+        if (soGoi % 20 === 0) {
+          fs.writeFileSync(fileDem, JSON.stringify(boNho), 'utf8');
+          console.info(`... ${soGoi} lượt Search (khoảng ${tu}..${den}: ${tong})`);
+        }
+        return tong;
+      }
+      console.warn(`Search lỗi ${res.status} (${tu}..${den}), thử lại lần ${lan}.`);
+      await ngu(res.status === 403 || res.status === 429 ? 65000 : 5000);
+    }
+    throw new Error(`Search lỗi liên tục ở khoảng ${tu}..${den}.`);
+  };
+
+  const kq = await chiaKhoangSaoThichUng(demTong, NGUONG_LOC_MAC_DINH.minStars, 1_000_000);
+  fs.writeFileSync(fileDem, JSON.stringify(boNho), 'utf8');
+  const tong =
+    kq.khoang.reduce((t, k) => t + k.tong, 0) + kq.khoangDonQuaLon.reduce((t, k) => t + k.tong, 0);
+  const daBiet = await layTapRepoDaBiet(thuMucDs);
+  const uocMoi = Math.max(0, tong - daBiet.size);
+  fs.writeFileSync(
+    path.join(thuMucDs, 'kham-pha-ke-hoach.json'),
+    JSON.stringify({ ngayPush, khoang: kq.khoang, khoangDonQuaLon: kq.khoangDonQuaLon }, null, 1),
+    'utf8',
+  );
+  console.info(
+    `\n=== ĐẾM KHÔ (push từ ${ngayPush}, sao ≥ ${NGUONG_LOC_MAC_DINH.minStars}, không fork, không archived) ===`,
+  );
+  console.info(`Số khoảng sao: ${kq.khoang.length} (mỗi khoảng ≤ 1.000 repo)`);
+  console.info(
+    `Khoảng một mức sao vẫn quá 1.000 (cần chia thêm theo ngày push): ${kq.khoangDonQuaLon.length}`,
+  );
+  console.info(`Tổng repo theo Search: ${tong}`);
+  console.info(`Repo đã biết (DB, kho, đã loại, đã dò lại): ${daBiet.size}`);
+  console.info(`Ước repo MỚI (cận trên, chưa qua lọc cục bộ): ${uocMoi}`);
+  console.info(`Lượt Search lần này: ${soGoi} (có bộ nhớ đệm ${fileDem})`);
+  console.info(
+    `Ước lượt GitHub core để lấy README và release của repo mới: tối đa ${uocMoi * 2}, tức khoảng ${((uocMoi * 2) / 4000).toFixed(1)} giờ (4.000 lượt mỗi giờ).`,
+  );
+  console.info('Chưa tải repo nào. Thu thập thật cần lệnh riêng của Chủ.');
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'dem-kho':
+      return lenhDemKho();
     case 'do-lai-bi-loai':
       return lenhDoLaiBiLoai();
     case 'quet-lai-cli':
@@ -2387,7 +2500,7 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: dem-kho | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }
