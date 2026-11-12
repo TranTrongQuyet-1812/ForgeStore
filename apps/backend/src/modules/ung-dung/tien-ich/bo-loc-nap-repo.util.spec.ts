@@ -403,3 +403,71 @@ describe('Luật ZIP lẻ và thư viện sau kiểm tay 339 repo (12/11/2026)',
     ).toBe(true);
   });
 });
+
+describe('Thư viện npm cài như phụ thuộc dự án (kiểm tay mẫu độc lập 12/11/2026)', () => {
+  // Đoạn nguyên văn từ README thật của fastmail/Squire, robinmoisson/staticrypt, pmndrs/react-three-fiber
+  const readmeSquire = [
+    'Squire is an HTML5 rich text editor, which provides powerful cross-browser normalisation in a flexible lightweight package.',
+    '1. Add Squire to your project: `npm install squire-rte`',
+  ].join('\n');
+  const readmeStaticrypt = [
+    'Staticrypt is available through npm as a CLI, install with',
+    'npm install staticrypt',
+    'staticrypt test.html',
+    'staticrypt test.html -p <long-password>',
+  ].join('\n');
+  const readmeR3f = [
+    'react-three-fiber is a React renderer for threejs.',
+    'npm install three @types/three @react-three/fiber',
+    'npm install expo-cli -g',
+  ].join('\n');
+
+  it('chỉ có npm install <gói> cục bộ thì là thư viện (Squire)', () => {
+    const cach = [
+      {
+        nhom: 'NPM',
+        trinhQuanLy: 'NPM',
+        tenGoi: 'squire-rte',
+        buoc: [{ lenh: 'npm install squire-rte' }],
+      },
+    ];
+    expect(laThuVienLapTrinh(readmeSquire, 'fastmail/Squire', cach)).toBe(true);
+  });
+
+  it('cùng cách cài npm nhưng README có dòng lệnh chạy chính gói đó thì là công cụ (staticrypt)', () => {
+    const cach = [
+      {
+        nhom: 'NPM',
+        trinhQuanLy: 'NPM',
+        tenGoi: 'staticrypt',
+        buoc: [{ lenh: 'npm install staticrypt' }],
+      },
+    ];
+    expect(laThuVienLapTrinh(readmeStaticrypt, 'robinmoisson/staticrypt', cach)).toBe(false);
+  });
+
+  it('cài toàn cục một gói KHÁC (expo-cli) không chứng tỏ repo là ứng dụng (react-three-fiber)', () => {
+    const cach = [
+      {
+        nhom: 'NPM',
+        trinhQuanLy: 'NPM',
+        tenGoi: '@react-three/fiber',
+        buoc: [{ lenh: 'npm install three @types/three @react-three/fiber' }],
+      },
+      {
+        nhom: 'NPM',
+        trinhQuanLy: 'NPM',
+        tenGoi: 'expo-cli',
+        buoc: [{ lenh: 'npm install expo-cli -g' }],
+      },
+    ];
+    expect(laThuVienLapTrinh(readmeR3f, 'pmndrs/react-three-fiber', cach)).toBe(true);
+  });
+
+  it('lệnh pnpm install trần (chạy từ mã nguồn) không làm repo thành thư viện', () => {
+    const cach = [{ nhom: 'NPM', trinhQuanLy: 'NPM', buoc: [{ lenh: 'pnpm install' }] }];
+    expect(
+      laThuVienLapTrinh('A web app. Run pnpm install then pnpm dev.', 'foo/web-app', cach),
+    ).toBe(false);
+  });
+});

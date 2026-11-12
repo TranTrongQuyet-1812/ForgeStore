@@ -211,6 +211,9 @@ export function laThuVienLapTrinh(
   // 4. Nếu có lệnh cài toàn cục (pipx install, uv tool install, npm -g, cargo install, go install) -> Là ứng dụng CLI
   let coCaiDatToanCuc = false;
   for (const c of cachCai) {
+    // Cài toàn cục chỉ chứng tỏ là ứng dụng khi gói đó là gói CỦA CHÍNH REPO (expo-cli của react-three-fiber, vercel của
+    // NoUnityCN, corepack của evolu là gói khác, không tính)
+    if (!cachCaiThuocRepo(fullName, [c])) continue;
     for (const b of c.buoc ?? []) {
       const l = b.lenh.trim();
       if (
@@ -228,6 +231,14 @@ export function laThuVienLapTrinh(
     return false;
   }
 
+  // Các tên có thể là tên lệnh của chương trình: tên repo và tên các gói cài
+  const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
+  const cacGoi = cachCai
+    .map((c) => c.tenGoi)
+    .filter(Boolean)
+    .map((g) => (g as string).toLowerCase());
+  const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
+
   // 4b. README tự mô tả "X is a Python package/library/module/ORM/adapter" ở phần mở đầu thì là thư viện, kể cả khi không
   // có khối import và có vài lệnh CLI phụ (faker, typer, sympy, psycopg2). Đo trên kiểm tay 339 repo vớt 12/11/2026.
   // Ngoại lệ: phần mở đầu nói rõ đây cũng là công cụ dòng lệnh/tiện ích/giao diện (gTTS, isort, jc), theo luật "chạy được như
@@ -241,15 +252,17 @@ export function laThuVienLapTrinh(
     return true;
   }
 
+  // 4c. Chỉ có cách cài "thêm gói vào dự án" và mở đầu không nói đây là công cụ dòng lệnh/ứng dụng
+  if (
+    chiCaiNhuPhuThuocDuAn(fullName, cachCai) &&
+    !MAU_MO_DAU_LA_CLI_RIENG.test(phanDauReadme(readme, 500)) &&
+    !coLenhChayChinhGoi(readme, danhSachTen) // browserify main.js, staticrypt file.html, playroom start...
+  ) {
+    return true;
+  }
+
   // 5. Framework/thư viện phát triển nổi tiếng luôn bị loại dù có CLI dev. Kiểm TRƯỚC khối code import vì README
   // viết bằng RST (scikit-learn, scrapy) không có khối ``` nên sẽ lọt nếu chỉ dựa vào dấu hiệu import.
-  const tenRepo = (fullName.split('/')[1] || fullName).toLowerCase();
-  const cacGoi = cachCai
-    .map((c) => c.tenGoi)
-    .filter(Boolean)
-    .map((g) => (g as string).toLowerCase());
-  const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
-
   const FRAMEWORK_DEV_LOAI = new Set([
     'fastapi',
     'scrapy',
@@ -270,19 +283,7 @@ export function laThuVienLapTrinh(
   // Nếu không có dấu hiệu import nào, thì không phải là thư viện thuần
   if (!coCodeImport) return false;
 
-  // Dòng lệnh chạy chính gói đó như một chương trình (`<gói> --help`, `<gói> <lệnh con>`): chỉ tính dòng nằm trong
-  // khối mã hoặc sau dấu `$`. Câu văn mở đầu bằng tên repo ("Faker is a Python package...") không phải lệnh.
-  const dongLenh = layCacDongLenhTrongReadme(readme);
-  // Tên lệnh thường là tên gói, hoặc thêm đuôi -cli (gtts-cli, vd. gTTS)
-  const reLenhChinhGoi = new RegExp(
-    `^(?:${danhSachTen
-      .filter((t) => t.length >= 2)
-      .map((t) => `${thoatKyTuRegex(t)}(?:[-_]?cli)?`)
-      .join('|')})(?:\\.exe)?\\s+(?![=(:,.])\\S`, // loại phép gán/gọi hàm trong mã (faker = Faker())
-    'i',
-  );
-  const lenhBoQua = /^(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i;
-  if (dongLenh.some((l) => !lenhBoQua.test(l) && reLenhChinhGoi.test(l))) return false;
+  if (coLenhChayChinhGoi(readme, danhSachTen)) return false;
 
   // 7. Lệnh chạy runner độc lập của CHÍNH gói này. `python -m pip`, `npx create-react-app`... là việc khác, không tính.
   const tenGoiRegex = danhSachTen
@@ -335,8 +336,13 @@ function layCacDongLenhTrongReadme(readme: string): string[] {
 
 /** Tệp cùng bản phát hành cho biết đây không phải ứng dụng Windows/Linux: gói thư viện, ứng dụng Mac/iOS, sách, ảnh đĩa, firmware. */
 const MAU_TEP_KHONG_PHAI_APP_DESKTOP =
-  /\.(?:app\.zip|ipa|nupkg|snupkg|aar|vsix|epub|pdf|iso|fpk)$|\.xcframework(?:\.zip)?$|\.fb2\.zip$|\.img(?:\.xz)?(?:\.\d+)?$|\.iso\.\d+$/i;
+  /\.(?:app\.zip|ipa|aar|vsix|epub|pdf|iso|fpk)$|\.xcframework(?:\.zip)?$|\.fb2\.zip$|\.img(?:\.xz)?(?:\.\d+)?$|\.iso\.\d+$/i;
 /** Tên ZIP chung chung kiểu gói web, dữ liệu, bản chụp mã (web.zip, specs.zip, frontend.zip, repo-git.zip). */
+/** Gói NuGet đi kèm ZIP: thường là thư viện .NET, nhưng tiện ích như lessmsi cũng phát hành kèm nupkg. */
+const MAU_TEP_NUGET = /\.s?nupkg$/i;
+/** README tự nhận là công cụ/tiện ích/dòng lệnh (lessmsi: "a utility with a graphical user interface"). */
+const MAU_ZIP_TU_NHAN_LA_CONG_CU =
+  /\b(?:tool|utility|command[- ]line|graphical user interface|desktop application)\b/i;
 const MAU_TEN_ZIP_GOI_PHU =
   /^(?:web|frontend|html5?|public|build|specs?|deps|resources|skills?|dist|assets|data)(?:[-_.\d].*)?\.(?:zip|7z)$|(?:^|[-_.])(?:web|ui|frontend|html5?)(?:[-_.]|$)|[-_.]git\.(?:zip|7z)$/i;
 const MAU_README_THU_VIEN_PHU_THUOC =
@@ -357,10 +363,61 @@ const MAU_TU_MO_TA_LA_THU_VIEN =
   /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|package(?!\s+of\b)|module|adapter|orm|wrapper|bindings|framework for)\b/i;
 /** Tiêu đề kiểu cụm danh từ ("Python GraphQL library", "database adapter for Python", "collection of widgets") ở ~260 ký tự đầu. */
 const MAU_MO_DAU_CUM_THU_VIEN =
-  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
+  /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\b(?:multi-?agent|agent|web|ai|python|javascript|typescript)\s+framework\b|\b(?:react|vue|angular|svelte|solid|jquery)\s+(?:component|plugin|hook)s?\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
+/** npm/pnpm/yarn/bun cài MỘT gói có tên (cho phép cờ trước tên). "pnpm install" trần (chạy từ mã nguồn) không khớp. */
+const MAU_NPM_CAI_GOI_CO_TEN =
+  /\b(?:npm|pnpm|yarn|bun)\s+(?:i|install|add)\s+(?:-{1,2}[\w-]+(?:=\S+)?\s+)*(?!-)[@\w.][^\s]*/;
+
+/**
+ * Mọi cách cài đều chỉ là thêm một gói vào dự án khác (npm install <gói> không -g, không npx; pip và cài từ mã nguồn không
+ * làm đổi kết luận) và không có đường cài kiểu ứng dụng (winget, scoop, choco, docker, cargo/go install, conda...). Ứng dụng
+ * viết bằng JS thường cài bằng npm -g hoặc npx. Kiểm tay mẫu độc lập 12/11/2026: lightGallery, effector, Squire, deck.gl...
+ */
+function chiCaiNhuPhuThuocDuAn(
+  fullName: string,
+  cachCai: Array<{ nhom?: string; tenGoi?: string; buoc?: Array<{ lenh: string }> }>,
+): boolean {
+  let coNpmCoTen = false;
+  for (const c of cachCai) {
+    const nhom = c.nhom ?? '';
+    if (nhom === 'PIP' || nhom === 'NGUON') continue;
+    if (nhom !== 'NPM') return false;
+    for (const b of c.buoc ?? []) {
+      const l = b.lenh.trim();
+      if (/(?:^|\s)npx\s/.test(l)) return false;
+      // Cài toàn cục chỉ chứng tỏ là ứng dụng khi là gói của chính repo (expo-cli của react-three-fiber thì không)
+      if (/(?:^|\s)(?:-g|--global)\b/.test(l) && cachCaiThuocRepo(fullName, [c])) return false;
+      if (MAU_NPM_CAI_GOI_CO_TEN.test(l)) coNpmCoTen = true;
+    }
+  }
+  return coNpmCoTen;
+}
+
+/**
+ * README có dòng lệnh chạy CHÍNH gói đó như một chương trình (`<gói> --help`, `<gói> <lệnh con>`): chỉ tính dòng nằm trong
+ * khối mã hoặc sau dấu `$`. Câu văn mở đầu bằng tên repo ("Faker is a Python package...") không phải lệnh.
+ */
+function coLenhChayChinhGoi(readme: string, danhSachTen: string[]): boolean {
+  // Tên lệnh thường là tên gói, hoặc thêm đuôi -cli (gtts-cli, vd. gTTS)
+  const ten = danhSachTen.filter((t) => t.length >= 2);
+  if (ten.length === 0) return false;
+  const reLenhChinhGoi = new RegExp(
+    `^(?:${ten.map((t) => `${thoatKyTuRegex(t)}(?:[-_]?cli)?`).join('|')})(?:\\.exe)?\\s+(?![=(:,.])\\S`, // loại phép gán/gọi hàm trong mã (faker = Faker())
+    'i',
+  );
+  const lenhBoQua = /^(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|go|git)\b/i;
+  return layCacDongLenhTrongReadme(readme).some(
+    (l) => !lenhBoQua.test(l) && reLenhChinhGoi.test(l),
+  );
+}
+
+/** Chỉ riêng CLI/dòng lệnh (không tính app, terminal, gui, vốn hay xuất hiện trong mô tả thư viện); không tính "để xây CLI". */
+const MAU_MO_DAU_LA_CLI_RIENG =
+  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)(?<![\w-])\b(?:cli|command[- ]line)\b/i;
+
 /** Phần mở đầu nói đây là công cụ dòng lệnh/tiện ích/ứng dụng; không tính "để xây/viết/tạo CLI". */
 const MAU_MO_DAU_LA_CONG_CU =
-  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)\b(?:cli|command[- ]line|utility|terminal|gui|desktop|app)\b/i;
+  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)(?<![\w-])\b(?:cli|command[- ]line|utility|terminal|gui|desktop|app)\b/i;
 /** Dấu hiệu không nhập nhằng ở phần mở đầu: web tự host, tài liệu học, bộ cấu hình, framework đặc thù. */
 const MAU_MO_DAU_KHONG_PHAI_APP =
   /\b(?:php|laravel|wordpress|self[- ]hosted|web[- ]based|web interface|in the browser|for the web|e-?commerce|tutorials?|courses?|exercises|katas|prompts?|skills?|graphic packs?|configs?|configuration files?|systemless module|home assistant|components for|operating system|framework for (?:wpf|\.net|react|vue|angular|android|ios|unity|godot|unreal)|language server|add-?on|gdextension|our research)\b|\b(?:development|testing|debugging|database|web|application|mobile|ui|test) framework\b|插件|主题|模板|配置|教程|课程|扩展/i;
@@ -370,7 +427,8 @@ function phanDauReadme(readme: string, n: number): string {
   return readme
     .replace(/!\[[^\]]*\]\([^)]*\)|<[^>]*>/g, ' ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[#*_`>|=-]/g, ' ')
+    .replace(/[#*_`>|=]/g, ' ')
+    .replace(/(^|\s)-+(?=\s)/g, ' ') // gạch đứng riêng (gạch đầu dòng); giữ gạch trong từ (expo-cli, multi-agent)
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, n);
@@ -399,13 +457,16 @@ export function zipLaUngDungDesktop(
   if (zip && MAU_TEN_ZIP_GOI_PHU.test(zip)) return false;
 
   const vb = readme ?? '';
+  const moDau = phanDauReadme(vb, 600);
+  const tuNhanLaCongCu = MAU_ZIP_TU_NHAN_LA_CONG_CU.test(moDau.slice(0, 450));
+  if (ten.some((t) => MAU_TEP_NUGET.test(t)) && !tuNhanLaCongCu) return false;
   if (MAU_README_THU_VIEN_PHU_THUOC.test(vb) || MAU_README_PLUGIN_CUA_APP_KHAC.test(vb))
     return false;
   if (MAU_README_TIEN_ICH_TRINH_DUYET.test(vb)) return false;
-  const moDau = phanDauReadme(vb, 600);
+  // Mở đầu tự nhận là thư viện/plugin/web tự host... thì loại, trừ khi mở đầu nói rõ đây là công cụ/tiện ích/dòng lệnh (SchemaCrawler)
   if (
-    MAU_TU_MO_TA_LA_GOI_PHU_TRO.test(moDau) ||
-    MAU_MO_DAU_KHONG_PHAI_APP.test(moDau.slice(0, 350))
+    !tuNhanLaCongCu &&
+    (MAU_TU_MO_TA_LA_GOI_PHU_TRO.test(moDau) || MAU_MO_DAU_KHONG_PHAI_APP.test(moDau.slice(0, 350)))
   )
     return false;
 
