@@ -4,6 +4,7 @@
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
  *   pnpm data-repo dem-kho  # ĐẾM KHÔ lô repo mới (D-39): chỉ đọc total_count của Search, chưa tải repo, kết quả ở 00_danh_sach/kham-pha-ke-hoach.json
  *   pnpm data-repo liet-ke [--chi-loc]  # liệt kê lô repo mới theo kế hoạch dem-kho (chỉ Search), lọc cục bộ, xếp hạng ưu tiên; chưa lấy README/release
+ *   pnpm data-repo thu-lo-moi [--ten thu-300] [--so 300]  # thử nhỏ lô repo mới: 300 repo phân tầng từ hạng 1+2, lấy README+release, chấm luật, lưu _nguon_moi
  *   pnpm data-repo do-lai-bi-loai [--sao-tu M]  # CHỈ ĐỌC, không gọi mạng: in kế hoạch dò lại repo bị loại (D-38)
  *   pnpm data-repo do-lai-bi-loai --goi-github [--ten lan-1] [--toi-da N] [--sao-tu M] [--du-tru 1000] # dò thật qua GitHub, xuất 00_danh_sach/do-lai-<ten>.jsonl
  *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
@@ -2628,9 +2629,88 @@ async function lenhLietKe(): Promise<void> {
   console.info(`Danh sách xếp hạng: ${fileRa}. Chưa lấy README hay release nào.`);
 }
 
+// ---------------------------------------------------------------- THỬ NHỎ LÔ REPO MỚI (D-39, P3B-37.3, bước 2)
+/**
+ * Thử nhỏ: chọn `--so` repo (mặc định 300) PHÂN TẦNG từ hạng 1 + 2 của `liet-ke` (mỗi hạng lấy đều đặn theo sao giảm dần, số
+ * lượng tỷ lệ theo hạng) để đo tỷ lệ qua README/release và chất lượng luật trên dữ liệu chưa từng thấy. Lấy README + release,
+ * chấm bằng đúng luật hiện tại, lưu bản gốc ở `_nguon_moi/` để chấm lại ngoại tuyến. Chạy tiếp được khi bị ngắt.
+ */
+async function lenhThuLoMoi(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const token = process.env.GITHUB_TOKEN || '';
+  if (!token) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+  const ten = layThamSo('ten') ?? 'thu-300';
+  const soMau = Number(layThamSo('so') ?? '300');
+  const duTru = Number(layThamSo('du-tru') ?? '1000');
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const fileMau = path.join(thuMucDs, `thu-lo-moi-${ten}.mau.jsonl`);
+  const fileRa = path.join(thuMucDs, `thu-lo-moi-${ten}.jsonl`);
+  const fileDaXet = path.join(thuMucDs, `thu-lo-moi-${ten}.da-xet.jsonl`);
+  const thuMucNguon = path.join(thuMucDs, '_nguon_moi');
+  fs.mkdirSync(thuMucNguon, { recursive: true });
+
+  type UngVien = { repo: string; sao: number; hang: 1 | 2 | 3 };
+  if (!fs.existsSync(fileMau)) {
+    const ds = docJsonl<UngVien>(path.join(thuMucDs, 'liet-ke-ung-vien.jsonl')).filter(
+      (r) => r.hang <= 2,
+    );
+    const chon: UngVien[] = [];
+    for (const h of [1, 2]) {
+      const nhom = ds.filter((r) => r.hang === h); // đã sắp sao giảm dần
+      const n = Math.round((soMau * nhom.length) / ds.length);
+      const buoc = nhom.length / n;
+      for (let i = 0; i < n; i++) chon.push(nhom[Math.floor(i * buoc + buoc / 2)]!);
+    }
+    fs.writeFileSync(fileMau, chon.map((c) => JSON.stringify(c)).join('\n') + '\n', 'utf8');
+  }
+  const mau = docJsonl<UngVien>(fileMau);
+  const daXet = new Set(docJsonl<{ repo: string }>(fileDaXet).map((b) => b.repo.toLowerCase()));
+  const { danhGiaRepoDoLai } = await import('./do-lai-bi-loai.core');
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${token}`,
+  };
+  let soXet = 0;
+  let soVot = 0;
+  for (const uv of mau) {
+    if (daXet.has(uv.repo.toLowerCase())) continue;
+    const du = await layDuLieuGithubDoLai(uv.repo, true, headers, duTru);
+    if (du.dung) {
+      console.warn(`Dừng: hạn mức GitHub xuống dưới ${duTru}. Chạy lại đúng lệnh này để tiếp tục.`);
+      break;
+    }
+    fs.writeFileSync(
+      path.join(thuMucNguon, `${uv.repo.replace('/', '__')}.json`),
+      JSON.stringify({ repo: uv.repo, readme: du.readme, releases: du.releases }),
+    );
+    const kq = danhGiaRepoDoLai(uv.repo, du.readme, du.releases);
+    noiThemJsonl(fileDaXet, { repo: uv.repo, vot: kq.vot });
+    soXet++;
+    if (!kq.vot) continue;
+    soVot++;
+    noiThemJsonl(fileRa, { ...uv, nhom: kq.nhom });
+  }
+  const tong = docJsonl<{ repo: string }>(fileDaXet).length;
+  const vot = docJsonl<UngVien & { nhom: string[] }>(fileRa);
+  const theoHang = (h: number) =>
+    `${vot.filter((v) => v.hang === h).length}/${mau.filter((m) => m.hang === h).length}`;
+  console.info(
+    `Thử nhỏ ${ten}: đã xét ${tong}/${mau.length} (lần này ${soXet}), qua ${vot.length} (hạng 1: ${theoHang(1)}, hạng 2: ${theoHang(2)}). Kết quả: ${fileRa}`,
+  );
+  void soVot;
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'thu-lo-moi':
+      return lenhThuLoMoi();
     case 'liet-ke':
       return lenhLietKe();
     case 'dem-kho':
@@ -2679,7 +2759,7 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: dem-kho | liet-ke | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: dem-kho | liet-ke | thu-lo-moi | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }

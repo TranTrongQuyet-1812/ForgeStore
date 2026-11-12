@@ -7,6 +7,8 @@ import {
   locCucBo,
   trongDanhSachChan,
   zipLaUngDungDesktop,
+  readmeChiChoMacTheoMoDau,
+  laCongCuGianLan,
   type RepoUngVien,
 } from './bo-loc-nap-repo.util';
 
@@ -468,6 +470,63 @@ describe('Thư viện npm cài như phụ thuộc dự án (kiểm tay mẫu đ�
     const cach = [{ nhom: 'NPM', trinhQuanLy: 'NPM', buoc: [{ lenh: 'pnpm install' }] }];
     expect(
       laThuVienLapTrinh('A web app. Run pnpm install then pnpm dev.', 'foo/web-app', cach),
+    ).toBe(false);
+  });
+});
+
+describe('Thử nhỏ lô repo mới: luật vá sau kiểm tay 107 repo qua (12/11/2026)', () => {
+  // Phần mở đầu README thật của getzep/graphiti, johannfaouzi/pyts, Babyhamsta/Aimmy, govijr/terminal-mac
+  const readmeGraphiti =
+    'Graphiti A Framework for Building Temporal Knowledge Graphs\n\ndocker run -p 6379:6379 -p 3000:3000 -it falkordb/falkordb';
+  const readmePyts = [
+    'pyts: a Python package for time series classification',
+    'pyts is a Python package for time series classification. It aims to make time series classification easily accessible by providing preprocessing and utility tools, and implementations of state-of-the-art algorithms.',
+  ].join('\n');
+  const readmeAimmy =
+    'Aimmy\nUniversal Second Eye for Gamers with Impairments (Universal AI Aim Alignment Mechanism)';
+  const readmeTerminalMac =
+    'terminal-mac\nA separate macOS desktop for computer-use agents, viewed and controlled from a terminal.';
+
+  it("thư viện tự nhận bằng tiêu đề dù có Docker (graphiti), và 'utility tools' của chính gói không làm nó thành tiện ích (pyts)", () => {
+    const cachGraphiti = [
+      {
+        nhom: 'PIP',
+        trinhQuanLy: 'PIP',
+        tenGoi: 'graphiti-core',
+        buoc: [{ lenh: 'pip install graphiti-core' }],
+      },
+      {
+        nhom: 'DOCKER',
+        trinhQuanLy: 'DOCKER',
+        tenGoi: 'falkordb/falkordb',
+        buoc: [{ lenh: 'docker run -p 6379:6379 -p 3000:3000 -it falkordb/falkordb' }],
+      },
+    ];
+    expect(laThuVienLapTrinh(readmeGraphiti, 'getzep/graphiti', cachGraphiti)).toBe(true);
+    const cachPyts = [
+      { nhom: 'PIP', trinhQuanLy: 'PIP', tenGoi: 'pyts', buoc: [{ lenh: 'pip install pyts' }] },
+    ];
+    expect(laThuVienLapTrinh(readmePyts, 'johannfaouzi/pyts', cachPyts)).toBe(true);
+  });
+
+  it('winget của gói khác không chứng tỏ repo là ứng dụng (robotgo cài GoLang.Go)', () => {
+    expect(cachCaiThuocRepo('go-vgo/robotgo', [{ nhom: 'WINGET', tenGoi: 'GoLang.Go' }])).toBe(
+      false,
+    );
+    expect(
+      cachCaiThuocRepo('charmbracelet/crush', [{ nhom: 'WINGET', tenGoi: 'charmbracelet.crush' }]),
+    ).toBe(true);
+  });
+
+  it('nhận ra công cụ gian lận game (Aimmy) và README chỉ nói về Mac (terminal-mac)', () => {
+    expect(laCongCuGianLan(readmeAimmy)).toBe(true);
+    expect(laCongCuGianLan('A fast video downloader built with Go')).toBe(false);
+    expect(readmeChiChoMacTheoMoDau(readmeTerminalMac)).toBe(true);
+    // app đa nền tảng có đoạn cài cho Mac (browser-use, aws-shell) thì không bị coi là chỉ cho Mac
+    expect(
+      readmeChiChoMacTheoMoDau(
+        'The open source browser agent.\nOn macOS install with brew. Works on Windows and Linux too.',
+      ),
     ).toBe(false);
   });
 });

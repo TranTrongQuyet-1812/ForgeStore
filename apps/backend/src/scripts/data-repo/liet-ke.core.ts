@@ -97,7 +97,7 @@ const CHU_DE_BO_CHAC = new Set([
 
 /** Mô tả của repo mồi (phần mềm lậu, bản cài giả) và nghiên cứu/sách/hội nghị: bỏ vô điều kiện. */
 const MAU_MO_TA_BO_CHAC =
-  /\b(?:full working installer|ready to run in 20\d\d|free download|download free|cracked?|keygen|activator|serial key|license key|premium unlocked|mod apk)\b|\b(?:paper|benchmark|survey|textbook|dataset|reading list|call for (?:papers|reviewers)|NeurIPS|ICML|ICLR|CVPR|ACL|arxiv)\b/i;
+  /\b(?:full working installer|ready to run in 20\d\d|free download|download free|cracked?|keygen|activator|serial key|license key|premium unlocked|mod apk|aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?)\b|\b(?:paper|benchmark|survey|textbook|dataset|reading list|call for (?:papers|reviewers)|NeurIPS|ICML|ICLR|CVPR|ACL|arxiv)\b/i;
 
 /** Lý do bỏ (để thống kê) hoặc null nếu giữ. Ứng dụng chạy được (CLI/desktop) không bị bỏ chỉ vì cũng là thư viện/tiện ích. */
 export function lyDoBoTheoSieuDuLieu(m: MetaRepo): string | null {

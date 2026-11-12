@@ -187,6 +187,21 @@ export function laThuVienLapTrinh(
 ): boolean {
   if (!readme || !cachCai || cachCai.length === 0) return false;
 
+  // 0. README tự mô tả là thư viện ở phần mở đầu ("X is a Python package", "Graphiti A Framework for...", "Python GraphQL
+  // library") thì là thư viện, kể cả khi có Docker (hasktorch, graphiti) hoặc vài lệnh CLI phụ (faker, typer, sympy). Cách cài
+  // winget/scoop/choco của đúng gói repo vẫn được tin hơn (bước 1). Ngoại lệ: mở đầu nói rõ là công cụ dòng lệnh (gTTS, isort).
+  const moDauThuVien = phanDauReadme(readme, 900);
+  const coCaiKieuUngDung = cachCai.some((c) => ['WINGET', 'SCOOP', 'CHOCO'].includes(c.nhom ?? ''));
+  if (
+    !coCaiKieuUngDung &&
+    (MAU_TU_MO_TA_LA_THU_VIEN.test(moDauThuVien) ||
+      MAU_MO_DAU_TIEU_DE_THU_VIEN.test(moDauThuVien.slice(0, 140)) ||
+      MAU_MO_DAU_CUM_THU_VIEN.test(moDauThuVien.slice(0, 260))) &&
+    !MAU_MO_DAU_LA_CONG_CU.test(moDauThuVien.slice(0, 500))
+  ) {
+    return true;
+  }
+
   // 1. Nếu có cách cài nào thuộc WINGET, SCOOP, CHOCO, DOCKER -> Là ứng dụng
   const nhomHopLe = new Set(cachCai.map((c) => c.nhom));
   if (
@@ -238,19 +253,6 @@ export function laThuVienLapTrinh(
     .filter(Boolean)
     .map((g) => (g as string).toLowerCase());
   const danhSachTen = Array.from(new Set([tenRepo, ...cacGoi]));
-
-  // 4b. README tự mô tả "X is a Python package/library/module/ORM/adapter" ở phần mở đầu thì là thư viện, kể cả khi không
-  // có khối import và có vài lệnh CLI phụ (faker, typer, sympy, psycopg2). Đo trên kiểm tay 339 repo vớt 12/11/2026.
-  // Ngoại lệ: phần mở đầu nói rõ đây cũng là công cụ dòng lệnh/tiện ích/giao diện (gTTS, isort, jc), theo luật "chạy được như
-  // một chương trình thì nhận". Chữ CLI trong "thư viện để xây CLI" (typer) không tính.
-  const moDauThuVien = phanDauReadme(readme, 900);
-  if (
-    (MAU_TU_MO_TA_LA_THU_VIEN.test(moDauThuVien) ||
-      MAU_MO_DAU_CUM_THU_VIEN.test(moDauThuVien.slice(0, 260))) &&
-    !MAU_MO_DAU_LA_CONG_CU.test(moDauThuVien.slice(0, 500))
-  ) {
-    return true;
-  }
 
   // 4c. Chỉ có cách cài "thêm gói vào dự án" và mở đầu không nói đây là công cụ dòng lệnh/ứng dụng
   if (
@@ -344,7 +346,7 @@ const MAU_TEP_NUGET = /\.s?nupkg$/i;
 const MAU_ZIP_TU_NHAN_LA_CONG_CU =
   /\b(?:tool|utility|command[- ]line|graphical user interface|desktop application)\b/i;
 const MAU_TEN_ZIP_GOI_PHU =
-  /^(?:web|frontend|html5?|public|build|specs?|deps|resources|skills?|dist|assets|data)(?:[-_.\d].*)?\.(?:zip|7z)$|(?:^|[-_.])(?:web|ui|frontend|html5?)(?:[-_.]|$)|[-_.]git\.(?:zip|7z)$/i;
+  /^(?:web|frontend|html5?|public|build|specs?|deps|resources|skills?|dist|assets|data)(?:[-_.\d].*)?\.(?:zip|7z)$|[-_.](?:data|dataset)[-_.]|(?:^|[-_.])(?:web|ui|frontend|html5?)(?:[-_.]|$)|[-_.]git\.(?:zip|7z)$/i;
 const MAU_README_THU_VIEN_PHU_THUOC =
   /dotnet\s+add\s+package|Install-Package|PackageReference|composer\s+require|vcpkg\s+install|conan\s+install|cargo\s+add|<artifactId>|\bimplementation\s*[("']|\bpod\s+['"]|\.package\(url:|FetchContent_Declare|find_package\(/i;
 const MAU_README_PLUGIN_CUA_APP_KHAC =
@@ -360,7 +362,10 @@ const MAU_TU_MO_TA_LA_GOI_PHU_TRO =
   /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|plug-?in|add-?on|extension|theme|template|boilerplate|dataset|firmware|wrapper|bindings|cms|operating system|language server)\b/i;
 /** Như trên, thêm các loại gói mã chỉ để import (dùng cho đường vớt README, nơi đã có cách cài pip/npm). */
 const MAU_TU_MO_TA_LA_THU_VIEN =
-  /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|package(?!\s+of\b)|module|adapter|orm|wrapper|bindings|framework for)\b/i;
+  /\b(?:is|are)\s+(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:library|sdk|toolkit|package(?!\s+of\b)|module|adapter|orm|wrapper|bindings|framework for)\b/i;
+/** Tiêu đề kiểu "Graphiti A Framework for...", "pyts: a Python package...": vài từ đầu rồi mạo từ rồi loại gói. */
+const MAU_MO_DAU_TIEU_DE_THU_VIEN =
+  /^(?:[\w.:-]+\s+){1,3}(?:an?|the)\s+(?:[^\s.]+\s+){0,4}(?:framework|library|package|toolkit|sdk)\b/i;
 /** Tiêu đề kiểu cụm danh từ ("Python GraphQL library", "database adapter for Python", "collection of widgets") ở ~260 ký tự đầu. */
 const MAU_MO_DAU_CUM_THU_VIEN =
   /\b(?:python|node(?:\.js)?|javascript|typescript|java|rust|ruby|php|\.?net|c\+\+|react|vue|django)\s+(?:[\w-]+\s+){0,3}(?:library|package|module|adapter|orm|sdk|wrapper|bindings)\b|\b(?:library|sdk|adapter|orm|bindings|wrapper|framework|plug-?in)\s+(?:for|to)\b|\bcollection of\b|\b(?:multi-?agent|agent|web|ai|python|javascript|typescript)\s+framework\b|\b(?:react|vue|angular|svelte|solid|jquery)\s+(?:component|plugin|hook)s?\b|\bthis (?:library|package|module)\b|\bport of\b|\bresume template\b/i;
@@ -417,7 +422,7 @@ const MAU_MO_DAU_LA_CLI_RIENG =
 
 /** Phần mở đầu nói đây là công cụ dòng lệnh/tiện ích/ứng dụng; không tính "để xây/viết/tạo CLI". */
 const MAU_MO_DAU_LA_CONG_CU =
-  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)(?<![\w-])\b(?:cli|command[- ]line|utility|terminal|gui|desktop|app)\b/i;
+  /(?<!(?:build|building|create|creating|write|writing|develop|developing|for)\s)(?<![\w-])\b(?:cli|command[- ]line|utility(?!\s+(?:tools?|functions?|methods?|classes|modules?))|terminal|gui|desktop|app)\b/i;
 /** Dấu hiệu không nhập nhằng ở phần mở đầu: web tự host, tài liệu học, bộ cấu hình, framework đặc thù. */
 const MAU_MO_DAU_KHONG_PHAI_APP =
   /\b(?:php|laravel|wordpress|self[- ]hosted|web[- ]based|web interface|in the browser|for the web|e-?commerce|tutorials?|courses?|exercises|katas|prompts?|skills?|graphic packs?|configs?|configuration files?|systemless module|home assistant|components for|operating system|framework for (?:wpf|\.net|react|vue|angular|android|ios|unity|godot|unreal)|language server|add-?on|gdextension|our research)\b|\b(?:development|testing|debugging|database|web|application|mobile|ui|test) framework\b|插件|主题|模板|配置|教程|课程|扩展/i;
@@ -471,17 +476,45 @@ export function zipLaUngDungDesktop(
     return false;
 
   const dem = (re: RegExp) => (vb.match(re) ?? []).length;
+  if (readmeChiChoMac(vb) || laCongCuGianLan(vb)) return false;
   if (dem(/\b(?:font|typeface)s?\b/gi) >= 3) return false; // bộ chữ, không phải ứng dụng
   if (dem(/\bphp\b/gi) >= 2) return false; // web PHP tự host
-  // "windows" đứng một mình hay trùng với "quản lý cửa sổ", nên Windows chỉ tính khi đi với phiên bản/ngữ cảnh cài đặt
+  return true;
+}
+
+/**
+ * README chỉ nói về macOS (Apple Silicon, MLX, Homebrew...) mà gần như không nhắc Windows/Linux. "windows" đứng một mình hay
+ * trùng với "quản lý cửa sổ", nên Windows chỉ tính khi đi với phiên bản/ngữ cảnh cài đặt. Kiểm tay 12/11/2026: Loop, mlx-audio.
+ */
+export function readmeChiChoMac(vb: string): boolean {
+  const dem = (re: RegExp) => (vb.match(re) ?? []).length;
   const win = dem(
     /\bwindows\s*(?:\d+|xp|vista|server)\b|\.exe\b|\bwin(?:32|64)\b|\bfor windows\b|\bwindows[,/ ]+(?:and |or )?(?:linux|macos|mac)\b|\b(?:linux|macos|mac)[,/ ]+(?:and |or )?windows\b|\bmicrosoft windows\b/gi,
   );
   const linux = dem(/\blinux\b|\bubuntu\b|\bdebian\b/gi);
   const mac = dem(
-    /\bmac(?:os)?\b|\bos\s?x\b|\bdarwin\b|\bhomebrew\b|\bxcode\b|\bapple silicon\b/gi,
+    /\bmac(?:os)?\b|\bos\s?x\b|\bdarwin\b|\bhomebrew\b|\bxcode\b|\bapple silicon\b|\bmlx\b/gi,
   );
-  return !(mac >= 2 && mac > 2 * (win + linux));
+  return mac >= 2 && mac > 2 * (win + linux);
+}
+
+/**
+ * Dùng cho đường README (pip/npm/docker): phần mở đầu nói về Mac/Apple Silicon/MLX VÀ cả README không nhắc Windows hay Linux
+ * (mlx-audio, mlx-serve, terminal-mac). Chặt hơn đếm số lần vì README ứng dụng đa nền tảng hay có đoạn cài cho Mac
+ * (browser-use, aws-shell nhắc macOS ở phần hướng dẫn cài).
+ */
+export function readmeChiChoMacTheoMoDau(vb: string): boolean {
+  return (
+    /\b(?:apple silicon|macos|mac|macbook|mlx)\b/i.test(phanDauReadme(vb, 500)) &&
+    !/\b(?:windows|linux|ubuntu|debian)\b/i.test(vb)
+  );
+}
+
+/** Công cụ gian lận game (aimbot...) hoặc tạo tài khoản hàng loạt, nhận ra ở phần mở đầu README. */
+export function laCongCuGianLan(readme: string | null | undefined): boolean {
+  return /\b(?:aimbot|aim[- ]?(?:assist|alignment|bot)|wallhack|triggerbot|game cheats?|cheat engine|account (?:generator|creator))\b/i.test(
+    phanDauReadme(readme ?? '', 900),
+  );
 }
 
 /**
@@ -496,12 +529,12 @@ export function cachCaiThuocRepo(
   cachCai: Array<{ nhom?: string; tenGoi?: string }> | null | undefined,
 ): boolean {
   const ds = cachCai ?? [];
-  if (
-    ds.some((c) => ['WINGET', 'SCOOP', 'CHOCO', 'DOCKER', 'NPX', 'CONDA'].includes(c.nhom ?? ''))
-  ) {
-    return true;
-  }
-  const goi = ds.filter((c) => ['PIP', 'NPM', 'CARGO', 'GO'].includes(c.nhom ?? '') && c.tenGoi);
+  if (ds.some((c) => ['DOCKER', 'NPX', 'CONDA'].includes(c.nhom ?? ''))) return true;
+  // winget/scoop/choco cũng phải đúng gói của repo (robotgo dạy cài "GoLang.Go" là gói khác)
+  const goi = ds.filter(
+    (c) =>
+      ['PIP', 'NPM', 'CARGO', 'GO', 'WINGET', 'SCOOP', 'CHOCO'].includes(c.nhom ?? '') && c.tenGoi,
+  );
   if (goi.length === 0) return true; // không có gói nào để so (ví dụ chỉ có cài từ mã nguồn): không phán ở luật này
   const [chu = '', ten = ''] = fullName.toLowerCase().split('/');
   const chuan = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -535,6 +568,7 @@ export function coLenhCaiTuReadme(readme: string | null | undefined, fullName: s
   if (!coCachCaiCliHopLe(huongDan)) return false;
   if (laThuVienLapTrinh(readme, fullName, huongDan.cachCai)) return false;
   if (!cachCaiThuocRepo(fullName, huongDan.cachCai)) return false;
+  if (readmeChiChoMacTheoMoDau(readme) || laCongCuGianLan(readme)) return false;
   return true;
 }
 
