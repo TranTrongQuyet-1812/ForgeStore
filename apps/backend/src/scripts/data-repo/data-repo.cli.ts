@@ -3,6 +3,7 @@
  *
  *   pnpm data-repo kham-pha --lo dot-01 [--so 1000] [--du-tru 1000]  # chạy tiếp được khi bị ngắt
  *   pnpm data-repo dem-kho  # ĐẾM KHÔ lô repo mới (D-39): chỉ đọc total_count của Search, chưa tải repo, kết quả ở 00_danh_sach/kham-pha-ke-hoach.json
+ *   pnpm data-repo liet-ke [--chi-loc]  # liệt kê lô repo mới theo kế hoạch dem-kho (chỉ Search), lọc cục bộ, xếp hạng ưu tiên; chưa lấy README/release
  *   pnpm data-repo do-lai-bi-loai [--sao-tu M]  # CHỈ ĐỌC, không gọi mạng: in kế hoạch dò lại repo bị loại (D-38)
  *   pnpm data-repo do-lai-bi-loai --goi-github [--ten lan-1] [--toi-da N] [--sao-tu M] [--du-tru 1000] # dò thật qua GitHub, xuất 00_danh_sach/do-lai-<ten>.jsonl
  *   pnpm data-repo quet-lai-cli --lo dot-01 [--ra dot-01b]  # nhận repo thiếu tệp cài nhưng README có lệnh cài
@@ -2451,9 +2452,185 @@ async function lenhDemKho(): Promise<void> {
   console.info('Chưa tải repo nào. Thu thập thật cần lệnh riêng của Chủ.');
 }
 
+// ---------------------------------------------------------------- LIỆT KÊ LÔ REPO MỚI (D-39, P3B-37.3, bước 1)
+interface RepoLietKe {
+  id: number;
+  repo: string;
+  sao: number;
+  coGiayPhep: boolean;
+  giayPhep: string | null;
+  pushedAt: string | null;
+  moTa: string | null;
+  chuDe: string[];
+  fork: boolean;
+  archived: boolean;
+}
+
+/** Lấy danh sách repo theo kế hoạch của `dem-kho` (chỉ Search, không tốn lượt core), lưu thô để chạy tiếp được. */
+async function layDanhSachTheoKeHoach(thuMucDs: string, fileTho: string): Promise<void> {
+  const fileKeHoach = path.join(thuMucDs, 'kham-pha-ke-hoach.json');
+  if (!fs.existsSync(fileKeHoach))
+    throw new Error('Chưa có kế hoạch: chạy "pnpm data-repo dem-kho" trước.');
+  const kh = JSON.parse(fs.readFileSync(fileKeHoach, 'utf8')) as {
+    ngayPush: string;
+    khoang: Array<{ tu: number; den: number; tong: number }>;
+  };
+  const fileTrang = path.join(thuMucDs, '_liet_ke_trang.json');
+  const daLay = new Set<string>(
+    fs.existsSync(fileTrang) ? (JSON.parse(fs.readFileSync(fileTrang, 'utf8')) as string[]) : [],
+  );
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'ForgeStore-DataRepo',
+    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+  };
+  const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let soGoi = 0;
+  for (const k of kh.khoang) {
+    const soTrang = Math.min(10, Math.ceil(k.tong / 100));
+    for (let trang = 1; trang <= soTrang; trang++) {
+      const khoa = `${k.tu}..${k.den}#${trang}`;
+      if (daLay.has(khoa)) continue;
+      const q = `stars:${k.tu}..${k.den} archived:false fork:false pushed:>=${kh.ngayPush}`;
+      const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=100&page=${trang}`;
+      let xong = false;
+      for (let lan = 1; lan <= 5 && !xong; lan++) {
+        await ngu(2500); // Search tối đa 30 lượt mỗi phút
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+        soGoi++;
+        if (!res.ok) {
+          console.warn(`Search lỗi ${res.status} (${khoa}), thử lại lần ${lan}.`);
+          await ngu(res.status === 403 || res.status === 429 ? 65000 : 5000);
+          continue;
+        }
+        const kq = (await res.json()) as {
+          items: Array<{
+            id: number;
+            full_name: string;
+            stargazers_count: number;
+            license: { spdx_id: string | null } | null;
+            pushed_at: string | null;
+            description: string | null;
+            topics?: string[];
+            fork: boolean;
+            archived: boolean;
+          }>;
+        };
+        for (const it of kq.items) {
+          const dong: RepoLietKe = {
+            id: it.id,
+            repo: it.full_name,
+            sao: it.stargazers_count,
+            coGiayPhep: !!it.license,
+            giayPhep: it.license?.spdx_id ?? null,
+            pushedAt: it.pushed_at,
+            moTa: it.description,
+            chuDe: it.topics ?? [],
+            fork: it.fork,
+            archived: it.archived,
+          };
+          noiThemJsonl(fileTho, dong);
+        }
+        daLay.add(khoa);
+        fs.writeFileSync(fileTrang, JSON.stringify([...daLay]), 'utf8');
+        xong = true;
+      }
+      if (!xong) throw new Error(`Search lỗi liên tục ở ${khoa}.`);
+      if (soGoi % 25 === 0)
+        console.info(`... ${soGoi} lượt Search (khoảng ${k.tu}..${k.den}, trang ${trang})`);
+    }
+  }
+  console.info(`Đã lấy xong ${daLay.size} trang (${soGoi} lượt Search lần này).`);
+}
+
+/**
+ * P3B-37.3 (bước 1): liệt kê toàn bộ repo của kế hoạch `dem-kho`, rồi lọc CỤC BỘ (không gọi README/release): trừ repo đã biết,
+ * bộ lọc cũ (giấy phép, fork, archived, push, danh sách chặn), bỏ thư viện/ngôn ngữ/framework theo siêu dữ liệu, xếp hạng ưu tiên
+ * (1 = AI, 2 = cài trực tiếp/portable, 3 = còn lại). `--chi-loc` bỏ qua phần gọi GitHub, chỉ lọc lại từ tệp đã lưu.
+ */
+async function lenhLietKe(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const thuMucDs = path.join(DATA_REPO_DIR, THU_MUC.danhSach);
+  const fileTho = path.join(thuMucDs, 'liet-ke-tho.jsonl');
+  if (!coCo('chi-loc')) {
+    if (!process.env.GITHUB_TOKEN) throw new Error('Thiếu GITHUB_TOKEN (apps/backend/.env).');
+    await layDanhSachTheoKeHoach(thuMucDs, fileTho);
+  }
+  const { locCucBo } = await import('../../modules/ung-dung/tien-ich/bo-loc-nap-repo.util');
+  const { lyDoBoTheoSieuDuLieu, mucUuTien } = await import('./liet-ke.core');
+  const daBiet = await layTapRepoDaBiet(thuMucDs);
+  const thay = new Set<number>();
+  const dem: Record<string, number> = {};
+  const giu: Array<RepoLietKe & { hang: 1 | 2 | 3 }> = [];
+  let tong = 0;
+  const now = new Date();
+  for (const r of docJsonl<RepoLietKe>(fileTho)) {
+    if (thay.has(r.id)) continue; // một repo có thể xuất hiện ở hai khoảng khi sao đổi giữa các lượt
+    thay.add(r.id);
+    tong++;
+    const tinh = (lyDo: string) => void (dem[lyDo] = (dem[lyDo] ?? 0) + 1);
+    if (daBiet.has(r.repo.toLowerCase())) {
+      tinh('DA_BIET');
+      continue;
+    }
+    const cb = locCucBo(
+      {
+        full_name: r.repo,
+        name: r.repo.split('/')[1] ?? r.repo,
+        description: r.moTa,
+        stargazers_count: r.sao,
+        fork: r.fork,
+        archived: r.archived,
+        pushed_at: r.pushedAt,
+        license: r.coGiayPhep ? { spdx_id: r.giayPhep } : null,
+        topics: r.chuDe,
+      },
+      now,
+    );
+    if (!cb.dat) {
+      tinh(`LOC_CU:${cb.lyDo}`);
+      continue;
+    }
+    const boSieuDuLieu = lyDoBoTheoSieuDuLieu({
+      full_name: r.repo,
+      description: r.moTa,
+      topics: r.chuDe,
+    });
+    if (boSieuDuLieu) {
+      tinh(`BO_THU_VIEN_NGON_NGU_FRAMEWORK`);
+      continue;
+    }
+    giu.push({
+      ...r,
+      hang: mucUuTien({ full_name: r.repo, description: r.moTa, topics: r.chuDe }),
+    });
+  }
+  giu.sort((a, b) => a.hang - b.hang || b.sao - a.sao);
+  const fileRa = path.join(thuMucDs, 'liet-ke-ung-vien.jsonl');
+  fs.writeFileSync(fileRa, giu.map((g) => JSON.stringify(g)).join('\n') + '\n', 'utf8');
+  const theoHang = [1, 2, 3].map((h) => giu.filter((g) => g.hang === h).length);
+  console.info(`\n=== LIỆT KÊ VÀ LỌC CỤC BỘ ===`);
+  console.info(`Repo duy nhất đã lấy: ${tong}`);
+  console.info(`Loại theo lý do: ${JSON.stringify(dem)}`);
+  console.info(
+    `Còn lại cần lấy README/release: ${giu.length} (hạng 1 AI: ${theoHang[0]}, hạng 2 cài trực tiếp/portable: ${theoHang[1]}, hạng 3: ${theoHang[2]})`,
+  );
+  console.info(
+    `Ước lượt GitHub core: tối đa ${giu.length * 2} (khoảng ${((giu.length * 2) / 4000).toFixed(1)} giờ ở 4.000 lượt mỗi giờ).`,
+  );
+  console.info(`Danh sách xếp hạng: ${fileRa}. Chưa lấy README hay release nào.`);
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
+    case 'liet-ke':
+      return lenhLietKe();
     case 'dem-kho':
       return lenhDemKho();
     case 'do-lai-bi-loai':
@@ -2500,7 +2677,7 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     default:
       console.info(
-        'Lệnh: dem-kho | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: dem-kho | liet-ke | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
       );
   }
 }
