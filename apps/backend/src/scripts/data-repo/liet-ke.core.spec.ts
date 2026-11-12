@@ -113,3 +113,21 @@ describe('lyDoBoTheoSieuDuLieu sau kiểm tay mẫu 12/11/2026', () => {
     );
   });
 });
+
+describe('mucUuTien: công cụ dòng lệnh (CLI) cũng được ưu tiên (Chủ chốt 12/11/2026)', () => {
+  it('CLI xếp hạng 2 theo chủ đề hoặc mô tả', () => {
+    expect(mucUuTien(meta('a/b', 'x', ['command-line-tool']))).toBe(2);
+    expect(mucUuTien(meta('a/detekt', 'A fast command line tool for static analysis'))).toBe(2);
+    expect(mucUuTien(meta('a/lazygit', 'simple terminal UI for git commands'))).toBe(2);
+  });
+
+  it('AI dạng CLI vẫn là hạng 1', () => {
+    expect(
+      mucUuTien(
+        meta('a/gemini-cli', 'An open-source AI agent that brings Gemini to your terminal', [
+          'cli',
+        ]),
+      ),
+    ).toBe(1);
+  });
+});

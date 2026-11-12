@@ -159,11 +159,18 @@ const CHU_DE_PHAN_MEM_CAI_TRUC_TIEP = new Set([
   'qt',
   'flutter-desktop',
   'cross-platform',
+  // Chủ chốt 12/11/2026: công cụ dòng lệnh (CLI) cũng được ưu tiên, và phần lớn công cụ AI là CLI
+  'cli',
+  'command-line',
+  'command-line-tool',
+  'command-line-interface',
+  'terminal',
+  'tui',
 ]);
 const MAU_PHAN_MEM_CAI_TRUC_TIEP =
-  /\b(?:desktop (?:app|application|client)|windows (?:app|application|tool|utility)|for windows|portable|installer|gui|system tray|menu ?bar app)\b/i;
+  /\b(?:desktop (?:app|application|client)|windows (?:app|application|tool|utility)|for windows|portable|installer|gui|system tray|menu ?bar app|CLI|command[- ]line|terminal|TUI)\b/i;
 
-/** Hạng ưu tiên: 1 = AI, 2 = phần mềm cài trực tiếp/portable, 3 = còn lại. */
+/** Hạng ưu tiên: 1 = AI, 2 = phần mềm cài trực tiếp/portable hoặc công cụ dòng lệnh (CLI), 3 = còn lại. */
 export function mucUuTien(m: MetaRepo): 1 | 2 | 3 {
   const chuDe = (m.topics ?? []).map((t) => t.toLowerCase());
   const mota = m.description ?? '';
