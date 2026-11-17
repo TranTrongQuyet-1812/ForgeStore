@@ -32,7 +32,7 @@
  *   pnpm data-repo phan-tich --repo o/r          # chạy phân tích AI của BE cho 1 app (uy tín, an toàn, CLI, vector)
  *   pnpm data-repo sinh-vector --mo-hinh 2 [--toi-da 900] [--lam-lai-truoc <ISO>] [--ghi] # bổ sung (hoặc sinh lại) vector, mặc định chỉ đếm
  *   pnpm data-repo thong-ke-ai                  # xem số liệu yêu cầu AI theo ngày và số mục xếp hàng (P3B-28.6)
- *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
+ *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--bo-qua-vector] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  */
 import * as fs from 'fs';
@@ -1744,7 +1744,7 @@ async function lenhDay(): Promise<void> {
           let phanTich = 'bo_qua';
           if (!coCo('bo-qua-phan-tich')) {
             try {
-              await apps.phanTichUngDung(ud.maUngDung);
+              await apps.phanTichUngDung(ud.maUngDung, { boQuaVector: coCo('bo-qua-vector') });
               const pt = await prisma.phanTichAI.findUnique({
                 where: { maUngDung: ud.maUngDung },
                 select: { maPhanTich: true },

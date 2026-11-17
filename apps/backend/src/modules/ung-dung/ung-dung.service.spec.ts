@@ -83,6 +83,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
     chuanBiVanBanNhung: ReturnType<typeof vi.fn>;
     sinhEmbedding: ReturnType<typeof vi.fn>;
     luuVectorNguNghia: ReturnType<typeof vi.fn>;
+    ghiMaBamVanBan: ReturnType<typeof vi.fn>;
     timKiemNguNghia: ReturnType<typeof vi.fn>;
   };
   let mockSearchTranslatorService: {
@@ -196,6 +197,7 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       chuanBiVanBanNhung: vi.fn().mockReturnValue('van ban nhung text'),
       sinhEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
       luuVectorNguNghia: vi.fn().mockResolvedValue(undefined),
+      ghiMaBamVanBan: vi.fn().mockResolvedValue(undefined),
       timKiemNguNghia: vi.fn().mockResolvedValue([
         {
           maUngDung: 'uuid-obsidian',
@@ -1311,6 +1313,45 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
           }),
         }),
       );
+    });
+
+    describe('P3B-38.2: cờ boQuaVector khi đẩy hàng loạt', () => {
+      const chuanBiApp = () => {
+        mockPrisma.phanTichAI.findUnique.mockResolvedValue(null);
+        mockPrisma.ungDung.findUnique.mockResolvedValue({
+          maUngDung: 'app-uuid-rustdesk',
+          tenRepoDayDu: 'rustdesk/rustdesk',
+          chuSoHuu: 'rustdesk',
+          tenKhoChua: 'rustdesk',
+          moTaVi: 'Phần mềm điều khiển máy tính từ xa mã nguồn mở',
+          moTaGocTiengAnh: 'Remote desktop software',
+          danhSachChuDe: ['remote-desktop'],
+          soSaoGithub: 75000,
+          soLuotFork: 9000,
+          loaiGiayPhep: 'GPL-3.0',
+          dongBoLanCuoi: new Date(),
+          danhSachPhatHanh: [],
+        });
+        mockPrisma.phanTichAI.upsert.mockResolvedValue({ maPhanTich: 'new-analysis-uuid' });
+      };
+
+      it('mặc định sinh vector cho cả hai mô hình và ghi mã băm văn bản', async () => {
+        chuanBiApp();
+        await service.phanTichUngDung('app-uuid-rustdesk');
+        expect(mockSemanticSearchService.sinhEmbedding).toHaveBeenCalledTimes(2);
+        expect(mockSemanticSearchService.luuVectorNguNghia).toHaveBeenCalledTimes(2);
+        expect(mockSemanticSearchService.ghiMaBamVanBan).toHaveBeenCalledTimes(1);
+      });
+
+      it('boQuaVector: vẫn lưu phân tích nhưng không tốn lượt embedding và không ghi mã băm', async () => {
+        chuanBiApp();
+        await service.phanTichUngDung('app-uuid-rustdesk', { boQuaVector: true });
+        expect(mockPrisma.phanTichAI.upsert).toHaveBeenCalledTimes(1);
+        expect(mockSemanticSearchService.sinhEmbedding).not.toHaveBeenCalled();
+        expect(mockSemanticSearchService.luuVectorNguNghia).not.toHaveBeenCalled();
+        // Không ghi mã băm để sinh-vector còn thấy cột trống mà bổ sung sau
+        expect(mockSemanticSearchService.ghiMaBamVanBan).not.toHaveBeenCalled();
+      });
     });
 
     it('Admin prewarm chạy phân tích hàng loạt cho các app (P2-31.5)', async () => {

@@ -1366,7 +1366,11 @@ export class UngDungService {
    * Phân tích Dual-AI cho ứng dụng (Lazy AI & Distributed Lock - P2-31).
    * Bọc trong withLock("fs:ai:<id>") đảm bảo 10 request đồng thời chỉ chạy AI 1 lần.
    */
-  async phanTichUngDung(maUngDung: string): Promise<void> {
+  /**
+   * `boQuaVector`: không sinh vector tìm kiếm ở bước 6. Dùng khi đẩy hàng loạt bằng lệnh `day` (P3B-38.2), vì mỗi app
+   * ăn 1 lượt embedding mỗi mô hình mà hũ chỉ có 1.000 lượt mỗi ngày; vector bổ sung sau bằng `sinh-vector`.
+   */
+  async phanTichUngDung(maUngDung: string, tuyChon: { boQuaVector?: boolean } = {}): Promise<void> {
     // ARCH-02: Single-Flight pattern ngăn chặn request đồng thời kích hoạt nhiều job AI
     const existingPromise = this.inFlightPhanTichMap.get(maUngDung);
     if (existingPromise) {
@@ -1649,8 +1653,10 @@ export class UngDungService {
             topics: app.danhSachChuDe,
             danhMuc: app.danhMucChinh,
           });
-          let duVector = true;
-          for (const moHinh of MO_HINH_EMBEDDING) {
+          // Bỏ qua vector thì không ghi mã băm, để `sinh-vector` thấy cột còn trống và bổ sung sau.
+          const moHinhCanSinh = tuyChon.boQuaVector ? [] : MO_HINH_EMBEDDING;
+          let duVector = moHinhCanSinh.length > 0;
+          for (const moHinh of moHinhCanSinh) {
             // Mô hình nào lỗi hay hết lượt thì cột đó để trống, lệnh `data-repo sinh-vector` bổ sung sau.
             try {
               const vector = await this.semanticSearchService.sinhEmbedding(textEmbed, moHinh);
