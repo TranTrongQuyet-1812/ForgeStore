@@ -52,4 +52,7 @@ export interface ChiTietReadmeResponseDto {
   readmeSha?: string | null;
   // Hôm nay đã hết lượt dịch, bản dịch được xếp sang ngày mai: giao diện hiện bản gốc, không chờ và không thử lại.
   choNgayMai?: boolean;
+  // Mốc thời gian (mili giây) hệ thống sẽ thử dịch lại. Lần chạm trần đầu chỉ hoãn vài phút, từ lần thứ 3 trong ngày mới
+  // hoãn 24 giờ, nên giao diện dựa vào mốc này để ghi "ít phút nữa" hay "ngày mai" (P3B-38.1).
+  thuLaiLuc?: number;
 }

@@ -378,6 +378,7 @@ export class ReadmeTranslationService {
         moHinhDich: banDichDb?.moHinhDich || null,
         readmeSha: hashGoc,
         choNgayMai: true,
+        thuLaiLuc: mucCho.retryAt,
       };
     }
     if (mucCho && mucCho.retryAt <= Date.now()) await this.cacheService.xoa(khoaChoNgayMai);

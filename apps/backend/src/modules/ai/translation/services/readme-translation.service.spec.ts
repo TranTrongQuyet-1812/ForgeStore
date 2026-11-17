@@ -204,14 +204,17 @@ MIT License.`;
         tenKhoChua: 'deferred',
         readmeSha: hash,
       } as unknown as ReturnType<typeof mockPrisma.ungDung.findFirst>);
+      const retryAt = Date.now() + 60_000;
       vi.mocked(mockCacheService.lay).mockImplementation((async (khoa: string) =>
         khoa === 'fs:ai:translation:deferred:app-uuid'
-          ? { readmeSha: hash, retryAt: Date.now() + 60_000 }
+          ? { readmeSha: hash, retryAt }
           : banGoc) as never);
 
       const res = await service.layHoacKichHoatDichReadme('org/deferred');
 
       expect(res.choNgayMai).toBe(true);
+      // P3B-38.1: trả kèm mốc thử lại để giao diện biết là hoãn vài phút hay sang ngày mai
+      expect(res.thuLaiLuc).toBe(retryAt);
       expect(res.trangThai).toBe(TrangThaiDichReadme.DANG_DICH);
       expect(res.banDich).toBeNull();
       expect(res.banGoc).toBe(banGoc);

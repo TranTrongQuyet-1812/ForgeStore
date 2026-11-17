@@ -44,6 +44,7 @@ import { ApiError } from '../dich-vu/api/api-client';
 import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
 import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi-cach-cai.core';
+import { laHoanNgan, layThongBaoBanDichHoan } from './thong-bao-dich-hoan.core';
 import { layTrinhQuanLyCachCai } from '../dich-vu/cong-cu-may/cong-cu-may.core';
 import {
   CachCaiDto,
@@ -423,7 +424,8 @@ export const TrangChiTiet: React.FC = () => {
     refetchInterval: (query) => {
       const data = query.state.data;
       // README đang xếp sang ngày mai thì không có gì để chờ, khỏi hỏi lại mỗi 3 giây.
-      if (data?.choNgayMai) return false;
+      // Hoãn ngắn (vài phút, P3B-38.1) thì hỏi lại mỗi phút để bản dịch tự hiện khi xong.
+      if (data?.choNgayMai) return laHoanNgan(data.thuLaiLuc) ? 60_000 : false;
       if (
         data &&
         (data.trangThai === 'DANG_DICH' ||
@@ -1316,9 +1318,7 @@ export const TrangChiTiet: React.FC = () => {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-surface-elevated border border-border text-xs text-secondary">
                     <AlertCircle className="w-4 h-4 text-warning shrink-0" />
-                    <span>
-                      Bản dịch tiếng Việt sẽ có vào ngày mai. Hiện đang xem bản gốc tiếng Anh.
-                    </span>
+                    <span>{layThongBaoBanDichHoan(readmeData.thuLaiLuc)}</span>
                   </div>
                   {readmeData.banGoc && (
                     <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
