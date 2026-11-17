@@ -3,6 +3,8 @@ import {
   phanLoaiTep,
   phanLoaiCacTepBanPhatHanh,
   hauXuLyKienTrucBanPhatHanh,
+  laZipUngDungHopLe,
+  locTepCaiCuaBanPhatHanh,
   tinhDiemUuTienTep,
 } from './phan-loai-tep.util';
 import { DinhDangTep, KienTrucChip } from '@forgestore/types';
@@ -543,6 +545,134 @@ describe('P3B-36: phanLoaiCacTepBanPhatHanh (ZIP duy nhất không ghi hệ đi�
         'agent_reach-1.6.1.tar.gz',
       ]);
       expect(kq.every((k) => k.boQua)).toBe(true);
+    });
+  });
+});
+
+describe('P2-60.3: bổ sung độ phủ cho bộ phân loại tệp', () => {
+  describe('laZipUngDungHopLe: ZIP là bản nén khác của tệp .tar', () => {
+    it('ZIP cùng tên gốc với tệp .tar.gz thì bị loại', () => {
+      expect(laZipUngDungHopLe('tool-1.0.zip', ['tool-1.0.zip', 'tool-1.0.tar.gz'])).toBe(false);
+    });
+
+    it('tên ZIP là phần đầu của tên tệp .tar (từ 4 ký tự) thì bị loại', () => {
+      expect(
+        laZipUngDungHopLe('mytool-win.zip', ['mytool-win.zip', 'mytool-win-v1.2.tar.gz']),
+      ).toBe(false);
+    });
+
+    it('tên ZIP ngắn dưới 4 ký tự thì không so khớp theo phần đầu', () => {
+      expect(laZipUngDungHopLe('ab.zip', ['ab.zip', 'abcdef-source.tar.gz'])).toBe(true);
+    });
+
+    it('tệp .tar không liên quan thì ZIP vẫn hợp lệ', () => {
+      expect(laZipUngDungHopLe('portable-app.zip', ['portable-app.zip', 'other.tar.gz'])).toBe(
+        true,
+      );
+    });
+  });
+
+  describe('hauXuLyKienTrucBanPhatHanh: MSI và ZIP portable', () => {
+    it('ZIP portable không ghi kiến trúc bị gán X86 khi đã có MSI x64 rõ ràng', () => {
+      const kq = hauXuLyKienTrucBanPhatHanh([
+        {
+          tenTep: 'App-portable.zip',
+          dinhDang: DinhDangTep.ZIP_PORTABLE,
+          kienTruc: KienTrucChip.X86_64,
+        },
+        { tenTep: 'App-x64.msi', dinhDang: DinhDangTep.MSI, kienTruc: KienTrucChip.X86_64 },
+      ]);
+      expect(kq[0]?.kienTruc).toBe(KienTrucChip.X86);
+      expect(kq[1]?.kienTruc).toBe(KienTrucChip.X86_64);
+    });
+
+    it('danh sách rỗng thì trả nguyên danh sách', () => {
+      expect(hauXuLyKienTrucBanPhatHanh([])).toEqual([]);
+    });
+  });
+
+  describe('tinhDiemUuTienTep: cộng điểm, trừ điểm và độ hợp máy', () => {
+    it('tên có "release" được cộng 20 điểm (máy x64, tệp x86_64)', () => {
+      const kq = tinhDiemUuTienTep(
+        'app-release.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      expect(kq.diem).toBe(220);
+      expect(kq.hopMay).toBe(true);
+    });
+
+    it('tên có "legacy" hoặc "english" bị trừ 30 điểm và coi là bản phụ', () => {
+      const kq = tinhDiemUuTienTep(
+        'app-legacy.exe',
+        DinhDangTep.EXE,
+        KienTrucChip.X86_64,
+        'x86_64',
+      );
+      expect(kq.diem).toBe(170);
+      expect(kq.laPhu).toBe(true);
+    });
+
+    it('máy x64: tệp universal +70, tệp x86 32-bit +40, đều chạy được', () => {
+      const chung = tinhDiemUuTienTep('app.exe', DinhDangTep.EXE, KienTrucChip.DUNG_CHUNG, 'amd64');
+      const x86 = tinhDiemUuTienTep('app.exe', DinhDangTep.EXE, KienTrucChip.X86, 'x64');
+      expect(chung).toMatchObject({ diem: 170, hopMay: true });
+      expect(x86).toMatchObject({ diem: 140, hopMay: true });
+    });
+
+    it('máy ARM64: tệp ARM64 +100, universal +70, ARM32 +40', () => {
+      const arm64 = tinhDiemUuTienTep(
+        'app.apk',
+        DinhDangTep.APK,
+        KienTrucChip.ARM64_V8A,
+        'arm64-v8a',
+      );
+      const chung = tinhDiemUuTienTep(
+        'app.apk',
+        DinhDangTep.APK,
+        KienTrucChip.DUNG_CHUNG,
+        'aarch64',
+      );
+      const arm32 = tinhDiemUuTienTep(
+        'app.apk',
+        DinhDangTep.APK,
+        KienTrucChip.ARMEABI_V7A,
+        'arm64',
+      );
+      expect(arm64).toMatchObject({ diem: 200, hopMay: true });
+      expect(chung).toMatchObject({ diem: 170, hopMay: true });
+      expect(arm32).toMatchObject({ diem: 140, hopMay: true });
+    });
+
+    it('máy ARM64 gặp tệp x86_64 thì trừ 80 điểm và không hợp máy', () => {
+      const kq = tinhDiemUuTienTep('app.exe', DinhDangTep.EXE, KienTrucChip.X86_64, 'aarch64');
+      expect(kq).toMatchObject({ diem: 20, hopMay: false });
+    });
+  });
+
+  describe('locTepCaiCuaBanPhatHanh: bỏ CLI và Debug khi đã có bộ cài chính quy', () => {
+    const tep = (...ten: string[]) => ten.map((name, i) => ({ name, id: i }));
+
+    it('có bộ cài GUI thì bỏ bản CLI và Debug', () => {
+      const kq = locTepCaiCuaBanPhatHanh(
+        tep('App-1.0-setup-x64.exe', 'App-1.0-cli-x64.exe', 'App-1.0-debug-x64.exe'),
+      );
+      expect(kq.map((k) => k.tenTep)).toEqual(['App-1.0-setup-x64.exe']);
+    });
+
+    it('chỉ có CLI và Debug thì giữ lại cả hai, không để bản phát hành trống', () => {
+      const kq = locTepCaiCuaBanPhatHanh(tep('App-1.0-cli-x64.exe', 'App-1.0-debug-x64.exe'));
+      expect(kq.map((k) => k.tenTep).sort()).toEqual([
+        'App-1.0-cli-x64.exe',
+        'App-1.0-debug-x64.exe',
+      ]);
+    });
+
+    it('tệp không phải bộ cài (checksum, ghi chú) bị bỏ', () => {
+      const kq = locTepCaiCuaBanPhatHanh(tep('App-1.0-setup-x64.exe', 'checksums.txt', 'notes.md'));
+      expect(kq.map((k) => k.tenTep)).toEqual(['App-1.0-setup-x64.exe']);
+      expect(kq[0]?.dinhDang).toBe(DinhDangTep.EXE);
     });
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DinhDangTep } from '@forgestore/types';
 import {
   chuanHoaNenTang,
+  kiemTraTepThuocNenTang,
   layBanPhatHanhMoiNhat,
   locVaSapXepBanPhatHanh,
   trichXuatDinhDangVaKienTruc,
@@ -237,6 +238,120 @@ describe('ReleaseSelectorUtil (N1 + K1)', () => {
         dinhDangCoSan: [],
         kienTrucCoSan: [],
       });
+    });
+  });
+});
+
+describe('P2-60.3: bổ sung độ phủ cho bộ chọn bản phát hành', () => {
+  describe('kiemTraTepThuocNenTang', () => {
+    it('không chỉ định nền tảng thì tệp nào cũng hợp lệ', () => {
+      expect(kiemTraTepThuocNenTang(DinhDangTep.KHAC, null)).toBe(true);
+    });
+
+    it('WINDOWS nhận EXE, MSI, ZIP portable; không nhận APK', () => {
+      expect(kiemTraTepThuocNenTang(DinhDangTep.EXE, 'WINDOWS')).toBe(true);
+      expect(kiemTraTepThuocNenTang(DinhDangTep.MSI, 'WINDOWS')).toBe(true);
+      expect(kiemTraTepThuocNenTang(DinhDangTep.ZIP_PORTABLE, 'WINDOWS')).toBe(true);
+      expect(kiemTraTepThuocNenTang(DinhDangTep.APK, 'WINDOWS')).toBe(false);
+    });
+
+    it('ANDROID chỉ nhận APK', () => {
+      expect(kiemTraTepThuocNenTang(DinhDangTep.APK, 'ANDROID')).toBe(true);
+      expect(kiemTraTepThuocNenTang(DinhDangTep.EXE, 'ANDROID')).toBe(false);
+    });
+
+    it('giá trị nền tảng ngoài dự kiến thì không chặn (nhánh phòng vệ)', () => {
+      expect(kiemTraTepThuocNenTang(DinhDangTep.EXE, 'LINUX' as never)).toBe(true);
+    });
+  });
+
+  describe('locVaSapXepBanPhatHanh: các nhánh biên', () => {
+    const ban = (tenPhienBan: string, ngay: string, tep: DinhDangTep[], thuNghiem = false) => ({
+      tenPhienBan,
+      ngayPhatHanh: new Date(ngay),
+      laBanThuNghiem: thuNghiem,
+      danhSachTepCaiDat: tep.map((dinhDangTep, i) => ({ maTep: `t${i}`, dinhDangTep })),
+    });
+
+    it('danh sách rỗng hoặc không có thì trả mảng rỗng', () => {
+      expect(locVaSapXepBanPhatHanh([], 'windows')).toEqual([]);
+      expect(locVaSapXepBanPhatHanh(undefined as never, 'windows')).toEqual([]);
+    });
+
+    it('bản không khai báo danhSachTepCaiDat thì giữ lại (chưa nạp tệp)', () => {
+      const chuaNapTep = { tenPhienBan: 'v1.0.0', ngayPhatHanh: new Date('2026-01-01') };
+      const kq = locVaSapXepBanPhatHanh([chuaNapTep as never], 'windows');
+      expect(kq).toHaveLength(1);
+    });
+
+    it('không chỉ định nền tảng thì chấp nhận cả tệp Windows và Android, loại tệp KHAC', () => {
+      const kq = locVaSapXepBanPhatHanh(
+        [
+          ban('v2.0.0', '2026-03-01', [DinhDangTep.KHAC]),
+          ban('v1.0.0', '2026-02-01', [DinhDangTep.APK]),
+          ban('v1.1.0', '2026-02-15', [DinhDangTep.EXE]),
+        ],
+        undefined,
+      );
+      expect(kq.map((r) => r.tenPhienBan)).toEqual(['v1.1.0', 'v1.0.0']);
+    });
+
+    it('toàn bộ bản đều không có tệp thì mặc định xếp theo SemVer thay vì trả rỗng', () => {
+      const kq = locVaSapXepBanPhatHanh(
+        [ban('v1.0.0', '2026-01-01', []), ban('v2.0.0', '2026-02-01', [])],
+        'windows',
+      );
+      expect(kq.map((r) => r.tenPhienBan)).toEqual(['v2.0.0', 'v1.0.0']);
+    });
+
+    it('tắt fallback thì toàn bộ bản không tệp trả rỗng', () => {
+      const kq = locVaSapXepBanPhatHanh([ban('v1.0.0', '2026-01-01', [])], 'windows', {
+        fallbackSemVerKhiKhongCoTep: false,
+      });
+      expect(kq).toEqual([]);
+    });
+
+    it('có tệp nhưng sai nền tảng (chỉ APK khi xem Windows) thì trả rỗng, không fallback', () => {
+      const kq = locVaSapXepBanPhatHanh(
+        [ban('v1.0.0', '2026-01-01', [DinhDangTep.APK])],
+        'windows',
+      );
+      expect(kq).toEqual([]);
+    });
+
+    it('cùng số phiên bản thì bản đăng sau đứng trước', () => {
+      const kq = locVaSapXepBanPhatHanh(
+        [
+          ban('v1.0.0', '2026-01-01', [DinhDangTep.EXE]),
+          ban('v1.0.0', '2026-03-01', [DinhDangTep.EXE]),
+        ],
+        'windows',
+      );
+      expect(kq.map((r) => r.ngayPhatHanh.toISOString().slice(0, 10))).toEqual([
+        '2026-03-01',
+        '2026-01-01',
+      ]);
+    });
+  });
+
+  describe('trichXuatDinhDangVaKienTruc: các định dạng và kiến trúc còn lại', () => {
+    it('nhận APK và các kiến trúc x86, Universal, ARM64', () => {
+      const kq = trichXuatDinhDangVaKienTruc([
+        { dinhDangTep: 'APK', kienTrucChip: 'ARM64_V8A' },
+        { dinhDangTep: 'APK', kienTrucChip: 'DUNG_CHUNG' },
+        { dinhDangTep: 'EXE', kienTrucChip: 'X86' },
+        { dinhDangTep: 'MSI', kienTrucChip: 'UNIVERSAL' },
+      ]);
+      expect(kq.dinhDangCoSan).toEqual(['EXE', 'MSI', 'APK']);
+      expect(kq.kienTrucCoSan).toEqual(['ARM64', 'x86', 'Universal']);
+    });
+
+    it('danh sách rỗng hoặc không có thì trả hai mảng rỗng', () => {
+      expect(trichXuatDinhDangVaKienTruc(undefined)).toEqual({
+        dinhDangCoSan: [],
+        kienTrucCoSan: [],
+      });
+      expect(trichXuatDinhDangVaKienTruc([])).toEqual({ dinhDangCoSan: [], kienTrucCoSan: [] });
     });
   });
 });
