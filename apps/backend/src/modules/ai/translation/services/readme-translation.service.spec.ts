@@ -715,6 +715,72 @@ MIT License.`;
       expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
     });
 
+    describe('dịch lẻ thất bại một đoạn (autogen 18/11)', () => {
+      const banGoc = 'Hello `tool`\n\nWorld `library`';
+      const datMock = (chiTietLoi: Array<{ provider: string; lyDoLoi: string }>) => {
+        vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+        vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+          thanhCong: true,
+          ketQua: { '1': 'Xin chào ⟦C1⟧' },
+          thieuIds: ['2'],
+          provider: 'gemini',
+          model: 'gemini-3.1-flash-lite',
+          chiTietLoi: [],
+        });
+        vi.mocked(mockRotationService.dichVanBan).mockResolvedValue({
+          thanhCong: false,
+          banDich: null,
+          provider: null,
+          model: null,
+          thoiGianMs: 5,
+          chiTietLoi,
+        } as unknown as Awaited<ReturnType<typeof mockRotationService.dichVanBan>>);
+      };
+
+      it('mọi nhà dịch đều lệch cấu trúc thì giữ tiếng Anh đoạn đó, README vẫn hoàn tất', async () => {
+        datMock([
+          { provider: 'gemini', lyDoLoi: 'placeholders_changed' },
+          { provider: 'gemini', lyDoLoi: 'headings_changed' },
+        ]);
+        const ok = await service.kichHoatDichReadmeNen(
+          'app-uuid',
+          'owner',
+          'repo',
+          banGoc,
+          service.tinhMaBam(banGoc),
+        );
+        expect(ok).toBe(true);
+        expect(mockPrisma.banDichReadme.upsert).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            update: expect.objectContaining({
+              trangThai: TrangThaiDichReadme.HOAN_TAT,
+              noiDungDich: expect.stringContaining('World `library`'),
+            }),
+          }),
+        );
+      });
+
+      it('thất bại vì hết hạn mức hoặc lỗi nhà dịch thì vẫn là THAT_BAI, không tạo README toàn tiếng Anh', async () => {
+        datMock([
+          { provider: 'gemini', lyDoLoi: 'placeholders_changed' },
+          { provider: 'gemini', lyDoLoi: 'ai_error' },
+        ]);
+        const ok = await service.kichHoatDichReadmeNen(
+          'app-uuid',
+          'owner',
+          'repo',
+          banGoc,
+          service.tinhMaBam(banGoc),
+        );
+        expect(ok).toBe(false);
+        expect(mockPrisma.banDichReadme.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ trangThai: TrangThaiDichReadme.THAT_BAI }),
+          }),
+        );
+      });
+    });
+
     it('đoạn dịch lẻ làm mất ký hiệu giữ chỗ không làm hỏng cả README (trước đây ném lỗi, bỏ hết) (18/11)', async () => {
       const banGoc = 'Hello `tool`\n\nWorld `library`';
       const hash = service.tinhMaBam(banGoc);

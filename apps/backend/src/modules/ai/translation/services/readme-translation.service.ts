@@ -7,7 +7,11 @@ import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import { StructureValidator } from '../tien-ich/structure-validator.util';
-import { ghepVaKiemReadme, locDoanDichHopLe } from '../tien-ich/loc-doan-dich-hop-le.util';
+import {
+  chiHongCauTruc,
+  ghepVaKiemReadme,
+  locDoanDichHopLe,
+} from '../tien-ich/loc-doan-dich-hop-le.util';
 import {
   goKhungGiuNguyen,
   kiemBatBienReadme,
@@ -777,6 +781,14 @@ export class ReadmeTranslationService {
                   cacDoanChoLuu,
                 );
                 return false;
+              }
+
+              if (ketQuaDon && !ketQuaDon.thanhCong && chiHongCauTruc(ketQuaDon.chiTietLoi)) {
+                // Mọi nhà dịch đều làm lệch cấu trúc đoạn này: giữ tiếng Anh đoạn này, dịch tiếp phần còn lại.
+                this.logger.warn(
+                  `Đoạn ${doan.stt} của [${owner}/${repo}] không dịch được vì lệch cấu trúc, giữ bản gốc tiếng Anh.`,
+                );
+                continue;
               }
 
               if (!ketQuaDon || !ketQuaDon.thanhCong || ketQuaDon.banDich === null) {

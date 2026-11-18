@@ -73,6 +73,17 @@ function doanDatBatBien(doan: DoanDichReadme, banDich: string): boolean {
   }
 }
 
+const LY_DO_LECH_CAU_TRUC = new Set(['placeholders_changed', 'headings_changed', 'table_changed']);
+
+/**
+ * Dịch lẻ thất bại chỉ vì bản dịch lệch cấu trúc (không phải hết hạn mức, quá giờ hay lỗi nhà dịch).
+ * Danh sách rỗng hoặc có lý do khác thì không coi là lỗi cấu trúc, để sự cố mạng không tạo ra
+ * README toàn tiếng Anh nhưng ghi là đã dịch.
+ */
+export function chiHongCauTruc(chiTietLoi: ReadonlyArray<{ lyDoLoi: string }>): boolean {
+  return chiTietLoi.length > 0 && chiTietLoi.every((loi) => LY_DO_LECH_CAU_TRUC.has(loi.lyDoLoi));
+}
+
 export interface KetQuaLocDoanDich {
   /** Các đoạn dịch giữ lại (đạt kiểm bất biến từng đoạn). */
   giu: Map<number, string>;
