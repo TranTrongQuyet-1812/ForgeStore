@@ -32,7 +32,7 @@ function taoBanDichHopLe() {
 describe('locDoanDichHopLe: một đoạn hỏng không làm hỏng cả README (18/11/2026)', () => {
   it('toàn bộ đoạn hợp lệ thì giữ hết, không loại đoạn nào', () => {
     const { cauTruc, ban } = taoBanDichHopLe();
-    const kq = locDoanDichHopLe(README, cauTruc, ban);
+    const kq = locDoanDichHopLe(cauTruc, ban);
     expect(kq.boQua).toEqual([]);
     expect(kq.giu.size).toBe(ban.size);
   });
@@ -45,7 +45,7 @@ describe('locDoanDichHopLe: một đoạn hỏng không làm hỏng cả README 
     // bản dịch hỏng: bỏ mất ký hiệu giữ chỗ nên mã `npm install` biến mất
     ban.set(doanCoMa.stt, 'CHẠY NGAY BÂY GIỜ.');
 
-    const kq = locDoanDichHopLe(README, cauTruc, ban);
+    const kq = locDoanDichHopLe(cauTruc, ban);
 
     expect(kq.boQua).toEqual([doanCoMa.stt]);
     expect(kq.giu.has(doanCoMa.stt)).toBe(false);
@@ -57,7 +57,7 @@ describe('locDoanDichHopLe: một đoạn hỏng không làm hỏng cả README 
     const doanHong = cauTruc.doan.find((d) => d.canDich && d.vanBanGoc.includes('npm install'))!;
     ban.set(doanHong.stt, 'CHẠY NGAY.');
 
-    const { giu } = locDoanDichHopLe(README, cauTruc, ban);
+    const { giu } = locDoanDichHopLe(cauTruc, ban);
     const ghep = rapLaiReadme(README, cauTruc, giu);
     const loi = layLoiBatBienReadme(
       kiemBatBienReadme(README, ghep, taoTuyChonKiemReadme(cauTruc, giu)).canhBao,
@@ -69,7 +69,7 @@ describe('locDoanDichHopLe: một đoạn hỏng không làm hỏng cả README 
 
   it('không có đoạn nào để lọc thì trả rỗng, không báo lỗi', () => {
     const cauTruc = phanTichReadme(README);
-    const kq = locDoanDichHopLe(README, cauTruc, new Map());
+    const kq = locDoanDichHopLe(cauTruc, new Map());
     expect(kq.giu.size).toBe(0);
     expect(kq.boQua).toEqual([]);
   });
@@ -78,7 +78,7 @@ describe('locDoanDichHopLe: một đoạn hỏng không làm hỏng cả README 
     const { cauTruc, ban } = taoBanDichHopLe();
     const doan = cauTruc.doan.find((d) => d.canDich && d.vanBanGoc.includes('the docs'))!;
     ban.set(doan.stt, 'XEM TÀI LIỆU.');
-    const kq = locDoanDichHopLe(README, cauTruc, ban);
+    const kq = locDoanDichHopLe(cauTruc, ban);
     expect(kq.boQua).toEqual([doan.stt]);
   });
 });

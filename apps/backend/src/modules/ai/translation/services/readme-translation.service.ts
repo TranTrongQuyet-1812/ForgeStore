@@ -7,13 +7,12 @@ import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import { StructureValidator } from '../tien-ich/structure-validator.util';
-import { locDoanDichHopLe, taoTuyChonKiemReadme } from '../tien-ich/loc-doan-dich-hop-le.util';
+import { ghepVaKiemReadme, locDoanDichHopLe } from '../tien-ich/loc-doan-dich-hop-le.util';
 import {
   goKhungGiuNguyen,
   kiemBatBienReadme,
   layLoiBatBienReadme,
   phanTichReadme,
-  rapLaiReadme,
 } from '../tien-ich/readme-markdown-processor.util';
 import { ChiTietReadmeResponseDto, TrangThaiDichReadme } from '@forgestore/types';
 import { thoatKyTuLike } from '../../../../common/utils/thoat-ky-tu-like.util';
@@ -811,49 +810,39 @@ export class ReadmeTranslationService {
       }
 
       // Ghép bằng offset nguồn để mọi khối không dịch được giữ nguyên byte.
-      let banDichGiu: ReadonlyMap<number, string> = banDichTheoDoan;
-      let noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichGiu);
-      let kiemTraChatLuong = kiemBatBienReadme(
-        banGoc,
-        noiDungDich,
-        taoTuyChonKiemReadme(cauTruc, banDichGiu),
-      );
+      let ghep = ghepVaKiemReadme(banGoc, cauTruc, banDichTheoDoan);
       let doanDaLuu = cacDoanChoLuu;
-      if (layLoiBatBienReadme(kiemTraChatLuong.canhBao).length > 0) {
+      if (!ghep || ghep.loi.length > 0) {
         // Một vài đoạn dịch làm lệch cấu trúc không được làm hỏng cả README: loại riêng các đoạn đó
         // (giữ tiếng Anh) rồi lưu phần còn lại, thay vì bỏ hết và dịch lại từ đầu mỗi giờ (18/11/2026).
-        const loc = locDoanDichHopLe(banGoc, cauTruc, banDichTheoDoan);
-        if (loc.boQua.length > 0) {
-          const sttBoQua = new Set(loc.boQua);
-          const maBamBoQua = new Set(
-            cauTruc.doan.filter((d) => sttBoQua.has(d.stt)).map((d) => d.maBam),
+        const loc = locDoanDichHopLe(cauTruc, banDichTheoDoan);
+        const sttBoQua = new Set(loc.boQua);
+        const maBamBoQua = new Set(
+          cauTruc.doan.filter((d) => sttBoQua.has(d.stt)).map((d) => d.maBam),
+        );
+        // Bản dịch hỏng cấu trúc không bao giờ được lưu vào kho dùng chung.
+        doanDaLuu = cacDoanChoLuu.filter((d) => !maBamBoQua.has(d.maBam));
+        // Không còn đoạn nào dùng được thì README coi như chưa dịch: đi tiếp đường thất bại bên dưới.
+        if (loc.giu.size > 0) {
+          ghep = ghepVaKiemReadme(banGoc, cauTruc, loc.giu);
+          this.logger.warn(
+            `README [${owner}/${repo}]: ${loc.boQua.length} đoạn dịch làm lệch cấu trúc, giữ bản gốc tiếng Anh cho các đoạn đó (stt ${loc.boQua.slice(0, 10).join(', ')}).`,
           );
-          // Bản dịch hỏng cấu trúc không bao giờ được lưu vào kho dùng chung.
-          doanDaLuu = cacDoanChoLuu.filter((d) => !maBamBoQua.has(d.maBam));
-          // Không còn đoạn nào dùng được thì README coi như chưa dịch: giữ nguyên đường thất bại bên dưới.
-          if (loc.giu.size > 0) {
-            banDichGiu = loc.giu;
-            noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichGiu);
-            kiemTraChatLuong = kiemBatBienReadme(
-              banGoc,
-              noiDungDich,
-              taoTuyChonKiemReadme(cauTruc, banDichGiu),
-            );
-            this.logger.warn(
-              `README [${owner}/${repo}]: ${loc.boQua.length} đoạn dịch làm lệch cấu trúc, giữ bản gốc tiếng Anh cho các đoạn đó (stt ${loc.boQua.slice(0, 10).join(', ')}).`,
-            );
-          }
         }
       }
-      const canhBaoReadme = [
-        ...kiemTraChatLuong.canhBao,
-        ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
-      ];
-      if (canhBaoReadme.length > 0) {
-        this.logger.warn(`README [${owner}/${repo}] được xếp hạng B: ${canhBaoReadme.join(', ')}`);
+      if (ghep) {
+        const canhBaoReadme = [
+          ...ghep.canhBao,
+          ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
+        ];
+        if (canhBaoReadme.length > 0) {
+          this.logger.warn(
+            `README [${owner}/${repo}] được xếp hạng B: ${canhBaoReadme.join(', ')}`,
+          );
+        }
       }
-      const loiBatBien = layLoiBatBienReadme(kiemTraChatLuong.canhBao);
-      if (loiBatBien.length > 0) {
+      const loiBatBien = ghep ? ghep.loi : ['khong_ghep_duoc'];
+      if (!ghep || loiBatBien.length > 0) {
         this.logger.error(
           `README [${owner}/${repo}] không vượt qua bộ kiểm bất biến: ${loiBatBien.join(', ')}`,
         );
@@ -866,6 +855,7 @@ export class ReadmeTranslationService {
         return false;
       }
       await this.luuDoanDichThanhCong(doanDaLuu);
+      const noiDungDich = ghep.noiDung;
       const moHinhDichTongHop = Array.from(cacModelDung).join(', ') || lastModelUsed;
 
       await this.prisma.banDichReadme.upsert({
