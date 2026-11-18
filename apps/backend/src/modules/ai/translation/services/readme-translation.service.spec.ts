@@ -715,6 +715,48 @@ MIT License.`;
       expect(mockRotationService.dichVanBan).not.toHaveBeenCalled();
     });
 
+    it('một đoạn dịch làm lệch cấu trúc thì chỉ giữ tiếng Anh đoạn đó, các đoạn tốt vẫn được lưu (18/11)', async () => {
+      const banGoc = 'Hello `tool`\n\nWorld `library`';
+      const hash = service.tinhMaBam(banGoc);
+      vi.mocked(mockPrisma.boNhoDichChung.findUnique).mockResolvedValue(null);
+      vi.mocked(mockRotationService.dichGomLoJson).mockResolvedValue({
+        thanhCong: true,
+        ketQua: { '1': 'Xin chào ⟦C1⟧' },
+        thieuIds: ['2'],
+        provider: 'gemini',
+        model: 'gemini-3.1-flash-lite',
+        chiTietLoi: [],
+      });
+      // đoạn 2 dịch lẻ nhưng chèn thêm URL lạ nên làm hỏng bộ kiểm cuối
+      vi.mocked(mockRotationService.dichVanBan).mockResolvedValue({
+        thanhCong: true,
+        banDich: 'Thế giới ⟦C1⟧ https://evil.example',
+        provider: 'gemini',
+        model: 'gemini-test',
+        thoiGianMs: 50,
+        chiTietLoi: [],
+      });
+
+      const success = await service.kichHoatDichReadmeNen(
+        'app-uuid',
+        'owner',
+        'repo',
+        banGoc,
+        hash,
+      );
+
+      expect(success).toBe(true);
+      expect(mockPrisma.boNhoDichChung.upsert).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.banDichReadme.upsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            trangThai: TrangThaiDichReadme.HOAN_TAT,
+            noiDungDich: expect.stringContaining('Xin chào `tool`'),
+          }),
+        }),
+      );
+    });
+
     it('xếp README sang ngày mai khi hai hũ hết lượt và giữ trạng thái đang dịch', async () => {
       const banGoc = 'New README text';
       const hash = service.tinhMaBam(banGoc);

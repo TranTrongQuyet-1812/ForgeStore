@@ -7,6 +7,7 @@ import { TranslationRotationService } from './translation-rotation.service';
 import { sanitizeLogMessage } from '../tien-ich/log-sanitizer.util';
 import { MarkdownMasker } from '../tien-ich/markdown-masker.util';
 import { StructureValidator } from '../tien-ich/structure-validator.util';
+import { locDoanDichHopLe, taoTuyChonKiemReadme } from '../tien-ich/loc-doan-dich-hop-le.util';
 import {
   goKhungGiuNguyen,
   kiemBatBienReadme,
@@ -810,16 +811,40 @@ export class ReadmeTranslationService {
       }
 
       // Ghép bằng offset nguồn để mọi khối không dịch được giữ nguyên byte.
-      const noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichTheoDoan);
-      const kiemTraChatLuong = kiemBatBienReadme(banGoc, noiDungDich, {
-        doan: cauTruc.doan.map((doan) => ({
-          goc: doan.vanBanDaChe.replace(/⟦C\d+⟧/g, ''),
-          dich: (
-            banDichTheoDoan.get(doan.stt) ??
-            (doan.vanBanDaChe !== doan.vanBanGoc ? doan.vanBanDaChe : doan.vanBanGoc)
-          ).replace(/⟦C\d+⟧/g, ''),
-        })),
-      });
+      let banDichGiu: ReadonlyMap<number, string> = banDichTheoDoan;
+      let noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichGiu);
+      let kiemTraChatLuong = kiemBatBienReadme(
+        banGoc,
+        noiDungDich,
+        taoTuyChonKiemReadme(cauTruc, banDichGiu),
+      );
+      let doanDaLuu = cacDoanChoLuu;
+      if (layLoiBatBienReadme(kiemTraChatLuong.canhBao).length > 0) {
+        // Một vài đoạn dịch làm lệch cấu trúc không được làm hỏng cả README: loại riêng các đoạn đó
+        // (giữ tiếng Anh) rồi lưu phần còn lại, thay vì bỏ hết và dịch lại từ đầu mỗi giờ (18/11/2026).
+        const loc = locDoanDichHopLe(banGoc, cauTruc, banDichTheoDoan);
+        if (loc.boQua.length > 0) {
+          const sttBoQua = new Set(loc.boQua);
+          const maBamBoQua = new Set(
+            cauTruc.doan.filter((d) => sttBoQua.has(d.stt)).map((d) => d.maBam),
+          );
+          // Bản dịch hỏng cấu trúc không bao giờ được lưu vào kho dùng chung.
+          doanDaLuu = cacDoanChoLuu.filter((d) => !maBamBoQua.has(d.maBam));
+          // Không còn đoạn nào dùng được thì README coi như chưa dịch: giữ nguyên đường thất bại bên dưới.
+          if (loc.giu.size > 0) {
+            banDichGiu = loc.giu;
+            noiDungDich = rapLaiReadme(banGoc, cauTruc, banDichGiu);
+            kiemTraChatLuong = kiemBatBienReadme(
+              banGoc,
+              noiDungDich,
+              taoTuyChonKiemReadme(cauTruc, banDichGiu),
+            );
+            this.logger.warn(
+              `README [${owner}/${repo}]: ${loc.boQua.length} đoạn dịch làm lệch cấu trúc, giữ bản gốc tiếng Anh cho các đoạn đó (stt ${loc.boQua.slice(0, 10).join(', ')}).`,
+            );
+          }
+        }
+      }
       const canhBaoReadme = [
         ...kiemTraChatLuong.canhBao,
         ...cauTruc.canhBao.map((warning) => `${warning.lyDo}_dong_${warning.dong}`),
@@ -832,25 +857,15 @@ export class ReadmeTranslationService {
         this.logger.error(
           `README [${owner}/${repo}] không vượt qua bộ kiểm bất biến: ${loiBatBien.join(', ')}`,
         );
+        // Giữ tiến độ: các đoạn đã dịch tốt vẫn được lưu để lần sau không dịch lại từ đầu.
+        await this.luuDoanDichThanhCong(doanDaLuu);
         await this.prisma.banDichReadme.update({
           where: { maUngDung_ngonNgu: { maUngDung, ngonNgu: 'vi' } },
           data: { trangThai: TrangThaiDichReadme.THAT_BAI, thoiGianDich: new Date() },
         });
         return false;
       }
-      for (const doan of cacDoanChoLuu) {
-        await this.prisma.boNhoDichChung.upsert({
-          where: { maBam_ngonNgu: { maBam: doan.maBam, ngonNgu: 'vi' } },
-          create: {
-            maBam: doan.maBam,
-            ngonNgu: 'vi',
-            doanGoc: doan.doanGoc,
-            doanDich: doan.doanDich,
-            moHinhDich: doan.moHinhDich,
-          },
-          update: { doanDich: doan.doanDich, moHinhDich: doan.moHinhDich },
-        });
-      }
+      await this.luuDoanDichThanhCong(doanDaLuu);
       const moHinhDichTongHop = Array.from(cacModelDung).join(', ') || lastModelUsed;
 
       await this.prisma.banDichReadme.upsert({
