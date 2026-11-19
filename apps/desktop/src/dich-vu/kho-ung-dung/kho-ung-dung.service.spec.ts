@@ -388,6 +388,23 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     expect(result.loaiTruyVan).toBe('TEN_APP');
   });
 
+  it('timKiem gửi kèm page và limit khi phân trang trên trang kết quả (P3B-41)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      duLieu: [],
+      tongSo: 0,
+      trangHienTai: 2,
+      kichThuocTrang: 48,
+      tongSoTrang: 2,
+      loaiTruyVan: 'TEN_APP',
+      nguonKetQua: 'CSDL',
+    });
+
+    await service.timKiem('rustdesk', 'WINDOWS', 2, 48);
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/tim-kiem?q=rustdesk&platform=WINDOWS&page=2&limit=48',
+    );
+  });
+
   it('timKiem xử lý kết quả phân luồng URL cho Paste & Play', async () => {
     const mockUrlRes = {
       duLieu: [],

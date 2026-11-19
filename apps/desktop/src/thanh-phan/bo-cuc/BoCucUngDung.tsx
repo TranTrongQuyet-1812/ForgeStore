@@ -8,6 +8,7 @@ import { TrangThuVien } from '../../trang/TrangThuVien';
 import { TrangYeuThich } from '../../trang/TrangYeuThich';
 import { TrangDanhMuc } from '../../trang/TrangDanhMuc';
 import { TrangCaiDat } from '../../trang/TrangCaiDat';
+import { TrangKetQuaTimKiem } from '../../trang/TrangKetQuaTimKiem';
 import { HopThoaiXacThuc } from '../xac-thuc/HopThoaiXacThuc';
 import { HopThoaiXacNhan } from '../dung-chung/HopThoaiXacNhan';
 import { KhungThongBao } from '../dung-chung/KhungThongBao';
@@ -27,6 +28,8 @@ export const BoCucUngDung: React.FC = () => {
         return <TrangYeuThich />;
       case 'categories':
         return <TrangDanhMuc />;
+      case 'search':
+        return <TrangKetQuaTimKiem />;
       case 'settings':
         return <TrangCaiDat />;
       default:

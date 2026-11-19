@@ -80,16 +80,20 @@ export class KhoUngDungService {
   }
 
   /**
-   * Tìm kiếm thông minh đa năng: tên app, ý định AI hoặc URL GitHub (P2-40 / P3-07)
+   * Tìm kiếm thông minh đa năng: tên app, ý định AI hoặc URL GitHub (P2-40 / P3-07 / P3B-41)
    */
   async timKiem(
     query: string,
     platform: 'WINDOWS' | 'ANDROID' = 'WINDOWS',
+    page?: number,
+    limit?: number,
   ): Promise<TimKiemResponseDto> {
     const params = new URLSearchParams({
       q: query.trim(),
       platform,
     });
+    if (page !== undefined) params.set('page', String(page));
+    if (limit !== undefined) params.set('limit', String(limit));
     return apiClient.get<TimKiemResponseDto>(`/tim-kiem?${params.toString()}`);
   }
 

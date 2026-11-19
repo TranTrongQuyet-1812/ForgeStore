@@ -289,7 +289,9 @@ export function phanTichTepAndroidApk<T extends { tenTep: string }>(
 
 export const TrangChiTiet: React.FC = () => {
   const queryClient = useQueryClient();
-  const { selectedAppId, navigateTo, setAuthModalOpen } = useDieuHuongStore();
+  const { selectedAppId, navigateTo, setAuthModalOpen, tabTruocChiTiet, quayLaiTuChiTiet } =
+    useDieuHuongStore();
+  const veTuTimKiem = tabTruocChiTiet === 'search';
   const { isAuthenticated, user, maThietBi } = useXacThucStore();
   const appId = selectedAppId || 'rustdesk/rustdesk';
   // Cờ `laYeuThich` trong chi tiết app phụ thuộc người đang đăng nhập, nên khóa cache phải gắn với
@@ -1123,10 +1125,10 @@ export const TrangChiTiet: React.FC = () => {
         </p>
         <div className="flex items-center gap-3 mt-2">
           <button
-            onClick={() => navigateTo('explore')}
+            onClick={quayLaiTuChiTiet}
             className="btn-tactile px-4 py-2 rounded-xl bg-surface-elevated text-secondary hover:text-primary text-xs font-semibold border border-border"
           >
-            Quay lại Khám phá
+            {veTuTimKiem ? 'Quay lại kết quả tìm kiếm' : 'Quay lại Khám phá'}
           </button>
           <button
             onClick={() => refetch()}
@@ -1145,11 +1147,11 @@ export const TrangChiTiet: React.FC = () => {
       {/* 1. Breadcrumb & Nút quay lại (P3-06.1) */}
       <div className="flex items-center gap-2 text-xs text-muted">
         <button
-          onClick={() => navigateTo('explore')}
+          onClick={quayLaiTuChiTiet}
           className="btn-tactile flex items-center gap-1.5 hover:text-primary transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Khám phá</span>
+          <span>{veTuTimKiem ? 'Quay lại kết quả tìm kiếm' : 'Khám phá'}</span>
         </button>
         <span>/</span>
         <span>{appDetail.danhMucChinh || 'Tiện ích'}</span>

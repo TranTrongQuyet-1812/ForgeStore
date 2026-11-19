@@ -8,6 +8,8 @@ describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => 
       selectedAppId: null,
       selectedCategory: null,
       searchQuery: '',
+      trangTimKiem: 1,
+      tabTruocChiTiet: null,
       isSearchModalOpen: false,
       isAuthModalOpen: false,
     });
@@ -38,5 +40,46 @@ describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => 
     useDieuHuongStore.getState().openCategory('developer-tools');
     expect(useDieuHuongStore.getState().currentTab).toBe('explore');
     expect(useDieuHuongStore.getState().selectedCategory).toBe('developer-tools');
+  });
+
+  it('moTrangTimKiem đặt đúng tab, từ khóa và đưa về trang 1 (P3B-41)', () => {
+    useDieuHuongStore.getState().setTrangTimKiem(4);
+    useDieuHuongStore.getState().moTrangTimKiem('  ghi chú markdown  ');
+
+    const state = useDieuHuongStore.getState();
+    expect(state.currentTab).toBe('search');
+    expect(state.searchQuery).toBe('ghi chú markdown');
+    expect(state.trangTimKiem).toBe(1);
+    expect(state.selectedAppId).toBeNull();
+  });
+
+  it('quayLaiTuChiTiet chỉ quay về search khi mở chi tiết từ search, giữ nguyên từ khóa và trang (P3B-41)', () => {
+    useDieuHuongStore.getState().moTrangTimKiem('terminal');
+    useDieuHuongStore.getState().setTrangTimKiem(3);
+
+    useDieuHuongStore.getState().openAppDetail('app-1');
+    expect(useDieuHuongStore.getState().tabTruocChiTiet).toBe('search');
+
+    // Mở tiếp app khác khi vẫn đang ở detail thì vẫn giữ nguồn ban đầu là 'search'
+    useDieuHuongStore.getState().openAppDetail('app-2');
+    expect(useDieuHuongStore.getState().tabTruocChiTiet).toBe('search');
+
+    useDieuHuongStore.getState().quayLaiTuChiTiet();
+    const state = useDieuHuongStore.getState();
+    expect(state.currentTab).toBe('search');
+    expect(state.searchQuery).toBe('terminal');
+    expect(state.trangTimKiem).toBe(3);
+    expect(state.tabTruocChiTiet).toBeNull();
+  });
+
+  it('quayLaiTuChiTiet về explore khi mở chi tiết từ explore, library hoặc favorites (P3B-41)', () => {
+    for (const nguon of ['explore', 'library', 'favorites'] as const) {
+      useDieuHuongStore.getState().navigateTo(nguon);
+      useDieuHuongStore.getState().openAppDetail('app-xyz');
+      useDieuHuongStore.getState().quayLaiTuChiTiet();
+
+      expect(useDieuHuongStore.getState().currentTab).toBe('explore');
+      expect(useDieuHuongStore.getState().tabTruocChiTiet).toBeNull();
+    }
   });
 });

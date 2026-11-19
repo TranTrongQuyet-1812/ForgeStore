@@ -15,7 +15,12 @@ import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import { khoUngDungService } from '../../dich-vu/kho-ung-dung/kho-ung-dung.service';
 import { layThongBaoLoi } from '../../dich-vu/api/thong-bao-loi';
-import { layMaMoTrangTuLink } from './tien-ich-tim-kiem';
+import {
+  layMaMoTrangTuLink,
+  quyetDinhKhiNhanEnter,
+  SO_KET_QUA_GOI_Y_DROPDOWN,
+  thongTinNutXemTatCa,
+} from './tien-ich-tim-kiem';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
 import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
 
@@ -30,7 +35,8 @@ const GOI_Y_TIM_KIEM = [
 ];
 
 export const ThanhTimKiemDropdown: React.FC = () => {
-  const { openAppDetail, isSearchModalOpen, setSearchModalOpen } = useDieuHuongStore();
+  const { openAppDetail, moTrangTimKiem, isSearchModalOpen, setSearchModalOpen } =
+    useDieuHuongStore();
   const { kiemTraAppDaCai } = useDeviceInstalledApps();
   const isAuthenticated = useXacThucStore((s) => s.isAuthenticated);
 
@@ -141,7 +147,8 @@ export const ThanhTimKiemDropdown: React.FC = () => {
         const res = await khoUngDungService.timKiem(trimmed, 'WINDOWS');
         if (daHuy) return;
         setSearchResult(res);
-        setSelectedIndex(res.duLieu && res.duLieu.length > 0 ? 0 : -1);
+        // Không tự chọn dòng đầu (P3B-41) để nhấn Enter mặc định mở trang kết quả thay vì nhảy thẳng vào app đầu.
+        setSelectedIndex(-1);
       } catch (err) {
         if (daHuy) return;
         console.error('Lỗi tìm kiếm:', err);
@@ -196,6 +203,19 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     }
   };
 
+  const ketQuaHienThi = (searchResult?.duLieu ?? []).slice(0, SO_KET_QUA_GOI_Y_DROPDOWN);
+  const nutXemTatCa = thongTinNutXemTatCa(searchResult);
+  const tongDongChon = ketQuaHienThi.length + (nutXemTatCa.hienThi ? 1 : 0);
+
+  // Giữ dòng đang chọn bằng phím mũi tên luôn nằm trong khung cuộn của dropdown.
+  useEffect(() => {
+    if (selectedIndex < 0 || !containerRef.current) return;
+    const mucDangChon = containerRef.current.querySelector('[aria-selected="true"]');
+    if (mucDangChon && typeof mucDangChon.scrollIntoView === 'function') {
+      mucDangChon.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex]);
+
   // Điều khiển bàn phím (Mũi tên lên/xuống, Enter, Esc)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -205,36 +225,34 @@ export const ThanhTimKiemDropdown: React.FC = () => {
       return;
     }
 
-    const items = searchResult?.duLieu || [];
-
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!isOpen) setIsOpen(true);
-      if (items.length > 0) {
-        setSelectedIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0));
+      if (tongDongChon > 0) {
+        setSelectedIndex((prev) => (prev < tongDongChon - 1 ? prev + 1 : 0));
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (items.length > 0) {
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1));
+      if (tongDongChon > 0) {
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : tongDongChon - 1));
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (isGithubUrl || searchResult?.loaiTruyVan === 'URL') {
-        if (searchResult?.duongDanUrl?.daCoTrongStore) {
-          openAppDetail(layMaMoTrangTuLink(searchResult.duongDanUrl));
-          dongVaXoaTimKiem();
-        } else {
-          handleInspectRepo(query.trim());
-        }
-      } else if (items.length > 0 && selectedIndex >= 0 && selectedIndex < items.length) {
-        const selectedApp = items[selectedIndex];
-        if (selectedApp.chuaThamDinh || searchResult?.nguonKetQua === 'GITHUB') {
-          handleInspectRepo(selectedApp.duongDanGithub || selectedApp.tenRepoDayDu);
-        } else {
-          openAppDetail(selectedApp.tenRepoDayDu || selectedApp.maUngDung);
-          dongVaXoaTimKiem();
-        }
+      const hanhDong = quyetDinhKhiNhanEnter({
+        tuKhoa: query,
+        laDuongDanGithub: isGithubUrl,
+        ketQua: searchResult,
+        chiSoDangChon: selectedIndex,
+        soDongHienThiToiDa: SO_KET_QUA_GOI_Y_DROPDOWN,
+      });
+      if (hanhDong.loai === 'MO_TRANG_KET_QUA') {
+        moTrangTimKiem(hanhDong.tuKhoa);
+        dongVaXoaTimKiem();
+      } else if (hanhDong.loai === 'MO_CHI_TIET') {
+        openAppDetail(hanhDong.maMoTrang);
+        dongVaXoaTimKiem();
+      } else if (hanhDong.loai === 'KIEM_DINH_REPO') {
+        handleInspectRepo(hanhDong.duongDan);
       }
     }
   };
@@ -283,6 +301,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
             }}
             onChange={(e) => {
               setQuery(e.target.value);
+              setSelectedIndex(-1);
               if (!isOpen) setIsOpen(true);
             }}
             onKeyDown={handleKeyDown}
@@ -448,9 +467,9 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                   </div>
                 )}
 
-                {searchResult?.duLieu && searchResult.duLieu.length > 0 ? (
-                  <div className="flex flex-col gap-1">
-                    {searchResult.duLieu.map((app, idx) => {
+                {ketQuaHienThi.length > 0 ? (
+                  <div className="flex flex-col gap-1" onMouseLeave={() => setSelectedIndex(-1)}>
+                    {ketQuaHienThi.map((app, idx) => {
                       const isSelected = selectedIndex === idx;
                       const isFromGithub = Boolean(
                         app.chuaThamDinh || searchResult?.nguonKetQua === 'GITHUB',
@@ -540,6 +559,26 @@ export const ThanhTimKiemDropdown: React.FC = () => {
                         </div>
                       );
                     })}
+
+                    {nutXemTatCa.hienThi && (
+                      <div
+                        role="option"
+                        aria-selected={selectedIndex === ketQuaHienThi.length}
+                        onClick={() => {
+                          moTrangTimKiem(query.trim());
+                          dongVaXoaTimKiem();
+                        }}
+                        onMouseEnter={() => setSelectedIndex(ketQuaHienThi.length)}
+                        className={`btn-tactile mt-1 p-2.5 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${
+                          selectedIndex === ketQuaHienThi.length
+                            ? 'bg-surface-elevated border-accent-forge/40 shadow-xs text-accent-forge-text'
+                            : 'bg-surface/80 border-border/60 hover:border-border hover:bg-surface-elevated text-secondary hover:text-primary'
+                        }`}
+                      >
+                        <span className="font-medium text-xs">{nutXemTatCa.nhan}</span>
+                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      </div>
+                    )}
                   </div>
                 ) : !isSearching ? (
                   <div className="py-6 flex flex-col items-center justify-center text-center gap-1.5 text-muted">
