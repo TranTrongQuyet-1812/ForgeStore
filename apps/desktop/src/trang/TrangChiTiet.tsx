@@ -1617,10 +1617,10 @@ export const TrangChiTiet: React.FC = () => {
 
                       {/* Cảnh báo nếu tên gói có thể không thuộc repository (P3B-18 & D-27: Heuristic Name Check) */}
                       {ownershipCheck && !ownershipCheck.khop && (
-                        <div className="p-2.5 rounded-lg bg-warning/10 border border-warning/30 text-warning text-[11px] font-mono flex items-start gap-2 leading-relaxed mt-1">
+                        <div className="p-2.5 rounded-lg bg-warning/10 border border-warning/30 text-warning text-xs flex items-start gap-2 leading-relaxed mt-1">
                           <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <span className="font-bold">Lưu ý đối chiếu tên gói:</span>{' '}
+                            <span className="font-bold">Lưu ý về tên gói:</span>{' '}
                             {ownershipCheck.canhBao}
                           </div>
                         </div>

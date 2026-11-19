@@ -525,7 +525,55 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         );
         expect(kq.khop).toBe(false);
         expect(kq.mucDoTinCay).toBe('CANH_BAO');
-        expect(kq.canhBao).toContain('Combosquatting');
+        expect(kq.canhBao).toContain('ytdlp-malware');
+        expect(kq.canhBao).toContain('gần giống nhưng không trùng');
+      });
+
+      it('NPX: lệnh trỏ đúng owner/repo của chính repo (npx skills add mattpocock/skills) là khớp, không báo nhầm', () => {
+        const kq = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.NPX,
+          'mattpocock/skills',
+          'https://github.com/mattpocock/skills',
+        );
+        expect(kq.khop).toBe(true);
+        expect(kq.mucDoTinCay).toBe('CAO');
+        expect(kq.canhBao).toBeUndefined();
+      });
+
+      it('NPX: địa chỉ GitHub đầy đủ (kể cả đuôi .git) trỏ đúng repo cũng khớp, nhưng repo khác thì vẫn cảnh báo', () => {
+        const khop = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.NPX,
+          'https://github.com/mattpocock/skills.git',
+          'mattpocock/skills',
+        );
+        expect(khop.khop).toBe(true);
+        expect(khop.mucDoTinCay).toBe('CAO');
+
+        const khac = kiemTraGoiThuocRepo(
+          MaTrinhQuanLyGoi.NPX,
+          'evil-org/skills',
+          'mattpocock/skills',
+        );
+        expect(khac.khop).toBe(false);
+        expect(khac.mucDoTinCay).toBe('CANH_BAO');
+      });
+
+      it('Câu cảnh báo dùng chữ đời thường, không có thuật ngữ kỹ thuật khó hiểu', () => {
+        const cacCanhBao = [
+          kiemTraGoiThuocRepo(MaTrinhQuanLyGoi.PIP, 'ytdlp-malware', 'yt-dlp/yt-dlp').canhBao,
+          kiemTraGoiThuocRepo(MaTrinhQuanLyGoi.NPM, '@evil-hacker/react', 'facebook/react').canhBao,
+          kiemTraGoiThuocRepo(MaTrinhQuanLyGoi.PIP, 'open-webui', 'flameshot-org/flameshot')
+            .canhBao,
+          kiemTraGoiThuocRepo(
+            MaTrinhQuanLyGoi.DOCKER,
+            'evil-org/open-webui:main',
+            'open-webui/open-webui',
+          ).canhBao,
+        ];
+        for (const canhBao of cacCanhBao) {
+          expect(canhBao).toBeTruthy();
+          expect(canhBao).not.toMatch(/Combosquatting|Registry|heuristic|repository/i);
+        }
       });
     });
 

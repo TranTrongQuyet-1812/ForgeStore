@@ -798,6 +798,22 @@ export function kiemTraGoiThuocRepo(
     };
   }
 
+  // 0. Lệnh trỏ thẳng vào địa chỉ của chính repo này (vd: npx skills add owner/repo): tên gói chính là
+  // owner/repo nên khớp hoàn toàn, không được đem so với tên repo ngắn rồi báo nhầm là gần giống.
+  const diaChiTrongLenh = trichXuatOwnerVaRepo(cleanGoi);
+  if (
+    diaChiTrongLenh &&
+    diaChiTrongLenh.owner === info.owner &&
+    diaChiTrongLenh.repo === info.repo
+  ) {
+    return {
+      khop: true,
+      mucDoTinCay: 'CAO',
+      tenGoiChuanHoa: tenGoiNorm,
+      repoChuanHoa: repoSlug,
+    };
+  }
+
   // 1. Docker: Image có dạng registry/owner/repo:tag hoặc owner/repo:tag
   if (trinhQuanLy === MaTrinhQuanLyGoi.DOCKER) {
     const cleanImage = cleanGoi.split(':')[0]?.split('@')[0] || cleanGoi;
@@ -834,7 +850,7 @@ export function kiemTraGoiThuocRepo(
       return {
         khop: false,
         mucDoTinCay: 'CANH_BAO',
-        canhBao: `Tổ chức Docker Image [${imgOwner}] không khớp với tác giả repository [${info.owner}]. Hãy kiểm tra kỹ trước khi tải.`,
+        canhBao: `Image Docker này thuộc “${imgOwner}”, không phải tác giả dự án (“${info.owner}”). Hãy kiểm tra kỹ trước khi tải.`,
         tenGoiChuanHoa: tenGoiNorm,
         repoChuanHoa: repoSlug,
       };
@@ -895,7 +911,7 @@ export function kiemTraGoiThuocRepo(
         return {
           khop: false,
           mucDoTinCay: 'CANH_BAO',
-          canhBao: `Phạm vi gói NPM [@${match[1]}] không khớp với tác giả repository [${info.owner}]. Nguy cơ mạo danh thư viện.`,
+          canhBao: `Gói này thuộc nhóm “@${match[1]}”, không phải tác giả dự án (“${info.owner}”). Có thể là gói giả mạo, hãy kiểm tra kỹ trước khi cài.`,
           tenGoiChuanHoa: tenGoiNorm,
           repoChuanHoa: repoSlug,
         };
@@ -923,7 +939,7 @@ export function kiemTraGoiThuocRepo(
       return {
         khop: false,
         mucDoTinCay: 'CANH_BAO',
-        canhBao: `Gói Scoop [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Cảnh giác nguy cơ mạo danh.`,
+        canhBao: `Tên gói “${cleanGoi}” gần giống nhưng không trùng với dự án “${repoSlug}”. Hãy kiểm tra kỹ trước khi cài.`,
         tenGoiChuanHoa: tenGoiNorm,
         repoChuanHoa: repoSlug,
       };
@@ -948,7 +964,7 @@ export function kiemTraGoiThuocRepo(
     return {
       khop: false,
       mucDoTinCay: 'CANH_BAO',
-      canhBao: `Tên gói [${cleanGoi}] tương đồng một phần nhưng không khớp chính xác với repository [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Cảnh giác nguy cơ Combosquatting.`,
+      canhBao: `Tên gói “${cleanGoi}” gần giống nhưng không trùng với dự án “${repoSlug}”. Hãy kiểm tra kỹ trước khi cài.`,
       tenGoiChuanHoa: tenGoiNorm,
       repoChuanHoa: repoSlug,
     };
@@ -958,7 +974,7 @@ export function kiemTraGoiThuocRepo(
   return {
     khop: false,
     mucDoTinCay: 'CANH_BAO',
-    canhBao: `Tên gói [${cleanGoi}] khác biệt so với tên kho lưu trữ [${repoSlug}] (đối chiếu theo tên, chưa kiểm tra Registry). Hãy kiểm tra kỹ độ tin cậy trước khi cài đặt.`,
+    canhBao: `Tên gói “${cleanGoi}” khác với tên dự án “${repoSlug}”. Hãy kiểm tra kỹ độ tin cậy trước khi cài.`,
     tenGoiChuanHoa: tenGoiNorm,
     repoChuanHoa: repoSlug,
   };
