@@ -28,6 +28,7 @@ import { NhanTinCay } from '../thanh-phan/dung-chung/NhanTinCay';
 import { NhanLuuTru } from '../thanh-phan/dung-chung/NhanLuuTru';
 import { NhanDaCaiTrenMay } from '../thanh-phan/dung-chung/NhanDaCaiTrenMay';
 import { CanhBaoThieuCongCu } from '../thanh-phan/dung-chung/CanhBaoThieuCongCu';
+import { GiaiThichGiayPhep } from '../thanh-phan/dung-chung/GiaiThichGiayPhep';
 import { KhungHopThoai } from '../thanh-phan/dung-chung/KhungHopThoai';
 import { XemMarkdown } from '../thanh-phan/dung-chung/XemMarkdown';
 import { AsciiSkeleton } from '../thanh-phan/dung-chung/KhungXuongAscii';
@@ -1206,6 +1207,8 @@ export const TrangChiTiet: React.FC = () => {
                   </>
                 )}
               </div>
+
+              <GiaiThichGiayPhep loaiGiayPhep={appDetail.loaiGiayPhep} />
 
               <p className="text-sm text-secondary mt-3 leading-relaxed">
                 {appDetail.moTaVi ||
