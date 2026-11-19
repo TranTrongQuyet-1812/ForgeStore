@@ -7,9 +7,12 @@ export interface GiaiThichGiayPhep {
   nhom: NhomGiayPhep;
   nguoiDung: string;
   neuSuaHoacChiaSe: string;
+  lienKetToanVan: string | null;
 }
 
 export const LUU_Y_GIAY_PHEP = 'Giải thích chỉ để tham khảo, không phải tư vấn pháp lý.';
+
+const GOC_CHOOSEALICENSE = 'https://choosealicense.com/licenses';
 
 // Dùng chung chuỗi mô tả quyền sử dụng để tránh lặp ở các giấy phép cùng điều kiện cơ bản.
 const DUNG_MIEN_PHI_KINH_DOANH = 'Được dùng miễn phí, kể cả cho công việc kinh doanh.';
@@ -24,6 +27,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
       'Được làm, chỉ cần giữ nguyên dòng ghi bản quyền và nội dung giấy phép. Tác giả không bảo hành.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/mit/`,
   },
   'Apache-2.0': {
     tenHienThi: 'Giấy phép Apache 2.0',
@@ -31,6 +35,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
       'Được làm; phải giữ thông báo bản quyền và giấy phép, ghi rõ chỗ đã sửa. Tác giả cũng cho phép dùng các bằng sáng chế của họ nằm trong phần mềm này.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/apache-2.0/`,
   },
   'BSD-3-Clause': {
     tenHienThi: 'Giấy phép BSD 3 điều khoản',
@@ -38,18 +43,21 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
       'Được làm, giữ thông báo bản quyền; không được dùng tên tác giả để quảng bá bản của bạn khi chưa được phép.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/bsd-3-clause/`,
   },
   'BSD-2-Clause': {
     tenHienThi: 'Giấy phép BSD 2 điều khoản',
     nhom: 'RAT_THOANG',
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe: 'Được làm, chỉ cần giữ thông báo bản quyền.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/bsd-2-clause/`,
   },
   ISC: {
     tenHienThi: 'Giấy phép ISC',
     nhom: 'RAT_THOANG',
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe: 'Được làm, chỉ cần giữ thông báo bản quyền.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/isc/`,
   },
   zlib: {
     tenHienThi: 'Giấy phép zlib',
@@ -57,12 +65,14 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
       'Được làm; không được nói mình là người viết ra bản gốc, và bản đã sửa phải ghi rõ là đã sửa.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/zlib/`,
   },
   Unlicense: {
     tenHienThi: 'Giấy phép Unlicense',
     nhom: 'RAT_THOANG',
     nguoiDung: 'Được dùng miễn phí, tác giả đã đưa phần mềm vào phạm vi công cộng.',
     neuSuaHoacChiaSe: 'Được làm gần như tự do, không cần xin phép hay ghi công.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/unlicense/`,
   },
   CC0: {
     tenHienThi: 'Creative Commons Zero (CC0)',
@@ -70,6 +80,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung:
       'Được dùng miễn phí, tác giả đã từ bỏ quyền tác giả trong phạm vi pháp luật cho phép.',
     neuSuaHoacChiaSe: 'Được làm gần như tự do, không cần xin phép hay ghi công.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/cc0-1.0/`,
   },
   'MPL-2.0': {
     tenHienThi: 'Giấy phép Mozilla 2.0 (MPL)',
@@ -77,24 +88,21 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
       'Nếu sửa một tệp của dự án này rồi phát hành thì phải mở mã tệp đó; phần mã riêng bạn thêm vào có thể giữ kín.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/mpl-2.0/`,
   },
   'LGPL-3.0': {
     tenHienThi: 'Giấy phép LGPL (bản 3.0)',
     nhom: 'MO_MA_THEO_PHAN',
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe: SUA_LGPL,
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/lgpl-3.0/`,
   },
   'LGPL-2.1': {
     tenHienThi: 'Giấy phép LGPL (bản 2.1)',
     nhom: 'MO_MA_THEO_PHAN',
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe: SUA_LGPL,
-  },
-  'LGPL-2.0': {
-    tenHienThi: 'Giấy phép LGPL (bản 2.0)',
-    nhom: 'MO_MA_THEO_PHAN',
-    nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
-    neuSuaHoacChiaSe: SUA_LGPL,
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/lgpl-2.1/`,
   },
   'GPL-3.0': {
     tenHienThi: 'Giấy phép GPL 3.0',
@@ -102,6 +110,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_CONG_VIEC,
     neuSuaHoacChiaSe:
       'Nếu bạn phát hành lại bản đã sửa, hoặc đưa mã này vào phần mềm khác rồi phát hành, thì phần mềm đó cũng phải mở mã theo GPL. Chỉ dùng riêng cho mình thì không bị buộc.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/gpl-3.0/`,
   },
   'GPL-2.0': {
     tenHienThi: 'Giấy phép GPL 2.0',
@@ -109,6 +118,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_CONG_VIEC,
     neuSuaHoacChiaSe:
       'Giống GPL 3.0 (là phiên bản cũ hơn): phát hành lại bản đã sửa hoặc phần mềm có chứa mã này thì phải mở mã theo GPL.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/gpl-2.0/`,
   },
   'AGPL-3.0': {
     tenHienThi: 'Giấy phép AGPL 3.0',
@@ -116,6 +126,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nguoiDung: DUNG_MIEN_PHI_CONG_VIEC,
     neuSuaHoacChiaSe:
       'Giống GPL 3.0 và chặt hơn: nếu bạn chạy bản đã sửa làm dịch vụ cho người khác dùng qua mạng thì cũng phải cung cấp mã nguồn cho họ.',
+    lienKetToanVan: `${GOC_CHOOSEALICENSE}/agpl-3.0/`,
   },
 };
 
@@ -140,6 +151,7 @@ function taoGiaiThichChuaRo(tenSach: string): GiaiThichGiayPhep {
       'Dự án này dùng giấy phép riêng, hoặc ForgeStore chưa có phần giải thích cho giấy phép này.',
     neuSuaHoacChiaSe:
       'Hãy đọc tệp giấy phép trên trang GitHub của dự án trước khi sửa, chia sẻ lại hay dùng cho mục đích đặc biệt.',
+    lienKetToanVan: null,
   };
 }
 

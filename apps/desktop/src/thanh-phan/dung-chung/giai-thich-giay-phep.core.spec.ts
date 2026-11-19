@@ -50,12 +50,6 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
       'liên kết, không sửa thư viện',
     ],
     [
-      'GNU Lesser General Public License v2.0',
-      'Giấy phép LGPL (bản 2.0)',
-      'MO_MA_THEO_PHAN',
-      'liên kết, không sửa thư viện',
-    ],
-    [
       'GNU General Public License v3.0',
       'Giấy phép GPL 3.0',
       'BUOC_MO_MA',
@@ -75,6 +69,7 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
     expect(kq.nguoiDung.length).toBeGreaterThan(0);
     expect(kq.neuSuaHoacChiaSe.length).toBeGreaterThan(0);
     expect(`${kq.nguoiDung} ${kq.neuSuaHoacChiaSe}`).toContain(tuKhoa);
+    expect(kq.lienKetToanVan).toMatch(/^https:\/\/choosealicense\.com\/licenses\/.+\/$/);
   });
 
   it.each<[string, string]>([
@@ -89,7 +84,6 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
     ['MPL-2.0', 'Giấy phép Mozilla 2.0 (MPL)'],
     ['LGPL-3.0', 'Giấy phép LGPL (bản 3.0)'],
     ['LGPL-2.1', 'Giấy phép LGPL (bản 2.1)'],
-    ['LGPL-2.0', 'Giấy phép LGPL (bản 2.0)'],
     ['GPL-3.0', 'Giấy phép GPL 3.0'],
     ['GPL-2.0', 'Giấy phép GPL 2.0'],
     ['AGPL-3.0', 'Giấy phép AGPL 3.0'],
@@ -97,6 +91,7 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
     const kq = giaiThichGiayPhep(spdx);
     expect(kq.tenHienThi).toBe(tenHienThi);
     expect(kq.nhom).not.toBe('CHUA_RO');
+    expect(kq.lienKetToanVan).toMatch(/^https:\/\/choosealicense\.com\/licenses\/.+\/$/);
   });
 
   it('trả CHUA_RO với câu chung cho Other, null, undefined, rỗng, Giấy phép riêng, NOASSERTION', () => {
@@ -110,34 +105,40 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
       expect(kq.neuSuaHoacChiaSe).toBe(
         'Hãy đọc tệp giấy phép trên trang GitHub của dự án trước khi sửa, chia sẻ lại hay dùng cho mục đích đặc biệt.',
       );
+      expect(kq.lienKetToanVan).toBeNull();
     }
 
     const rieng = giaiThichGiayPhep('Giấy phép riêng');
     expect(rieng.nhom).toBe('CHUA_RO');
     expect(rieng.tenHienThi).toBe('Giấy phép riêng');
+    expect(rieng.lienKetToanVan).toBeNull();
   });
 
-  it('không nhận nhầm các giấy phép gần tên (MIT No Attribution, BSD Zero Clause, GFDL)', () => {
+  it('không nhận nhầm các giấy phép gần tên và xếp LGPL-2.0 vào CHUA_RO', () => {
     for (const tenLa of [
       'MIT No Attribution',
       'BSD Zero Clause License',
       'GNU Free Documentation License v1.3',
+      'GNU Lesser General Public License v2.0',
+      'LGPL-2.0',
       'Creative Commons Attribution 4.0 International',
       'Eclipse Public License 2.0',
     ]) {
       const kq = giaiThichGiayPhep(tenLa);
       expect(kq.nhom, tenLa).toBe('CHUA_RO');
       expect(kq.tenHienThi, tenLa).toBe(tenLa);
+      expect(kq.lienKetToanVan, tenLa).toBeNull();
     }
   });
 
-  it('mọi mục trong bảng đều có đủ hai đoạn chữ không rỗng và có dòng lưu ý cố định', () => {
+  it('bảng phủ đúng 14 giấy phép với đầy đủ nội dung và liên kết choosealicense.com', () => {
     const mucs = Object.values(BANG_GIAI_THICH_GIAY_PHEP);
-    expect(mucs.length).toBeGreaterThanOrEqual(14);
+    expect(mucs.length).toBe(14);
     for (const muc of mucs) {
       expect(muc.tenHienThi.trim().length).toBeGreaterThan(0);
       expect(muc.nguoiDung.trim().length).toBeGreaterThan(0);
       expect(muc.neuSuaHoacChiaSe.trim().length).toBeGreaterThan(0);
+      expect(muc.lienKetToanVan).toMatch(/^https:\/\/choosealicense\.com\/licenses\/.+\/$/);
     }
     expect(LUU_Y_GIAY_PHEP).toBe('Giải thích chỉ để tham khảo, không phải tư vấn pháp lý.');
   });

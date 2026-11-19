@@ -1208,7 +1208,11 @@ export const TrangChiTiet: React.FC = () => {
                 )}
               </div>
 
-              <GiaiThichGiayPhep loaiGiayPhep={appDetail.loaiGiayPhep} />
+              <GiaiThichGiayPhep
+                key={appDetail.maUngDung || appDetail.tenRepoDayDu}
+                loaiGiayPhep={appDetail.loaiGiayPhep}
+                duongDanGithub={appDetail.duongDanGithub}
+              />
 
               <p className="text-sm text-secondary mt-3 leading-relaxed">
                 {appDetail.moTaVi ||
