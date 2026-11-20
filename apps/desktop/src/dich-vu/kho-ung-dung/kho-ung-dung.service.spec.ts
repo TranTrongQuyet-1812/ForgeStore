@@ -405,6 +405,28 @@ describe('KhoUngDungService (P3-05 Storefront API Client)', () => {
     );
   });
 
+  it('timKiem gửi đúng nguon CSDL hoặc GITHUB khi có chỉ định, giữ URL cũ khi không truyền (P3B-43)', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      duLieu: [],
+      tongSo: 0,
+      trangHienTai: 1,
+      kichThuocTrang: 24,
+      tongSoTrang: 0,
+      loaiTruyVan: 'TEN_APP',
+      nguonKetQua: 'GITHUB',
+    });
+
+    await service.timKiem('craft', 'WINDOWS', 1, 48, 'CSDL');
+    expect(apiClient.get).toHaveBeenLastCalledWith(
+      '/tim-kiem?q=craft&platform=WINDOWS&page=1&limit=48&nguon=CSDL',
+    );
+
+    await service.timKiem('craft', 'WINDOWS', 2, 24, 'GITHUB');
+    expect(apiClient.get).toHaveBeenLastCalledWith(
+      '/tim-kiem?q=craft&platform=WINDOWS&page=2&limit=24&nguon=GITHUB',
+    );
+  });
+
   it('timKiem xử lý kết quả phân luồng URL cho Paste & Play', async () => {
     const mockUrlRes = {
       duLieu: [],

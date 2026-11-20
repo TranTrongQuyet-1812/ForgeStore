@@ -80,13 +80,14 @@ export class KhoUngDungService {
   }
 
   /**
-   * Tìm kiếm thông minh đa năng: tên app, ý định AI hoặc URL GitHub (P2-40 / P3-07 / P3B-41)
+   * Tìm kiếm thông minh đa năng: tên app, ý định AI hoặc URL GitHub (P2-40 / P3-07 / P3B-41 / P3B-43)
    */
   async timKiem(
     query: string,
     platform: 'WINDOWS' | 'ANDROID' = 'WINDOWS',
     page?: number,
     limit?: number,
+    nguon?: 'CSDL' | 'GITHUB',
   ): Promise<TimKiemResponseDto> {
     const params = new URLSearchParams({
       q: query.trim(),
@@ -94,6 +95,7 @@ export class KhoUngDungService {
     });
     if (page !== undefined) params.set('page', String(page));
     if (limit !== undefined) params.set('limit', String(limit));
+    if (nguon !== undefined) params.set('nguon', nguon);
     return apiClient.get<TimKiemResponseDto>(`/tim-kiem?${params.toString()}`);
   }
 

@@ -1,16 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, PackageOpen, RefreshCw, Search } from 'lucide-react';
-import type { TimKiemResponseDto } from '@forgestore/types';
-import { TheUngDung, type AppCardData } from '../thanh-phan/dung-chung/TheUngDung';
+import { AlertCircle, ArrowLeft, Info, PackageOpen, RefreshCw, Search } from 'lucide-react';
+import type { TimKiemResponseDto, UngDungTomTatDto } from '@forgestore/types';
+import { TheUngDung } from '../thanh-phan/dung-chung/TheUngDung';
 import { ThanhPhanTrang } from '../thanh-phan/dung-chung/ThanhPhanTrang';
 import { AsciiReveal, KhungXuongCard } from '../thanh-phan/dung-chung/KhungXuongAscii';
+import { TheRepoGithub } from '../thanh-phan/tim-kiem/TheRepoGithub';
 import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
 import { khoUngDungService } from '../dich-vu/kho-ung-dung/kho-ung-dung.service';
+import { useKiemDinhRepo } from '../hooks/useKiemDinhRepo';
 import {
-  locUngDungTrongKho,
+  laKetQuaTrongKho,
+  layDuongDanKiemDinhRepo,
+  nenHienPhanGithub,
+  SO_KET_QUA_MOI_TRANG_GITHUB,
   SO_KET_QUA_MOI_TRANG_TIM_KIEM,
-  taoDongPhuKetQuaTimKiem,
+  THOI_GIAN_CACHE_GITHUB_MS,
 } from '../thanh-phan/tim-kiem/tien-ich-tim-kiem';
 
 const KhungTuKhoaTrong: React.FC<{ onQuayLai: () => void }> = ({ onQuayLai }) => (
@@ -33,12 +38,15 @@ const KhungTuKhoaTrong: React.FC<{ onQuayLai: () => void }> = ({ onQuayLai }) =>
   </div>
 );
 
-const KhungLoiKetNoi: React.FC<{ onThuLai: () => void }> = ({ onThuLai }) => (
+const KhungLoiKetNoi: React.FC<{ tieuDe?: string; onThuLai: () => void }> = ({
+  tieuDe = 'Không thể tải kết quả tìm kiếm',
+  onThuLai,
+}) => (
   <div className="p-8 rounded-2xl bg-surface border border-danger/20 flex flex-col items-center justify-center text-center gap-3">
     <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-danger">
       <AlertCircle className="w-5 h-5" />
     </div>
-    <h2 className="text-sm font-bold text-primary">Không thể tải kết quả tìm kiếm</h2>
+    <h2 className="text-sm font-bold text-primary">{tieuDe}</h2>
     <p className="text-xs text-muted max-w-md">Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.</p>
     <button
       type="button"
@@ -76,53 +84,351 @@ const KhungKhongCoKetQua: React.FC<{ tuKhoa: string; onQuayLai: () => void }> = 
   </div>
 );
 
+interface PhanKetQuaTrongKhoProps {
+  tuKhoa: string;
+  ketQua: TimKiemResponseDto;
+  trangHienTai: number;
+  isPlaceholderData: boolean;
+  isError: boolean;
+  onChuyenTrang: (trangMoi: number) => void;
+  onThuLai: () => void;
+}
+
+const PhanKetQuaTrongKho: React.FC<PhanKetQuaTrongKhoProps> = ({
+  tuKhoa,
+  ketQua,
+  trangHienTai,
+  isPlaceholderData,
+  isError,
+  onChuyenTrang,
+  onThuLai,
+}) => {
+  const tongSoTrang = ketQua.tongSoTrang ?? 0;
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-bold font-display text-primary">Trong ForgeStore</h2>
+      </div>
+
+      {ketQua.duLieu.length === 0 ? (
+        <p className="text-xs text-muted py-2">
+          Chưa có ứng dụng nào trong ForgeStore khớp với “{tuKhoa}”.
+        </p>
+      ) : (
+        <>
+          <div
+            className={`transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
+          >
+            <AsciiReveal
+              preset="dither"
+              duration="fast"
+              origin="top-left"
+              key={`csdl-${tuKhoa}-${ketQua.trangHienTai ?? trangHienTai}`}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {ketQua.duLieu.map((dto, index) => (
+                  <TheUngDung
+                    key={dto.maUngDung}
+                    app={khoUngDungService.anhXaDtoSangTheUngDung(dto)}
+                    staggerIndex={index}
+                  />
+                ))}
+              </div>
+            </AsciiReveal>
+          </div>
+
+          {tongSoTrang > 1 && (
+            <ThanhPhanTrang
+              trangHienTai={ketQua.trangHienTai ?? trangHienTai}
+              tongSoTrang={tongSoTrang}
+              tongSo={ketQua.tongSo ?? ketQua.duLieu.length}
+              kichThuocTrang={ketQua.kichThuocTrang ?? SO_KET_QUA_MOI_TRANG_TIM_KIEM}
+              dangTai={isPlaceholderData}
+              onChuyenTrang={onChuyenTrang}
+            />
+          )}
+
+          {isError && (
+            <p className="text-center text-xs text-danger">
+              Không tải được trang này.{' '}
+              <button type="button" onClick={onThuLai} className="underline">
+                Thử lại
+              </button>
+            </p>
+          )}
+        </>
+      )}
+    </section>
+  );
+};
+
+interface TrangThaiKiemDinhThe {
+  repoDangChonUrl: string | null;
+  dangKiemDinh: boolean;
+  daThanhCong: boolean;
+  loiKiemDinh: string | null;
+  onKiemDinh: (duongDan: string) => void;
+}
+
+function renderTheRepoGithub(dto: UngDungTomTatDto, index: number, kiemDinh: TrangThaiKiemDinhThe) {
+  const duongDanMuc = layDuongDanKiemDinhRepo(dto);
+  const laMucDangChon = kiemDinh.repoDangChonUrl === duongDanMuc;
+  return (
+    <TheRepoGithub
+      key={dto.maUngDung || dto.tenRepoDayDu}
+      repo={dto}
+      staggerIndex={index}
+      dangKiemDinh={kiemDinh.dangKiemDinh && laMucDangChon}
+      voHieuHoa={kiemDinh.dangKiemDinh || kiemDinh.daThanhCong}
+      thanhCong={laMucDangChon && kiemDinh.daThanhCong}
+      loiKiemDinh={laMucDangChon ? kiemDinh.loiKiemDinh : null}
+      onKiemDinh={kiemDinh.onKiemDinh}
+    />
+  );
+}
+
+interface PhanKetQuaGithubProps {
+  tuKhoa: string;
+  ketQua: TimKiemResponseDto | undefined;
+  trangHienTai: number;
+  isLoading: boolean;
+  isError: boolean;
+  isPlaceholderData: boolean;
+  trangThaiKiemDinh: TrangThaiKiemDinhThe;
+  dauPhanRef: React.RefObject<HTMLDivElement | null>;
+  onChuyenTrang: (trangMoi: number) => void;
+  onThuLai: () => void;
+}
+
+const PhanKetQuaGithub: React.FC<PhanKetQuaGithubProps> = ({
+  tuKhoa,
+  ketQua,
+  trangHienTai,
+  isLoading,
+  isError,
+  isPlaceholderData,
+  trangThaiKiemDinh,
+  dauPhanRef,
+  onChuyenTrang,
+  onThuLai,
+}) => {
+  const tongSoTrang = ketQua?.tongSoTrang ?? 0;
+
+  return (
+    <section
+      ref={dauPhanRef}
+      className="scroll-mt-4 flex flex-col gap-4 pt-6 border-t border-border/60"
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-bold font-display text-primary">
+          Từ GitHub, chưa có trong ForgeStore
+        </h2>
+        <p className="text-xs text-muted">
+          Bấm vào để ForgeStore kiểm tra và thêm vào kho. Cần đăng nhập.
+        </p>
+      </div>
+
+      {ketQua?.thongDiep && (
+        <div className="p-3 rounded-xl bg-surface border border-border text-xs text-secondary flex items-center gap-2">
+          <Info className="w-4 h-4 text-accent-forge-text shrink-0" />
+          <span>{ketQua.thongDiep}</span>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <KhungXuongCard key={i} index={i} variant="dither" />
+          ))}
+        </div>
+      ) : isError && !ketQua ? (
+        <KhungLoiKetNoi tieuDe="Không thể tải kết quả từ GitHub" onThuLai={onThuLai} />
+      ) : ketQua && ketQua.duLieu.length === 0 ? (
+        !ketQua.thongDiep && (
+          <p className="text-xs text-muted py-2">Không có thêm kho mã nguồn phù hợp trên GitHub.</p>
+        )
+      ) : ketQua ? (
+        <>
+          <div
+            className={`transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
+          >
+            <AsciiReveal
+              preset="dither"
+              duration="fast"
+              origin="top-left"
+              key={`github-${tuKhoa}-${ketQua.trangHienTai ?? trangHienTai}`}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {ketQua.duLieu.map((dto, index) =>
+                  renderTheRepoGithub(dto, index, trangThaiKiemDinh),
+                )}
+              </div>
+            </AsciiReveal>
+          </div>
+
+          {tongSoTrang > 1 && (
+            <ThanhPhanTrang
+              trangHienTai={ketQua.trangHienTai ?? trangHienTai}
+              tongSoTrang={tongSoTrang}
+              tongSo={ketQua.tongSo ?? ketQua.duLieu.length}
+              kichThuocTrang={ketQua.kichThuocTrang ?? SO_KET_QUA_MOI_TRANG_GITHUB}
+              dangTai={isPlaceholderData}
+              onChuyenTrang={onChuyenTrang}
+            />
+          )}
+
+          {isError && (
+            <p className="text-center text-xs text-danger">
+              Không tải được trang GitHub này.{' '}
+              <button type="button" onClick={onThuLai} className="underline">
+                Thử lại
+              </button>
+            </p>
+          )}
+        </>
+      ) : null}
+    </section>
+  );
+};
+
+const DanhSachKetQuaYDinh: React.FC<{
+  tuKhoa: string;
+  ketQua: TimKiemResponseDto;
+  trangThaiKiemDinh: TrangThaiKiemDinhThe;
+  onQuayLai: () => void;
+}> = ({ tuKhoa, ketQua, trangThaiKiemDinh, onQuayLai }) => {
+  if (ketQua.duLieu.length === 0) {
+    return <KhungKhongCoKetQua tuKhoa={tuKhoa} onQuayLai={onQuayLai} />;
+  }
+
+  return (
+    <AsciiReveal preset="dither" duration="fast" origin="top-left" key={`ydinh-${tuKhoa}`}>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {ketQua.duLieu.map((dto, index) =>
+          laKetQuaTrongKho(dto, ketQua.nguonKetQua) ? (
+            <TheUngDung
+              key={dto.maUngDung}
+              app={khoUngDungService.anhXaDtoSangTheUngDung(dto)}
+              staggerIndex={index}
+            />
+          ) : (
+            renderTheRepoGithub(dto, index, trangThaiKiemDinh)
+          ),
+        )}
+      </div>
+    </AsciiReveal>
+  );
+};
+
 export const TrangKetQuaTimKiem: React.FC = () => {
   const queryClient = useQueryClient();
-  const { searchQuery, trangTimKiem, setTrangTimKiem, navigateTo } = useDieuHuongStore();
+  const {
+    searchQuery,
+    trangTimKiem,
+    trangTimKiemGithub,
+    setTrangTimKiem,
+    setTrangTimKiemGithub,
+    navigateTo,
+    openAppDetail,
+  } = useDieuHuongStore();
+
   const dauDanhSachRef = useRef<HTMLDivElement>(null);
+  const dauPhanGithubRef = useRef<HTMLDivElement>(null);
   const tuKhoa = searchQuery.trim();
   const tuKhoaTruocRef = useRef(tuKhoa);
+  const trangGithubTruocRef = useRef(trangTimKiemGithub);
   const hopLe = tuKhoa.length >= 2;
+  const [repoDangChonUrl, setRepoDangChonUrl] = useState<string | null>(null);
 
-  // Khi đang ở trang kết quả mà gõ tìm từ khóa mới, cuộn lại đầu danh sách để người dùng thấy từ đầu.
+  const { dangKiemDinh, loiKiemDinh, ketQuaThanhCong, kiemDinh, xoaTrangThai } = useKiemDinhRepo({
+    khiThanhCong: (ungDung) => openAppDetail(ungDung.tenRepoDayDu || ungDung.maUngDung),
+  });
+
+  // Đổi từ khóa hoặc sang trang GitHub mới thì cuộn/xóa trạng thái kiểm định thẻ cũ.
   useEffect(() => {
-    if (tuKhoaTruocRef.current !== tuKhoa) {
+    const doiTuKhoa = tuKhoaTruocRef.current !== tuKhoa;
+    const doiTrangGithub = trangGithubTruocRef.current !== trangTimKiemGithub;
+    if (doiTuKhoa || doiTrangGithub) {
       tuKhoaTruocRef.current = tuKhoa;
-      dauDanhSachRef.current?.scrollIntoView({ block: 'start' });
+      trangGithubTruocRef.current = trangTimKiemGithub;
+      setRepoDangChonUrl(null);
+      xoaTrangThai();
+      if (doiTuKhoa) {
+        dauDanhSachRef.current?.scrollIntoView({ block: 'start' });
+      }
     }
-  }, [tuKhoa]);
+  }, [tuKhoa, trangTimKiemGithub, xoaTrangThai]);
 
-  const taoTruyVan = useCallback(
+  const taoTruyVanKho = useCallback(
     (trangSo: number) => ({
-      queryKey: ['tim-kiem-trang', tuKhoa, trangSo] as const,
+      queryKey: ['tim-kiem-trang', tuKhoa, trangSo, 'CSDL'] as const,
       queryFn: () =>
-        khoUngDungService.timKiem(tuKhoa, 'WINDOWS', trangSo, SO_KET_QUA_MOI_TRANG_TIM_KIEM),
+        khoUngDungService.timKiem(
+          tuKhoa,
+          'WINDOWS',
+          trangSo,
+          SO_KET_QUA_MOI_TRANG_TIM_KIEM,
+          'CSDL',
+        ),
       staleTime: 1000 * 60 * 3,
     }),
     [tuKhoa],
   );
 
   const {
-    data: ketQua,
-    isLoading,
-    isError,
-    refetch,
-    isPlaceholderData,
+    data: ketQuaKho,
+    isLoading: isLoadingKho,
+    isError: isErrorKho,
+    refetch: refetchKho,
+    isPlaceholderData: isPlaceholderKho,
   } = useQuery<TimKiemResponseDto>({
-    ...taoTruyVan(trangTimKiem),
+    ...taoTruyVanKho(trangTimKiem),
     enabled: hopLe,
     placeholderData: (previousData) => previousData,
   });
 
-  const tongSoTrang = ketQua?.tongSoTrang ?? 0;
+  const tongSoTrangKho = ketQuaKho?.tongSoTrang ?? 0;
+  const laLuongTen = ketQuaKho?.loaiTruyVan === 'TEN_APP';
 
-  // Tải sẵn trang kế khi đang ở trang hợp lệ để chuyển trang mượt mà.
+  // Chỉ tải sẵn trang kế cho Phần 1 (CSDL); Phần 2 (GitHub) tuyệt đối không prefetch để tiết kiệm hạn mức.
   useEffect(() => {
-    if (!hopLe || isPlaceholderData || trangTimKiem >= tongSoTrang) return;
-    void queryClient.prefetchQuery(taoTruyVan(trangTimKiem + 1));
-  }, [hopLe, isPlaceholderData, trangTimKiem, tongSoTrang, queryClient, taoTruyVan]);
+    if (!hopLe || !laLuongTen || isPlaceholderKho || trangTimKiem >= tongSoTrangKho) return;
+    void queryClient.prefetchQuery(taoTruyVanKho(trangTimKiem + 1));
+  }, [
+    hopLe,
+    laLuongTen,
+    isPlaceholderKho,
+    trangTimKiem,
+    tongSoTrangKho,
+    queryClient,
+    taoTruyVanKho,
+  ]);
 
-  const chuyenTrang = useCallback(
+  const hienPhanGithub = nenHienPhanGithub(hopLe, ketQuaKho);
+
+  const {
+    data: ketQuaGithub,
+    isLoading: isLoadingGithub,
+    isError: isErrorGithub,
+    refetch: refetchGithub,
+    isPlaceholderData: isPlaceholderGithub,
+  } = useQuery<TimKiemResponseDto>({
+    queryKey: ['tim-kiem-trang-github', tuKhoa, trangTimKiemGithub] as const,
+    queryFn: () =>
+      khoUngDungService.timKiem(
+        tuKhoa,
+        'WINDOWS',
+        trangTimKiemGithub,
+        SO_KET_QUA_MOI_TRANG_GITHUB,
+        'GITHUB',
+      ),
+    enabled: hienPhanGithub,
+    staleTime: THOI_GIAN_CACHE_GITHUB_MS,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
+  });
+
+  const chuyenTrangKho = useCallback(
     (trangMoi: number) => {
       setTrangTimKiem(trangMoi);
       dauDanhSachRef.current?.scrollIntoView({ block: 'start' });
@@ -130,17 +436,33 @@ export const TrangKetQuaTimKiem: React.FC = () => {
     [setTrangTimKiem],
   );
 
+  const chuyenTrangGithub = useCallback(
+    (trangMoi: number) => {
+      setTrangTimKiemGithub(trangMoi);
+      dauPhanGithubRef.current?.scrollIntoView({ block: 'start' });
+    },
+    [setTrangTimKiemGithub],
+  );
+
   const quayVeKhamPha = useCallback(() => {
     navigateTo('explore');
   }, [navigateTo]);
 
-  const theUngDung: AppCardData[] = useMemo(
-    () =>
-      locUngDungTrongKho(ketQua?.duLieu, ketQua?.nguonKetQua).map((dto) =>
-        khoUngDungService.anhXaDtoSangTheUngDung(dto),
-      ),
-    [ketQua],
+  const batDauKiemDinhThe = useCallback(
+    (duongDan: string) => {
+      setRepoDangChonUrl(duongDan);
+      void kiemDinh(duongDan);
+    },
+    [kiemDinh],
   );
+
+  const trangThaiKiemDinh: TrangThaiKiemDinhThe = {
+    repoDangChonUrl,
+    dangKiemDinh,
+    daThanhCong: ketQuaThanhCong !== null,
+    loiKiemDinh,
+    onKiemDinh: batDauKiemDinhThe,
+  };
 
   if (!hopLe) {
     return (
@@ -160,8 +482,18 @@ export const TrangKetQuaTimKiem: React.FC = () => {
           <h1 className="text-xl md:text-2xl font-bold font-display text-primary truncate">
             Kết quả cho “{tuKhoa}”
           </h1>
-          {!isLoading && ketQua && (
-            <p className="text-xs text-muted">{taoDongPhuKetQuaTimKiem(ketQua)}</p>
+          {!isLoadingKho && ketQuaKho && (
+            <>
+              {laLuongTen ? (
+                ketQuaKho.tongSo > 0 && (
+                  <p className="text-xs text-muted">
+                    Tìm thấy {ketQuaKho.tongSo} ứng dụng trong ForgeStore
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-muted">Các kết quả phù hợp nhất</p>
+              )}
+            </>
           )}
         </div>
 
@@ -175,56 +507,51 @@ export const TrangKetQuaTimKiem: React.FC = () => {
         </button>
       </div>
 
-      {isLoading ? (
+      {isLoadingKho ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <KhungXuongCard key={i} index={i} variant="dither" />
           ))}
         </div>
-      ) : isError && !ketQua ? (
-        <KhungLoiKetNoi onThuLai={() => void refetch()} />
-      ) : theUngDung.length === 0 ? (
-        <KhungKhongCoKetQua tuKhoa={tuKhoa} onQuayLai={quayVeKhamPha} />
-      ) : (
-        <>
-          <div
-            className={`transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
-          >
-            <AsciiReveal
-              preset="dither"
-              duration="fast"
-              origin="top-left"
-              key={`${tuKhoa}-${ketQua?.trangHienTai ?? trangTimKiem}`}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {theUngDung.map((app, index) => (
-                  <TheUngDung key={app.id} app={app} staggerIndex={index} />
-                ))}
-              </div>
-            </AsciiReveal>
-          </div>
-
-          {tongSoTrang > 1 && (
-            <ThanhPhanTrang
-              trangHienTai={ketQua?.trangHienTai ?? trangTimKiem}
-              tongSoTrang={tongSoTrang}
-              tongSo={ketQua?.tongSo ?? theUngDung.length}
-              kichThuocTrang={ketQua?.kichThuocTrang ?? SO_KET_QUA_MOI_TRANG_TIM_KIEM}
-              dangTai={isPlaceholderData}
-              onChuyenTrang={chuyenTrang}
+      ) : isErrorKho && !ketQuaKho ? (
+        <KhungLoiKetNoi onThuLai={() => void refetchKho()} />
+      ) : ketQuaKho ? (
+        laLuongTen ? (
+          <>
+            <PhanKetQuaTrongKho
+              tuKhoa={tuKhoa}
+              ketQua={ketQuaKho}
+              trangHienTai={trangTimKiem}
+              isPlaceholderData={isPlaceholderKho}
+              isError={isErrorKho}
+              onChuyenTrang={chuyenTrangKho}
+              onThuLai={() => void refetchKho()}
             />
-          )}
 
-          {isError && (
-            <p className="text-center text-xs text-danger">
-              Không tải được trang này.{' '}
-              <button type="button" onClick={() => void refetch()} className="underline">
-                Thử lại
-              </button>
-            </p>
-          )}
-        </>
-      )}
+            {hienPhanGithub && (
+              <PhanKetQuaGithub
+                tuKhoa={tuKhoa}
+                ketQua={ketQuaGithub}
+                trangHienTai={trangTimKiemGithub}
+                isLoading={isLoadingGithub}
+                isError={isErrorGithub}
+                isPlaceholderData={isPlaceholderGithub}
+                trangThaiKiemDinh={trangThaiKiemDinh}
+                dauPhanRef={dauPhanGithubRef}
+                onChuyenTrang={chuyenTrangGithub}
+                onThuLai={() => void refetchGithub()}
+              />
+            )}
+          </>
+        ) : (
+          <DanhSachKetQuaYDinh
+            tuKhoa={tuKhoa}
+            ketQua={ketQuaKho}
+            trangThaiKiemDinh={trangThaiKiemDinh}
+            onQuayLai={quayVeKhamPha}
+          />
+        )
+      ) : null}
     </div>
   );
 };

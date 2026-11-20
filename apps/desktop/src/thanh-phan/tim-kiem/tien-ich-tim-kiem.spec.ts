@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { TimKiemResponseDto, UngDungTomTatDto } from '@forgestore/types';
 import {
+  layDuongDanKiemDinhRepo,
   layMaMoTrangTuLink,
   locUngDungTrongKho,
+  nenHienPhanGithub,
   quyetDinhKhiNhanEnter,
   taoDongPhuKetQuaTimKiem,
   thongTinNutXemTatCa,
@@ -220,5 +222,31 @@ describe('quyetDinhKhiNhanEnter (P3B-41)', () => {
         chiSoDangChon: -1,
       }),
     ).toEqual({ loai: 'KHONG_LAM_GI' });
+  });
+});
+
+describe('nenHienPhanGithub & layDuongDanKiemDinhRepo (P3B-43)', () => {
+  it('bật phần 2 khi phần 1 là TEN_APP, kể cả khi phần 1 trong kho trống', () => {
+    expect(nenHienPhanGithub(true, { loaiTruyVan: 'TEN_APP' })).toBe(true);
+    expect(nenHienPhanGithub(true, { loaiTruyVan: 'Y_DINH' })).toBe(false);
+    expect(nenHienPhanGithub(true, { loaiTruyVan: 'URL' })).toBe(false);
+    expect(nenHienPhanGithub(true, null)).toBe(false);
+    expect(nenHienPhanGithub(false, { loaiTruyVan: 'TEN_APP' })).toBe(false);
+  });
+
+  it('ưu tiên duongDanGithub và lùi về tenRepoDayDu khi kích hoạt kiểm định thẻ GitHub', () => {
+    expect(
+      layDuongDanKiemDinhRepo({
+        duongDanGithub: 'https://github.com/EbookFoundation/free-programming-books',
+        tenRepoDayDu: 'EbookFoundation/free-programming-books',
+      }),
+    ).toBe('https://github.com/EbookFoundation/free-programming-books');
+
+    expect(
+      layDuongDanKiemDinhRepo({
+        duongDanGithub: '',
+        tenRepoDayDu: 'someone/tool',
+      }),
+    ).toBe('someone/tool');
   });
 });

@@ -9,6 +9,7 @@ describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => 
       selectedCategory: null,
       searchQuery: '',
       trangTimKiem: 1,
+      trangTimKiemGithub: 1,
       tabTruocChiTiet: null,
       isSearchModalOpen: false,
       isAuthModalOpen: false,
@@ -42,20 +43,23 @@ describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => 
     expect(useDieuHuongStore.getState().selectedCategory).toBe('developer-tools');
   });
 
-  it('moTrangTimKiem đặt đúng tab, từ khóa và đưa về trang 1 (P3B-41)', () => {
+  it('moTrangTimKiem đặt đúng tab, từ khóa và đưa cả 2 trang về 1 (P3B-41 & P3B-43)', () => {
     useDieuHuongStore.getState().setTrangTimKiem(4);
+    useDieuHuongStore.getState().setTrangTimKiemGithub(3);
     useDieuHuongStore.getState().moTrangTimKiem('  ghi chú markdown  ');
 
     const state = useDieuHuongStore.getState();
     expect(state.currentTab).toBe('search');
     expect(state.searchQuery).toBe('ghi chú markdown');
     expect(state.trangTimKiem).toBe(1);
+    expect(state.trangTimKiemGithub).toBe(1);
     expect(state.selectedAppId).toBeNull();
   });
 
-  it('quayLaiTuChiTiet chỉ quay về search khi mở chi tiết từ search, giữ nguyên từ khóa và trang (P3B-41)', () => {
+  it('quayLaiTuChiTiet chỉ quay về search khi mở chi tiết từ search, giữ nguyên từ khóa và trang (P3B-41 & P3B-43)', () => {
     useDieuHuongStore.getState().moTrangTimKiem('terminal');
     useDieuHuongStore.getState().setTrangTimKiem(3);
+    useDieuHuongStore.getState().setTrangTimKiemGithub(2);
 
     useDieuHuongStore.getState().openAppDetail('app-1');
     expect(useDieuHuongStore.getState().tabTruocChiTiet).toBe('search');
@@ -69,6 +73,7 @@ describe('useDieuHuongStore & HopThoaiXacThuc state (P3B-15-PREMIUM-UI)', () => 
     expect(state.currentTab).toBe('search');
     expect(state.searchQuery).toBe('terminal');
     expect(state.trangTimKiem).toBe(3);
+    expect(state.trangTimKiemGithub).toBe(2);
     expect(state.tabTruocChiTiet).toBeNull();
   });
 

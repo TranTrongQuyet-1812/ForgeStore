@@ -10,6 +10,7 @@ interface NavState {
   searchQuery: string;
   // Lưu số trang kết quả trong store vì BoCucUngDung unmount trang khi mở chi tiết app.
   trangTimKiem: number;
+  trangTimKiemGithub: number;
   // Nhớ nguồn mở trang chi tiết để nút quay lại trả về trang kết quả khi đi từ 'search'.
   tabTruocChiTiet: NavTab | null;
   isSearchModalOpen: boolean;
@@ -18,6 +19,7 @@ interface NavState {
   openAppDetail: (appId: string) => void;
   moTrangTimKiem: (tuKhoa: string) => void;
   setTrangTimKiem: (trang: number) => void;
+  setTrangTimKiemGithub: (trang: number) => void;
   quayLaiTuChiTiet: () => void;
   openCategory: (category: string) => void;
   setSelectedCategory: (category: string | null) => void;
@@ -32,6 +34,7 @@ export const useDieuHuongStore = create<NavState>((set) => ({
   selectedCategory: null,
   searchQuery: '',
   trangTimKiem: 1,
+  trangTimKiemGithub: 1,
   tabTruocChiTiet: null,
   isSearchModalOpen: false,
   isAuthModalOpen: false,
@@ -48,10 +51,12 @@ export const useDieuHuongStore = create<NavState>((set) => ({
       currentTab: 'search',
       searchQuery: tuKhoa.trim(),
       trangTimKiem: 1,
+      trangTimKiemGithub: 1,
       selectedAppId: null,
       tabTruocChiTiet: null,
     }),
   setTrangTimKiem: (trang) => set({ trangTimKiem: Math.max(1, Math.floor(trang)) }),
+  setTrangTimKiemGithub: (trang) => set({ trangTimKiemGithub: Math.max(1, Math.floor(trang)) }),
   quayLaiTuChiTiet: () =>
     set((state) => ({
       currentTab: state.tabTruocChiTiet === 'search' ? 'search' : 'explore',
@@ -61,7 +66,7 @@ export const useDieuHuongStore = create<NavState>((set) => ({
   openCategory: (category) =>
     set({ currentTab: 'explore', selectedCategory: category, tabTruocChiTiet: null }),
   setSelectedCategory: (selectedCategory) => set({ selectedCategory }),
-  setSearchQuery: (searchQuery) => set({ searchQuery, trangTimKiem: 1 }),
+  setSearchQuery: (searchQuery) => set({ searchQuery, trangTimKiem: 1, trangTimKiemGithub: 1 }),
   setSearchModalOpen: (isSearchModalOpen) => set({ isSearchModalOpen }),
   setAuthModalOpen: (isAuthModalOpen) => set({ isAuthModalOpen }),
 }));

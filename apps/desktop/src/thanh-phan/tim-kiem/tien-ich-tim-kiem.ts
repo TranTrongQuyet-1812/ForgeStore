@@ -2,6 +2,8 @@ import type { ThongTinUrlGithub, TimKiemResponseDto, UngDungTomTatDto } from '@f
 
 export const SO_KET_QUA_GOI_Y_DROPDOWN = 8;
 export const SO_KET_QUA_MOI_TRANG_TIM_KIEM = 48;
+export const SO_KET_QUA_MOI_TRANG_GITHUB = 24;
+export const THOI_GIAN_CACHE_GITHUB_MS = 1000 * 60 * 5;
 
 export interface ThongTinNutXemTatCa {
   hienThi: boolean;
@@ -78,6 +80,21 @@ export function taoDongPhuKetQuaTimKiem(ketQua: TimKiemResponseDto | null | unde
     return `Tìm thấy ${ketQua!.tongSo} ứng dụng`;
   }
   return 'Các kết quả phù hợp nhất';
+}
+
+/** Phần 2 từ GitHub chỉ bật khi từ khóa hợp lệ và phần 1 đã xác nhận đây là luồng tìm theo tên app. */
+export function nenHienPhanGithub(
+  hopLe: boolean,
+  ketQuaKho: Pick<TimKiemResponseDto, 'loaiTruyVan'> | null | undefined,
+): boolean {
+  return Boolean(hopLe && ketQuaKho && ketQuaKho.loaiTruyVan === 'TEN_APP');
+}
+
+/** Lấy đường dẫn chuẩn để đưa vào hook kiểm định khi người dùng bấm thẻ repo GitHub. */
+export function layDuongDanKiemDinhRepo(
+  repo: Pick<UngDungTomTatDto, 'duongDanGithub' | 'tenRepoDayDu'>,
+): string {
+  return (repo.duongDanGithub || repo.tenRepoDayDu || '').trim();
 }
 
 /** Xác định hành động khi người dùng nhấn Enter trong thanh tìm kiếm theo 5 nhánh đã chốt. */
