@@ -12,9 +12,7 @@ import {
   CornerDownLeft,
 } from 'lucide-react';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
-import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 import { khoUngDungService } from '../../dich-vu/kho-ung-dung/kho-ung-dung.service';
-import { layThongBaoLoi } from '../../dich-vu/api/thong-bao-loi';
 import {
   layMaMoTrangTuLink,
   quyetDinhKhiNhanEnter,
@@ -22,7 +20,8 @@ import {
   thongTinNutXemTatCa,
 } from './tien-ich-tim-kiem';
 import { useDeviceInstalledApps } from '../../hooks/useDeviceInstalledApps';
-import type { TimKiemResponseDto, InspectRepoResponseDto } from '@forgestore/types';
+import { useKiemDinhRepo } from '../../hooks/useKiemDinhRepo';
+import type { TimKiemResponseDto } from '@forgestore/types';
 
 // Danh sách gợi ý tìm kiếm nhanh khi ô nhập đang trống
 const GOI_Y_TIM_KIEM = [
@@ -38,7 +37,6 @@ export const ThanhTimKiemDropdown: React.FC = () => {
   const { openAppDetail, moTrangTimKiem, isSearchModalOpen, setSearchModalOpen } =
     useDieuHuongStore();
   const { kiemTraAppDaCai } = useDeviceInstalledApps();
-  const isAuthenticated = useXacThucStore((s) => s.isAuthenticated);
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
@@ -46,14 +44,8 @@ export const ThanhTimKiemDropdown: React.FC = () => {
   const [searchResult, setSearchResult] = useState<TimKiemResponseDto | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
-  // Trạng thái kiểm định Paste & Play
-  const [isInspecting, setIsInspecting] = useState<boolean>(false);
-  const [inspectError, setInspectError] = useState<string | null>(null);
-  const [inspectSuccess, setInspectSuccess] = useState<InspectRepoResponseDto | null>(null);
-
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Chọn xong một kết quả thì đóng khung và xóa chữ đã gõ, để ô tìm kiếm sạch khi sang trang khác.
   const dongVaXoaTimKiem = () => {
@@ -62,9 +54,22 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     setQuery('');
     setSearchResult(null);
     setSelectedIndex(-1);
-    setInspectError(null);
-    setInspectSuccess(null);
+    xoaTrangThaiKiemDinh();
   };
+
+  // Tách luồng kiểm định Paste & Play thành hook dùng chung với trang kết quả (P3B-43).
+  const {
+    dangKiemDinh: isInspecting,
+    loiKiemDinh: inspectError,
+    ketQuaThanhCong: inspectSuccess,
+    kiemDinh: handleInspectRepo,
+    xoaTrangThai: xoaTrangThaiKiemDinh,
+  } = useKiemDinhRepo({
+    khiThanhCong: (ungDung) => {
+      openAppDetail(ungDung.tenRepoDayDu || ungDung.maUngDung);
+      dongVaXoaTimKiem();
+    },
+  });
 
   // Đồng bộ trạng thái mở nếu có nơi khác kích hoạt setSearchModalOpen
   useEffect(() => {
@@ -109,15 +114,6 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     };
   }, [isOpen, setSearchModalOpen]);
 
-  // Dọn dẹp timer khi component unmount
-  useEffect(() => {
-    return () => {
-      if (autoCloseTimerRef.current) {
-        clearTimeout(autoCloseTimerRef.current);
-      }
-    };
-  }, []);
-
   // Nhận diện đường dẫn GitHub Repo cho tính năng Paste & Play (EC-05 & FE-R7-05)
   const trimmedQuery = query.trim();
   const isGithubFullUrl = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+/i.test(trimmedQuery);
@@ -138,7 +134,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
     }
 
     setIsSearching(true);
-    setInspectError(null);
+    xoaTrangThaiKiemDinh();
 
     // Gõ tiếp khi yêu cầu cũ chưa về thì bỏ kết quả cũ, tránh ghi đè kết quả của từ khóa mới.
     let daHuy = false;
@@ -162,46 +158,7 @@ export const ThanhTimKiemDropdown: React.FC = () => {
       daHuy = true;
       clearTimeout(timer);
     };
-  }, [query]);
-
-  // Xử lý nạp và kiểm định repo Paste & Play
-  const handleInspectRepo = async (rawUrl: string) => {
-    if (!rawUrl || isInspecting) return;
-    // Thêm app mới vào kho cần đăng nhập (máy chủ từ chối khách), báo trước thay vì để lộ lỗi kỹ thuật
-    if (!isAuthenticated) {
-      setInspectSuccess(null);
-      setInspectError('Hãy đăng nhập để thêm ứng dụng mới từ GitHub vào ForgeStore.');
-      return;
-    }
-    const urlToInspect = rawUrl.startsWith('http') ? rawUrl : `https://github.com/${rawUrl}`;
-    setIsInspecting(true);
-    setInspectError(null);
-    setInspectSuccess(null);
-
-    try {
-      const res = await khoUngDungService.kiemDinhRepo(urlToInspect);
-      if (res.trangThai === 'THANH_CONG' && res.ungDung) {
-        setInspectSuccess(res);
-        if (autoCloseTimerRef.current) {
-          clearTimeout(autoCloseTimerRef.current);
-        }
-        autoCloseTimerRef.current = setTimeout(() => {
-          openAppDetail(res.ungDung!.tenRepoDayDu || res.ungDung!.maUngDung);
-          dongVaXoaTimKiem();
-        }, 800);
-      } else {
-        const errorMsg =
-          res.trangThai === 'LINK_KHONG_HOP_LE'
-            ? 'Liên kết GitHub không hợp lệ hoặc kho lưu trữ không công khai.'
-            : 'Không thể nạp ứng dụng từ liên kết này.';
-        setInspectError(res.thongBao || errorMsg);
-      }
-    } catch (err: unknown) {
-      setInspectError(layThongBaoLoi(err, 'Lỗi kết nối khi kiểm tra repository.'));
-    } finally {
-      setIsInspecting(false);
-    }
-  };
+  }, [query, xoaTrangThaiKiemDinh]);
 
   const ketQuaHienThi = (searchResult?.duLieu ?? []).slice(0, SO_KET_QUA_GOI_Y_DROPDOWN);
   const nutXemTatCa = thongTinNutXemTatCa(searchResult);
