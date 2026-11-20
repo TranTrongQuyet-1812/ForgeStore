@@ -8,6 +8,10 @@ const trangThai = vi.hoisted(() => ({
     queryKey: readonly unknown[];
     enabled?: boolean;
     staleTime?: number;
+    placeholderData?: (
+      prev: TimKiemResponseDto | undefined,
+      prevQuery?: { queryKey: readonly unknown[] },
+    ) => TimKiemResponseDto | undefined;
   }>,
   prefetchQuery: vi.fn(),
   ketQuaKho: {} as Record<string, unknown>,
@@ -25,7 +29,15 @@ const trangThai = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ prefetchQuery: trangThai.prefetchQuery }),
-  useQuery: (opts: { queryKey: readonly unknown[]; enabled?: boolean; staleTime?: number }) => {
+  useQuery: (opts: {
+    queryKey: readonly unknown[];
+    enabled?: boolean;
+    staleTime?: number;
+    placeholderData?: (
+      prev: TimKiemResponseDto | undefined,
+      prevQuery?: { queryKey: readonly unknown[] },
+    ) => TimKiemResponseDto | undefined;
+  }) => {
     trangThai.truyVanNhanDuoc.push(opts);
     return opts.queryKey[0] === 'tim-kiem-trang-github'
       ? trangThai.ketQuaGithub
@@ -274,5 +286,46 @@ describe('TrangKetQuaTimKiem (P3B-43 hai phần)', () => {
     expect(html).toContain('GitHub');
     expect(html).not.toContain('Từ GitHub, chưa có trong ForgeStore');
     expect(html).not.toContain('Chuyển trang danh sách ứng dụng');
+  });
+
+  it('Phần 2 bị loại trùng hết trang hiện tại nhưng tongSoTrang > 1 vẫn giữ thanh phân trang; không giữ placeholder khi đổi từ khóa', () => {
+    trangThai.dieuHuong.searchQuery = 'craft';
+    const duLieuCu = taoKetQua({ tongSo: 10, tongSoTrang: 1 });
+    trangThai.ketQuaKho = {
+      data: taoKetQua({ tongSo: 1, tongSoTrang: 1 }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+      isPlaceholderData: false,
+    };
+    trangThai.ketQuaGithub = {
+      data: taoKetQua({
+        nguonKetQua: 'GITHUB',
+        duLieu: [],
+        tongSo: 72,
+        kichThuocTrang: 24,
+        tongSoTrang: 3,
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+      isPlaceholderData: false,
+    };
+
+    const html = renderToStaticMarkup(<TrangKetQuaTimKiem />);
+
+    expect(html).toContain(
+      'Các kết quả ở trang này đều đã có trong ForgeStore, bạn có thể chuyển sang trang khác.',
+    );
+    expect(html).toContain('Chuyển trang danh sách ứng dụng');
+
+    for (const q of trangThai.truyVanNhanDuoc) {
+      expect(
+        q.placeholderData?.(duLieuCu, { queryKey: ['tim-kiem-trang', 'tu-khoa-cu', 1] }),
+      ).toBeUndefined();
+      expect(q.placeholderData?.(duLieuCu, { queryKey: ['tim-kiem-trang', 'craft', 1] })).toEqual(
+        duLieuCu,
+      );
+    }
   });
 });

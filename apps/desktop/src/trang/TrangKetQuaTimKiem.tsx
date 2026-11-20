@@ -243,28 +243,34 @@ const PhanKetQuaGithub: React.FC<PhanKetQuaGithubProps> = ({
         </div>
       ) : isError && !ketQua ? (
         <KhungLoiKetNoi tieuDe="Không thể tải kết quả từ GitHub" onThuLai={onThuLai} />
-      ) : ketQua && ketQua.duLieu.length === 0 ? (
-        !ketQua.thongDiep && (
-          <p className="text-xs text-muted py-2">Không có thêm kho mã nguồn phù hợp trên GitHub.</p>
-        )
       ) : ketQua ? (
         <>
-          <div
-            className={`transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
-          >
-            <AsciiReveal
-              preset="dither"
-              duration="fast"
-              origin="top-left"
-              key={`github-${tuKhoa}-${ketQua.trangHienTai ?? trangHienTai}`}
+          {ketQua.duLieu.length === 0 ? (
+            !ketQua.thongDiep && (
+              <p className="text-xs text-muted py-2">
+                {tongSoTrang > 1
+                  ? 'Các kết quả ở trang này đều đã có trong ForgeStore, bạn có thể chuyển sang trang khác.'
+                  : 'Không có thêm kho mã nguồn phù hợp trên GitHub.'}
+              </p>
+            )
+          ) : (
+            <div
+              className={`transition-opacity duration-150 ${isPlaceholderData ? 'opacity-60' : ''}`}
             >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {ketQua.duLieu.map((dto, index) =>
-                  renderTheRepoGithub(dto, index, trangThaiKiemDinh),
-                )}
-              </div>
-            </AsciiReveal>
-          </div>
+              <AsciiReveal
+                preset="dither"
+                duration="fast"
+                origin="top-left"
+                key={`github-${tuKhoa}-${ketQua.trangHienTai ?? trangHienTai}`}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {ketQua.duLieu.map((dto, index) =>
+                    renderTheRepoGithub(dto, index, trangThaiKiemDinh),
+                  )}
+                </div>
+              </AsciiReveal>
+            </div>
+          )}
 
           {tongSoTrang > 1 && (
             <ThanhPhanTrang
@@ -384,7 +390,8 @@ export const TrangKetQuaTimKiem: React.FC = () => {
   } = useQuery<TimKiemResponseDto>({
     ...taoTruyVanKho(trangTimKiem),
     enabled: hopLe,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[1] === tuKhoa ? previousData : undefined,
   });
 
   const tongSoTrangKho = ketQuaKho?.tongSoTrang ?? 0;
@@ -425,7 +432,8 @@ export const TrangKetQuaTimKiem: React.FC = () => {
     enabled: hienPhanGithub,
     staleTime: THOI_GIAN_CACHE_GITHUB_MS,
     refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[1] === tuKhoa ? previousData : undefined,
   });
 
   const chuyenTrangKho = useCallback(
