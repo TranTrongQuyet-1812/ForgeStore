@@ -18,7 +18,7 @@ const GOC_CHOOSEALICENSE = 'https://choosealicense.com/licenses';
 const DUNG_MIEN_PHI_KINH_DOANH = 'Được dùng miễn phí, kể cả cho công việc kinh doanh.';
 const DUNG_MIEN_PHI_CONG_VIEC = 'Được dùng miễn phí, kể cả cho công việc.';
 const SUA_LGPL =
-  'Dành cho thư viện: được dùng trong phần mềm khác mà không phải mở mã phần mềm đó (nếu chỉ liên kết, không sửa thư viện). Sửa chính thư viện rồi phát hành thì phần sửa phải mở theo LGPL.';
+  'Dành cho thư viện: được dùng trong phần mềm khác mà không phải mở mã phần mềm đó (nếu chỉ liên kết, không sửa thư viện). Sửa chính thư viện rồi phát hành thì phần sửa phải mở theo LGPL. Phần mềm của bạn phải để người dùng thay được thư viện bằng bản sửa của họ.';
 
 export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhep>> = {
   MIT: {
@@ -34,7 +34,7 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nhom: 'RAT_THOANG',
     nguoiDung: DUNG_MIEN_PHI_KINH_DOANH,
     neuSuaHoacChiaSe:
-      'Được làm; phải giữ thông báo bản quyền và giấy phép, ghi rõ chỗ đã sửa. Tác giả cũng cho phép dùng các bằng sáng chế của họ nằm trong phần mềm này.',
+      'Được làm; phải giữ thông báo bản quyền và giấy phép, ghi rõ chỗ đã sửa. Tác giả cũng cho phép dùng các bằng sáng chế của họ nằm trong phần mềm này. Giấy phép không cấp quyền dùng tên hay nhãn hiệu của tác giả.',
     lienKetToanVan: `${GOC_CHOOSEALICENSE}/apache-2.0/`,
   },
   'BSD-3-Clause': {
@@ -79,7 +79,8 @@ export const BANG_GIAI_THICH_GIAY_PHEP: Readonly<Record<string, GiaiThichGiayPhe
     nhom: 'RAT_THOANG',
     nguoiDung:
       'Được dùng miễn phí, tác giả đã từ bỏ quyền tác giả trong phạm vi pháp luật cho phép.',
-    neuSuaHoacChiaSe: 'Được làm gần như tự do, không cần xin phép hay ghi công.',
+    neuSuaHoacChiaSe:
+      'Được làm gần như tự do, không cần xin phép hay ghi công. Giấy phép này không cấp quyền về bằng sáng chế và nhãn hiệu.',
     lienKetToanVan: `${GOC_CHOOSEALICENSE}/cc0-1.0/`,
   },
   'MPL-2.0': {

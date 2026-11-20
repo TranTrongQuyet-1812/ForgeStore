@@ -142,4 +142,31 @@ describe('giaiThichGiayPhep (P3B-40)', () => {
     }
     expect(LUU_Y_GIAY_PHEP).toBe('Giải thích chỉ để tham khảo, không phải tư vấn pháp lý.');
   });
+
+  it('bổ sung đầy đủ ba câu làm rõ cho CC0, Apache-2.0 và LGPL 3.0 / 2.1 (P3B-43)', () => {
+    expect(giaiThichGiayPhep('Creative Commons Zero v1.0 Universal').neuSuaHoacChiaSe).toContain(
+      'Giấy phép này không cấp quyền về bằng sáng chế và nhãn hiệu.',
+    );
+    expect(giaiThichGiayPhep('CC0-1.0').neuSuaHoacChiaSe).toContain(
+      'Giấy phép này không cấp quyền về bằng sáng chế và nhãn hiệu.',
+    );
+
+    expect(giaiThichGiayPhep('Apache License 2.0').neuSuaHoacChiaSe).toContain(
+      'Giấy phép không cấp quyền dùng tên hay nhãn hiệu của tác giả.',
+    );
+    expect(giaiThichGiayPhep('Apache-2.0').neuSuaHoacChiaSe).toContain(
+      'Giấy phép không cấp quyền dùng tên hay nhãn hiệu của tác giả.',
+    );
+
+    for (const lgpl of [
+      'GNU Lesser General Public License v3.0',
+      'GNU Lesser General Public License v2.1',
+      'LGPL-3.0',
+      'LGPL-2.1',
+    ]) {
+      expect(giaiThichGiayPhep(lgpl).neuSuaHoacChiaSe, lgpl).toContain(
+        'Phần mềm của bạn phải để người dùng thay được thư viện bằng bản sửa của họ.',
+      );
+    }
+  });
 });
