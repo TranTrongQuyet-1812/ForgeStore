@@ -67,20 +67,33 @@ describe('thongTinNutXemTatCa & taoDongPhuKetQuaTimKiem (P3B-41)', () => {
     expect(taoDongPhuKetQuaTimKiem(kq)).toBe('Các kết quả phù hợp nhất');
   });
 
-  it('chỉ có kết quả GitHub chưa thẩm định: không hiện nút Xem tất cả', () => {
+  it('chỉ có kết quả GitHub chưa thẩm định vẫn hiện nút Xem tất cả (không gắn số), vì trang kết quả hiện cả hai nguồn', () => {
     const kqGithub = taoKetQua({
-      loaiTruyVan: 'Y_DINH',
+      loaiTruyVan: 'TEN_APP',
       nguonKetQua: 'GITHUB',
+      tongSo: 640,
       duLieu: [taoApp({ maUngDung: 'other/tool', tenRepoDayDu: 'other/tool', chuaThamDinh: true })],
     });
-    expect(thongTinNutXemTatCa(kqGithub)).toEqual({ hienThi: false, nhan: '' });
+    expect(thongTinNutXemTatCa(kqGithub)).toEqual({ hienThi: true, nhan: 'Xem tất cả kết quả' });
 
     const kqKetHopToanGithub = taoKetQua({
       loaiTruyVan: 'Y_DINH',
       nguonKetQua: 'KET_HOP',
       duLieu: [taoApp({ chuaThamDinh: true })],
     });
-    expect(thongTinNutXemTatCa(kqKetHopToanGithub)).toEqual({ hienThi: false, nhan: '' });
+    expect(thongTinNutXemTatCa(kqKetHopToanGithub)).toEqual({
+      hienThi: true,
+      nhan: 'Xem tất cả kết quả',
+    });
+  });
+
+  it('kết quả dán link GitHub (URL) không có trang riêng nên không hiện nút Xem tất cả', () => {
+    const kqUrl = taoKetQua({
+      loaiTruyVan: 'URL',
+      nguonKetQua: 'URL',
+      duLieu: [taoApp({ chuaThamDinh: true })],
+    });
+    expect(thongTinNutXemTatCa(kqUrl)).toEqual({ hienThi: false, nhan: '' });
   });
 
   it('không có kết quả hoặc null: ẩn nút Xem tất cả', () => {
@@ -199,20 +212,20 @@ describe('quyetDinhKhiNhanEnter (P3B-41)', () => {
     ).toEqual({ loai: 'MO_TRANG_KET_QUA', tuKhoa: 'ghi chú' });
   });
 
-  it('nhánh 5: không chọn dòng nào và chỉ có kết quả từ GitHub (hoặc rỗng) thì không làm gì', () => {
+  it('nhánh 5: không chọn dòng nào mà chỉ có kết quả từ GitHub, kết quả rỗng hoặc chưa về thì vẫn mở trang kết quả (trang tự tìm cả hai nguồn)', () => {
     const kqChiGithub = taoKetQua({
-      loaiTruyVan: 'Y_DINH',
+      loaiTruyVan: 'TEN_APP',
       nguonKetQua: 'GITHUB',
       duLieu: [taoApp({ chuaThamDinh: true })],
     });
     expect(
       quyetDinhKhiNhanEnter({
-        tuKhoa: 'công cụ lạ',
+        tuKhoa: 'free-programming-books',
         laDuongDanGithub: false,
         ketQua: kqChiGithub,
         chiSoDangChon: -1,
       }),
-    ).toEqual({ loai: 'KHONG_LAM_GI' });
+    ).toEqual({ loai: 'MO_TRANG_KET_QUA', tuKhoa: 'free-programming-books' });
 
     expect(
       quyetDinhKhiNhanEnter({
@@ -221,7 +234,17 @@ describe('quyetDinhKhiNhanEnter (P3B-41)', () => {
         ketQua: taoKetQua({ duLieu: [], tongSo: 0 }),
         chiSoDangChon: -1,
       }),
-    ).toEqual({ loai: 'KHONG_LAM_GI' });
+    ).toEqual({ loai: 'MO_TRANG_KET_QUA', tuKhoa: 'không có gì' });
+
+    // Gõ nhanh rồi Enter khi dropdown chưa kịp có kết quả.
+    expect(
+      quyetDinhKhiNhanEnter({
+        tuKhoa: 'redis',
+        laDuongDanGithub: false,
+        ketQua: null,
+        chiSoDangChon: -1,
+      }),
+    ).toEqual({ loai: 'MO_TRANG_KET_QUA', tuKhoa: 'redis' });
   });
 });
 

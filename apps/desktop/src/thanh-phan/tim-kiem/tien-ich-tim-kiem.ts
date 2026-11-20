@@ -61,11 +61,14 @@ export function locUngDungTrongKho(
   return duLieu.filter((app) => !app.chuaThamDinh);
 }
 
-/** Dòng "Xem tất cả" chỉ hiện khi có ít nhất một ứng dụng đã vào kho, và chỉ gắn số thật. */
+/**
+ * Dòng "Xem tất cả" hiện khi có ít nhất một kết quả, kể cả khi toàn repo từ GitHub chưa vào kho
+ * (trang kết quả hiện cả hai nguồn). Kết quả dán link GitHub thì không có trang riêng. Chỉ gắn số khi là số thật.
+ */
 export function thongTinNutXemTatCa(
   ketQua: TimKiemResponseDto | null | undefined,
 ): ThongTinNutXemTatCa {
-  if (!ketQua || locUngDungTrongKho(ketQua.duLieu, ketQua.nguonKetQua).length === 0) {
+  if (!ketQua || ketQua.loaiTruyVan === 'URL' || (ketQua.duLieu ?? []).length === 0) {
     return { hienThi: false, nhan: '' };
   }
   const nhan = coSoLuongKetQuaThat(ketQua)
@@ -123,7 +126,9 @@ export function quyetDinhKhiNhanEnter(thamSo: ThamSoNhanEnter): HanhDongNhanEnte
     return { loai: 'MO_CHI_TIET', maMoTrang: app.tenRepoDayDu || app.maUngDung };
   }
 
-  if (coXemTatCa && (thamSo.chiSoDangChon === danhSachHienThi.length || thamSo.chiSoDangChon < 0)) {
+  // Chưa chọn dòng nào (hoặc chọn dòng "Xem tất cả"): sang trang kết quả. Không đợi kết quả của dropdown về,
+  // vì trang kết quả tự tìm cả trong kho lẫn trên GitHub (gõ nhanh rồi Enter vẫn ra trang).
+  if (thamSo.chiSoDangChon < 0 || (coXemTatCa && thamSo.chiSoDangChon === danhSachHienThi.length)) {
     return { loai: 'MO_TRANG_KET_QUA', tuKhoa: tuKhoaSach };
   }
 
