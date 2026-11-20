@@ -72,6 +72,10 @@ import { GithubRepo } from '../github/github.constants';
 import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
+const GIOI_HAN_KET_QUA_GITHUB = 1000;
+const THONG_DIEP_VUOT_TRAN_GITHUB = 'GitHub chỉ cho xem tối đa 1.000 kết quả đầu tiên.';
+const THONG_DIEP_LOI_GITHUB = 'Chưa tìm được trên GitHub lúc này, hãy thử lại sau ít phút.';
+
 /** Lý do "Dán link GitHub" không nhận repo, viết bằng lời đời thường để hiện cho người dùng. */
 const LY_DO_KHONG_NHAN: Partial<Record<LyDoLoc, string>> = {
   IT_SAO: 'chưa đủ 1.000 sao trên GitHub',
@@ -1733,6 +1737,102 @@ export class UngDungService {
     return { daChay: appsToWarm.length, thanhCong };
   }
 
+  private anhXaRepoGithubSangTomTat(r: GithubRepo): UngDungTomTatDto {
+    return {
+      maUngDung: r.html_url,
+      tenRepoDayDu: r.full_name,
+      chuSoHuu: r.owner.login,
+      tenKhoChua: r.name,
+      duongDanGithub: r.html_url,
+      duongDanIcon: r.owner.avatar_url || null,
+      soSaoGithub: r.stargazers_count,
+      danhMucChinh: anhXaDanhMuc(r.topics, r.description, r.full_name),
+      nenTangHoTro: null,
+      chuaThamDinh: true, // Kết quả trực tiếp từ GitHub, chưa thẩm định vào Store
+      duocNoiBat: false,
+      daXacMinh: false,
+      daLuuTru: Boolean(r.archived),
+      moTaGocTiengAnh: r.description ?? null,
+      khauHieuTiengViet: null,
+      diemUyTin: null,
+      mucDoAnToan: null,
+      phienBanMoiNhat: null,
+      ngayCapNhat: r.updated_at,
+    };
+  }
+
+  private async timKiemTrenGithubTheoTen(
+    tuKhoa: string,
+    page: number,
+    limit: number,
+  ): Promise<TimKiemResponseDto> {
+    // GitHub Search API chặn xem quá 1.000 kết quả đầu; dừng trước để khỏi tốn lượt gọi lỗi.
+    if ((page - 1) * limit >= GIOI_HAN_KET_QUA_GITHUB) {
+      return {
+        duLieu: [],
+        tongSo: 0,
+        trangHienTai: page,
+        tongSoTrang: 0,
+        kichThuocTrang: limit,
+        loaiTruyVan: 'TEN_APP',
+        thongDiep: THONG_DIEP_VUOT_TRAN_GITHUB,
+        nguonKetQua: 'GITHUB',
+      };
+    }
+
+    try {
+      const ghSearch = await this.githubService.timKiemRepo(tuKhoa, limit, page);
+      const danhSachSlug = ghSearch.items.map((r) => r.full_name).filter(Boolean);
+      const tapDaCoTrongKho = new Set<string>();
+
+      if (danhSachSlug.length > 0) {
+        const daCo =
+          (await this.prisma.ungDung.findMany({
+            where: {
+              trangThai: 'HOAT_DONG',
+              OR: danhSachSlug.map((slug) => ({
+                tenRepoDayDu: { equals: slug, mode: 'insensitive' },
+              })),
+            },
+            select: { tenRepoDayDu: true },
+          })) ?? [];
+        for (const app of daCo) {
+          tapDaCoTrongKho.add(app.tenRepoDayDu.toLowerCase());
+        }
+      }
+
+      const duLieu = ghSearch.items
+        .filter((r) => !tapDaCoTrongKho.has(r.full_name.toLowerCase()))
+        .map((r) => this.anhXaRepoGithubSangTomTat(r));
+
+      // tongSo và tongSoTrang là ước lượng theo GitHub sau khi áp trần 1.000 (chưa trừ trùng ở trang khác).
+      const tongSo = Math.min(ghSearch.total_count, GIOI_HAN_KET_QUA_GITHUB);
+      const tongSoTrang = tongSo > 0 ? Math.ceil(tongSo / limit) : 0;
+
+      return {
+        duLieu,
+        tongSo,
+        trangHienTai: page,
+        tongSoTrang,
+        kichThuocTrang: limit,
+        loaiTruyVan: 'TEN_APP',
+        nguonKetQua: 'GITHUB',
+      };
+    } catch (err) {
+      this.logger.warn(`Lỗi GitHub search (nguon=GITHUB): ${(err as Error).message}`);
+      return {
+        duLieu: [],
+        tongSo: 0,
+        trangHienTai: page,
+        tongSoTrang: 0,
+        kichThuocTrang: limit,
+        loaiTruyVan: 'TEN_APP',
+        thongDiep: THONG_DIEP_LOI_GITHUB,
+        nguonKetQua: 'GITHUB',
+      };
+    }
+  }
+
   /**
    * P2-40: Tìm kiếm thông minh (Smart Input Dispatcher - GET /tim-kiem).
    * Phân luồng câu nhập:
@@ -1744,6 +1844,10 @@ export class UngDungService {
     const rawQ = query.q?.trim() || '';
     const page = Number(query.page) > 0 ? Number(query.page) : 1;
     const limit = Number(query.limit) > 0 ? Math.min(Number(query.limit), 50) : 20;
+    const nguonChiDinh =
+      typeof query.nguon === 'string'
+        ? (query.nguon.toUpperCase().trim() as 'CSDL' | 'GITHUB')
+        : undefined;
 
     if (!rawQ) {
       return {
@@ -1753,13 +1857,13 @@ export class UngDungService {
         tongSoTrang: 0,
         kichThuocTrang: limit,
         loaiTruyVan: 'TEN_APP',
-        nguonKetQua: 'CSDL',
+        nguonKetQua: nguonChiDinh || 'CSDL',
       };
     }
 
-    // Cache key cho kết quả tìm kiếm với TTL 300s (5 phút)
+    // Cache key cho kết quả tìm kiếm với TTL 300s (5 phút); tách riêng theo chế độ `nguon`.
     const queryHash = Buffer.from(
-      `${rawQ.toLowerCase()}_${query.platform || 'all'}_${page}_${limit}`,
+      `${rawQ.toLowerCase()}_${query.platform || 'all'}_${page}_${limit}_${nguonChiDinh || 'MAC_DINH'}`,
     ).toString('base64');
     const cacheKey = `fs:search:query:${queryHash}`;
     const cached = await this.cacheService.lay<TimKiemResponseDto>(cacheKey);
@@ -1768,6 +1872,26 @@ export class UngDungService {
     }
 
     const phanLuong = phanLuongInput(rawQ);
+
+    // Chế độ chỉ tìm trên GitHub (cho phần 2 trang kết quả): chỉ áp dụng cho luồng tên ứng dụng.
+    if (nguonChiDinh === 'GITHUB') {
+      if (phanLuong.loai !== 'TEN_APP' || laCumTuMoTaNhuCauTiengViet(phanLuong.tuKhoa)) {
+        return {
+          duLieu: [],
+          tongSo: 0,
+          trangHienTai: page,
+          tongSoTrang: 0,
+          kichThuocTrang: limit,
+          loaiTruyVan: laCumTuMoTaNhuCauTiengViet(phanLuong.tuKhoa) ? 'Y_DINH' : phanLuong.loai,
+          nguonKetQua: 'GITHUB',
+        };
+      }
+      const resGithub = await this.timKiemTrenGithubTheoTen(phanLuong.tuKhoa, page, limit);
+      if (resGithub.thongDiep !== THONG_DIEP_LOI_GITHUB) {
+        await this.cacheService.dat(cacheKey, resGithub, 300);
+      }
+      return resGithub;
+    }
 
     // LUỒNG 1: URL GITHUB (P2-40.2)
     if (phanLuong.loai === 'URL' && phanLuong.owner && phanLuong.repo) {
@@ -1946,29 +2070,27 @@ export class UngDungService {
         return this.timKiemThongMinh({ ...query, q: `ứng dụng ${rawQ}` });
       }
 
+      // Khi trang kết quả yêu cầu riêng nguồn CSDL thì trả rỗng, không tự rơi sang GitHub để tránh gọi 2 lần.
+      if (nguonChiDinh === 'CSDL') {
+        const res: TimKiemResponseDto = {
+          duLieu: [],
+          tongSo: 0,
+          trangHienTai: page,
+          tongSoTrang: 0,
+          kichThuocTrang: limit,
+          loaiTruyVan: 'TEN_APP',
+          nguonKetQua: 'CSDL',
+        };
+        await this.cacheService.dat(cacheKey, res, 300);
+        return res;
+      }
+
       // Nếu không có trong DB Store -> gọi GitHub Search API (P2-40.3)
       try {
         const ghSearch = await this.githubService.timKiemRepo(phanLuong.tuKhoa, limit, page);
-        const duLieu: UngDungTomTatDto[] = ghSearch.items.map((r) => ({
-          maUngDung: r.html_url,
-          tenRepoDayDu: r.full_name,
-          chuSoHuu: r.owner.login,
-          tenKhoChua: r.name,
-          duongDanGithub: r.html_url,
-          duongDanIcon: r.owner.avatar_url || null,
-          soSaoGithub: r.stargazers_count,
-          danhMucChinh: anhXaDanhMuc(r.topics, r.description, r.full_name),
-          nenTangHoTro: null,
-          chuaThamDinh: true, // Kết quả trực tiếp từ GitHub, chưa thẩm định vào Store
-          duocNoiBat: false,
-          daXacMinh: false,
-          daLuuTru: Boolean(r.archived),
-          khauHieuTiengViet: null,
-          diemUyTin: null,
-          mucDoAnToan: null,
-          phienBanMoiNhat: null,
-          ngayCapNhat: r.updated_at,
-        }));
+        const duLieu: UngDungTomTatDto[] = ghSearch.items.map((r) =>
+          this.anhXaRepoGithubSangTomTat(r),
+        );
 
         const res: TimKiemResponseDto = {
           duLieu,
@@ -2046,25 +2168,7 @@ export class UngDungService {
           (r) =>
             !semanticApps.some((sa) => sa.tenRepoDayDu.toLowerCase() === r.full_name.toLowerCase()),
         )
-        .map((r) => ({
-          maUngDung: r.html_url,
-          tenRepoDayDu: r.full_name,
-          chuSoHuu: r.owner.login,
-          tenKhoChua: r.name,
-          duongDanGithub: r.html_url,
-          duongDanIcon: r.owner.avatar_url || null,
-          soSaoGithub: r.stargazers_count,
-          danhMucChinh: anhXaDanhMuc(r.topics, r.description, r.full_name),
-          nenTangHoTro: NenTangHoTro.DA_NEN_TANG,
-          duocNoiBat: false,
-          daXacMinh: false,
-          daLuuTru: Boolean(r.archived),
-          khauHieuTiengViet: null,
-          diemUyTin: null,
-          mucDoAnToan: null,
-          phienBanMoiNhat: null,
-          ngayCapNhat: r.updated_at,
-        }));
+        .map((r) => this.anhXaRepoGithubSangTomTat(r));
     } catch (err) {
       this.logger.warn(`Lỗi Gemini dịch tìm kiếm: ${(err as Error).message}`);
     }

@@ -1482,6 +1482,164 @@ describe('UngDungService (P2-21, P2-23, P2-24, P2-40, P2-41)', () => {
       );
       expect(mockGithubService.timKiemRepo).toHaveBeenCalled();
       expect(res.duLieu.length).toBeGreaterThan(0);
+      const mucGithub = res.duLieu.find((item) => item.tenRepoDayDu === 'videolan/vlc');
+      expect(mucGithub?.moTaGocTiengAnh).toBe('VLC media player');
+      expect(mucGithub?.chuaThamDinh).toBe(true);
+    });
+
+    it('6. Không gửi nguon: giữ nguyên hành vi cũ và ánh xạ moTaGocTiengAnh từ GitHub', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      const res = await service.timKiemThongMinh({ q: 'vlc' });
+      expect(res.nguonKetQua).toBe('GITHUB');
+      expect(mockGithubService.timKiemRepo).toHaveBeenCalledWith('vlc', 20, 1);
+      expect(res.duLieu[0].moTaGocTiengAnh).toBe('VLC media player');
+      expect(res.duLieu[0].chuaThamDinh).toBe(true);
+    });
+
+    it('7. nguon=CSDL khi kho rỗng (tên app): trả rỗng, KHÔNG rơi sang GitHub', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      const res = await service.timKiemThongMinh({ q: 'craft', nguon: 'CSDL', limit: 48 });
+      expect(res.loaiTruyVan).toBe('TEN_APP');
+      expect(res.nguonKetQua).toBe('CSDL');
+      expect(res.duLieu).toEqual([]);
+      expect(res.tongSo).toBe(0);
+      expect(res.tongSoTrang).toBe(0);
+      expect(mockGithubService.timKiemRepo).not.toHaveBeenCalled();
+    });
+
+    it('8. nguon=CSDL với cụm mô tả nhu cầu tiếng Việt ("chụp màn hình"): vẫn chuyển sang Y_DINH', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      const res = await service.timKiemThongMinh({ q: 'chụp màn hình', nguon: 'CSDL', limit: 48 });
+      expect(res.loaiTruyVan).toBe('Y_DINH');
+      expect(mockSearchTranslatorService.dichVaGhepQuery).toHaveBeenCalledWith(
+        'ứng dụng chụp màn hình',
+      );
+    });
+
+    it('9. nguon=GITHUB: bỏ qua tìm kiếm kho, gọi GitHub theo page/limit, loại trùng kho và tính trần 1.000', async () => {
+      mockGithubService.timKiemRepo.mockResolvedValueOnce({
+        total_count: 5400,
+        incomplete_results: false,
+        items: [
+          {
+            id: 1,
+            name: 'craft-in-store',
+            full_name: 'OwnerOne/Craft-In-Store',
+            html_url: 'https://github.com/OwnerOne/Craft-In-Store',
+            description: 'App đã có trong kho',
+            stargazers_count: 2000,
+            forks_count: 100,
+            language: 'TypeScript',
+            topics: ['tool'],
+            owner: { login: 'OwnerOne', avatar_url: 'https://avatar.com/1' },
+            updated_at: '2026-11-20T00:00:00Z',
+          },
+          {
+            id: 2,
+            name: 'craft-fresh',
+            full_name: 'someone/craft-fresh',
+            html_url: 'https://github.com/someone/craft-fresh',
+            description: 'Repo mới trên GitHub',
+            stargazers_count: 500,
+            forks_count: 20,
+            language: 'Rust',
+            topics: ['cli'],
+            owner: { login: 'someone', avatar_url: 'https://avatar.com/2' },
+            updated_at: '2026-11-20T00:00:00Z',
+          },
+        ],
+      });
+      mockPrisma.ungDung.findMany.mockResolvedValueOnce([
+        { tenRepoDayDu: 'ownerone/craft-in-store' },
+      ]);
+
+      const res = await service.timKiemThongMinh({
+        q: 'craft',
+        page: 2,
+        limit: 24,
+        nguon: 'GITHUB',
+      });
+
+      expect(mockPrisma.ungDung.count).not.toHaveBeenCalled();
+      expect(mockGithubService.timKiemRepo).toHaveBeenCalledWith('craft', 24, 2);
+      expect(res.nguonKetQua).toBe('GITHUB');
+      expect(res.loaiTruyVan).toBe('TEN_APP');
+      // Loại trùng không phân biệt hoa thường
+      expect(res.duLieu).toHaveLength(1);
+      expect(res.duLieu[0].tenRepoDayDu).toBe('someone/craft-fresh');
+      expect(res.duLieu[0].moTaGocTiengAnh).toBe('Repo mới trên GitHub');
+      expect(res.duLieu[0].chuaThamDinh).toBe(true);
+      // Trần 1.000: min(5400, 1000) = 1000, ceil(1000 / 24) = 42
+      expect(res.tongSo).toBe(1000);
+      expect(res.tongSoTrang).toBe(42);
+      expect(res.thongDiep).toBeUndefined();
+    });
+
+    it('10. nguon=GITHUB với URL hoặc ý định: trả rỗng, không gọi kho và không gọi GitHub', async () => {
+      const resUrl = await service.timKiemThongMinh({
+        q: 'https://github.com/sharkdp/bat',
+        nguon: 'GITHUB',
+      });
+      expect(resUrl.duLieu).toEqual([]);
+      expect(resUrl.nguonKetQua).toBe('GITHUB');
+
+      const resYdinh = await service.timKiemThongMinh({
+        q: 'phần mềm ghi chú markdown đẹp',
+        nguon: 'GITHUB',
+      });
+      expect(resYdinh.duLieu).toEqual([]);
+      expect(resYdinh.nguonKetQua).toBe('GITHUB');
+      expect(mockGithubService.timKiemRepo).not.toHaveBeenCalled();
+    });
+
+    it('11. nguon=GITHUB vượt trần 1.000 kết quả (page 43, limit 24): không gọi GitHub, trả thongDiep rõ ràng', async () => {
+      const res = await service.timKiemThongMinh({
+        q: 'react',
+        page: 43,
+        limit: 24,
+        nguon: 'GITHUB',
+      });
+
+      expect(mockGithubService.timKiemRepo).not.toHaveBeenCalled();
+      expect(res.duLieu).toEqual([]);
+      expect(res.nguonKetQua).toBe('GITHUB');
+      expect(res.thongDiep).toBe('GitHub chỉ cho xem tối đa 1.000 kết quả đầu tiên.');
+    });
+
+    it('12. nguon=GITHUB khi GitHub lỗi hoặc hết lượt: không ném 500, trả rỗng kèm thongDiep và không cache lỗi', async () => {
+      mockGithubService.timKiemRepo.mockRejectedValueOnce(new Error('GitHub 403 rate limit'));
+
+      const res = await service.timKiemThongMinh({
+        q: 'bat',
+        page: 1,
+        limit: 24,
+        nguon: 'GITHUB',
+      });
+
+      expect(res.duLieu).toEqual([]);
+      expect(res.tongSo).toBe(0);
+      expect(res.nguonKetQua).toBe('GITHUB');
+      expect(res.thongDiep).toBe('Chưa tìm được trên GitHub lúc này, hãy thử lại sau ít phút.');
+      expect(mockCacheService.dat).not.toHaveBeenCalled();
+    });
+
+    it('13. Khóa cache phân biệt theo nguon (mặc định vs CSDL vs GITHUB)', async () => {
+      mockPrisma.ungDung.findMany.mockResolvedValue([]);
+      mockPrisma.ungDung.count.mockResolvedValue(0);
+
+      await service.timKiemThongMinh({ q: 'vlc', page: 1, limit: 24 });
+      await service.timKiemThongMinh({ q: 'vlc', page: 1, limit: 24, nguon: 'CSDL' });
+      await service.timKiemThongMinh({ q: 'vlc', page: 1, limit: 24, nguon: 'GITHUB' });
+
+      const keys = mockCacheService.lay.mock.calls.map((c) => c[0] as string);
+      expect(keys).toHaveLength(3);
+      expect(new Set(keys).size).toBe(3);
     });
   });
 

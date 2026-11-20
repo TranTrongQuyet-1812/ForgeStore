@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -11,6 +12,8 @@ import {
   Min,
 } from 'class-validator';
 import { NenTangHoTro } from '@forgestore/types';
+
+export type NguonTimKiemChiDinh = 'CSDL' | 'GITHUB';
 
 export class SearchQueryDto {
   @ApiProperty({
@@ -63,4 +66,19 @@ export class SearchQueryDto {
   @Min(1)
   @Max(50)
   limit: number = 20;
+
+  @ApiPropertyOptional({
+    description:
+      'Chỉ định nguồn tìm kiếm cho luồng tên ứng dụng (không phân biệt hoa thường: CSDL chỉ tìm trong kho, GITHUB chỉ tìm trên GitHub)',
+    enum: ['CSDL', 'GITHUB'],
+    example: 'CSDL',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.toUpperCase().trim() : value,
+  )
+  @IsIn(['CSDL', 'GITHUB'], {
+    message: 'Nguồn tìm kiếm chỉ chấp nhận CSDL hoặc GITHUB',
+  })
+  nguon?: NguonTimKiemChiDinh;
 }
