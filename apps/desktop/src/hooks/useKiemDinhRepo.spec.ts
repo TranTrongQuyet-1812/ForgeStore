@@ -22,8 +22,12 @@ function taoChiTietMau(): UngDungChiTietDto {
     daXacMinh: true,
     daLuuTru: false,
     soLuotFork: 1200,
-    danhSachPhatHanh: [],
-    huongDanCaiDatCli: null,
+    danhSachChuDe: [],
+    trangThai: 'HOAT_DONG',
+    dongBoLanCuoi: '2026-11-20T00:00:00Z',
+    ngayTao: '2026-11-20T00:00:00Z',
+    danhSachBanPhatHanh: [],
+    huongDanCaiDat: null,
   };
 }
 
