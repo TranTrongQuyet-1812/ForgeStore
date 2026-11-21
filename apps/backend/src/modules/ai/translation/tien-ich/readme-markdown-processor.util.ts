@@ -1002,10 +1002,29 @@ export function rapLaiReadme(
     if (markdown.slice(segment.viTriBatDau, segment.viTriKetThuc) !== segment.vanBanGoc) {
       throw new Error(`Vị trí đoạn README đã thay đổi tại dòng ${segment.dong}`);
     }
-    const restored = goKhungGiuNguyen(segment, text);
+    const restored = thoatDauNhayThuocTinhHtml(markdown, segment, goKhungGiuNguyen(segment, text));
     result = `${result.slice(0, segment.viTriBatDau)}${restored}${result.slice(segment.viTriKetThuc)}`;
   }
   return result;
+}
+
+/**
+ * Đoạn nằm trong thuộc tính HTML (`alt="..."`, `title="..."`) mà bản dịch có chính dấu nháy bao ngoài
+ * (AI hay viết `Phim "abc"`) sẽ làm đứt thuộc tính và vỡ thẻ. Chỉ trường hợp đó mới đổi dấu nháy thành thực thể HTML;
+ * mọi đoạn khác giữ nguyên từng chữ.
+ */
+function thoatDauNhayThuocTinhHtml(
+  markdown: string,
+  segment: DoanDichReadme,
+  banDich: string,
+): string {
+  const dauNhay = markdown[segment.viTriKetThuc];
+  if ((dauNhay !== '"' && dauNhay !== "'") || markdown[segment.viTriBatDau - 1] !== dauNhay) {
+    return banDich;
+  }
+  const truocDauMo = markdown.slice(Math.max(0, segment.viTriBatDau - 16), segment.viTriBatDau - 1);
+  if (!/\s(?:alt|title)\s*=$/i.test(truocDauMo)) return banDich;
+  return banDich.split(dauNhay).join(dauNhay === '"' ? '&quot;' : '&#39;');
 }
 
 /** Khôi phục đúng phần cú pháp đã thay bằng ký hiệu C trước khi ghép Markdown. */

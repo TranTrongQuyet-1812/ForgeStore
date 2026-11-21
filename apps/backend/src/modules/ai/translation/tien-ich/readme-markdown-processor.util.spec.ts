@@ -213,6 +213,32 @@ describe('ReadmeMarkdownProcessor', () => {
     expect(kiemBatBienReadme(source, result).canhBao).not.toContain('url_thay_doi');
   });
 
+  it('đổi dấu nháy kép trong bản dịch thành &quot; khi đoạn nằm trong thuộc tính alt (Toonflow-app)', () => {
+    const source =
+      '<img src="a.png" alt="基于 Toonflow 打造的短剧《悍妻进门》" width="100%" />\n\nHello world.\n';
+    const structure = phanTichReadme(source);
+    const alt = structure.doan.find((d) => d.vanBanGoc.includes('悍妻'))!;
+    const result = rapLaiReadme(
+      source,
+      structure,
+      new Map([[alt.stt, 'Phim ngắn "悍妻进门" (Vợ dữ vào cửa)']]),
+    );
+
+    expect(result).toContain('alt="Phim ngắn &quot;悍妻进门&quot; (Vợ dữ vào cửa)" width="100%"');
+    expect(layLoiBatBienReadme(kiemBatBienReadme(source, result).canhBao)).not.toContain(
+      'khung_van_ban_thay_doi',
+    );
+  });
+
+  it('không đổi dấu nháy của đoạn văn thường khi ghép bản dịch', () => {
+    const source = 'Hello world.\n';
+    const structure = phanTichReadme(source);
+    const doan = structure.doan[0]!;
+    const result = rapLaiReadme(source, structure, new Map([[doan.stt, 'Xin chào "thế giới".']]));
+
+    expect(result).toContain('Xin chào "thế giới".');
+  });
+
   it('giữ nguyên cụm nhãn chuyển ngôn ngữ thay vì phát hành để dịch', () => {
     const source =
       '[English](README.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md)';
