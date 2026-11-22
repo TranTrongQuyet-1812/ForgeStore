@@ -230,6 +230,23 @@ describe('ReadmeMarkdownProcessor', () => {
     );
   });
 
+  it('giữ nguyên dấu nháy HTML khi một đoạn alt trải qua nhiều thẻ ảnh liền nhau (Filee)', () => {
+    const source =
+      '<p>\n  <img src="https://img.shields.io/badge/Windows-10-blue" alt="Windows 10 | 11">\n  <img src="https://img.shields.io/badge/Linux-x64-blue" alt="Linux x64 | ARM64">\n</p>\n';
+    const structure = phanTichReadme(source);
+
+    expect(rapLaiReadme(source, structure, new Map())).toBe(source);
+    const doan = structure.doan.find((d) => d.vanBanGoc.startsWith('Windows'))!;
+    expect(doan.vanBanGoc).toContain('src="https://img.shields.io/badge/Linux-x64-blue"');
+    const banDich = doan.vanBanDaChe.replace('Windows 10 | 11', 'Bản "Windows" 10 | 11');
+    const result = rapLaiReadme(source, structure, new Map([[doan.stt, banDich]]));
+    expect(result).toContain('src="https://img.shields.io/badge/Linux-x64-blue"');
+    expect(result).toContain('alt="Bản &quot;Windows&quot; 10 | 11"');
+    expect(layLoiBatBienReadme(kiemBatBienReadme(source, result).canhBao)).not.toContain(
+      'khung_van_ban_thay_doi',
+    );
+  });
+
   it('không đổi dấu nháy của đoạn văn thường khi ghép bản dịch', () => {
     const source = 'Hello world.\n';
     const structure = phanTichReadme(source);

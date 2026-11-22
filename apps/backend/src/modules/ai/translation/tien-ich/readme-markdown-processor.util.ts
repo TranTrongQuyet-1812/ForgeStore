@@ -1002,7 +1002,9 @@ export function rapLaiReadme(
     if (markdown.slice(segment.viTriBatDau, segment.viTriKetThuc) !== segment.vanBanGoc) {
       throw new Error(`Vị trí đoạn README đã thay đổi tại dòng ${segment.dong}`);
     }
-    const restored = thoatDauNhayThuocTinhHtml(markdown, segment, goKhungGiuNguyen(segment, text));
+    // Thoát dấu nháy trên chữ dịch TRƯỚC khi khôi phục HTML đã che: một đoạn có thể trải qua nhiều thẻ
+    // (`alt="A"><img src="..." alt="B`), dấu nháy của src nằm trong ký hiệu giữ chỗ và phải giữ nguyên.
+    const restored = goKhungGiuNguyen(segment, thoatDauNhayThuocTinhHtml(markdown, segment, text));
     result = `${result.slice(0, segment.viTriBatDau)}${restored}${result.slice(segment.viTriKetThuc)}`;
   }
   return result;
