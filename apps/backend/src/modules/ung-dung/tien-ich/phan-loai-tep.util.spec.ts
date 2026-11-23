@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  coNhanKienTrucRoRang,
   phanLoaiTep,
   phanLoaiCacTepBanPhatHanh,
   hauXuLyKienTrucBanPhatHanh,
+  laTenTepArm,
   laZipUngDungHopLe,
   locTepCaiCuaBanPhatHanh,
   tinhDiemUuTienTep,
@@ -309,6 +311,46 @@ describe('P2-22: phanLoaiTep (Bộ phân loại file cài đặt)', () => {
 
       const processed = hauXuLyKienTrucBanPhatHanh(genericAssets);
       expect(processed[0].kienTruc).toBe(KienTrucChip.X86_64);
+    });
+
+    it('P3B-44.2: bộ 3 tệp scrcpy thật giữ nguyên win64 -> X86_64, win32 -> X86, winarm64 -> ARM64_V8A sau hậu xử lý', () => {
+      const scrcpyRelease = locTepCaiCuaBanPhatHanh([
+        { name: 'scrcpy-win64-v5.0.1.zip' },
+        { name: 'scrcpy-win32-v5.0.1.zip' },
+        { name: 'scrcpy-winarm64-v5.0.1.zip' },
+      ]);
+
+      expect(scrcpyRelease.map((t) => ({ tenTep: t.tenTep, kienTruc: t.kienTruc }))).toEqual([
+        { tenTep: 'scrcpy-win64-v5.0.1.zip', kienTruc: KienTrucChip.X86_64 },
+        { tenTep: 'scrcpy-win32-v5.0.1.zip', kienTruc: KienTrucChip.X86 },
+        { tenTep: 'scrcpy-winarm64-v5.0.1.zip', kienTruc: KienTrucChip.ARM64_V8A },
+      ]);
+    });
+
+    it('P3B-44.2: giữ nguyên ARM64_V8A cho BraveBrowserStandaloneSilentBetaSetupArm64.exe và watchtower_windows_arm64v8_1.24.1.zip khi cùng release với bản x64', () => {
+      expect(laTenTepArm('scrcpy-winarm64-v5.0.1.zip')).toBe(true);
+      expect(coNhanKienTrucRoRang('BraveBrowserStandaloneSilentBetaSetupArm64.exe')).toBe(true);
+      expect(coNhanKienTrucRoRang('watchtower_windows_arm64v8_1.24.1.zip')).toBe(true);
+
+      const braveRelease = locTepCaiCuaBanPhatHanh([
+        { name: 'BraveBrowserStandaloneSilentBetaSetup.exe' },
+        { name: 'BraveBrowserStandaloneSilentBetaSetup64.exe' },
+        { name: 'BraveBrowserStandaloneSilentBetaSetupArm64.exe' },
+        { name: 'BraveBrowserStandaloneSetup-x64.exe' },
+      ]);
+      expect(
+        braveRelease.find((t) => t.tenTep === 'BraveBrowserStandaloneSilentBetaSetupArm64.exe')
+          ?.kienTruc,
+      ).toBe(KienTrucChip.ARM64_V8A);
+
+      const watchtowerRelease = locTepCaiCuaBanPhatHanh([
+        { name: 'watchtower_windows_amd64_1.24.1.zip' },
+        { name: 'watchtower_windows_arm64v8_1.24.1.zip' },
+      ]);
+      expect(watchtowerRelease.map((t) => ({ tenTep: t.tenTep, kienTruc: t.kienTruc }))).toEqual([
+        { tenTep: 'watchtower_windows_amd64_1.24.1.zip', kienTruc: KienTrucChip.X86_64 },
+        { tenTep: 'watchtower_windows_arm64v8_1.24.1.zip', kienTruc: KienTrucChip.ARM64_V8A },
+      ]);
     });
   });
 

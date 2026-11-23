@@ -35,6 +35,7 @@
  *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--bo-qua-vector] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
  *   pnpm data-repo tinh-lai-diem-quyen [--ghi]                # P3B-44.1: bỏ điểm trừ QUYEN_* trong phan_tich_ai (mặc định chạy thử in bảng, --ghi mới cập nhật 1 transaction + xóa cache)
+ *   pnpm data-repo sua-nhan-kien-truc-arm [--ghi]             # P3B-44.2: đếm/sửa tệp arm64/aarch64 bị ghi nhầm X86 + tính lại ung_dung.kien_truc_co_san (mặc định chỉ đọc, --ghi mới cập nhật + xóa cache)
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -2929,6 +2930,154 @@ async function lenhTinhLaiDiemQuyen(): Promise<void> {
   });
 }
 
+/**
+ * P3B-44.2: Đếm và sửa các tệp trong tep_cai_dat có tên chứa arm64/aarch64 nhưng kien_truc_chip đang bị ghi X86,
+ * đồng thời tính lại cột ung_dung.kien_truc_co_san của các app liên quan và xóa cache.
+ * Mặc định chỉ đọc (SELECT); truyền --ghi mới cập nhật DB và xóa cache.
+ */
+async function lenhSuaNhanKienTrucArm(): Promise<void> {
+  const ghi = coCo('ghi');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const { KienTrucChip, PrismaClient } = await import('@prisma/client');
+  const { PlatformFilter } = await import('../../modules/ung-dung/dto/truy-van-ung-dung.dto');
+  const { layBanPhatHanhMoiNhat } =
+    await import('../../modules/ung-dung/tien-ich/chon-ban-phat-hanh.util');
+
+  const prisma = new PrismaClient();
+  let danhSachAppCanXoaCache: Array<{ maUngDung: string; tenRepoDayDu: string }> = [];
+  try {
+    const danhSachTep = await prisma.tepCaiDat.findMany({
+      where: {
+        kienTrucChip: KienTrucChip.X86,
+        OR: [
+          { tenTep: { contains: 'arm64', mode: 'insensitive' } },
+          { tenTep: { contains: 'aarch64', mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        maTep: true,
+        tenTep: true,
+        dinhDangTep: true,
+        kienTrucChip: true,
+        banPhatHanh: {
+          select: {
+            tenPhienBan: true,
+            maUngDung: true,
+            ungDung: {
+              select: {
+                maUngDung: true,
+                tenRepoDayDu: true,
+                kienTrucCoSan: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        tenTep: 'asc',
+      },
+    });
+
+    console.info('app | phiên bản | tên tệp | định dạng | kiến trúc cũ | kiến trúc mới');
+    console.info('--- | --- | --- | --- | --- | ---');
+    for (const tep of danhSachTep) {
+      console.info(
+        `${tep.banPhatHanh.ungDung.tenRepoDayDu} | ${tep.banPhatHanh.tenPhienBan} | ${tep.tenTep} | ${tep.dinhDangTep} | ${tep.kienTrucChip} | ${KienTrucChip.ARM64_V8A}`,
+      );
+    }
+
+    const mapApp = new Map<string, { maUngDung: string; tenRepoDayDu: string }>();
+    for (const tep of danhSachTep) {
+      const ud = tep.banPhatHanh.ungDung;
+      mapApp.set(ud.maUngDung, { maUngDung: ud.maUngDung, tenRepoDayDu: ud.tenRepoDayDu });
+    }
+
+    console.info(
+      `\nTổng cộng: ${danhSachTep.length} tệp chứa arm64/aarch64 đang bị ghi X86 (thuộc ${mapApp.size} ứng dụng).`,
+    );
+
+    if (!ghi) {
+      console.info(
+        '[Chạy thử chỉ đọc] Chưa ghi vào DB. Thêm --ghi để cập nhật kien_truc_chip -> ARM64_V8A, tính lại ung_dung.kien_truc_co_san và xóa cache.',
+      );
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.tepCaiDat.updateMany({
+        where: {
+          maTep: { in: danhSachTep.map((t) => t.maTep) },
+        },
+        data: {
+          kienTrucChip: KienTrucChip.ARM64_V8A,
+        },
+      });
+
+      for (const appInfo of mapApp.values()) {
+        const currentReleases = await tx.banPhatHanh.findMany({
+          where: { maUngDung: appInfo.maUngDung },
+          orderBy: { ngayPhatHanh: 'desc' },
+          take: 15,
+          include: {
+            danhSachTepCaiDat: {
+              select: {
+                dinhDangTep: true,
+                kienTrucChip: true,
+              },
+            },
+          },
+        });
+
+        const banMoiWindows = layBanPhatHanhMoiNhat(currentReleases, PlatformFilter.WINDOWS);
+        const banMoiAndroid = layBanPhatHanhMoiNhat(currentReleases, PlatformFilter.ANDROID);
+        const banMoiChung = layBanPhatHanhMoiNhat(currentReleases);
+
+        const setKienTruc = new Set<import('@prisma/client').KienTrucChip>();
+        const dsTepMoi = [
+          ...(banMoiWindows?.danhSachTepCaiDat || []),
+          ...(banMoiAndroid?.danhSachTepCaiDat || []),
+        ];
+        if (dsTepMoi.length === 0 && banMoiChung?.danhSachTepCaiDat) {
+          dsTepMoi.push(...banMoiChung.danhSachTepCaiDat);
+        }
+        for (const t of dsTepMoi) {
+          if (t.kienTrucChip) setKienTruc.add(t.kienTrucChip);
+        }
+
+        await tx.ungDung.update({
+          where: { maUngDung: appInfo.maUngDung },
+          data: {
+            kienTrucCoSan: Array.from(setKienTruc),
+          },
+        });
+      }
+    });
+
+    danhSachAppCanXoaCache = Array.from(mapApp.values());
+  } finally {
+    await prisma.$disconnect();
+  }
+
+  await voiNest(async (app) => {
+    const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
+    const { CacheService } = await import('../../modules/redis/cache.service');
+    const ungDungService = app.get(UngDungService);
+    const cache = app.get(CacheService);
+    for (const item of danhSachAppCanXoaCache) {
+      await ungDungService.xoaCacheChiTietApp(item);
+    }
+    await cache.xoaTheoPrefix('fs:apps:list:');
+    console.info(
+      `Đã cập nhật kien_truc_chip, tính lại kien_truc_co_san cho ${danhSachAppCanXoaCache.length} app và xóa cache.`,
+    );
+  });
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
@@ -2984,9 +3133,11 @@ async function main(): Promise<void> {
       return lenhThongKeAi();
     case 'tinh-lai-diem-quyen':
       return lenhTinhLaiDiemQuyen();
+    case 'sua-nhan-kien-truc-arm':
+      return lenhSuaNhanKienTrucArm();
     default:
       console.info(
-        'Lệnh: dem-kho | liet-ke | thu-lo-moi | chia-tin-hieu | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai | tinh-lai-diem-quyen (xem phần đầu file này)',
+        'Lệnh: dem-kho | liet-ke | thu-lo-moi | chia-tin-hieu | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai | tinh-lai-diem-quyen | sua-nhan-kien-truc-arm (xem phần đầu file này)',
       );
   }
 }

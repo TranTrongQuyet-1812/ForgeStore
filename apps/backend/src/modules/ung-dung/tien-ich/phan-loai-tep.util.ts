@@ -174,6 +174,38 @@ export function phanLoaiTep(tenTep: string): KetQuaPhanLoaiTep {
   };
 }
 
+/** Kiểm tra tên tệp (đã hạ chữ thường) có nhãn ARM64 hay không (P3B-44.2). */
+function laTenTepArm64(lowerName: string): boolean {
+  return (
+    /(?:^|[-_.])(arm64-v8a|arm64|aarch64|arm-64)(?:[-_.]|$)/i.test(lowerName) ||
+    lowerName.includes('arm64-v8a') ||
+    lowerName.includes('arm64') ||
+    lowerName.includes('aarch64') ||
+    lowerName.includes('arm-64')
+  );
+}
+
+/** Kiểm tra tên tệp (đã hạ chữ thường) có nhãn ARM 32-bit hay không (P3B-44.2). */
+function laTenTepArm32(lowerName: string): boolean {
+  return (
+    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32|arm)(?:[-_.]|$)/i.test(lowerName) ||
+    lowerName.includes('armeabi-v7a') ||
+    lowerName.includes('armeabi') ||
+    lowerName.includes('armv7') ||
+    lowerName.includes('arm32v7') ||
+    lowerName.includes('arm32')
+  );
+}
+
+/**
+ * Kiểm tra tên tệp (đã hạ chữ thường) có nhãn ARM (64-bit hoặc 32-bit) hay không (P3B-44.2).
+ * Dùng chung cho `suyKienTrucTuTenTep` và `coNhanKienTrucRoRang` để tên như `winarm64`,
+ * `SetupArm64.exe`, `arm64v8` không bị coi là thiếu nhãn kiến trúc ở bước hậu xử lý.
+ */
+export function laTenTepArm(lowerName: string): boolean {
+  return laTenTepArm64(lowerName) || laTenTepArm32(lowerName);
+}
+
 /**
  * Suy kiến trúc chip từ tên tệp (đã hạ chữ thường). Tách riêng khỏi `phanLoaiTep` để luật ZIP duy nhất
  * (P3B-36) dùng lại đúng cùng một cách suy, không chép lại.
@@ -184,24 +216,11 @@ function suyKienTrucTuTenTep(lowerName: string, dinhDang: DinhDangTep): KienTruc
   let kienTruc: KienTrucChip = KienTrucChip.KHONG_XAC_DINH;
 
   // A. ARM64 (Android 64-bit hiện đại & Windows on ARM)
-  if (
-    /(?:^|[-_.])(arm64-v8a|arm64|aarch64|arm-64)(?:[-_.]|$)/i.test(lowerName) ||
-    lowerName.includes('arm64-v8a') ||
-    lowerName.includes('arm64') ||
-    lowerName.includes('aarch64') ||
-    lowerName.includes('arm-64')
-  ) {
+  if (laTenTepArm64(lowerName)) {
     kienTruc = KienTrucChip.ARM64_V8A;
   }
   // B. ARM 32-bit (Android 32-bit đời cũ) - V3: Bổ sung nhãn arm đứng một mình
-  else if (
-    /(?:^|[-_.])(armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32|arm)(?:[-_.]|$)/i.test(lowerName) ||
-    lowerName.includes('armeabi-v7a') ||
-    lowerName.includes('armeabi') ||
-    lowerName.includes('armv7') ||
-    lowerName.includes('arm32v7') ||
-    lowerName.includes('arm32')
-  ) {
+  else if (laTenTepArm32(lowerName)) {
     kienTruc = KienTrucChip.ARMEABI_V7A;
   }
   // C. x86_64 (PC 64-bit hoặc Android x86_64 emulator) — BẮT BUỘC KIỂM TRA TRƯỚC x86!
@@ -374,14 +393,13 @@ export interface ThongTinDiemUuTien {
 }
 
 /**
- * Kiểm tra xem tên tệp có chứa nhãn kiến trúc rõ ràng hay không.
+ * Kiểm tra xem tên tệp có chứa nhãn kiến trúc rõ ràng hay không (P3B-44.2).
  */
 export function coNhanKienTrucRoRang(tenTep: string): boolean {
   const lower = tenTep.toLowerCase();
   return (
-    /(?:^|[-_.])(x86_64|x86-64|x64|amd64|win64|x86|i386|i686|win32|ia32|arm64-v8a|arm64|aarch64|arm-64|armeabi-v7a|armeabi|armv7a|armv7|arm32v7|arm32|arm)(?:[-_.]|$)/i.test(
-      lower,
-    ) ||
+    laTenTepArm(lower) ||
+    /(?:^|[-_.])(x86_64|x86-64|x64|amd64|win64|x86|i386|i686|win32|ia32)(?:[-_.]|$)/i.test(lower) ||
     lower.includes('x86_64') ||
     lower.includes('amd64') ||
     lower.includes('-x64') ||
