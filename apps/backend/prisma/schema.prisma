@@ -113,7 +113,6 @@ model NguoiDung {
   danhSachPhien     PhienDangNhap[]
   danhSachYeuThich  KhoYeuThich[]
   danhSachDaCai     UngDungDaCai[]
-  danhSachDanhGia   DanhGiaUngDung[]
   nhatKyNapRepo     NhatKyNapRepo[]
 
   @@map("nguoi_dung")
@@ -216,7 +215,6 @@ model UngDung {
   danhSachBanDichReadme BanDichReadme[]
   danhSachYeuThich  KhoYeuThich[]
   danhSachDaCai     UngDungDaCai[]
-  danhSachDanhGia   DanhGiaUngDung[]
   nhatKyNapRepo     NhatKyNapRepo[]
 
   @@index([danhMucChinh, soSaoGithub(sort: Desc)])
@@ -359,30 +357,6 @@ model UngDungDaCai {
   @@index([maUngDung])
   @@index([maTepDaCai])
   @@map("ung_dung_da_cai")
-}
-
-// -------------------------------------------------------------
-// BẢNG 10: ĐÁNH GIÁ & PHẢN HỒI CỘNG ĐỒNG (APP REVIEWS)
-// -------------------------------------------------------------
-model DanhGiaUngDung {
-  maDanhGia         String            @id @default(uuid()) @map("ma_danh_gia") @db.Uuid
-  maNguoiDung       String            @map("ma_nguoi_dung") @db.Uuid
-  maUngDung         String            @map("ma_ung_dung") @db.Uuid
-  soSao             Int               @map("so_sao") // 1 - 5 sao
-  tieuDe            String?           @map("tieu_de")
-  noiDungNhanXet    String            @db.Text @map("noi_dung_nhan_xet")
-  phienBanDanhGia   String            @map("phien_ban_danh_gia") // Đánh giá trên bản v1.2 hay v1.3
-  thietBiDanhGia    String            @map("thiet_bi_danh_gia") // "Windows 11" hoặc "Pixel 7"
-  soLuotHuuIch      Int               @default(0) @map("so_luot_huu_ich")
-  ngayDanhGia       DateTime          @default(now()) @map("ngay_danh_gia")
-  ngayCapNhat       DateTime          @updatedAt @map("ngay_cap_nhat")
-
-  nguoiDung         NguoiDung         @relation(fields: [maNguoiDung], references: [maNguoiDung], onDelete: Cascade)
-  ungDung           UngDung           @relation(fields: [maUngDung], references: [maUngDung], onDelete: Cascade)
-
-  @@unique([maNguoiDung, maUngDung, phienBanDanhGia])
-  @@index([maUngDung, soSao(sort: Desc)])
-  @@map("danh_gia_ung_dung")
 }
 
 // -------------------------------------------------------------

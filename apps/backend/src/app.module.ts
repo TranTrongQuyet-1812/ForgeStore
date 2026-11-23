@@ -16,7 +16,6 @@ import { UngDungModule } from './modules/ung-dung/ung-dung.module';
 import { AiModule } from './modules/ai/ai.module';
 import { YeuThichModule } from './modules/yeu-thich/yeu-thich.module';
 import { CapNhatModule } from './modules/cap-nhat/cap-nhat.module';
-import { DanhGiaModule } from './modules/danh-gia/danh-gia.module';
 import { JwtAuthGuard } from './modules/xac-thuc/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/xac-thuc/guards/roles.guard';
 import { AppController } from './app.controller';
@@ -41,9 +40,6 @@ import { AppController } from './app.controller';
     ThietBiModule,
     XacThucModule,
     GithubModule,
-    // Phải đứng trước UngDungModule: Nest đăng ký route theo thứ tự module, và GET `ung-dung/:owner/:repo`
-    // của UngDungModule sẽ nuốt GET `ung-dung/:id/danh-gia` nếu được đăng ký trước (trả 404 cho mọi app)
-    DanhGiaModule,
     UngDungModule,
     AiModule,
     YeuThichModule,
