@@ -3,12 +3,12 @@ import { MucDoUyTin } from '@prisma/client';
 import {
   DauVaoTrustScore,
   TrustScoreService,
+  tinhLaiDiemBoQuyenAndroid,
   tinhLaiDiemTheoThoiGian,
   xepMucDoAnToan,
 } from './trust-score.service';
-import { RulePermissionJudgeService } from './rule-permission-judge.service';
 
-describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P2-70)', () => {
+describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P2-70, P3B-44.1)', () => {
   let service: TrustScoreService;
 
   const defaultInput: DauVaoTrustScore = {
@@ -18,11 +18,10 @@ describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P
     daArchived: false,
     ngayPushCuoi: new Date(), // Mới push hôm nay
     soContributor: 50,
-    danhSachQuyenAndroid: [],
   };
 
   beforeEach(() => {
-    service = new TrustScoreService(new RulePermissionJudgeService());
+    service = new TrustScoreService();
   });
 
   describe('Phần Luật (Tín hiệu cứng - P2-32.3)', () => {
@@ -85,48 +84,64 @@ describe('TrustScoreService (P2-32: điểm uy tín hoàn toàn bằng luật, P
     });
   });
 
-  describe('Phần quyền Android theo bảng điểm cố định (P2-32.4, P2-70)', () => {
-    it('Trừ điểm quyền nhạy cảm theo bảng, nguồn LUAT, lý do đọc được', async () => {
-      const res = await service.tinhTrustScore({
-        ...defaultInput,
-        danhSachQuyenAndroid: ['android.permission.CAMERA'],
-      });
+  describe('Bỏ luật trừ điểm theo quyền Android (P3B-44.1)', () => {
+    it('DauVaoTrustScore không nhận quyền Android; app trước đây chỉ bị trừ quyền (như LocalSend) nay đạt 100 điểm và AN_TOAN_CAO', async () => {
+      const res = await service.tinhTrustScore(defaultInput);
+      expect(res.diemUyTin).toBe(100);
+      expect(res.mucDoAnToan).toBe(MucDoUyTin.AN_TOAN_CAO);
+      expect(res.yeuToRuiRo).toEqual([]);
+    });
 
-      expect(res.diemUyTin).toBe(90);
-      expect(res.yeuToRuiRo).toEqual([
+    it('tinhLaiDiemBoQuyenAndroid: gỡ hết phần tử QUYEN_* và trả về 100 khi không còn yếu tố rủi ro khác', () => {
+      const kq = tinhLaiDiemBoQuyenAndroid([
         {
-          ma: 'QUYEN_CAMERA',
-          moTa: 'Sử dụng máy ảnh (Camera): Quyền chụp ảnh và quay video. Trừ 10 điểm.',
+          ma: 'QUYEN_REQUEST_INSTALL_PACKAGES',
+          moTa: 'Cài đặt gói ứng dụng ngoài: Quyền cho phép ứng dụng tải và cài tệp APK khác. Trừ 10 điểm.',
           diemTru: 10,
           nguon: 'LUAT',
         },
       ]);
+
+      expect(kq.diemUyTin).toBe(100);
+      expect(kq.mucDoAnToan).toBe(MucDoUyTin.AN_TOAN_CAO);
+      expect(kq.yeuToRuiRo).toEqual([]);
     });
 
-    it('Không trừ điểm quyền không có trong bảng nhạy cảm', async () => {
-      const res = await service.tinhTrustScore({
-        ...defaultInput,
-        danhSachQuyenAndroid: ['android.permission.INTERNET', 'android.permission.WAKE_LOCK'],
-      });
+    it('tinhLaiDiemBoQuyenAndroid: giữ nguyên các yếu tố không phải QUYEN_* và tính lại mức an toàn đúng ngưỡng', () => {
+      const kq = tinhLaiDiemBoQuyenAndroid([
+        {
+          ma: 'SINGLE_CONTRIBUTOR',
+          moTa: 'Dự án chỉ có 1 người đóng góp, nguy cơ bỏ rơi cao hơn.',
+          diemTru: 10,
+          nguon: 'LUAT',
+        },
+        {
+          ma: 'NO_PUSH_OVER_6_MONTHS',
+          moTa: 'Dự án không có cập nhật mới trong hơn 6 tháng qua.',
+          diemTru: 10,
+          nguon: 'LUAT',
+        },
+        {
+          ma: 'QUYEN_CAMERA',
+          moTa: 'Sử dụng máy ảnh (Camera). Trừ 10 điểm.',
+          diemTru: 10,
+          nguon: 'LUAT',
+        },
+        {
+          ma: 'QUYEN_RECORD_AUDIO',
+          moTa: 'Ghi âm (Microphone). Trừ 10 điểm.',
+          diemTru: 10,
+          nguon: 'LUAT',
+        },
+      ]);
 
-      expect(res.diemUyTin).toBe(100);
-      expect(res.yeuToRuiRo).toHaveLength(0);
-    });
-
-    it('Mức an toàn chỉ suy từ điểm: READ_SMS + RECORD_AUDIO + CAMERA còn 65 điểm là CAN_LUU_Y', async () => {
-      const res = await service.tinhTrustScore({
-        ...defaultInput,
-        danhSachQuyenAndroid: [
-          'android.permission.READ_SMS',
-          'android.permission.RECORD_AUDIO',
-          'android.permission.CAMERA',
-        ],
-      });
-
-      // 100 - 15 - 10 - 10 = 65
-      expect(res.diemUyTin).toBe(65);
-      expect(res.mucDoAnToan).toBe(MucDoUyTin.CAN_LUU_Y);
-      expect(res.yeuToRuiRo.every((r) => r.nguon === 'LUAT')).toBe(true);
+      // Trước đây: 100 - 40 = 60 (CAN_LUU_Y); sau khi bỏ 2 quyền Android: 100 - 20 = 80 (AN_TOAN_CAO)
+      expect(kq.diemUyTin).toBe(80);
+      expect(kq.mucDoAnToan).toBe(MucDoUyTin.AN_TOAN_CAO);
+      expect(kq.yeuToRuiRo.map((y) => y.ma)).toEqual([
+        'SINGLE_CONTRIBUTOR',
+        'NO_PUSH_OVER_6_MONTHS',
+      ]);
     });
   });
 

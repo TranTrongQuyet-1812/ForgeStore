@@ -34,6 +34,7 @@
  *   pnpm data-repo thong-ke-ai                  # xem số liệu yêu cầu AI theo ngày và số mục xếp hàng (P3B-28.6)
  *   pnpm data-repo day  --lo pilot-01 [--toi-da 20] [--ghi] [--bo-qua-phan-tich] [--bo-qua-vector] [--repo owner/repo] [--luu-tru <bao_cao.jsonl>] --nguon-che <Dich_Hang_Loat> [--doi-ten <file>] [--sua-bo-nho] # 04_da_kiem → DB (mặc định chạy thử, không ghi)
  *   pnpm data-repo hoan-tac --lo pilot-01 [--ghi]             # gỡ bản dịch của lô khỏi DB (theo nhãn)
+ *   pnpm data-repo tinh-lai-diem-quyen [--ghi]                # P3B-44.1: bỏ điểm trừ QUYEN_* trong phan_tich_ai (mặc định chạy thử in bảng, --ghi mới cập nhật 1 transaction + xóa cache)
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -2803,6 +2804,131 @@ async function lenhChiaTinHieu(): Promise<void> {
   );
 }
 
+/**
+ * P3B-44.1: Bỏ các phần tử QUYEN_* trong phan_tich_ai.yeu_to_rui_ro và tính lại điểm uy tín, mức độ an toàn
+ * chỉ từ CSDL (không gọi GitHub, không gọi AI/embedding). Mặc định chỉ đọc và in bảng đối chiếu;
+ * có --ghi mới cập nhật trong 1 transaction và xóa cache chi tiết của các app bị ảnh hưởng.
+ */
+async function lenhTinhLaiDiemQuyen(): Promise<void> {
+  const ghi = coCo('ghi');
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+  } catch {
+    /* dùng biến môi trường sẵn có */
+  }
+  const { PrismaClient } = await import('@prisma/client');
+  const { tinhLaiDiemBoQuyenAndroid } =
+    await import('../../modules/ai/services/trust-score.service');
+  type YeuToRuiRoItem = import('@forgestore/types').YeuToRuiRoItem;
+
+  const prisma = new PrismaClient();
+  let danhSachDaSua: Array<{ maUngDung: string; tenRepoDayDu: string }> = [];
+  try {
+    const danhSach = await prisma.phanTichAI.findMany({
+      select: {
+        maPhanTich: true,
+        maUngDung: true,
+        diemUyTin: true,
+        mucDoAnToan: true,
+        yeuToRuiRo: true,
+        ungDung: {
+          select: {
+            maUngDung: true,
+            tenRepoDayDu: true,
+          },
+        },
+      },
+      orderBy: {
+        ungDung: {
+          tenRepoDayDu: 'asc',
+        },
+      },
+    });
+
+    const canCapNhat = danhSach
+      .map((banGhi) => {
+        const yeuToCu = Array.isArray(banGhi.yeuToRuiRo)
+          ? (banGhi.yeuToRuiRo as unknown as YeuToRuiRoItem[])
+          : [];
+        const coQuyen = yeuToCu.some(
+          (yt) => typeof yt?.ma === 'string' && yt.ma.startsWith('QUYEN_'),
+        );
+        if (!coQuyen) return null;
+        const diemTruQuyen = yeuToCu
+          .filter((yt) => typeof yt?.ma === 'string' && yt.ma.startsWith('QUYEN_'))
+          .reduce((tong, yt) => tong + (Number(yt.diemTru) || 0), 0);
+        const ketQuaMoi = tinhLaiDiemBoQuyenAndroid(yeuToCu);
+        return {
+          maPhanTich: banGhi.maPhanTich,
+          maUngDung: banGhi.maUngDung,
+          tenRepoDayDu: banGhi.ungDung.tenRepoDayDu,
+          diemCu: banGhi.diemUyTin,
+          diemMoi: ketQuaMoi.diemUyTin,
+          mucCu: banGhi.mucDoAnToan,
+          mucMoi: ketQuaMoi.mucDoAnToan,
+          yeuToMoi: ketQuaMoi.yeuToRuiRo,
+          diemTruQuyen,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    const tongDiemTruQuyen = canCapNhat.reduce((tong, x) => tong + x.diemTruQuyen, 0);
+    const soAppDoiMuc = canCapNhat.filter((x) => x.mucCu !== x.mucMoi).length;
+
+    console.info('app | điểm cũ | điểm mới | mức cũ | mức mới');
+    console.info('--- | --- | --- | --- | ---');
+    for (const item of canCapNhat) {
+      console.info(
+        `${item.tenRepoDayDu} | ${item.diemCu} | ${item.diemMoi} | ${item.mucCu} | ${item.mucMoi}`,
+      );
+    }
+    console.info(
+      `\nTổng cộng: ${canCapNhat.length} app có yếu tố QUYEN_* (tổng điểm trừ quyền đã gỡ: ${tongDiemTruQuyen} điểm), ${soAppDoiMuc} app đổi mức độ an toàn.`,
+    );
+
+    if (!ghi) {
+      console.info(
+        '[Chạy thử chỉ đọc] Chưa ghi vào DB. Thêm --ghi để cập nhật trong 1 transaction và xóa cache chi tiết.',
+      );
+      return;
+    }
+
+    await prisma.$transaction(
+      canCapNhat.map((item) =>
+        prisma.phanTichAI.update({
+          where: { maPhanTich: item.maPhanTich },
+          data: {
+            diemUyTin: item.diemMoi,
+            mucDoAnToan: item.mucMoi,
+            yeuToRuiRo: item.yeuToMoi as unknown as import('@prisma/client').Prisma.InputJsonValue,
+          },
+        }),
+      ),
+    );
+    danhSachDaSua = canCapNhat.map((item) => ({
+      maUngDung: item.maUngDung,
+      tenRepoDayDu: item.tenRepoDayDu,
+    }));
+  } finally {
+    await prisma.$disconnect();
+  }
+
+  await voiNest(async (app) => {
+    const { UngDungService } = await import('../../modules/ung-dung/ung-dung.service');
+    const { CacheService } = await import('../../modules/redis/cache.service');
+    const ungDungService = app.get(UngDungService);
+    const cache = app.get(CacheService);
+    for (const item of danhSachDaSua) {
+      await ungDungService.xoaCacheChiTietApp(item);
+    }
+    await cache.xoaTheoPrefix('fs:apps:list:');
+    console.info(
+      `Đã cập nhật ${danhSachDaSua.length} bản ghi phan_tich_ai trong 1 transaction và xóa cache chi tiết.`,
+    );
+  });
+}
+
 async function main(): Promise<void> {
   const lenh = process.argv[2];
   switch (lenh) {
@@ -2856,9 +2982,11 @@ async function main(): Promise<void> {
       return lenhSinhVector();
     case 'thong-ke-ai':
       return lenhThongKeAi();
+    case 'tinh-lai-diem-quyen':
+      return lenhTinhLaiDiemQuyen();
     default:
       console.info(
-        'Lệnh: dem-kho | liet-ke | thu-lo-moi | chia-tin-hieu | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai (xem phần đầu file này)',
+        'Lệnh: dem-kho | liet-ke | thu-lo-moi | chia-tin-hieu | cao | xuat | nhap | kiem-chat-luong | va-tach-doan | hop-nhat | kiem-tuoi | do-boc-tach | do-lai-bi-loai | xem | doi-chieu | day | hoan-tac | sinh-vector | thong-ke-ai | tinh-lai-diem-quyen (xem phần đầu file này)',
       );
   }
 }

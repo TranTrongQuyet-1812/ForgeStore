@@ -1356,10 +1356,7 @@ export class UngDungService {
     return `${this.CACHE_KEY_DETAIL}${id}:${platform || 'all'}:${arch || 'all'}:v${PHIEN_BAN_BOC_TACH_CLI}`;
   }
 
-  private async xoaCacheChiTietApp(app: {
-    maUngDung: string;
-    tenRepoDayDu: string;
-  }): Promise<void> {
+  public async xoaCacheChiTietApp(app: { maUngDung: string; tenRepoDayDu: string }): Promise<void> {
     await this.cacheService.xoaTheoPrefix(`${this.CACHE_KEY_DETAIL}${app.maUngDung}`);
     await this.cacheService.xoaTheoPrefix(
       `${this.CACHE_KEY_DETAIL}${app.tenRepoDayDu.toLowerCase()}`,
@@ -1523,9 +1520,8 @@ export class UngDungService {
               : app.moTaGocTiengAnh) ||
             app.tenKhoChua;
 
-          // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35)
+          // 3. Đọc quyền Android qua APK HTTP Range Request nếu có APK (P2-35, giữ đọc cho cột quyen_han_da_kiem_tra theo P3B-44.1)
           let danhSachQuyen: string[] = [];
-          let coAccessibilityService = false;
           const latestRelease = app.danhSachPhatHanh[0];
           const apkFile = latestRelease?.danhSachTepCaiDat?.find(
             (f) => f.dinhDangTep === DinhDangTep.APK,
@@ -1536,7 +1532,6 @@ export class UngDungService {
               const kqApk = await this.apkInspectorService.docQuyenApkTuUrl(apkFile.duongDanTaiVe);
               if (kqApk.thanhCong) {
                 danhSachQuyen = kqApk.permissions;
-                coAccessibilityService = kqApk.coAccessibilityService;
                 if (kqApk.packageName && !app.tenGoiAndroid) {
                   await this.prisma.ungDung.update({
                     where: { maUngDung },
@@ -1551,7 +1546,7 @@ export class UngDungService {
             }
           }
 
-          // 4. Lấy dữ liệu sống từ GitHub và tính điểm uy tín bằng luật (P2-32, D-01, P2-70)
+          // 4. Lấy dữ liệu sống từ GitHub và tính điểm uy tín bằng luật (P2-32, D-01, P2-70, P3B-44.1)
           let daArchived = false;
           let ngayPushCuoi = app.dongBoLanCuoi;
           let soContributor = 1;
@@ -1585,8 +1580,6 @@ export class UngDungService {
             daArchived,
             ngayPushCuoi,
             soContributor,
-            danhSachQuyenAndroid: danhSachQuyen,
-            coAccessibilityService,
           });
 
           // 4b. Trích xuất hướng dẫn cài đặt qua dòng lệnh CLI từ README (Section 3.3, P3B-16.3, D-23)

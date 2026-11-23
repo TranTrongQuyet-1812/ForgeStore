@@ -1,7 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { MucDoUyTin } from '@prisma/client';
 import { YeuToRuiRoItem } from '@forgestore/types';
-import { BO_PHAN_DOAN_QUYEN, IBoPhanDoanQuyen } from '../interfaces/permission-judge.interface';
 
 export interface DauVaoTrustScore {
   soSaoGithub: number;
@@ -10,8 +9,6 @@ export interface DauVaoTrustScore {
   daArchived: boolean;
   ngayPushCuoi: Date | null;
   soContributor: number;
-  danhSachQuyenAndroid: string[];
-  coAccessibilityService?: boolean;
 }
 
 export interface KetQuaTrustScore {
@@ -22,10 +19,8 @@ export interface KetQuaTrustScore {
 
 @Injectable()
 export class TrustScoreService {
-  constructor(@Inject(BO_PHAN_DOAN_QUYEN) private readonly boPhanDoanQuyen: IBoPhanDoanQuyen) {}
-
   /**
-   * Tính điểm uy tín hoàn toàn bằng luật (P2-32, D-01 đổi 27/10/2026, P2-70).
+   * Tính điểm uy tín hoàn toàn bằng luật (P2-32, D-01 đổi 27/10/2026, P2-70, P3B-44.1).
    * Mức an toàn chỉ suy từ điểm, nên mỗi nhãn đều truy ngược được về các điểm trừ.
    */
   async tinhTrustScore(dauVao: DauVaoTrustScore): Promise<KetQuaTrustScore> {
@@ -33,7 +28,7 @@ export class TrustScoreService {
     const yeuToRuiRo: YeuToRuiRoItem[] = [];
 
     // ============================================================
-    // PHẦN 1: BỘ LUẬT TÍN HIỆU CỨNG (HÀM THUẦN TYPESCRIPT - P2-32.3)
+    // BỘ LUẬT TÍN HIỆU CỨNG (HÀM THUẦN TYPESCRIPT - P2-32.3, P3B-44.1)
     // ============================================================
 
     // 1 và 2. Kho bị lưu trữ (-40), lâu không push (-10 hoặc -25)
@@ -72,22 +67,6 @@ export class TrustScoreService {
         moTa: 'Dự án có dưới 50 sao trên GitHub (độ tín nhiệm cộng đồng chưa cao).',
         diemTru: 10,
         nguon: 'LUAT',
-      });
-    }
-
-    // ============================================================
-    // PHẦN 2: QUYỀN ANDROID NHẠY CẢM THEO BẢNG ĐIỂM CỐ ĐỊNH (P2-32.4, P2-70)
-    // ============================================================
-    const phanDoan = this.boPhanDoanQuyen.phanDoan({
-      quyenCanKiemTra: dauVao.danhSachQuyenAndroid ?? [],
-    });
-    for (const pd of phanDoan) {
-      diem -= pd.diemTru;
-      yeuToRuiRo.push({
-        ma: `QUYEN_${pd.quyen.replace('android.permission.', '')}`,
-        moTa: pd.lyDo,
-        diemTru: pd.diemTru,
-        nguon: pd.nguon,
       });
     }
 
@@ -163,6 +142,17 @@ export function tinhLaiDiemTheoThoiGian(
       yt.ma !== 'REPO_ARCHIVED' && (ngayPushCuoi === null || !MA_THEO_THOI_GIAN.includes(yt.ma)),
   );
   const yeuToRuiRo = [...yeuToTheoThoiGian(daArchived, ngayPushCuoi, now), ...giuLai];
+  const tongTru = yeuToRuiRo.reduce((tong, yt) => tong + yt.diemTru, 0);
+  const diemUyTin = Math.max(0, Math.min(100, 100 - tongTru));
+  return { diemUyTin, mucDoAnToan: xepMucDoAnToan(diemUyTin), yeuToRuiRo };
+}
+
+/**
+ * Bỏ các yếu tố rủi ro quyền Android (mã bắt đầu bằng QUYEN_) và tính lại điểm uy tín,
+ * mức an toàn chỉ từ dữ liệu đã có trong CSDL, không gọi GitHub hay AI (P3B-44.1).
+ */
+export function tinhLaiDiemBoQuyenAndroid(yeuToCu: YeuToRuiRoItem[]): KetQuaTrustScore {
+  const yeuToRuiRo = yeuToCu.filter((yt) => !yt.ma.startsWith('QUYEN_'));
   const tongTru = yeuToRuiRo.reduce((tong, yt) => tong + yt.diemTru, 0);
   const diemUyTin = Math.max(0, Math.min(100, 100 - tongTru));
   return { diemUyTin, mucDoAnToan: xepMucDoAnToan(diemUyTin), yeuToRuiRo };
