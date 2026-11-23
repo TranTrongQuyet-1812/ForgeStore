@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CacheService } from '../redis/cache.service';
 import { TrangKetQua, UngDungTomTatDto } from '@forgestore/types';
 import { trichXuatDinhDangVaKienTruc } from '../ung-dung/tien-ich/chon-ban-phat-hanh.util';
+import { layKhauHieuHienThi, layMoTaViHienTai } from '../ung-dung/tien-ich/mo-ta-ung-dung.util';
 import { giaiMaDinhDanh } from '../../common/utils/giai-ma-dinh-danh.util';
 import { thoatKyTuLike } from '../../common/utils/thoat-ky-tu-like.util';
 
@@ -57,6 +58,7 @@ export class YeuThichService {
       const { dinhDangCoSan, kienTrucCoSan } = trichXuatDinhDangVaKienTruc(
         banMoiNhat?.danhSachTepCaiDat,
       );
+      const moTaViHienTai = layMoTaViHienTai(app);
       return {
         maUngDung: app.maUngDung,
         chuSoHuu: app.chuSoHuu,
@@ -67,7 +69,11 @@ export class YeuThichService {
         soSaoGithub: app.soSaoGithub,
         danhMucChinh: app.danhMucChinh,
         nenTangHoTro: app.nenTangHoTro,
-        khauHieuTiengViet: app.phanTichAI?.khauHieuTiengViet ?? app.moTaGocTiengAnh ?? '',
+        khauHieuTiengViet:
+          moTaViHienTai || layKhauHieuHienThi(app, app.phanTichAI?.khauHieuTiengViet) || '',
+        moTaGocTiengAnh: app.moTaGocTiengAnh ?? null,
+        moTaVi: moTaViHienTai,
+        maBamMoTa: app.maBamMoTa ?? null,
         phienBanMoiNhat: banMoiNhat?.tenPhienBan ?? null,
         ngayCapNhat: banMoiNhat?.ngayPhatHanh?.toISOString() ?? app.ngayCapNhat.toISOString(),
         diemUyTin: app.phanTichAI?.diemUyTin ?? null,

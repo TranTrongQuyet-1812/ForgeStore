@@ -5,7 +5,6 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { createHash } from 'crypto';
 import {
   DinhDangTep,
   KienTrucChip,
@@ -51,6 +50,7 @@ import {
   trichXuatDinhDangVaKienTruc,
   BanPhatHanhToiThieu,
 } from './tien-ich/chon-ban-phat-hanh.util';
+import { layKhauHieuHienThi, layMoTaViHienTai } from './tien-ich/mo-ta-ung-dung.util';
 import { phanLuongInput, laCumTuMoTaNhuCauTiengViet } from './tien-ich/dieu-phoi-dau-vao.util';
 import {
   sapXepCachCai,
@@ -185,19 +185,14 @@ export class UngDungService {
     moTaGocTiengAnh?: string | null;
     maBamMoTa?: string | null;
   }): string | null {
-    if (!app.moTaVi) return null;
-    if (!app.moTaGocTiengAnh || !app.maBamMoTa) return app.moTaVi;
-    const maBamNguon = createHash('sha256').update(app.moTaGocTiengAnh.trim()).digest('hex');
-    // Giữ bản dịch cũ trong DB để có thể đối chiếu, nhưng không hiển thị khi nguồn đã đổi.
-    return maBamNguon === app.maBamMoTa ? app.moTaVi : null;
+    return layMoTaViHienTai(app);
   }
 
   private layKhauHieuHienThi(
     app: { moTaGocTiengAnh?: string | null; maBamMoTa?: string | null },
     khauHieuCu?: string | null,
   ): string | null {
-    if (app.maBamMoTa && app.moTaGocTiengAnh) return app.moTaGocTiengAnh;
-    return khauHieuCu || app.moTaGocTiengAnh || null;
+    return layKhauHieuHienThi(app, khauHieuCu);
   }
 
   constructor(

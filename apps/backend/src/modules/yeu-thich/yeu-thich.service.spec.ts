@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { YeuThichService } from './yeu-thich.service';
@@ -187,6 +188,130 @@ describe('YeuThichService (P2-50)', () => {
       expect(result.duLieu[0].maUngDung).toBe('app-uuid-1');
       expect(result.duLieu[0].daYeuThich).toBe(true);
       expect(result.duLieu[0].phienBanMoiNhat).toBe('1.2.3');
+    });
+
+    it('P3B-44.3: có moTaVi và mô tả gốc chưa đổi (mã băm khớp) thì trả mô tả tiếng Việt', async () => {
+      const moTaGoc = 'AI assistant for knowledge graph visualization';
+      const maBamMoTa = createHash('sha256').update(moTaGoc.trim()).digest('hex');
+
+      prisma.khoYeuThich.findMany.mockResolvedValue([
+        {
+          maYeuThich: 'fav-graphify',
+          maNguoiDung: 'user-1',
+          maUngDung: 'app-graphify',
+          ngayThem: new Date('2026-11-24'),
+          ungDung: {
+            maUngDung: 'app-graphify',
+            tenKhoChua: 'graphify',
+            chuSoHuu: 'safishamsi',
+            duongDanGithub: 'https://github.com/safishamsi/graphify',
+            tenRepoDayDu: 'safishamsi/graphify',
+            soSaoGithub: 3500,
+            danhMucChinh: 'CONG_CU',
+            nenTangHoTro: 'WINDOWS',
+            ngayCapNhat: new Date('2026-11-20'),
+            daXacMinh: false,
+            duocNoiBat: false,
+            daLuuTru: false,
+            moTaGocTiengAnh: moTaGoc,
+            moTaVi: 'Trợ lý AI trực quan hóa đồ thị tri thức từ mã nguồn và tài liệu',
+            maBamMoTa,
+            phanTichAI: {
+              khauHieuTiengViet: moTaGoc,
+              diemUyTin: 100,
+              mucDoAnToan: 'AN_TOAN_CAO',
+            },
+            danhSachPhatHanh: [],
+          },
+        },
+      ]);
+      prisma.khoYeuThich.count.mockResolvedValue(1);
+
+      const result = await service.layDanhSachYeuThich('user-1', 1, 20);
+      expect(result.duLieu[0]?.khauHieuTiengViet).toBe(
+        'Trợ lý AI trực quan hóa đồ thị tri thức từ mã nguồn và tài liệu',
+      );
+      expect(result.duLieu[0]?.moTaVi).toBe(
+        'Trợ lý AI trực quan hóa đồ thị tri thức từ mã nguồn và tài liệu',
+      );
+    });
+
+    it('P3B-44.3: mô tả gốc đã đổi (mã băm lệch) thì không trả bản dịch cũ mà rơi về mô tả gốc hiện tại', async () => {
+      const moTaGocCu = 'Old English description';
+      const maBamMoTaCu = createHash('sha256').update(moTaGocCu).digest('hex');
+      const moTaGocMoi = 'New updated English description from GitHub';
+
+      prisma.khoYeuThich.findMany.mockResolvedValue([
+        {
+          maYeuThich: 'fav-stale',
+          maNguoiDung: 'user-1',
+          maUngDung: 'app-stale',
+          ngayThem: new Date('2026-11-24'),
+          ungDung: {
+            maUngDung: 'app-stale',
+            tenKhoChua: 'openclaw',
+            chuSoHuu: 'openclaw',
+            duongDanGithub: 'https://github.com/openclaw/openclaw',
+            tenRepoDayDu: 'openclaw/openclaw',
+            soSaoGithub: 5000,
+            danhMucChinh: 'CONG_CU',
+            nenTangHoTro: 'WINDOWS',
+            ngayCapNhat: new Date('2026-11-20'),
+            daXacMinh: false,
+            duocNoiBat: false,
+            daLuuTru: false,
+            moTaGocTiengAnh: moTaGocMoi,
+            moTaVi: 'Bản dịch tiếng Việt cũ đã lỗi thời',
+            maBamMoTa: maBamMoTaCu,
+            phanTichAI: {
+              khauHieuTiengViet: 'Khẩu hiệu cũ',
+              diemUyTin: 100,
+              mucDoAnToan: 'AN_TOAN_CAO',
+            },
+            danhSachPhatHanh: [],
+          },
+        },
+      ]);
+      prisma.khoYeuThich.count.mockResolvedValue(1);
+
+      const result = await service.layDanhSachYeuThich('user-1', 1, 20);
+      expect(result.duLieu[0]?.moTaVi).toBeNull();
+      expect(result.duLieu[0]?.khauHieuTiengViet).toBe(moTaGocMoi);
+    });
+
+    it('P3B-44.3: chưa có moTaVi thì rơi về khẩu hiệu hoặc mô tả gốc giống trang Khám phá', async () => {
+      prisma.khoYeuThich.findMany.mockResolvedValue([
+        {
+          maYeuThich: 'fav-fallback-1',
+          maNguoiDung: 'user-1',
+          maUngDung: 'app-fallback-1',
+          ngayThem: new Date('2026-11-24'),
+          ungDung: {
+            maUngDung: 'app-fallback-1',
+            tenKhoChua: 'rea',
+            chuSoHuu: 'morluto',
+            duongDanGithub: 'https://github.com/morluto/rea',
+            tenRepoDayDu: 'morluto/rea',
+            soSaoGithub: 1200,
+            danhMucChinh: 'CONG_CU',
+            nenTangHoTro: 'WINDOWS',
+            ngayCapNhat: new Date('2026-11-20'),
+            daXacMinh: false,
+            duocNoiBat: false,
+            daLuuTru: false,
+            moTaGocTiengAnh: 'English fallback description',
+            moTaVi: null,
+            maBamMoTa: null,
+            phanTichAI: null,
+            danhSachPhatHanh: [],
+          },
+        },
+      ]);
+      prisma.khoYeuThich.count.mockResolvedValue(1);
+
+      const result = await service.layDanhSachYeuThich('user-1', 1, 20);
+      expect(result.duLieu[0]?.moTaVi).toBeNull();
+      expect(result.duLieu[0]?.khauHieuTiengViet).toBe('English fallback description');
     });
   });
 
