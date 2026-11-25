@@ -30,12 +30,13 @@ import { CacheService } from './cache.service';
         redis.on('ready', async () => {
           logger.log(`✅ Kết nối thành công Redis Swarm và sẵn sàng nhận lệnh!`);
 
-          // P2-05.5: Cấu hình giới hạn bộ nhớ 256MB và chính sách dọn dẹp LRU
+          // P2-05.5: Cấu hình giới hạn bộ nhớ và chính sách dọn dẹp LRU.
+          // 25/11/2026: nâng 256MB lên 512MB vì kho ~5.400 app làm Redis chạm trần, LRU xóa cả khóa ngân sách/hẹn dịch.
           try {
-            await redis.config('SET', 'maxmemory', '256mb');
+            await redis.config('SET', 'maxmemory', '512mb');
             await redis.config('SET', 'maxmemory-policy', 'allkeys-lru');
             logger.log(
-              '⚙️ Đã áp dụng cấu hình Redis: maxmemory=256mb, maxmemory-policy=allkeys-lru',
+              '⚙️ Đã áp dụng cấu hình Redis: maxmemory=512mb, maxmemory-policy=allkeys-lru',
             );
           } catch (cfgErr) {
             logger.warn(
