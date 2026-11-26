@@ -14,6 +14,7 @@ pub enum TrangThaiCongCu {
     SanSang,  // "SAN_SANG"
     ChuaCai,  // "CHUA_CAI"
     ChuaChay, // "CHUA_CHAY" (riêng Docker: đã có docker.exe nhưng engine chưa chạy)
+    ThieuWsl, // "THIEU_WSL" (riêng Docker: đã có docker.exe nhưng máy chưa cài/bật WSL)
 }
 
 #[cfg(windows)]
@@ -195,7 +196,12 @@ fn tim_chuong_trinh_docker(thoi_gian_cho: std::time::Duration) -> Option<Option<
     }
 }
 
-/// Kiểm tra Docker 2 bước chỉ đọc: đã cài chưa (3 giây) và engine có đang chạy không (5 giây) (P3B-45).
+/// Kiểm tra nhanh trạng thái WSL chỉ đọc (hạn giờ 3 giây) để phân biệt thiếu WSL với chưa mở Docker Desktop (P3B-45.3c).
+fn kiem_tra_wsl_san_sang() -> Option<bool> {
+    chay_kiem_tra_co_han_gio("wsl.exe", &["--status"], std::time::Duration::from_secs(3))
+}
+
+/// Kiểm tra Docker 2 bước chỉ đọc: đã cài chưa (3 giây) và engine có đang chạy không (5 giây) (P3B-45, P3B-45.3c).
 fn kiem_tra_docker() -> Option<TrangThaiCongCu> {
     let chuong_trinh = match tim_chuong_trinh_docker(std::time::Duration::from_secs(3))? {
         Some(lenh) => lenh,
@@ -209,7 +215,14 @@ fn kiem_tra_docker() -> Option<TrangThaiCongCu> {
         std::time::Duration::from_secs(5),
     ) {
         Some(true) => Some(TrangThaiCongCu::SanSang),
-        Some(false) => Some(TrangThaiCongCu::ChuaChay),
+        Some(false) => {
+            // Chỉ kiểm WSL khi `docker info` đã thất bại để không báo nhầm máy chạy Docker bằng Hyper-V.
+            if kiem_tra_wsl_san_sang() == Some(false) {
+                Some(TrangThaiCongCu::ThieuWsl)
+            } else {
+                Some(TrangThaiCongCu::ChuaChay)
+            }
+        }
         None => None,
     }
 }
@@ -401,6 +414,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&TrangThaiCongCu::ChuaChay).unwrap(),
             "\"CHUA_CHAY\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TrangThaiCongCu::ThieuWsl).unwrap(),
+            "\"THIEU_WSL\""
         );
     }
 

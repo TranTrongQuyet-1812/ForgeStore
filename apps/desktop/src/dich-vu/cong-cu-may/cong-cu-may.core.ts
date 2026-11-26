@@ -6,8 +6,8 @@
 
 import { trichTenGoiTuLenhTho } from '@forgestore/types';
 
-/** Trạng thái công cụ dòng lệnh trả về từ lệnh Rust `kiem_tra_cong_cu_may` (P3B-45). */
-export type TrangThaiCongCuMay = 'SAN_SANG' | 'CHUA_CAI' | 'CHUA_CHAY';
+/** Trạng thái công cụ dòng lệnh trả về từ lệnh Rust `kiem_tra_cong_cu_may` (P3B-45, P3B-45.3c). */
+export type TrangThaiCongCuMay = 'SAN_SANG' | 'CHUA_CAI' | 'CHUA_CHAY' | 'THIEU_WSL';
 
 /**
  * Thông tin định nghĩa công cụ quản lý gói trên máy trạm (P3B-31).
@@ -29,7 +29,7 @@ export interface ThongTinCongCu {
 export interface ThongTinCanhBaoThieuCongCu {
   readonly trinhQuanLy: string;
   readonly tenHienThi: string;
-  readonly trangThai: 'CHUA_CAI' | 'CHUA_CHAY';
+  readonly trangThai: 'CHUA_CAI' | 'CHUA_CHAY' | 'THIEU_WSL';
   readonly lienKetChinhThuc?: string;
   readonly thongDiep: string;
   readonly lenhGoiY?: string;
@@ -112,12 +112,13 @@ function chuanHoaTrangThaiCongCu(
   if (ketQua === true || ketQua === 'SAN_SANG') return 'SAN_SANG';
   if (ketQua === false || ketQua === 'CHUA_CAI') return 'CHUA_CAI';
   if (ketQua === 'CHUA_CHAY') return 'CHUA_CHAY';
+  if (ketQua === 'THIEU_WSL') return 'THIEU_WSL';
   return null;
 }
 
 /**
- * Quyết định hiển thị cảnh báo khi thiếu công cụ hoặc công cụ chưa chạy trên máy (P3B-31, P3B-45).
- * Chỉ trả về cảnh báo khi trạng thái là CHUA_CAI hoặc CHUA_CHAY và trình quản lý thuộc danh sách hỗ trợ.
+ * Quyết định hiển thị cảnh báo khi thiếu công cụ, thiếu WSL hoặc công cụ chưa chạy trên máy (P3B-31, P3B-45).
+ * Chỉ trả về cảnh báo khi trạng thái là CHUA_CAI, CHUA_CHAY hoặc THIEU_WSL và trình quản lý thuộc danh sách hỗ trợ.
  * Nếu là SAN_SANG, null, undefined hoặc trình lạ thì trả về null (im lặng).
  */
 export function canhBaoThieuCongCu(
@@ -125,7 +126,10 @@ export function canhBaoThieuCongCu(
   ketQua?: TrangThaiCongCuMay | boolean | null,
 ): ThongTinCanhBaoThieuCongCu | null {
   const trangThai = chuanHoaTrangThaiCongCu(ketQua);
-  if ((trangThai !== 'CHUA_CAI' && trangThai !== 'CHUA_CHAY') || !trinhQuanLy) {
+  if (
+    (trangThai !== 'CHUA_CAI' && trangThai !== 'CHUA_CHAY' && trangThai !== 'THIEU_WSL') ||
+    !trinhQuanLy
+  ) {
     return null;
   }
 
@@ -133,6 +137,20 @@ export function canhBaoThieuCongCu(
   const thongTin = BANG_CONG_CU[maTrinh];
   if (!thongTin) {
     return null;
+  }
+
+  if (trangThai === 'THIEU_WSL') {
+    // Trạng thái THIEU_WSL chỉ áp dụng cho Docker Desktop; trình khác bỏ qua để tránh báo sai.
+    if (maTrinh !== 'docker') return null;
+    return {
+      trinhQuanLy: thongTin.trinhQuanLy,
+      tenHienThi: thongTin.tenHienThi,
+      trangThai: 'THIEU_WSL',
+      lienKetChinhThuc: undefined,
+      thongDiep:
+        'Máy bạn đã có Docker Desktop nhưng chưa cài WSL (môi trường chạy Linux cho Docker trên Windows). Hãy mở PowerShell bằng quyền Quản trị viên, chạy lệnh bên dưới rồi khởi động lại máy.',
+      lenhGoiY: 'wsl --install --no-distribution',
+    };
   }
 
   if (trangThai === 'CHUA_CHAY') {
@@ -144,7 +162,7 @@ export function canhBaoThieuCongCu(
       trangThai: 'CHUA_CHAY',
       lienKetChinhThuc: undefined,
       thongDiep:
-        'Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy. Hãy mở Docker Desktop, chờ khởi động xong (lần đầu có thể cần bật WSL và khởi động lại máy) rồi chạy lại lệnh.',
+        'Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy. Hãy mở Docker Desktop, chờ khởi động xong rồi chạy lại lệnh.',
       lenhGoiY: undefined,
     };
   }

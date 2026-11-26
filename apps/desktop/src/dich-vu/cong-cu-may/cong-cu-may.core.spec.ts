@@ -101,12 +101,27 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
       expect(cb?.lienKetChinhThuc).toBeUndefined();
       expect(cb?.lenhGoiY).toBeUndefined();
       expect(cb?.thongDiep).toBe(
-        'Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy. Hãy mở Docker Desktop, chờ khởi động xong (lần đầu có thể cần bật WSL và khởi động lại máy) rồi chạy lại lệnh.',
+        'Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy. Hãy mở Docker Desktop, chờ khởi động xong rồi chạy lại lệnh.',
       );
     });
 
-    it('trả về null khi nhận CHUA_CHAY cho trình không phải docker', () => {
+    it('trả về cảnh báo THIEU_WSL cho docker: nhắc chạy lệnh cài WSL bằng PowerShell Quản trị viên', () => {
+      const cb = canhBaoThieuCongCu('docker', 'THIEU_WSL');
+      expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('THIEU_WSL');
+      expect(cb?.trinhQuanLy).toBe('docker');
+      expect(cb?.tenHienThi).toBe('Docker Desktop');
+      expect(cb?.lienKetChinhThuc).toBeUndefined();
+      expect(cb?.lenhGoiY).toBe('wsl --install --no-distribution');
+      expect(cb?.thongDiep).toBe(
+        'Máy bạn đã có Docker Desktop nhưng chưa cài WSL (môi trường chạy Linux cho Docker trên Windows). Hãy mở PowerShell bằng quyền Quản trị viên, chạy lệnh bên dưới rồi khởi động lại máy.',
+      );
+    });
+
+    it('trả về null khi nhận CHUA_CHAY hoặc THIEU_WSL cho trình không phải docker', () => {
       expect(canhBaoThieuCongCu('npm', 'CHUA_CHAY')).toBeNull();
+      expect(canhBaoThieuCongCu('npm', 'THIEU_WSL')).toBeNull();
+      expect(canhBaoThieuCongCu('pip', 'THIEU_WSL')).toBeNull();
     });
 
     it('khi chính winget bị thiếu: KHÔNG gợi ý lệnh dùng winget', () => {

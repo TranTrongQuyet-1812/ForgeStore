@@ -35,10 +35,15 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
     },
     enabled: coTheKiem,
     staleTime: 5 * 60 * 1000,
-    // Đang thiếu hoặc chưa chạy thì kiểm lại mỗi khi cửa sổ ForgeStore lấy lại tiêu điểm
+    // Đang thiếu, thiếu WSL hoặc chưa chạy thì kiểm lại mỗi khi cửa sổ ForgeStore lấy lại tiêu điểm
     refetchOnWindowFocus: (query) => {
       const duLieu = query.state.data as TrangThaiCongCuMay | boolean | null | undefined;
-      return duLieu === 'CHUA_CAI' || duLieu === 'CHUA_CHAY' || duLieu === false ? 'always' : false;
+      return duLieu === 'CHUA_CAI' ||
+        duLieu === 'CHUA_CHAY' ||
+        duLieu === 'THIEU_WSL' ||
+        duLieu === false
+        ? 'always'
+        : false;
     },
     retry: false,
   });
@@ -102,6 +107,39 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
               </div>
             </div>
           )}
+        </div>
+      ) : canhBao.trangThai === 'THIEU_WSL' ? (
+        <div className="flex items-center gap-3 flex-wrap pl-6">
+          {canhBao.lenhGoiY && (
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
+              <span className="text-muted">Chạy bằng PowerShell (Quản trị viên):</span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary">
+                <code>{canhBao.lenhGoiY}</code>
+                <button
+                  type="button"
+                  onClick={() => xuLySaoChepLenhGoiY(canhBao.lenhGoiY!)}
+                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center"
+                  title="Sao chép lệnh cài WSL"
+                >
+                  {daChepGoiY ? (
+                    <Check className="w-3 h-3 text-success" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="btn-tactile px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated border border-warning/40 text-warning font-semibold text-xs font-mono inline-flex items-center gap-1.5 transition-all disabled:opacity-60 disabled:cursor-wait"
+          >
+            <RefreshCw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
+            <span>{isFetching ? 'Đang kiểm tra...' : 'Kiểm tra lại'}</span>
+          </button>
         </div>
       ) : (
         <div className="flex items-center gap-3 flex-wrap pl-6">

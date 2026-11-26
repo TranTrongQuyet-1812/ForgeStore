@@ -362,7 +362,7 @@ async fn doc_phien_ban_goi_da_cai(
 }
 
 /// Kiểm tra trạng thái công cụ quản lý gói trên máy (P3B-31, P3B-45: npm, pip, docker, winget, scoop).
-/// Chạy ở luồng nền. Riêng Docker phân biệt chưa cài, chưa chạy và sẵn sàng; trả về None nếu không rõ hoặc quá giờ.
+/// Chạy ở luồng nền. Riêng Docker phân biệt chưa cài, thiếu WSL, chưa chạy và sẵn sàng; trả về None nếu không rõ hoặc quá giờ.
 #[tauri::command]
 async fn kiem_tra_cong_cu_may(
     trinh_quan_ly: String,

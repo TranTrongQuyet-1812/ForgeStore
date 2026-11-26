@@ -106,13 +106,32 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45)', () => {
     expect(html).not.toContain('Hoặc cài nhanh:');
   });
 
-  it('refetchOnWindowFocus trả always cho CHUA_CAI, CHUA_CHAY, false và trả false cho SAN_SANG', () => {
+  it('hiện cảnh báo THIEU_WSL cho Docker: lệnh cài WSL, nút Kiểm tra lại, ẩn link tải và winget', () => {
+    truyVan.ketQua = 'THIEU_WSL';
+    truyVan.isFetching = false;
+    const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="docker" />);
+    expect(html).toContain('chưa cài WSL');
+    expect(html).toContain('Chạy bằng PowerShell (Quản trị viên):');
+    expect(html).toContain('wsl --install --no-distribution');
+    expect(html).toContain('Kiểm tra lại');
+    expect(html).not.toContain('winget install');
+    expect(html).not.toContain('Tải Docker Desktop');
+    expect(html).not.toContain('Hoặc cài nhanh:');
+  });
+
+  it('không hiện gì khi nhận THIEU_WSL cho trình ngoài docker', () => {
+    truyVan.ketQua = 'THIEU_WSL';
+    expect(renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="npm" />)).toBe('');
+  });
+
+  it('refetchOnWindowFocus trả always cho CHUA_CAI, CHUA_CHAY, THIEU_WSL, false và trả false cho SAN_SANG', () => {
     truyVan.ketQua = 'CHUA_CAI';
     renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="docker" />);
     const fn = truyVan.refetchOnWindowFocus;
     expect(fn).toBeDefined();
     expect(fn?.({ state: { data: 'CHUA_CAI' } })).toBe('always');
     expect(fn?.({ state: { data: 'CHUA_CHAY' } })).toBe('always');
+    expect(fn?.({ state: { data: 'THIEU_WSL' } })).toBe('always');
     expect(fn?.({ state: { data: false } })).toBe('always');
     expect(fn?.({ state: { data: 'SAN_SANG' } })).toBe(false);
     expect(fn?.({ state: { data: true } })).toBe(false);
