@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BANG_CONG_CU, canhBaoThieuCongCu, layTrinhQuanLyCachCai } from './cong-cu-may.core';
+import {
+  BANG_CONG_CU,
+  canhBaoThieuCongCu,
+  coLenhDockerCompose,
+  layTrinhQuanLyCachCai,
+} from './cong-cu-may.core';
 
-describe('cong-cu-may.core (P3B-31)', () => {
+describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
   describe('Bảng công cụ cố định (BANG_CONG_CU)', () => {
     it('định nghĩa đủ 5 công cụ hỗ trợ: npm, pip, docker, winget, scoop', () => {
       const danhSach = Object.keys(BANG_CONG_CU);
@@ -30,7 +35,9 @@ describe('cong-cu-may.core (P3B-31)', () => {
   });
 
   describe('canhBaoThieuCongCu', () => {
-    it('trả về null khi ketQua là true (máy đã có công cụ)', () => {
+    it('trả về null khi ketQua là SAN_SANG hoặc true (máy đã có công cụ)', () => {
+      expect(canhBaoThieuCongCu('npm', 'SAN_SANG')).toBeNull();
+      expect(canhBaoThieuCongCu('docker', 'SAN_SANG')).toBeNull();
       expect(canhBaoThieuCongCu('npm', true)).toBeNull();
       expect(canhBaoThieuCongCu('pip', true)).toBeNull();
       expect(canhBaoThieuCongCu('winget', true)).toBeNull();
@@ -43,60 +50,101 @@ describe('cong-cu-may.core (P3B-31)', () => {
     });
 
     it('trả về null khi trinhQuanLy trống hoặc không có trong bảng', () => {
-      expect(canhBaoThieuCongCu('', false)).toBeNull();
-      expect(canhBaoThieuCongCu(null, false)).toBeNull();
-      expect(canhBaoThieuCongCu('cargo', false)).toBeNull();
-      expect(canhBaoThieuCongCu('go', false)).toBeNull();
+      expect(canhBaoThieuCongCu('', 'CHUA_CAI')).toBeNull();
+      expect(canhBaoThieuCongCu(null, 'CHUA_CAI')).toBeNull();
+      expect(canhBaoThieuCongCu('cargo', 'CHUA_CAI')).toBeNull();
+      expect(canhBaoThieuCongCu('go', 'CHUA_CHAY')).toBeNull();
       expect(canhBaoThieuCongCu('la_hoan_toan', false)).toBeNull();
     });
 
-    it('trả về cảnh báo chính xác cho npm khi thiếu (false)', () => {
-      const cb = canhBaoThieuCongCu('npm', false);
+    it('trả về cảnh báo chính xác cho npm khi thiếu (CHUA_CAI và false)', () => {
+      const cb = canhBaoThieuCongCu('npm', 'CHUA_CAI');
       expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.trinhQuanLy).toBe('npm');
       expect(cb?.tenHienThi).toBe('Node.js');
       expect(cb?.lienKetChinhThuc).toBe('https://nodejs.org/en/download');
       expect(cb?.lenhGoiY).toBe('winget install OpenJS.NodeJS.LTS');
       expect(cb?.thongDiep).toContain('Node.js');
       expect(cb?.thongDiep).toContain('Terminal mới');
+      expect(canhBaoThieuCongCu('npm', false)).toEqual(cb);
     });
 
-    it('trả về cảnh báo chính xác cho pip khi thiếu (false)', () => {
-      const cb = canhBaoThieuCongCu('pip', false);
+    it('trả về cảnh báo chính xác cho pip khi thiếu (CHUA_CAI)', () => {
+      const cb = canhBaoThieuCongCu('pip', 'CHUA_CAI');
       expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.tenHienThi).toBe('Python');
       expect(cb?.lienKetChinhThuc).toBe('https://www.python.org/downloads/');
       expect(cb?.lenhGoiY).toBe('winget install Python.Python.3.12');
     });
 
-    it('trả về cảnh báo chính xác cho docker khi thiếu (false)', () => {
-      const cb = canhBaoThieuCongCu('docker', false);
+    it('trả về cảnh báo CHUA_CAI cho docker: nhắc mở Docker Desktop + WSL và giữ lệnh winget', () => {
+      const cb = canhBaoThieuCongCu('docker', 'CHUA_CAI');
       expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.tenHienThi).toBe('Docker Desktop');
       expect(cb?.lienKetChinhThuc).toBe('https://www.docker.com/products/docker-desktop/');
       expect(cb?.lenhGoiY).toBe('winget install Docker.DockerDesktop');
+      expect(cb?.thongDiep).toBe(
+        'Máy bạn chưa có Docker Desktop nên lệnh này có thể không chạy được. Cài xong, hãy mở Docker Desktop (lần đầu máy có thể yêu cầu bật WSL và khởi động lại) rồi chạy lại lệnh.',
+      );
+      expect(canhBaoThieuCongCu('docker', false)).toEqual(cb);
+    });
+
+    it('trả về cảnh báo CHUA_CHAY cho docker: nhắc mở Docker Desktop, không có link tải hay winget', () => {
+      const cb = canhBaoThieuCongCu('docker', 'CHUA_CHAY');
+      expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CHAY');
+      expect(cb?.trinhQuanLy).toBe('docker');
+      expect(cb?.tenHienThi).toBe('Docker Desktop');
+      expect(cb?.lienKetChinhThuc).toBeUndefined();
+      expect(cb?.lenhGoiY).toBeUndefined();
+      expect(cb?.thongDiep).toBe(
+        'Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy. Hãy mở Docker Desktop, chờ khởi động xong (lần đầu có thể cần bật WSL và khởi động lại máy) rồi chạy lại lệnh.',
+      );
     });
 
     it('khi chính winget bị thiếu: KHÔNG gợi ý lệnh dùng winget', () => {
-      const cb = canhBaoThieuCongCu('winget', false);
+      const cb = canhBaoThieuCongCu('winget', 'CHUA_CAI');
       expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.tenHienThi).toBe('Công cụ winget (App Installer)');
       expect(cb?.lienKetChinhThuc).toBe('https://apps.microsoft.com/detail/9nblggh4nns1');
       expect(cb?.lenhGoiY).toBeUndefined();
     });
 
     it('khi scoop bị thiếu: không có lệnh gợi ý', () => {
-      const cb = canhBaoThieuCongCu('scoop', false);
+      const cb = canhBaoThieuCongCu('scoop', 'CHUA_CAI');
       expect(cb).not.toBeNull();
+      expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.tenHienThi).toBe('Scoop');
       expect(cb?.lienKetChinhThuc).toBe('https://scoop.sh');
       expect(cb?.lenhGoiY).toBeUndefined();
     });
 
     it('chấp nhận mã trình viết hoa hoặc có khoảng trắng thừa', () => {
-      const cb = canhBaoThieuCongCu('  NPM  ', false);
+      const cb = canhBaoThieuCongCu('  NPM  ', 'CHUA_CAI');
       expect(cb).not.toBeNull();
       expect(cb?.tenHienThi).toBe('Node.js');
+    });
+  });
+
+  describe('coLenhDockerCompose', () => {
+    it('nhận diện docker compose và docker-compose (không phân biệt hoa thường)', () => {
+      expect(coLenhDockerCompose([{ lenh: 'docker compose up -d' }])).toBe(true);
+      expect(coLenhDockerCompose([{ lenh: 'docker-compose up' }])).toBe(true);
+      expect(coLenhDockerCompose([{ lenh: 'cd app' }, { lenh: 'DOCKER COMPOSE up -d' }])).toBe(
+        true,
+      );
+    });
+
+    it('trả về false với lệnh docker run thường, mảng rỗng hoặc undefined', () => {
+      expect(coLenhDockerCompose([{ lenh: 'docker run -it n8n' }])).toBe(false);
+      expect(coLenhDockerCompose([])).toBe(false);
+      expect(coLenhDockerCompose(undefined)).toBe(false);
+      expect(coLenhDockerCompose(null)).toBe(false);
+      expect(coLenhDockerCompose([{}])).toBe(false);
     });
   });
 

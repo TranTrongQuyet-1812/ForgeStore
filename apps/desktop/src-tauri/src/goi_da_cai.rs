@@ -1,9 +1,20 @@
-//! P3B-16.8, P3B-30 và P3B-31: tự kiểm tra máy đã cài gói chưa, đọc phiên bản thật của gói,
-//! và kiểm tra công cụ quản lý gói có trên máy (npm, pip, docker, winget, scoop). Chỉ đọc,
-//! không cài gì. Gọi thẳng chương trình với danh sách đối số cố định (không qua shell),
-//! không nhận tên chương trình từ bên ngoài.
+//! P3B-16.8, P3B-30, P3B-31 và P3B-45: tự kiểm tra máy đã cài gói chưa, đọc phiên bản thật của gói,
+//! và kiểm tra trạng thái công cụ quản lý gói trên máy (npm, pip, docker, winget, scoop; riêng Docker
+//! kiểm 2 bước chỉ đọc: đã cài và engine đang chạy). Chỉ đọc, không cài gì. Gọi thẳng chương trình
+//! với danh sách đối số cố định (không qua shell), không nhận tên chương trình từ bên ngoài.
 
+use std::ffi::{OsStr, OsString};
+use std::path::PathBuf;
 use std::process::Command;
+
+/// Trạng thái sẵn sàng của công cụ dòng lệnh trên máy người dùng (P3B-45).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TrangThaiCongCu {
+    SanSang,  // "SAN_SANG"
+    ChuaCai,  // "CHUA_CAI"
+    ChuaChay, // "CHUA_CHAY" (riêng Docker: đã có docker.exe nhưng engine chưa chạy)
+}
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -102,11 +113,27 @@ pub fn chuong_trinh_kiem_cong_cu(trinh_quan_ly: &str) -> Option<(&'static str, V
     }
 }
 
-/// Chạy kiểm tra chương trình với thời gian chờ tối đa (P3B-31).
+/// Đường dẫn mặc định của Docker Desktop khi tiến trình đang mở giữ PATH cũ sau cài đặt (P3B-45).
+pub fn duong_dan_docker_mac_dinh(program_files: Option<&OsStr>) -> Option<PathBuf> {
+    let goc = program_files?;
+    if goc.is_empty() {
+        return None;
+    }
+    Some(
+        PathBuf::from(goc)
+            .join("Docker")
+            .join("Docker")
+            .join("resources")
+            .join("bin")
+            .join("docker.exe"),
+    )
+}
+
+/// Chạy kiểm tra chương trình với thời gian chờ tối đa (P3B-31, P3B-45).
 /// Trả về Some(true) nếu chạy được và thoát mã 0, Some(false) nếu lỗi spawn hoặc mã thoát khác 0,
 /// None nếu quá hạn giờ (tiến trình bị kill để không treo giao diện).
 fn chay_kiem_tra_co_han_gio(
-    chuong_trinh: &str,
+    chuong_trinh: impl AsRef<OsStr>,
     doi_so: &[&str],
     thoi_gian_cho: std::time::Duration,
 ) -> Option<bool> {
@@ -144,20 +171,73 @@ fn chay_kiem_tra_co_han_gio(
     }
 }
 
-/// Kiểm tra công cụ quản lý gói có khả dụng trên máy không (P3B-31).
-/// Hạn giờ 3 giây. Trả về Some(true) nếu có, Some(false) nếu thiếu hoặc mã lỗi, None nếu chưa hỗ trợ hoặc quá giờ.
-pub fn kiem_tra_cong_cu(trinh_quan_ly: &str) -> Option<bool> {
+/// Bước 1 kiểm tra Docker: tìm `docker.exe` trong PATH hoặc thư mục cài mặc định (P3B-45).
+/// Trả `Some(Some(lenh))` nếu đã cài, `Some(None)` nếu chưa cài, `None` nếu quá hạn giờ.
+fn tim_chuong_trinh_docker(thoi_gian_cho: std::time::Duration) -> Option<Option<OsString>> {
+    match chay_kiem_tra_co_han_gio("docker.exe", &["--version"], thoi_gian_cho) {
+        Some(true) => return Some(Some(OsString::from("docker.exe"))),
+        None => return None,
+        Some(false) => {}
+    }
+
+    // Tiến trình đang chạy giữ PATH cũ sau khi vừa cài Docker qua winget nên kiểm thêm trên đĩa.
+    let Some(duong_dan) = duong_dan_docker_mac_dinh(std::env::var_os("ProgramFiles").as_deref())
+    else {
+        return Some(None);
+    };
+    if !duong_dan.is_file() {
+        return Some(None);
+    }
+    match chay_kiem_tra_co_han_gio(&duong_dan, &["--version"], thoi_gian_cho) {
+        Some(true) => Some(Some(duong_dan.into_os_string())),
+        Some(false) => Some(None),
+        None => None,
+    }
+}
+
+/// Kiểm tra Docker 2 bước chỉ đọc: đã cài chưa (3 giây) và engine có đang chạy không (5 giây) (P3B-45).
+fn kiem_tra_docker() -> Option<TrangThaiCongCu> {
+    let chuong_trinh = match tim_chuong_trinh_docker(std::time::Duration::from_secs(3))? {
+        Some(lenh) => lenh,
+        None => return Some(TrangThaiCongCu::ChuaCai),
+    };
+
+    // Chạy `docker info` chỉ đọc để phân biệt đã cài nhưng chưa bật Docker Desktop với đã sẵn sàng.
+    match chay_kiem_tra_co_han_gio(
+        &chuong_trinh,
+        &["info", "--format", "{{.ServerVersion}}"],
+        std::time::Duration::from_secs(5),
+    ) {
+        Some(true) => Some(TrangThaiCongCu::SanSang),
+        Some(false) => Some(TrangThaiCongCu::ChuaChay),
+        None => None,
+    }
+}
+
+/// Kiểm tra trạng thái công cụ quản lý gói trên máy (P3B-31, P3B-45).
+/// Riêng Docker kiểm 2 bước (đã cài và đang chạy); các trình khác kiểm `--version` hạn giờ 3 giây.
+pub fn kiem_tra_trang_thai_cong_cu(trinh_quan_ly: &str) -> Option<TrangThaiCongCu> {
+    if trinh_quan_ly == "docker" {
+        return kiem_tra_docker();
+    }
+
     let (chuong_trinh, doi_so) = chuong_trinh_kiem_cong_cu(trinh_quan_ly)?;
     let thoi_gian_cho = std::time::Duration::from_secs(3);
 
-    let ket_qua = chay_kiem_tra_co_han_gio(chuong_trinh, &doi_so, thoi_gian_cho);
+    let mut ket_qua = chay_kiem_tra_co_han_gio(chuong_trinh, &doi_so, thoi_gian_cho);
 
     // Trường hợp pip: nếu pip.exe không chạy được (Some(false)), thử tiếp python.exe -m pip --version
     if trinh_quan_ly == "pip" && ket_qua == Some(false) {
-        return chay_kiem_tra_co_han_gio("python.exe", &["-m", "pip", "--version"], thoi_gian_cho);
+        ket_qua = chay_kiem_tra_co_han_gio("python.exe", &["-m", "pip", "--version"], thoi_gian_cho);
     }
 
-    ket_qua
+    ket_qua.map(|co_san| {
+        if co_san {
+            TrangThaiCongCu::SanSang
+        } else {
+            TrangThaiCongCu::ChuaCai
+        }
+    })
 }
 
 /// Phiên bản hợp lệ để gửi lên máy chủ: khớp luật của backend (chữ, số và `. + _ ~ -`, tối đa 100 ký tự).
@@ -309,17 +389,53 @@ mod tests {
     }
 
     #[test]
-    fn test_kiem_tra_cong_cu_khong_ho_tro_tra_none() {
-        assert_eq!(kiem_tra_cong_cu("cargo"), None);
-        assert_eq!(kiem_tra_cong_cu("go"), None);
-        assert_eq!(kiem_tra_cong_cu("npm; calc"), None);
-        assert_eq!(kiem_tra_cong_cu(""), None);
+    fn test_serialize_trang_thai_cong_cu() {
+        assert_eq!(
+            serde_json::to_string(&TrangThaiCongCu::SanSang).unwrap(),
+            "\"SAN_SANG\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TrangThaiCongCu::ChuaCai).unwrap(),
+            "\"CHUA_CAI\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TrangThaiCongCu::ChuaChay).unwrap(),
+            "\"CHUA_CHAY\""
+        );
     }
 
     #[test]
-    fn test_kiem_tra_cong_cu_hop_le_khong_panic() {
+    fn test_duong_dan_docker_mac_dinh() {
+        let duong_dan = duong_dan_docker_mac_dinh(Some(OsStr::new("C:\\Program Files")));
+        assert_eq!(
+            duong_dan,
+            Some(
+                PathBuf::from("C:\\Program Files")
+                    .join("Docker")
+                    .join("Docker")
+                    .join("resources")
+                    .join("bin")
+                    .join("docker.exe")
+            )
+        );
+        assert_eq!(duong_dan_docker_mac_dinh(None), None);
+        assert_eq!(duong_dan_docker_mac_dinh(Some(OsStr::new(""))), None);
+    }
+
+    #[test]
+    fn test_kiem_tra_trang_thai_cong_cu_khong_ho_tro_tra_none() {
+        assert_eq!(kiem_tra_trang_thai_cong_cu("cargo"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("go"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("docker; calc"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("npm; calc"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu(""), None);
+    }
+
+    #[test]
+    fn test_kiem_tra_trang_thai_cong_cu_hop_le_khong_panic() {
         // Kiểm tra hàm chạy an toàn với công cụ hỗ trợ mà không bị hoảng loạn (panic)
-        let _ = kiem_tra_cong_cu("npm");
-        let _ = kiem_tra_cong_cu("winget");
+        let _ = kiem_tra_trang_thai_cong_cu("npm");
+        let _ = kiem_tra_trang_thai_cong_cu("winget");
+        let _ = kiem_tra_trang_thai_cong_cu("docker");
     }
 }

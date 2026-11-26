@@ -361,12 +361,14 @@ async fn doc_phien_ban_goi_da_cai(
     .map_err(|e| e.to_string())?
 }
 
-/// Kiểm tra công cụ quản lý gói có trên máy không (P3B-31, npm, pip, docker, winget, scoop).
-/// Chạy ở luồng nền với hạn giờ 3 giây. Trả về Some(true) nếu có, Some(false) nếu thiếu, None nếu không rõ hoặc quá giờ.
+/// Kiểm tra trạng thái công cụ quản lý gói trên máy (P3B-31, P3B-45: npm, pip, docker, winget, scoop).
+/// Chạy ở luồng nền. Riêng Docker phân biệt chưa cài, chưa chạy và sẵn sàng; trả về None nếu không rõ hoặc quá giờ.
 #[tauri::command]
-async fn kiem_tra_cong_cu_may(trinh_quan_ly: String) -> Result<Option<bool>, String> {
+async fn kiem_tra_cong_cu_may(
+    trinh_quan_ly: String,
+) -> Result<Option<goi_da_cai::TrangThaiCongCu>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        Ok(goi_da_cai::kiem_tra_cong_cu(&trinh_quan_ly))
+        Ok(goi_da_cai::kiem_tra_trang_thai_cong_cu(&trinh_quan_ly))
     })
     .await
     .map_err(|e| e.to_string())?

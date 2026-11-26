@@ -46,7 +46,10 @@ import { useDongBoUngDungCli } from '../hooks/useDongBoUngDungCli';
 import { TIEU_DE_HUONG_DAN_DONG_LENH } from './tieu-de-huong-dan.core';
 import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi-cach-cai.core';
 import { laHoanNgan, layThongBaoBanDichHoan } from './thong-bao-dich-hoan.core';
-import { layTrinhQuanLyCachCai } from '../dich-vu/cong-cu-may/cong-cu-may.core';
+import {
+  coLenhDockerCompose,
+  layTrinhQuanLyCachCai,
+} from '../dich-vu/cong-cu-may/cong-cu-may.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
@@ -1627,8 +1630,21 @@ export const TrangChiTiet: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Cảnh báo thiếu công cụ quản lý gói trước khi chạy lệnh (P3B-31) */}
+                    {/* Cảnh báo thiếu công cụ quản lý gói trước khi chạy lệnh (P3B-31, P3B-45) */}
                     <CanhBaoThieuCongCu trinhQuanLy={layTrinhQuanLyCachCai(currentMethod)} />
+
+                    {/* Ghi chú nhẹ khi lệnh cần tệp cấu hình docker-compose.yml của dự án (P3B-45) */}
+                    {coLenhDockerCompose(currentMethod.buoc) && (
+                      <div className="p-2.5 rounded-xl bg-surface/60 border border-border text-xs text-secondary flex items-start gap-2 leading-relaxed">
+                        <AlertCircle className="w-4 h-4 text-muted shrink-0 mt-0.5" />
+                        <span>
+                          Lệnh này cần tệp cấu hình{' '}
+                          <code className="font-mono text-primary">docker-compose.yml</code> của dự
+                          án trong thư mục chạy lệnh. Hãy xem hướng dẫn chi tiết ở mục Giới thiệu
+                          bên dưới trước khi chạy.
+                        </span>
+                      </div>
+                    )}
 
                     {/* Danh sách các bước lệnh (loại bỏ viền lồng hộp, phân tách thoáng đãng) */}
                     <div className="flex flex-col gap-4">

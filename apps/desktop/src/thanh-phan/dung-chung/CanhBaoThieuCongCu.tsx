@@ -1,15 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ExternalLink, Copy, Check } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Copy, Check, RefreshCw } from 'lucide-react';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
-import { BANG_CONG_CU, canhBaoThieuCongCu } from '../../dich-vu/cong-cu-may/cong-cu-may.core';
+import {
+  BANG_CONG_CU,
+  canhBaoThieuCongCu,
+  type TrangThaiCongCuMay,
+} from '../../dich-vu/cong-cu-may/cong-cu-may.core';
 
 interface CanhBaoThieuCongCuProps {
   trinhQuanLy?: string;
 }
 
 /**
- * Dòng cảnh báo nhẹ khi máy chưa có công cụ chạy dòng lệnh (P3B-31).
+ * Dòng cảnh báo nhẹ khi máy chưa có công cụ dòng lệnh hoặc Docker Desktop chưa chạy (P3B-31, P3B-45).
  * Không chặn nút sao chép hay mở Terminal. Kiểm lại khi cửa sổ lấy lại tiêu điểm.
  */
 export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQuanLy }) => {
@@ -19,16 +23,23 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
   const [daChepGoiY, setDaChepGoiY] = useState(false);
   const boDemChepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: ketQuaKiemTra } = useQuery({
+  const {
+    data: ketQuaKiemTra,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['kiem-tra-cong-cu', maTrinh],
     queryFn: async () => {
       const { invoke } = await import('@tauri-apps/api/core');
-      return invoke<boolean | null>('kiem_tra_cong_cu_may', { trinhQuanLy: maTrinh });
+      return invoke<TrangThaiCongCuMay | null>('kiem_tra_cong_cu_may', { trinhQuanLy: maTrinh });
     },
     enabled: coTheKiem,
     staleTime: 5 * 60 * 1000,
-    // Đang thiếu thì kiểm lại mỗi khi cửa sổ ForgeStore lấy lại tiêu điểm
-    refetchOnWindowFocus: (query) => (query.state.data === false ? 'always' : false),
+    // Đang thiếu hoặc chưa chạy thì kiểm lại mỗi khi cửa sổ ForgeStore lấy lại tiêu điểm
+    refetchOnWindowFocus: (query) => {
+      const duLieu = query.state.data as TrangThaiCongCuMay | boolean | null | undefined;
+      return duLieu === 'CHUA_CAI' || duLieu === 'CHUA_CHAY' || duLieu === false ? 'always' : false;
+    },
     retry: false,
   });
 
@@ -57,38 +68,54 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap pl-6">
-        <a
-          href={canhBao.lienKetChinhThuc}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-tactile text-accent-ai hover:underline text-xs font-mono inline-flex items-center gap-1 font-medium"
-        >
-          <span>Tải {canhBao.tenHienThi}</span>
-          <ExternalLink className="w-3 h-3" />
-        </a>
+      {canhBao.trangThai === 'CHUA_CAI' ? (
+        <div className="flex items-center gap-3 flex-wrap pl-6">
+          {canhBao.lienKetChinhThuc && (
+            <a
+              href={canhBao.lienKetChinhThuc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
+            >
+              <span>Tải {canhBao.tenHienThi}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
 
-        {canhBao.lenhGoiY && (
-          <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
-            <span className="text-muted">Hoặc cài nhanh:</span>
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary">
-              <code>{canhBao.lenhGoiY}</code>
-              <button
-                type="button"
-                onClick={() => xuLySaoChepLenhGoiY(canhBao.lenhGoiY!)}
-                className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center"
-                title="Sao chép lệnh gợi ý"
-              >
-                {daChepGoiY ? (
-                  <Check className="w-3 h-3 text-success" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-              </button>
+          {canhBao.lenhGoiY && (
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
+              <span className="text-muted">Hoặc cài nhanh:</span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary">
+                <code>{canhBao.lenhGoiY}</code>
+                <button
+                  type="button"
+                  onClick={() => xuLySaoChepLenhGoiY(canhBao.lenhGoiY!)}
+                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center"
+                  title="Sao chép lệnh gợi ý"
+                >
+                  {daChepGoiY ? (
+                    <Check className="w-3 h-3 text-success" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap pl-6">
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="btn-tactile px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated border border-warning/40 text-warning font-semibold text-xs font-mono inline-flex items-center gap-1.5 transition-all disabled:opacity-60 disabled:cursor-wait"
+          >
+            <RefreshCw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
+            <span>{isFetching ? 'Đang kiểm tra...' : 'Kiểm tra lại'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };
