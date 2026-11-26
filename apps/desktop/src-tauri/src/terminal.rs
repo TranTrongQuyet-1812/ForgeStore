@@ -127,11 +127,14 @@ fn base64_encode(bytes: &[u8]) -> String {
 }
 
 /// Tạo nội dung script chào an toàn cho PowerShell.
+/// Đầu phiên tự nạp lại `$env:Path` từ Windows Registry (Machine + User) để nhận công cụ mới cài
+/// qua winget mà không cần tắt mở lại ForgeStore (P3B-45.3b).
 /// Sau lời chào, điền sẵn lệnh vào dòng nhắc bằng PSReadLine (chỉ gõ chữ, KHÔNG nhấn Enter):
 /// người dùng tự xem lại rồi bấm Enter (D-27). Chèn trong sự kiện OnIdle vì PSReadLine
 /// chỉ nhận chữ khi đã chờ nhập; lỗi thì bỏ qua, người dùng vẫn dán bằng Ctrl+V.
 pub fn tao_script_chao_powershell() -> String {
     concat!(
+        "try { $m = [Environment]::GetEnvironmentVariable('Path','Machine'); $u = [Environment]::GetEnvironmentVariable('Path','User'); if ($m -or $u) { $env:Path = ($m, $u | Where-Object { $_ }) -join ';' } } catch {}; ",
         "Write-Host ''; ",
         "Write-Host '=== ForgeStore CLI Terminal Helper ===' -ForegroundColor Cyan; ",
         "Write-Host 'Lệnh cài đặt: ' -NoNewline; ",
@@ -327,6 +330,27 @@ mod tests {
         let encoded = ma_hoa_powershell_base64(&script);
         assert!(!encoded.is_empty(), "Chuỗi mã hóa không được rỗng");
         assert!(!encoded.contains(';'), "Chuỗi mã hóa không được chứa dấu chấm phẩy");
+    }
+
+    #[test]
+    fn test_script_chao_lam_moi_path_tu_registry() {
+        let script = tao_script_chao_powershell();
+        assert!(
+            script.contains("[Environment]::GetEnvironmentVariable('Path','Machine')"),
+            "Script phải đọc PATH của Machine từ Registry"
+        );
+        assert!(
+            script.contains("[Environment]::GetEnvironmentVariable('Path','User')"),
+            "Script phải đọc PATH của User từ Registry"
+        );
+        assert!(
+            script.contains("$env:Path ="),
+            "Script phải gán lại $env:Path sau khi ghép Machine và User"
+        );
+        assert!(
+            script.starts_with("try {"),
+            "Đoạn làm mới PATH phải nằm đầu script và bọc trong try/catch"
+        );
     }
 
     #[test]
