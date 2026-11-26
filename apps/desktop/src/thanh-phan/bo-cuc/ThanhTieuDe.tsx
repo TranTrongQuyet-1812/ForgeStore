@@ -27,6 +27,7 @@ import {
   URL_HUONG_DAN_CLI_GOC,
   URL_HUONG_DAN_GITHUB,
 } from '../../dich-vu/huong-dan/huong-dan.core';
+import { moLienKetNgoai } from '../../dich-vu/lien-ket/mo-lien-ket-ngoai';
 import { ThanhTimKiemDropdown } from '../tim-kiem/ThanhTimKiemDropdown';
 
 const TAB_LABELS: Record<string, string> = {
@@ -186,7 +187,11 @@ export const ThanhTieuDe: React.FC = () => {
                 href={URL_HUONG_DAN_GITHUB}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setIsHelpMenuOpen(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsHelpMenuOpen(false);
+                  void moLienKetNgoai(URL_HUONG_DAN_GITHUB);
+                }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
               >
                 <BookOpen className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge-text transition-colors shrink-0" />
@@ -198,7 +203,11 @@ export const ThanhTieuDe: React.FC = () => {
                 href={URL_HUONG_DAN_CLI_GOC}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => setIsHelpMenuOpen(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsHelpMenuOpen(false);
+                  void moLienKetNgoai(URL_HUONG_DAN_CLI_GOC);
+                }}
                 className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
               >
                 <Terminal className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge-text transition-colors shrink-0" />

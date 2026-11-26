@@ -8,6 +8,7 @@ import {
   type TrangThaiCongCuMay,
 } from '../../dich-vu/cong-cu-may/cong-cu-may.core';
 import { layLienKetHuongDanCli } from '../../dich-vu/huong-dan/huong-dan.core';
+import { moLienKetNgoai } from '../../dich-vu/lien-ket/mo-lien-ket-ngoai';
 
 interface CanhBaoThieuCongCuProps {
   trinhQuanLy?: string;
@@ -64,6 +65,11 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
     }
   };
 
+  const xuLyMoLink = (url: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    void moLienKetNgoai(url);
+  };
+
   const nutKiemTraLai = (
     <button
       type="button"
@@ -95,6 +101,7 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
               href={canhBao.lienKetChinhThuc}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={xuLyMoLink(canhBao.lienKetChinhThuc)}
               className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
             >
               <span>Tải {canhBao.tenHienThi}</span>
@@ -129,6 +136,7 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
             href={lienKetHuongDan}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={xuLyMoLink(lienKetHuongDan)}
             className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
           >
             <span>Xem hướng dẫn</span>
@@ -164,6 +172,7 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
             href={lienKetHuongDan}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={xuLyMoLink(lienKetHuongDan)}
             className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
           >
             <span>Xem hướng dẫn Docker &amp; WSL</span>
@@ -178,6 +187,7 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
             href={lienKetHuongDan}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={xuLyMoLink(lienKetHuongDan)}
             className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
           >
             <span>Xem hướng dẫn Docker</span>

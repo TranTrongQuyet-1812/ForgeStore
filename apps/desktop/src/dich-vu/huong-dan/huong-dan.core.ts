@@ -30,15 +30,17 @@ export interface BuocHuongDanNhanh {
   readonly tieuDe: string;
   readonly moTa: string;
   readonly phia?: 'top' | 'right' | 'bottom' | 'left';
+  readonly canLe?: 'start' | 'center' | 'end';
 }
 
 /** Chặng 1 (4 bước): Giới thiệu nhanh trên màn hình Khám phá và thanh điều hướng. */
 export const CAC_BUOC_HUONG_DAN_KHAM_PHA: readonly BuocHuongDanNhanh[] = [
   {
     element: '[data-tour="tim-kiem"]',
-    tieuDe: 'Tìm ứng dụng & dán link GitHub (Ctrl+K)',
-    moTa: 'Gõ tên phần mềm hoặc mô tả nhu cầu bằng tiếng Việt để tìm trong kho, VÀ bạn có thể dán thẳng đường dẫn một kho mã GitHub (ví dụ https://github.com/localsend/localsend) để ForgeStore tự kiểm tra độ an toàn và tải cài đặt.',
+    tieuDe: 'Tìm ứng dụng & dán link GitHub',
+    moTa: 'Nhấn Ctrl+K để gõ tên phần mềm hoặc mô tả nhu cầu bằng tiếng Việt, và có thể dán thẳng đường dẫn kho mã GitHub (ví dụ https://github.com/localsend/localsend) để ForgeStore tự kiểm tra độ an toàn và tải cài đặt.',
     phia: 'bottom',
+    canLe: 'center',
   },
   {
     element: '[data-tour="kham-pha"]',
@@ -67,6 +69,7 @@ export const CAC_BUOC_HUONG_DAN_CHI_TIET: readonly BuocHuongDanNhanh[] = [
     tieuDe: 'Trợ giúp & Tài liệu hướng dẫn',
     moTa: 'Bấm biểu tượng dấu chấm hỏi (?) này bất cứ lúc nào để đọc GitHub & Repo là gì, mở lại hướng dẫn nhanh và đặc biệt hãy đọc kỹ tài liệu hướng dẫn cài đặt dòng lệnh (CLI) trước khi cài ứng dụng dòng lệnh.',
     phia: 'bottom',
+    canLe: 'end',
   },
   {
     element: '[data-tour="chi-tiet-readme"]',

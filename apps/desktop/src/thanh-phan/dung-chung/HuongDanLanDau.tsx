@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { driver, type DriveStep, type Driver, type PopoverDOM } from 'driver.js';
+import {
+  driver,
+  type AllowedButtons,
+  type Config,
+  type DriveStep,
+  type Driver,
+  type PopoverDOM,
+} from 'driver.js';
 import {
   CAC_BUOC_HUONG_DAN_CHI_TIET,
   CAC_BUOC_HUONG_DAN_KHAM_PHA,
@@ -10,9 +17,24 @@ import {
 } from '../../dich-vu/huong-dan/huong-dan.core';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useHuongDanStore } from '../../kho-trang-thai/useHuongDanStore';
+import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
 
 const CHU_KY_DO_DOM_MS = 150;
 const SO_LAN_DO_DOM_TOI_DA = 30; // ~4,5 giây chờ Trang Chi tiết tải xong
+
+/** Cấu hình giao diện dùng chung cho cả Chặng 1 và Chặng 2 (khớp bo góc rounded-xl, tránh sát đỉnh cửa sổ). */
+const CAU_HINH_TOUR_CHUNG: Partial<Config> = {
+  smoothScroll: true,
+  allowClose: true,
+  showProgress: true,
+  showButtons: ['next', 'close'] as AllowedButtons[],
+  nextBtnText: 'Tiếp tục',
+  popoverClass: 'forgestore-tour-popover',
+  stagePadding: 5,
+  stageRadius: 12,
+  popoverOffset: 12,
+  overlayOpacity: 0.58,
+};
 
 /**
  * Tiêm nút "Bỏ qua" vào chân popover để người dùng luôn chỉ thấy 2 nút gọn: Bỏ qua + Tiếp tục/Hoàn tất.
@@ -47,6 +69,7 @@ function taoDanhSachBuocDriver(
         title: buoc.tieuDe,
         description: buoc.moTa,
         side: buoc.phia,
+        ...(buoc.canLe ? { align: buoc.canLe } : {}),
         progressText: `${chiSoBatDau + idx + 1} / ${tongSoBuoc}`,
         ...(laBuocCuoi && khiBamTiepBuocCuoi
           ? {
@@ -65,6 +88,9 @@ function taoDanhSachBuocDriver(
 export const HuongDanLanDau: React.FC = () => {
   const currentTab = useDieuHuongStore((s) => s.currentTab);
   const yeuCauChayLai = useHuongDanStore((s) => s.yeuCauChayLai);
+  const authLoading = useXacThucStore((s) => s.isLoading);
+  const isAuthenticated = useXacThucStore((s) => s.isAuthenticated);
+  const tenHienThi = useXacThucStore((s) => s.user?.tenHienThi);
 
   const driverHienTaiRef = useRef<Driver | null>(null);
   const boDemChoChiTietRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -102,14 +128,9 @@ export const HuongDanLanDau: React.FC = () => {
     const steps = taoDanhSachBuocDriver(cacBuocHopLe, soBuocChangMot, tongBuoc);
 
     const d = driver({
+      ...CAU_HINH_TOUR_CHUNG,
       steps,
-      smoothScroll: true,
-      allowClose: true,
-      showProgress: true,
-      showButtons: ['next', 'close'],
-      nextBtnText: 'Tiếp tục',
       doneBtnText: 'Hoàn tất',
-      popoverClass: 'forgestore-tour-popover',
       onPopoverRender: (popover, opts) => chenNutBoQua(popover, opts.driver),
       onDestroyed: () => {
         if (driverHienTaiRef.current === d) {
@@ -183,15 +204,10 @@ export const HuongDanLanDau: React.FC = () => {
     });
 
     const d = driver({
+      ...CAU_HINH_TOUR_CHUNG,
       steps,
-      smoothScroll: true,
-      allowClose: true,
-      showProgress: true,
-      showButtons: ['next', 'close'],
-      nextBtnText: 'Tiếp tục',
       // Bước 4 là bước cuối Chặng 1 nhưng nút vẫn là "Tiếp tục" để mở Chặng 2 trên Trang Chi tiết
       doneBtnText: 'Tiếp tục',
-      popoverClass: 'forgestore-tour-popover',
       onPopoverRender: (popover, opts) => chenNutBoQua(popover, opts.driver),
       onDestroyed: () => {
         if (driverHienTaiRef.current === d) {
@@ -216,20 +232,41 @@ export const HuongDanLanDau: React.FC = () => {
     };
   }, []);
 
-  // Tự chạy đúng 1 lần khi mở ứng dụng lần đầu ở màn hình Khám phá
+  // Tự chạy đúng 1 lần khi mở ứng dụng lần đầu ở màn hình Khám phá sau khi initAuth xong để tránh lệch ô khoét header
   useEffect(() => {
-    if (daTuChayLanDauRef.current || currentTab !== 'explore' || daXemHuongDanLanDau()) {
+    if (
+      daTuChayLanDauRef.current ||
+      authLoading ||
+      currentTab !== 'explore' ||
+      daXemHuongDanLanDau()
+    ) {
       return;
     }
 
     const henGio = setTimeout(() => {
-      if (daUnmountRef.current || daTuChayLanDauRef.current || daXemHuongDanLanDau()) return;
+      if (
+        daUnmountRef.current ||
+        daTuChayLanDauRef.current ||
+        useXacThucStore.getState().isLoading ||
+        daXemHuongDanLanDau()
+      ) {
+        return;
+      }
       daTuChayLanDauRef.current = true;
       khoiChayChangMot();
     }, 400);
 
     return () => clearTimeout(henGio);
-  }, [currentTab]);
+  }, [currentTab, authLoading]);
+
+  // Nếu trạng thái tài khoản thay đổi độ rộng thanh tiêu đề lúc tour đang mở, tự bám sát lại tọa độ spotlight
+  useEffect(() => {
+    if (!driverHienTaiRef.current?.isActive()) return;
+    const khungHinh = requestAnimationFrame(() => {
+      driverHienTaiRef.current?.refresh();
+    });
+    return () => cancelAnimationFrame(khungHinh);
+  }, [authLoading, isAuthenticated, tenHienThi]);
 
   // Chạy lại theo yêu cầu từ nút Trợ giúp (?) hoặc Trang Cài đặt
   useEffect(() => {

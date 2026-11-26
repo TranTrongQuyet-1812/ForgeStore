@@ -28,6 +28,7 @@ import { thietBiService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.se
 import { desktopLogger } from '../dich-vu/logger/desktop-logger';
 import { kiemTraThuCong, layPhienBanHienTai } from '../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
 import { URL_HUONG_DAN_CLI_GOC, URL_HUONG_DAN_GITHUB } from '../dich-vu/huong-dan/huong-dan.core';
+import { moLienKetNgoai } from '../dich-vu/lien-ket/mo-lien-ket-ngoai';
 
 export const TrangCaiDat: React.FC = () => {
   const { theme, setTheme } = useGiaoDienStore();
@@ -524,6 +525,10 @@ export const TrangCaiDat: React.FC = () => {
             href={URL_HUONG_DAN_GITHUB}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              e.preventDefault();
+              void moLienKetNgoai(URL_HUONG_DAN_GITHUB);
+            }}
             className="btn-tactile px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-primary text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
           >
             <BookOpen className="w-3.5 h-3.5 text-accent-forge-text" />
@@ -535,6 +540,10 @@ export const TrangCaiDat: React.FC = () => {
             href={URL_HUONG_DAN_CLI_GOC}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(e) => {
+              e.preventDefault();
+              void moLienKetNgoai(URL_HUONG_DAN_CLI_GOC);
+            }}
             className="btn-tactile px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-primary text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
           >
             <Terminal className="w-3.5 h-3.5 text-accent-forge-text" />

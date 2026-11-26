@@ -82,6 +82,8 @@ describe('huong-dan.core (P3B-46)', () => {
       ]);
 
       const buocMot = CAC_BUOC_HUONG_DAN_KHAM_PHA[0];
+      expect(buocMot?.tieuDe).toBe('Tìm ứng dụng & dán link GitHub');
+      expect(buocMot?.canLe).toBe('center');
       expect(buocMot?.moTa.toLowerCase()).toContain('tiếng việt');
       expect(buocMot?.moTa.toLowerCase()).toContain('github');
       expect(buocMot?.moTa).toContain('https://github.com/localsend/localsend');
@@ -89,6 +91,7 @@ describe('huong-dan.core (P3B-46)', () => {
 
     it('Chặng 2 có đủ 5 bước phủ tro-giup, chi-tiet-readme, chi-tiet-phat-hanh, chi-tiet-cli và chi-tiet-cai-dat', () => {
       expect(CAC_BUOC_HUONG_DAN_CHI_TIET).toHaveLength(5);
+      expect(CAC_BUOC_HUONG_DAN_CHI_TIET[0]?.canLe).toBe('end');
       expect(CAC_BUOC_HUONG_DAN_CHI_TIET.map((b) => b.element)).toEqual([
         '[data-tour="tro-giup"]',
         '[data-tour="chi-tiet-readme"]',
