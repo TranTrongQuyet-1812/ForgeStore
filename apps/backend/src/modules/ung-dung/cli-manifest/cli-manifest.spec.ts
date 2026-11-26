@@ -23,9 +23,11 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.NPM);
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.PIP);
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.DOCKER);
-      // D-38 (P3B-33): thêm npx cho nhóm skill AI, tổng 6 trình quản lý
+      // D-38 (P3B-33): thêm npx cho nhóm skill AI; P3B-45.3e: thêm cargo và conda, tổng 8 trình quản lý
       expect(cacTrinh).toContain(MaTrinhQuanLyGoi.NPX);
-      expect(cacTrinh).toHaveLength(6);
+      expect(cacTrinh).toContain(MaTrinhQuanLyGoi.CARGO);
+      expect(cacTrinh).toContain(MaTrinhQuanLyGoi.CONDA);
+      expect(cacTrinh).toHaveLength(8);
     });
 
     it('mỗi manifest có đầy đủ mẫu lệnh cài, cập nhật, gỡ và regex tên gói', () => {
@@ -68,6 +70,14 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         'docker run -d --name {tenContainer} {tenGoi}',
       );
       expect(DANH_SACH_TRINH_QUAN_LY_GOI.docker.mauLenhGo).toBe('docker rm -f {tenContainer}');
+
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.cargo.mauLenhCai).toBe('cargo install {tenGoi}');
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.cargo.mauLenhCapNhat).toBe('cargo install {tenGoi}');
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.cargo.mauLenhGo).toBe('cargo uninstall {tenGoi}');
+
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.conda.mauLenhCai).toBe('conda install {tenGoi}');
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.conda.mauLenhCapNhat).toBe('conda update {tenGoi}');
+      expect(DANH_SACH_TRINH_QUAN_LY_GOI.conda.mauLenhGo).toBe('conda remove -y {tenGoi}');
     });
   });
 
@@ -188,6 +198,33 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
       expect(kqDocker.lenhCai).not.toContain('{tenContainer}');
       expect(kqDocker.lenhCapNhat).toBe('docker pull ghcr.io/open-webui/open-webui:main');
       expect(kqDocker.lenhGo).toBe('docker rm -f open-webui');
+
+      // 6. cargo (P3B-45.3e)
+      const kqCargo = ghepLenhCliAnToan(MaTrinhQuanLyGoi.CARGO, 'fd-find');
+      expect(kqCargo.hopLe).toBe(true);
+      expect(kqCargo.lenhCai).toBe('cargo install fd-find');
+      expect(kqCargo.lenhCapNhat).toBe('cargo install fd-find');
+      expect(kqCargo.lenhGo).toBe('cargo uninstall fd-find');
+
+      // 7. conda (P3B-45.3e)
+      const kqConda = ghepLenhCliAnToan(MaTrinhQuanLyGoi.CONDA, 'ffmpeg');
+      expect(kqConda.hopLe).toBe(true);
+      expect(kqConda.lenhCai).toBe('conda install ffmpeg');
+      expect(kqConda.lenhCapNhat).toBe('conda update ffmpeg');
+      expect(kqConda.lenhGo).toBe('conda remove -y ffmpeg');
+    });
+
+    it('P3B-45.3e: cargo và conda chặn tên gói injection và đường dẫn traversal', () => {
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CARGO, 'fd-find')).toBe(true);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CARGO, 'fd-find; calc')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CARGO, '../evil')).toBe(false);
+      expect(ghepLenhCliAnToan(MaTrinhQuanLyGoi.CARGO, 'fd-find; calc').hopLe).toBe(false);
+      expect(ghepLenhCliAnToan(MaTrinhQuanLyGoi.CARGO, '../evil').hopLe).toBe(false);
+
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CONDA, 'ffmpeg')).toBe(true);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CONDA, 'ffmpeg; calc')).toBe(false);
+      expect(kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CONDA, '../evil')).toBe(false);
+      expect(ghepLenhCliAnToan(MaTrinhQuanLyGoi.CONDA, 'ffmpeg && whoami').hopLe).toBe(false);
     });
 
     it('taoTenContainerTuImage làm sạch tên image thành container name hợp lệ (🔴 Lỗi Đỏ 2)', () => {
@@ -378,6 +415,47 @@ describe('P3B-16.1 & P3B-16.2: Package Manager Manifest Framework & Command Inje
         trinhQuanLy: 'npx',
         tenGoi: 'cloudflare/security-audit-skill',
       });
+    });
+
+    it('P3B-45.3e: trích xuất chính xác tên crate từ lệnh cargo install và bỏ qua cờ / --path', () => {
+      expect(trichTenGoiTuLenhTho('cargo install fd-find')).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'fd-find',
+      });
+      expect(trichTenGoiTuLenhTho('cargo install --locked ripgrep')).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'ripgrep',
+      });
+      expect(trichTenGoiTuLenhTho('cargo install --version 1.2.3 bat')).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'bat',
+      });
+      expect(trichTenGoiTuLenhTho('cargo install -f fd-find@10.5.2')).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'fd-find',
+      });
+      expect(trichTenGoiTuLenhTho('cargo install -F pcre2 ripgrep')).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'ripgrep',
+      });
+      expect(trichTenGoiTuLenhTho('cargo install --path .')).toBeNull();
+      expect(trichTenGoiTuLenhTho('cargo install --git https://github.com/sharkdp/fd')).toBeNull();
+    });
+
+    it('P3B-45.3e: trích xuất chính xác tên gói từ lệnh conda install (kèm cờ kênh/môi trường và phiên bản)', () => {
+      expect(trichTenGoiTuLenhTho('conda install -c conda-forge fd-find')).toEqual({
+        trinhQuanLy: 'conda',
+        tenGoi: 'fd-find',
+      });
+      expect(trichTenGoiTuLenhTho('conda install -y -n myenv foo=1.2.0')).toEqual({
+        trinhQuanLy: 'conda',
+        tenGoi: 'foo',
+      });
+      expect(trichTenGoiTuLenhTho('conda install -y -c pytorch conda-forge::ffmpeg==6.1')).toEqual({
+        trinhQuanLy: 'conda',
+        tenGoi: 'ffmpeg',
+      });
+      expect(trichTenGoiTuLenhTho('conda install -c conda-forge')).toBeNull();
     });
   });
 

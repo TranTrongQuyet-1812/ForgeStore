@@ -14,6 +14,8 @@ export const MaTrinhQuanLyGoi = {
   PIP: 'pip',
   DOCKER: 'docker',
   NPX: 'npx',
+  CARGO: 'cargo',
+  CONDA: 'conda',
 } as const;
 
 export type MaTrinhQuanLyGoi = (typeof MaTrinhQuanLyGoi)[keyof typeof MaTrinhQuanLyGoi];
@@ -125,6 +127,30 @@ export const DANH_SACH_TRINH_QUAN_LY_GOI: Record<MaTrinhQuanLyGoi, KhaiBaoTrinhQ
     mauLenhGo: '',
     // Hỗ trợ cả tên gói npm đơn lẻ, scoped package hoặc repo slug của nhóm skill (D-38)
     regexTenGoi: '^(?:@[a-z0-9][a-z0-9_.-]*\\/)?[A-Za-z0-9][A-Za-z0-9_.-]*(?:\\/[A-Za-z0-9_.-]+)?$',
+    kieuSoPhienBan: KieuSoPhienBan.SEMVER,
+  },
+  [MaTrinhQuanLyGoi.CARGO]: {
+    ma: MaTrinhQuanLyGoi.CARGO,
+    tenHienThi: 'Cargo (Rust)',
+    bieuTuong: 'Terminal',
+    mauLenhCai: 'cargo install {tenGoi}',
+    mauLenhCapNhat: 'cargo install {tenGoi}',
+    mauLenhGo: 'cargo uninstall {tenGoi}',
+    // Tên crate Rust theo chuẩn crates.io (VD: fd-find, ripgrep, bat)
+    regexTenGoi: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
+    regexPhienBan: '^[0-9]+(?:\\.[0-9a-zA-Z._-]+)*$',
+    kieuSoPhienBan: KieuSoPhienBan.SEMVER,
+  },
+  [MaTrinhQuanLyGoi.CONDA]: {
+    ma: MaTrinhQuanLyGoi.CONDA,
+    tenHienThi: 'Conda',
+    bieuTuong: 'Terminal',
+    mauLenhCai: 'conda install {tenGoi}',
+    mauLenhCapNhat: 'conda update {tenGoi}',
+    mauLenhGo: 'conda remove -y {tenGoi}',
+    // Tên gói Conda (VD: fd-find, ffmpeg, pandas)
+    regexTenGoi: '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$',
+    regexPhienBan: '^[0-9]+(?:\\.[0-9a-zA-Z._-]+)*$',
     kieuSoPhienBan: KieuSoPhienBan.SEMVER,
   },
 };
@@ -391,6 +417,113 @@ export function boDauNhacShell(lenh: string): string {
     .trim()
     .replace(/^(?:PS(?:\s+[^>\r\n]*)?>\s*|[$>%]\s+)/, '')
     .trim();
+}
+
+/**
+ * Bóc tên crate Rust từ lệnh `cargo install` (P3B-45.3e).
+ * Tách riêng cờ có giá trị và giữ phân biệt hoa thường với cờ ngắn (`-F` features khác `-f` force).
+ */
+function trichGoiCargoTuLenh(l: string): { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string } | null {
+  const tokens = l.split(/\s+/);
+  const installIdx = tokens.findIndex((t) => /^install$/i.test(t));
+  if (installIdx === -1) return null;
+
+  const sauInstall = tokens.slice(installIdx + 1);
+  const cargoFlagsWithArgs = new Set([
+    '--version',
+    '--features',
+    '-F',
+    '--bin',
+    '--bins',
+    '--example',
+    '--path',
+    '--git',
+    '--branch',
+    '--tag',
+    '--rev',
+    '--root',
+    '--target',
+    '--target-dir',
+    '--profile',
+    '--jobs',
+    '-j',
+    '--registry',
+    '--index',
+    '--config',
+  ]);
+
+  let pkgToken: string | undefined;
+  for (let i = 0; i < sauInstall.length; i++) {
+    const token = sauInstall[i];
+    if (!token) continue;
+    if (token.startsWith('--') && token.includes('=')) continue;
+    const khoaCo = token.startsWith('--') ? token.toLowerCase() : token;
+    if (cargoFlagsWithArgs.has(khoaCo)) {
+      i++; // Nhảy qua giá trị đi kèm cờ (VD: --path ., --version 1.2.3)
+      continue;
+    }
+    if (token.startsWith('-')) continue;
+    pkgToken = token;
+    break;
+  }
+
+  if (!pkgToken) return null;
+  // Bỏ hậu tố @phiên-bản nếu có (VD: fd-find@10.5.2 -> fd-find)
+  const cleanPkg = pkgToken.replace(/@[0-9a-zA-Z._-]+$/, '');
+  if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CARGO, cleanPkg)) {
+    return { trinhQuanLy: MaTrinhQuanLyGoi.CARGO, tenGoi: cleanPkg };
+  }
+  return null;
+}
+
+/**
+ * Bóc tên gói từ lệnh `conda install` (P3B-45.3e).
+ * Bỏ cờ kênh/môi trường, tiền tố kênh `channel::pkg` và ràng buộc phiên bản (`=`, `==`, `>=`...).
+ */
+function trichGoiCondaTuLenh(l: string): { trinhQuanLy: MaTrinhQuanLyGoi; tenGoi: string } | null {
+  const tokens = l.split(/\s+/);
+  const installIdx = tokens.findIndex((t) => /^install$/i.test(t));
+  if (installIdx === -1) return null;
+
+  const sauInstall = tokens.slice(installIdx + 1);
+  const condaFlagsWithArgs = new Set([
+    '-c',
+    '--channel',
+    '-n',
+    '--name',
+    '-p',
+    '--prefix',
+    '-f',
+    '--file',
+    '--subdir',
+  ]);
+
+  let pkgToken: string | undefined;
+  for (let i = 0; i < sauInstall.length; i++) {
+    const token = sauInstall[i];
+    if (!token) continue;
+    if (token.startsWith('-') && token.includes('=')) continue;
+    if (condaFlagsWithArgs.has(token.toLowerCase())) {
+      i++; // Nhảy qua đối số đi kèm cờ (VD: -c conda-forge, -n myenv)
+      continue;
+    }
+    if (token.startsWith('-')) continue;
+    pkgToken = token;
+    break;
+  }
+
+  if (!pkgToken) return null;
+  // Bỏ tiền tố kênh (conda-forge::pkg -> pkg) và ràng buộc phiên bản (foo=1.2.0 -> foo)
+  let cleanPkg = pkgToken;
+  if (cleanPkg.includes('::')) {
+    cleanPkg = cleanPkg.slice(cleanPkg.lastIndexOf('::') + 2);
+  }
+  cleanPkg = cleanPkg.split(/(?:==|>=|<=|!=|=|>|<)/)[0] ?? '';
+
+  if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.CONDA, cleanPkg)) {
+    return { trinhQuanLy: MaTrinhQuanLyGoi.CONDA, tenGoi: cleanPkg };
+  }
+  return null;
 }
 
 /**
@@ -698,6 +831,16 @@ export function trichTenGoiTuLenhTho(
     if (kiemTraTenGoiHopLe(MaTrinhQuanLyGoi.NPX, pkg)) {
       return { trinhQuanLy: MaTrinhQuanLyGoi.NPX, tenGoi: pkg };
     }
+  }
+
+  // 7. CARGO (P3B-45.3e)
+  if (/^cargo\s+install\b/i.test(l)) {
+    return trichGoiCargoTuLenh(l);
+  }
+
+  // 8. CONDA (P3B-45.3e)
+  if (/^conda\s+install\b/i.test(l)) {
+    return trichGoiCondaTuLenh(l);
   }
 
   return null;

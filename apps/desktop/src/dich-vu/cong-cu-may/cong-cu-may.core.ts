@@ -4,7 +4,11 @@
  * Không tự cài, không sửa PATH, chỉ đưa ra cảnh báo nhẹ kèm liên kết chính thức hoặc nhắc mở phần mềm.
  */
 
-import { trichTenGoiTuLenhTho } from '@forgestore/types';
+import {
+  DANH_SACH_TRINH_QUAN_LY_GOI,
+  type MaTrinhQuanLyGoi,
+  trichTenGoiTuLenhTho,
+} from '@forgestore/types';
 
 /** Trạng thái công cụ dòng lệnh trả về từ lệnh Rust `kiem_tra_cong_cu_may` (P3B-45, P3B-45.3c). */
 export type TrangThaiCongCuMay = 'SAN_SANG' | 'CHUA_CAI' | 'CHUA_CHAY' | 'THIEU_WSL';
@@ -105,13 +109,13 @@ export function chuanHoaMaCongCuKiemTra(trinhQuanLy?: string | null): string | u
 }
 
 /**
- * Trích xuất mã trình quản lý gói từ phương thức cài đặt CLI (P3B-31).
+ * Trích xuất mã trình quản lý gói từ phương thức cài đặt CLI (P3B-31, P3B-45.3e).
  * Gom logic suy luận dùng chung giữa TrangChiTiet, NhanDaCaiTrenMay và CanhBaoThieuCongCu.
  */
 export function layTrinhQuanLyCachCai(
   phuongThuc?: {
     nhom?: string;
-    trinhQuanLy?: string;
+    trinhQuanLy?: string | null;
     buoc?: Array<{ lenh?: string }>;
   } | null,
 ): string | undefined {
@@ -127,6 +131,8 @@ export function layTrinhQuanLyCachCai(
   if (nhomLow.includes('npm')) return 'npm';
   if (nhomLow.includes('pip')) return 'pip';
   if (nhomLow.includes('docker')) return 'docker';
+  if (nhomLow.includes('cargo')) return 'cargo';
+  if (nhomLow.includes('conda')) return 'conda';
 
   if (phuongThuc.buoc?.[0]?.lenh) {
     const trich = trichTenGoiTuLenhTho(phuongThuc.buoc[0].lenh);
@@ -139,13 +145,70 @@ export function layTrinhQuanLyCachCai(
 }
 
 /**
+ * Thông tin cặp trình quản lý + tên gói hợp lệ để ghi nhận vào Thư viện máy (P3B-45.3e).
+ */
+export interface ThongTinGhiNhanCli {
+  readonly trinhQuanLy: MaTrinhQuanLyGoi;
+  readonly tenGoi: string;
+}
+
+/**
+ * Kiểm tra trình quản lý gói có hỗ trợ lưu vào Thư viện máy và sinh lệnh gỡ an toàn hay không (P3B-45.3e).
+ * Chỉ trả về true khi mã nằm trong manifest chính thức và có mẫu lệnh gỡ khác rỗng (loại npx, go, chuỗi lạ).
+ */
+export function hoTroGhiNhanThuVienCli(trinhQuanLy?: string | null): boolean {
+  if (!trinhQuanLy) return false;
+  const ma = trinhQuanLy.trim().toLowerCase() as MaTrinhQuanLyGoi;
+  const manifest = DANH_SACH_TRINH_QUAN_LY_GOI[ma];
+  return Boolean(manifest && manifest.mauLenhGo.trim().length > 0);
+}
+
+/**
+ * Xác định trình quản lý và tên gói hợp lệ để lưu vào Thư viện máy từ cách cài đang chọn (P3B-45.3e).
+ * Tuyệt đối không fallback sang winget; trả về null nếu cách cài chưa hỗ trợ ghi nhận và tạo lệnh gỡ.
+ */
+export function xacDinhThongTinGhiNhanCli(
+  phuongThuc?: {
+    nhom?: string;
+    trinhQuanLy?: string | null;
+    tenGoi?: string | null;
+    buoc?: Array<{ lenh?: string }>;
+  } | null,
+  tenGoiDuPhong?: string | null,
+): ThongTinGhiNhanCli | null {
+  if (!phuongThuc) return null;
+
+  const tenGoiCoSan = phuongThuc.tenGoi?.trim() || undefined;
+  const lenhDau = phuongThuc.buoc?.[0]?.lenh;
+  // Ưu tiên bóc từ lệnh thô khi dữ liệu DB chưa điền tenGoi (ví dụ các repo CARGO, CONDA hiện có)
+  const trich = !tenGoiCoSan && lenhDau ? trichTenGoiTuLenhTho(lenhDau) : null;
+
+  const trinhQuanLy = (trich?.trinhQuanLy || layTrinhQuanLyCachCai(phuongThuc))
+    ?.trim()
+    .toLowerCase();
+  if (!trinhQuanLy || !hoTroGhiNhanThuVienCli(trinhQuanLy)) {
+    return null;
+  }
+
+  const tenGoi = tenGoiCoSan || trich?.tenGoi || tenGoiDuPhong?.trim() || '';
+  if (!tenGoi) {
+    return null;
+  }
+
+  return {
+    trinhQuanLy: trinhQuanLy as MaTrinhQuanLyGoi,
+    tenGoi,
+  };
+}
+
+/**
  * Xác định công cụ cần kiểm tra máy cho khung cảnh báo (P3B-45.3d).
- * Tách riêng khỏi `layTrinhQuanLyCachCai` để mở rộng cargo/conda/go mà không làm lệch enum gửi backend.
+ * Tách riêng khỏi `layTrinhQuanLyCachCai` để mở rộng go mà không làm lệch enum gửi backend.
  */
 export function layCongCuKiemTraCachCai(
   phuongThuc?: {
     nhom?: string;
-    trinhQuanLy?: string;
+    trinhQuanLy?: string | null;
     buoc?: Array<{ lenh?: string }>;
   } | null,
 ): string | undefined {

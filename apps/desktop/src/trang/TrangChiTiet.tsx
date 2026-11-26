@@ -50,11 +50,11 @@ import {
   coLenhDockerCompose,
   layCongCuKiemTraCachCai,
   layTrinhQuanLyCachCai,
+  xacDinhThongTinGhiNhanCli,
 } from '../dich-vu/cong-cu-may/cong-cu-may.core';
 import {
   CachCaiDto,
   MaTrinhQuanLyGoi,
-  trichTenGoiTuLenhTho,
   laLenhNpmCucBo,
   timTepTheoMauWildcard,
   kiemTraGoiThuocRepo,
@@ -846,7 +846,7 @@ export const TrangChiTiet: React.FC = () => {
   );
   useDongBoUngDungCli(maThietBi, banGhiCliDeDongBo);
 
-  // Ghi nhận "Tôi đã cài" qua dòng lệnh CLI (P3B-16.5)
+  // Ghi nhận "Tôi đã cài" qua dòng lệnh CLI (P3B-16.5, P3B-45.3e)
   const handleRecordCliInstall = async (currentMethod?: CachCaiDto | null) => {
     if (!isAuthenticated) {
       setAuthModalOpen(true);
@@ -859,22 +859,19 @@ export const TrangChiTiet: React.FC = () => {
     }
     if (!appDetail?.maUngDung) return;
 
+    const thongTinGhiNhan = xacDinhThongTinGhiNhanCli(
+      currentMethod,
+      appDetail.tenKhoChua || appDetail.tenRepoDayDu.split('/')[1],
+    );
+    if (!thongTinGhiNhan) {
+      toast.info('Cách cài đặt này chưa hỗ trợ lưu tự động và tạo lệnh gỡ trong Thư viện máy.');
+      return;
+    }
+
+    const { trinhQuanLy, tenGoi } = thongTinGhiNhan;
+
     try {
       setIsRecordingCli(true);
-      let trinhQuanLy: MaTrinhQuanLyGoi =
-        (layTrinhQuanLyCachCai(currentMethod) as MaTrinhQuanLyGoi) || MaTrinhQuanLyGoi.WINGET;
-
-      let tenGoi = currentMethod?.tenGoi;
-      if (!tenGoi && currentMethod?.buoc?.[0]?.lenh) {
-        const trich = trichTenGoiTuLenhTho(currentMethod.buoc[0].lenh);
-        if (trich) {
-          tenGoi = trich.tenGoi;
-          trinhQuanLy = trich.trinhQuanLy;
-        }
-      }
-      if (!tenGoi) {
-        tenGoi = appDetail.tenKhoChua || appDetail.tenRepoDayDu.split('/')[1];
-      }
 
       const phienBan =
         appDetail.banPhatHanhMoiNhat?.tenPhienBan ||
@@ -1580,6 +1577,13 @@ export const TrangChiTiet: React.FC = () => {
                       )
                     : null;
 
+                const coTheGhiNhanCli = Boolean(
+                  xacDinhThongTinGhiNhanCli(
+                    currentMethod,
+                    appDetail?.tenKhoChua || appDetail?.tenRepoDayDu?.split('/')[1],
+                  ),
+                );
+
                 return (
                   <div className="flex flex-col gap-4">
                     {/* Thông tin phương thức & Yêu cầu tiên quyết */}
@@ -1753,10 +1757,18 @@ export const TrangChiTiet: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                      ) : (
+                      ) : coTheGhiNhanCli ? (
                         <div className="flex items-center gap-2 text-xs text-secondary">
                           <Terminal className="w-4 h-4 text-accent-forge-text shrink-0" />
                           <span>Bạn đã chạy xong câu lệnh trên trong Terminal cá nhân?</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-muted">
+                          <AlertCircle className="w-4 h-4 text-muted shrink-0" />
+                          <span>
+                            Cách cài đặt này chưa hỗ trợ lưu tự động và tạo lệnh gỡ trong Thư viện
+                            máy.
+                          </span>
                         </div>
                       )}
 
@@ -1779,20 +1791,22 @@ export const TrangChiTiet: React.FC = () => {
                         )}
 
                         {!installedCliRecord ? (
-                          <button
-                            type="button"
-                            onClick={() => handleRecordCliInstall(currentMethod)}
-                            disabled={isRecordingCli}
-                            className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent font-bold text-xs flex items-center gap-2 shadow-sm"
-                            title="Ghi nhận ứng dụng vào Thư viện máy này (Chờ xác nhận sau 24h)"
-                          >
-                            {isRecordingCli ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4" />
-                            )}
-                            <span>Tôi đã cài</span>
-                          </button>
+                          coTheGhiNhanCli ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRecordCliInstall(currentMethod)}
+                              disabled={isRecordingCli}
+                              className="btn-tactile h-9 px-4 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent font-bold text-xs flex items-center gap-2 shadow-sm"
+                              title="Ghi nhận ứng dụng vào Thư viện máy này (Chờ xác nhận sau 24h)"
+                            >
+                              {isRecordingCli ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4" />
+                              )}
+                              <span>Tôi đã cài</span>
+                            </button>
+                          ) : null
                         ) : (
                           <button
                             type="button"

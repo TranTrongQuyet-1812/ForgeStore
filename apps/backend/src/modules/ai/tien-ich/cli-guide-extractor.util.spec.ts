@@ -717,10 +717,11 @@ describe('P3B-25.12: quét cả README nhưng chỉ nhận gói có tên khớp 
       .filter((c) => c.trinhQuanLy && c.tenGoi)
       .map((c) => `${c.trinhQuanLy}:${c.tenGoi}`);
 
-  it('nhận pip install nằm sau 4.000 ký tự dưới tiêu đề không phải "Installation" (pandas)', () => {
+  it('nhận pip install và conda install nằm sau 4.000 ký tự dưới tiêu đề không phải "Installation" (pandas)', () => {
     const md = `# pandas\n\n${DEM}\n\n## Where to get it\n\n\`\`\`sh\n# conda\nconda install -c conda-forge pandas\n\`\`\`\n\n\`\`\`sh\n# or PyPI\npip install pandas\n\`\`\`\n\n## Installation from sources\n\n\`\`\`sh\npip install .\n\`\`\`\n`;
 
-    expect(cach(md, 'pandas-dev/pandas')).toEqual(['pip:pandas']);
+    // P3B-45.3e: conda đã được hỗ trợ bóc tên gói nên cả conda:pandas và pip:pandas đều được nhận diện
+    expect(cach(md, 'pandas-dev/pandas')).toEqual(['conda:pandas', 'pip:pandas']);
   });
 
   it('nhận lệnh npm trong hàng bảng dù có lệnh npx đứng trước (worldmonitor)', () => {

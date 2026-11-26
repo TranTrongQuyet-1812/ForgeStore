@@ -4,8 +4,10 @@ import {
   canhBaoThieuCongCu,
   chuanHoaMaCongCuKiemTra,
   coLenhDockerCompose,
+  hoTroGhiNhanThuVienCli,
   layCongCuKiemTraCachCai,
   layTrinhQuanLyCachCai,
+  xacDinhThongTinGhiNhanCli,
 } from './cong-cu-may.core';
 
 describe('cong-cu-may.core (P3B-31, P3B-45, P3B-45.3d)', () => {
@@ -220,12 +222,14 @@ describe('cong-cu-may.core (P3B-31, P3B-45, P3B-45.3d)', () => {
       expect(layTrinhQuanLyCachCai({ trinhQuanLy: 'WINGET' })).toBe('winget');
     });
 
-    it('suy luận từ trường nhom nếu không có trinhQuanLy', () => {
+    it('suy luận từ trường nhom nếu không có trinhQuanLy (gồm cả cargo và conda)', () => {
       expect(layTrinhQuanLyCachCai({ nhom: 'WINGET_CLI' })).toBe('winget');
       expect(layTrinhQuanLyCachCai({ nhom: 'npm' })).toBe('npm');
       expect(layTrinhQuanLyCachCai({ nhom: 'PIP_PACKAGE' })).toBe('pip');
       expect(layTrinhQuanLyCachCai({ nhom: 'docker-compose' })).toBe('docker');
       expect(layTrinhQuanLyCachCai({ nhom: 'scoop-main' })).toBe('scoop');
+      expect(layTrinhQuanLyCachCai({ nhom: 'CARGO' })).toBe('cargo');
+      expect(layTrinhQuanLyCachCai({ nhom: 'CONDA' })).toBe('conda');
     });
 
     it('suy luận từ lệnh thô ở bước đầu tiên nếu nhom không chứa tên trình', () => {
@@ -243,13 +247,97 @@ describe('cong-cu-may.core (P3B-31, P3B-45, P3B-45.3d)', () => {
       ).toBe('pip');
     });
 
-    it('trả về undefined nếu không có thông tin hoặc đối tượng rỗng và không trả cargo/conda/go', () => {
+    it('trả về undefined nếu không có thông tin hoặc đối tượng rỗng và vẫn không trả go/nguon/khac', () => {
       expect(layTrinhQuanLyCachCai(undefined)).toBeUndefined();
       expect(layTrinhQuanLyCachCai({})).toBeUndefined();
       expect(layTrinhQuanLyCachCai({ nhom: 'KHAC' })).toBeUndefined();
-      expect(layTrinhQuanLyCachCai({ nhom: 'CARGO' })).toBeUndefined();
-      expect(layTrinhQuanLyCachCai({ nhom: 'CONDA' })).toBeUndefined();
+      expect(layTrinhQuanLyCachCai({ nhom: 'NGUON' })).toBeUndefined();
       expect(layTrinhQuanLyCachCai({ nhom: 'GO' })).toBeUndefined();
+    });
+  });
+
+  describe('hoTroGhiNhanThuVienCli (P3B-45.3e)', () => {
+    it('trả về true cho 7 trình quản lý có mẫu lệnh gỡ hợp lệ', () => {
+      expect(hoTroGhiNhanThuVienCli('winget')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('scoop')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('npm')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('pip')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('docker')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('cargo')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('conda')).toBe(true);
+      expect(hoTroGhiNhanThuVienCli('  CARGO  ')).toBe(true);
+    });
+
+    it('trả về false cho npx, go, undefined, null và chuỗi lạ', () => {
+      expect(hoTroGhiNhanThuVienCli('npx')).toBe(false);
+      expect(hoTroGhiNhanThuVienCli('go')).toBe(false);
+      expect(hoTroGhiNhanThuVienCli(undefined)).toBe(false);
+      expect(hoTroGhiNhanThuVienCli(null)).toBe(false);
+      expect(hoTroGhiNhanThuVienCli('la')).toBe(false);
+    });
+  });
+
+  describe('xacDinhThongTinGhiNhanCli (P3B-45.3e)', () => {
+    it('bóc đúng cargo / fd-find từ ca thực tế sharkdp/fd (không fallback sang winget hay fd)', () => {
+      expect(
+        xacDinhThongTinGhiNhanCli(
+          {
+            nhom: 'CARGO',
+            buoc: [{ lenh: 'cargo install fd-find' }],
+          },
+          'fd',
+        ),
+      ).toEqual({
+        trinhQuanLy: 'cargo',
+        tenGoi: 'fd-find',
+      });
+    });
+
+    it('bóc đúng conda / mytool từ lệnh conda install kèm kênh', () => {
+      expect(
+        xacDinhThongTinGhiNhanCli(
+          {
+            nhom: 'CONDA',
+            buoc: [{ lenh: 'conda install -c conda-forge mytool' }],
+          },
+          'repo-khac',
+        ),
+      ).toEqual({
+        trinhQuanLy: 'conda',
+        tenGoi: 'mytool',
+      });
+    });
+
+    it('trả về null cho Go, Từ mã nguồn và npx (tuyệt đối không ép sang winget)', () => {
+      expect(
+        xacDinhThongTinGhiNhanCli(
+          {
+            nhom: 'GO',
+            buoc: [{ lenh: 'go install github.com/a/b@latest' }],
+          },
+          'b',
+        ),
+      ).toBeNull();
+
+      expect(
+        xacDinhThongTinGhiNhanCli(
+          {
+            nhom: 'NGUON',
+            buoc: [{ lenh: 'git clone https://github.com/a/b.git' }],
+          },
+          'b',
+        ),
+      ).toBeNull();
+
+      expect(
+        xacDinhThongTinGhiNhanCli(
+          {
+            trinhQuanLy: 'npx',
+            tenGoi: 'mattpocock/skills',
+          },
+          'skills',
+        ),
+      ).toBeNull();
     });
   });
 
