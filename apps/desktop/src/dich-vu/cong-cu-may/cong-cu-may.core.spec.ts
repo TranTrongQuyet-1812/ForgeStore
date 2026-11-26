@@ -105,6 +105,10 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
       );
     });
 
+    it('trả về null khi nhận CHUA_CHAY cho trình không phải docker', () => {
+      expect(canhBaoThieuCongCu('npm', 'CHUA_CHAY')).toBeNull();
+    });
+
     it('khi chính winget bị thiếu: KHÔNG gợi ý lệnh dùng winget', () => {
       const cb = canhBaoThieuCongCu('winget', 'CHUA_CAI');
       expect(cb).not.toBeNull();

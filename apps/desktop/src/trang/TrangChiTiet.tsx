@@ -1640,8 +1640,8 @@ export const TrangChiTiet: React.FC = () => {
                         <span>
                           Lệnh này cần tệp cấu hình{' '}
                           <code className="font-mono text-primary">docker-compose.yml</code> của dự
-                          án trong thư mục chạy lệnh. Hãy xem hướng dẫn chi tiết ở mục Giới thiệu
-                          bên dưới trước khi chạy.
+                          án trong thư mục chạy lệnh. Hãy xem hướng dẫn chi tiết ở phần Giới thiệu
+                          phía trên trước khi chạy.
                         </span>
                       </div>
                     )}

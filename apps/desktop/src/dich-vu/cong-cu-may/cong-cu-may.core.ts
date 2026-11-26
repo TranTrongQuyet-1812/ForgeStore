@@ -136,6 +136,8 @@ export function canhBaoThieuCongCu(
   }
 
   if (trangThai === 'CHUA_CHAY') {
+    // Trạng thái CHUA_CHAY chỉ áp dụng cho Docker Desktop; các trình khác bỏ qua để tránh báo sai thông điệp.
+    if (maTrinh !== 'docker') return null;
     return {
       trinhQuanLy: thongTin.trinhQuanLy,
       tenHienThi: thongTin.tenHienThi,
