@@ -1,8 +1,11 @@
-//! P3B-16.8, P3B-30, P3B-31 và P3B-45: tự kiểm tra máy đã cài gói chưa, đọc phiên bản thật của gói,
-//! và kiểm tra trạng thái công cụ quản lý gói trên máy (npm, pip, docker, winget, scoop; riêng Docker
-//! kiểm 2 bước chỉ đọc: đã cài và engine đang chạy). Chỉ đọc, không cài gì. Gọi thẳng chương trình
-//! với danh sách đối số cố định (không qua shell), không nhận tên chương trình từ bên ngoài.
+//! P3B-16.8, P3B-30, P3B-31, P3B-45 và P3B-45.3d: tự kiểm tra máy đã cài gói chưa, đọc phiên bản
+//! thật của gói, và kiểm tra trạng thái công cụ dòng lệnh trên máy (npm/npx, pip, docker, winget,
+//! scoop, cargo, conda, go; riêng Docker kiểm 2 bước chỉ đọc: đã cài, thiếu WSL và engine đang chạy).
+//! Tự nạp PATH mới nhất từ Windows Registry để nhận công cụ vừa cài mà không cần mở lại ứng dụng.
+//! Chỉ đọc, không cài gì. Gọi thẳng chương trình với danh sách đối số cố định (không qua shell),
+//! không nhận tên chương trình từ bên ngoài.
 
+use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::Command;
@@ -54,10 +57,7 @@ pub fn kiem_tra_goi_da_cai(trinh_quan_ly: &str, ten_goi: &str) -> Result<Option<
         "npm" => ("npm.cmd", vec!["ls", "-g", ten_goi, "--depth=0", "--json"]),
         _ => return Ok(None),
     };
-    let mut lenh = Command::new(chuong_trinh);
-    lenh.args(&doi_so);
-    #[cfg(windows)]
-    lenh.creation_flags(CREATE_NO_WINDOW);
+    let mut lenh = tao_lenh_voi_path_moi(chuong_trinh, &doi_so);
     // Máy chưa cài winget hay Node.js thì không chạy được: coi là không kiểm được, không phải lỗi.
     let Ok(ket_qua) = lenh.output() else {
         return Ok(None);
@@ -90,26 +90,173 @@ pub fn doc_phien_ban_goi(trinh_quan_ly: &str, ten_goi: &str) -> Result<Option<St
     }
 }
 
-/// Chạy một chương trình chỉ để đọc, không qua shell, không bật cửa sổ console. `None` nếu không chạy được
-/// (máy chưa cài chương trình đó); chương trình chạy xong dù báo lỗi (ví dụ gói chưa cài) vẫn trả đầu ra.
-fn chay_chi_doc(chuong_trinh: &str, doi_so: &[&str]) -> Option<String> {
-    let mut lenh = Command::new(chuong_trinh);
+/// Bung các mẫu biến môi trường `%TEN_BIEN%` (không phân biệt hoa thường) cho chuỗi PATH từ Registry (P3B-45.3d).
+/// Nếu biến không tồn tại thì giữ nguyên `%TEN_BIEN%`.
+pub fn bung_bien_moi_truong(chuoi: &str, tra_cuu: &dyn Fn(&str) -> Option<String>) -> String {
+    let mut ket_qua = String::with_capacity(chuoi.len());
+    let mut con_lai = chuoi;
+
+    while let Some(dau) = con_lai.find('%') {
+        ket_qua.push_str(&con_lai[..dau]);
+        let sau_dau = &con_lai[dau + 1..];
+        let Some(cuoi) = sau_dau.find('%') else {
+            ket_qua.push_str(&con_lai[dau..]);
+            return ket_qua;
+        };
+        let ten_bien = &sau_dau[..cuoi];
+        let hop_le = !ten_bien.is_empty() && !ten_bien.contains(['\\', '/']);
+        let gia_tri = if hop_le {
+            tra_cuu(ten_bien)
+                .or_else(|| tra_cuu(&ten_bien.to_ascii_uppercase()))
+                .or_else(|| tra_cuu(&ten_bien.to_ascii_lowercase()))
+        } else {
+            None
+        };
+        if let Some(gt) = gia_tri {
+            ket_qua.push_str(&gt);
+        } else {
+            ket_qua.push('%');
+            ket_qua.push_str(ten_bien);
+            ket_qua.push('%');
+        }
+        con_lai = &sau_dau[cuoi + 1..];
+    }
+
+    ket_qua.push_str(con_lai);
+    ket_qua
+}
+
+/// Ghép các chuỗi PATH (phân cách `;`), bỏ mục rỗng và lọc trùng không phân biệt hoa thường
+/// nhưng giữ đúng thứ tự ưu tiên Machine → User → PATH hiện tại của tiến trình (P3B-45.3d).
+pub fn ghep_path_khong_trung(danh_sach_path: &[String]) -> String {
+    let mut da_thay = HashSet::new();
+    let mut ket_qua = Vec::new();
+
+    for chuoi in danh_sach_path {
+        for muc in chuoi.split(';') {
+            let sach = muc.trim();
+            if sach.is_empty() {
+                continue;
+            }
+            let khoa = if sach.len() > 3 {
+                sach.trim_end_matches('\\')
+            } else {
+                sach
+            }
+            .to_ascii_lowercase();
+            if da_thay.insert(khoa) {
+                ket_qua.push(sach);
+            }
+        }
+    }
+
+    ket_qua.join(";")
+}
+
+/// Đọc PATH mới nhất từ Windows Registry (Machine + User) gộp với PATH của tiến trình (P3B-45.3d).
+/// Chỉ đọc; giúp nhận công cụ vừa cài qua winget/Scoop khi ForgeStore đang mở.
+fn doc_path_moi_nhat_tu_he_thong() -> Option<OsString> {
+    #[cfg(windows)]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+        use winreg::RegKey;
+
+        let tra_cuu = |ten: &str| std::env::var(ten).ok();
+        let mut danh_sach = Vec::new();
+
+        if let Ok(key_may) = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")
+        {
+            if let Ok(path_may) = key_may.get_value::<String, _>("Path") {
+                danh_sach.push(bung_bien_moi_truong(&path_may, &tra_cuu));
+            }
+        }
+
+        if let Ok(key_nguoi_dung) = RegKey::predef(HKEY_CURRENT_USER).open_subkey("Environment") {
+            if let Ok(path_nguoi_dung) = key_nguoi_dung.get_value::<String, _>("Path") {
+                danh_sach.push(bung_bien_moi_truong(&path_nguoi_dung, &tra_cuu));
+            }
+        }
+
+        if let Ok(path_tien_trinh) = std::env::var("PATH") {
+            danh_sach.push(path_tien_trinh);
+        }
+
+        let ghep = ghep_path_khong_trung(&danh_sach);
+        if ghep.is_empty() {
+            std::env::var_os("PATH")
+        } else {
+            Some(OsString::from(ghep))
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("PATH")
+    }
+}
+
+/// Tìm tệp thực thi trong chuỗi PATH mới nhất (P3B-45.3d).
+/// Nếu `ten_chuong_trinh` đã là đường dẫn có dấu tách thư mục thì giữ nguyên.
+pub fn tim_chuong_trinh_trong_path(ten_chuong_trinh: &str, chuoi_path: &OsStr) -> Option<PathBuf> {
+    if ten_chuong_trinh.is_empty() {
+        return None;
+    }
+    if ten_chuong_trinh.contains('\\') || ten_chuong_trinh.contains('/') {
+        return Some(PathBuf::from(ten_chuong_trinh));
+    }
+    for thu_muc in std::env::split_paths(chuoi_path) {
+        let ung_vien = thu_muc.join(ten_chuong_trinh);
+        if ung_vien.is_file() {
+            return Some(ung_vien);
+        }
+    }
+    None
+}
+
+/// Dựng `Command` chỉ đọc với đường dẫn giải từ PATH mới nhất và gắn `PATH` mới cho tiến trình con (P3B-45.3d).
+fn tao_lenh_voi_path_moi(chuong_trinh: impl AsRef<OsStr>, doi_so: &[&str]) -> Command {
+    let chuong_trinh_ref = chuong_trinh.as_ref();
+    let path_moi = doc_path_moi_nhat_tu_he_thong();
+    let duong_dan_chay = path_moi
+        .as_deref()
+        .and_then(|p| chuong_trinh_ref.to_str().and_then(|ten| tim_chuong_trinh_trong_path(ten, p)));
+
+    let mut lenh = match duong_dan_chay {
+        Some(ref duong_dan) => Command::new(duong_dan),
+        None => Command::new(chuong_trinh_ref),
+    };
     lenh.args(doi_so);
     #[cfg(windows)]
     lenh.creation_flags(CREATE_NO_WINDOW);
+    // Truyền PATH mới để các script trung gian (scoop.cmd, npm.cmd, conda.bat) tìm thấy công cụ con.
+    if let Some(ref p) = path_moi {
+        lenh.env("PATH", p);
+    }
+    lenh
+}
+
+/// Chạy một chương trình chỉ để đọc, không qua shell, không bật cửa sổ console. `None` nếu không chạy được
+/// (máy chưa cài chương trình đó); chương trình chạy xong dù báo lỗi (ví dụ gói chưa cài) vẫn trả đầu ra.
+fn chay_chi_doc(chuong_trinh: &str, doi_so: &[&str]) -> Option<String> {
+    let mut lenh = tao_lenh_voi_path_moi(chuong_trinh, doi_so);
     let ket_qua = lenh.output().ok()?;
     Some(String::from_utf8_lossy(&ket_qua.stdout).into_owned())
 }
 
-/// Bảng chương trình và đối số kiểm tra cố định cho từng trình quản lý gói (P3B-31).
+/// Bảng chương trình và đối số kiểm tra cố định cho từng trình quản lý gói (P3B-31, P3B-45.3d).
 /// Chỉ chấp nhận danh sách cố định, không nhận tên chương trình từ bên ngoài để chống chèn lệnh.
 pub fn chuong_trinh_kiem_cong_cu(trinh_quan_ly: &str) -> Option<(&'static str, Vec<&'static str>)> {
     match trinh_quan_ly {
-        "npm" => Some(("npm.cmd", vec!["--version"])),
+        "npm" | "npx" => Some(("npm.cmd", vec!["--version"])),
         "pip" => Some(("pip.exe", vec!["--version"])),
         "docker" => Some(("docker.exe", vec!["--version"])),
         "winget" => Some(("winget.exe", vec!["--version"])),
         "scoop" => Some(("scoop.cmd", vec!["--version"])),
+        "cargo" => Some(("cargo.exe", vec!["--version"])),
+        "conda" => Some(("conda.exe", vec!["--version"])),
+        // `go --version` thoát mã lỗi 2; lệnh đúng của Go là `go version`.
+        "go" => Some(("go.exe", vec!["version"])),
         _ => None,
     }
 }
@@ -130,7 +277,7 @@ pub fn duong_dan_docker_mac_dinh(program_files: Option<&OsStr>) -> Option<PathBu
     )
 }
 
-/// Chạy kiểm tra chương trình với thời gian chờ tối đa (P3B-31, P3B-45).
+/// Chạy kiểm tra chương trình với thời gian chờ tối đa (P3B-31, P3B-45, P3B-45.3d).
 /// Trả về Some(true) nếu chạy được và thoát mã 0, Some(false) nếu lỗi spawn hoặc mã thoát khác 0,
 /// None nếu quá hạn giờ (tiến trình bị kill để không treo giao diện).
 fn chay_kiem_tra_co_han_gio(
@@ -138,10 +285,7 @@ fn chay_kiem_tra_co_han_gio(
     doi_so: &[&str],
     thoi_gian_cho: std::time::Duration,
 ) -> Option<bool> {
-    let mut lenh = Command::new(chuong_trinh);
-    lenh.args(doi_so);
-    #[cfg(windows)]
-    lenh.creation_flags(CREATE_NO_WINDOW);
+    let mut lenh = tao_lenh_voi_path_moi(chuong_trinh, doi_so);
     lenh.stdin(std::process::Stdio::null());
     lenh.stdout(std::process::Stdio::null());
     lenh.stderr(std::process::Stdio::null());
@@ -242,6 +386,11 @@ pub fn kiem_tra_trang_thai_cong_cu(trinh_quan_ly: &str) -> Option<TrangThaiCongC
     // Trường hợp pip: nếu pip.exe không chạy được (Some(false)), thử tiếp python.exe -m pip --version
     if trinh_quan_ly == "pip" && ket_qua == Some(false) {
         ket_qua = chay_kiem_tra_co_han_gio("python.exe", &["-m", "pip", "--version"], thoi_gian_cho);
+    }
+
+    // Miniconda trên Windows thường đưa `condabin\conda.bat` vào PATH thay vì `conda.exe`.
+    if trinh_quan_ly == "conda" && ket_qua == Some(false) {
+        ket_qua = chay_kiem_tra_co_han_gio("conda.bat", &["--version"], thoi_gian_cho);
     }
 
     ket_qua.map(|co_san| {
@@ -368,9 +517,79 @@ mod tests {
     }
 
     #[test]
+    fn test_bung_bien_moi_truong() {
+        let tra_cuu = |ten: &str| match ten {
+            "USERPROFILE" => Some("C:\\Users\\demo".to_string()),
+            "SystemRoot" => Some("C:\\Windows".to_string()),
+            _ => None,
+        };
+        assert_eq!(
+            bung_bien_moi_truong("%USERPROFILE%\\scoop\\shims", &tra_cuu),
+            "C:\\Users\\demo\\scoop\\shims"
+        );
+        assert_eq!(
+            bung_bien_moi_truong("%userprofile%\\scoop\\shims", &tra_cuu),
+            "C:\\Users\\demo\\scoop\\shims"
+        );
+        assert_eq!(
+            bung_bien_moi_truong("%KHONG_CO%\\bin", &tra_cuu),
+            "%KHONG_CO%\\bin"
+        );
+        assert_eq!(
+            bung_bien_moi_truong("%SystemRoot%\\System32;%USERPROFILE%\\.cargo\\bin", &tra_cuu),
+            "C:\\Windows\\System32;C:\\Users\\demo\\.cargo\\bin"
+        );
+    }
+
+    #[test]
+    fn test_ghep_path_khong_trung() {
+        let danh_sach = vec![
+            "C:\\Windows\\System32;;C:\\Tools\\bin\\".to_string(),
+            "c:\\tools\\bin;C:\\Users\\demo\\scoop\\shims; ".to_string(),
+            "C:\\Windows\\System32;C:\\Program Files\\Go\\bin".to_string(),
+        ];
+        assert_eq!(
+            ghep_path_khong_trung(&danh_sach),
+            "C:\\Windows\\System32;C:\\Tools\\bin\\;C:\\Users\\demo\\scoop\\shims;C:\\Program Files\\Go\\bin"
+        );
+    }
+
+    #[test]
+    fn test_tim_chuong_trinh_trong_path() {
+        let thu_muc_tam = std::env::temp_dir().join(format!(
+            "forgestore_path_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&thu_muc_tam);
+        std::fs::create_dir_all(&thu_muc_tam).unwrap();
+        let tep_gia = thu_muc_tam.join("cong_cu_thu.cmd");
+        std::fs::write(&tep_gia, "@echo off\r\n").unwrap();
+
+        let path_thu = OsString::from(format!("Z:\\KhongTonTai;{}", thu_muc_tam.display()));
+        assert_eq!(
+            tim_chuong_trinh_trong_path("cong_cu_thu.cmd", &path_thu),
+            Some(tep_gia)
+        );
+        assert_eq!(
+            tim_chuong_trinh_trong_path("khong_co_tep.exe", &path_thu),
+            None
+        );
+        assert_eq!(
+            tim_chuong_trinh_trong_path("C:\\Program Files\\Docker\\docker.exe", &path_thu),
+            Some(PathBuf::from("C:\\Program Files\\Docker\\docker.exe"))
+        );
+
+        let _ = std::fs::remove_dir_all(&thu_muc_tam);
+    }
+
+    #[test]
     fn test_chuong_trinh_kiem_cong_cu_hop_le() {
         assert_eq!(
             chuong_trinh_kiem_cong_cu("npm"),
+            Some(("npm.cmd", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("npx"),
             Some(("npm.cmd", vec!["--version"]))
         );
         assert_eq!(
@@ -389,12 +608,26 @@ mod tests {
             chuong_trinh_kiem_cong_cu("scoop"),
             Some(("scoop.cmd", vec!["--version"]))
         );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("cargo"),
+            Some(("cargo.exe", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("conda"),
+            Some(("conda.exe", vec!["--version"]))
+        );
+        assert_eq!(
+            chuong_trinh_kiem_cong_cu("go"),
+            Some(("go.exe", vec!["version"]))
+        );
     }
 
     #[test]
     fn test_chuong_trinh_kiem_cong_cu_khong_ho_tro_va_chuoi_la() {
-        assert_eq!(chuong_trinh_kiem_cong_cu("cargo"), None);
-        assert_eq!(chuong_trinh_kiem_cong_cu("go"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("ruby"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("brew"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("cargo & dir"), None);
+        assert_eq!(chuong_trinh_kiem_cong_cu("go; calc"), None);
         assert_eq!(chuong_trinh_kiem_cong_cu("npm; calc"), None);
         assert_eq!(chuong_trinh_kiem_cong_cu("pip & del C:\\"), None);
         assert_eq!(chuong_trinh_kiem_cong_cu(""), None);
@@ -441,8 +674,10 @@ mod tests {
 
     #[test]
     fn test_kiem_tra_trang_thai_cong_cu_khong_ho_tro_tra_none() {
-        assert_eq!(kiem_tra_trang_thai_cong_cu("cargo"), None);
-        assert_eq!(kiem_tra_trang_thai_cong_cu("go"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("ruby"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("brew"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("cargo & dir"), None);
+        assert_eq!(kiem_tra_trang_thai_cong_cu("go; calc"), None);
         assert_eq!(kiem_tra_trang_thai_cong_cu("docker; calc"), None);
         assert_eq!(kiem_tra_trang_thai_cong_cu("npm; calc"), None);
         assert_eq!(kiem_tra_trang_thai_cong_cu(""), None);

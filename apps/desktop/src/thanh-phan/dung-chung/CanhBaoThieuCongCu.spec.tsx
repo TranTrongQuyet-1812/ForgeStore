@@ -32,8 +32,8 @@ vi.mock('../../dich-vu/xac-thuc/luu-tru-token', () => ({
 
 import { CanhBaoThieuCongCu } from './CanhBaoThieuCongCu';
 
-describe('CanhBaoThieuCongCu (P3B-31, P3B-45)', () => {
-  it('hiện dòng báo kèm liên kết tải và lệnh winget khi máy thiếu công cụ (CHUA_CAI)', () => {
+describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
+  it('hiện dòng báo kèm liên kết tải, lệnh winget và nút Kiểm tra lại khi máy thiếu công cụ (CHUA_CAI)', () => {
     truyVan.ketQua = 'CHUA_CAI';
     truyVan.isFetching = false;
     const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="npm" />);
@@ -41,8 +41,61 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45)', () => {
     expect(html).toContain('Tải Node.js');
     expect(html).toContain('https://nodejs.org/en/download');
     expect(html).toContain('winget install OpenJS.NodeJS.LTS');
-    expect(html).not.toContain('Kiểm tra lại');
+    expect(html).toContain('Kiểm tra lại');
     expect(truyVan.enabled).toBe(true);
+  });
+
+  it('hiển thị Đang kiểm tra... và khóa nút khi isFetching ở trạng thái CHUA_CAI', () => {
+    truyVan.ketQua = 'CHUA_CAI';
+    truyVan.isFetching = true;
+    const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="npm" />);
+    expect(html).toContain('Đang kiểm tra...');
+    expect(html).toContain('disabled=""');
+    truyVan.isFetching = false;
+  });
+
+  it('hiện cảnh báo Scoop với nhãn PowerShell, lệnh get.scoop.sh và nút Kiểm tra lại', () => {
+    truyVan.ketQua = 'CHUA_CAI';
+    truyVan.isFetching = false;
+    const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="scoop" />);
+    expect(html).toContain('Tải Scoop');
+    expect(html).toContain('Hoặc cài nhanh (PowerShell):');
+    expect(html).toContain('get.scoop.sh');
+    expect(html).toContain('Kiểm tra lại');
+    expect(truyVan.enabled).toBe(true);
+  });
+
+  it('với npx: bật truy vấn và hiển thị cảnh báo Node.js', () => {
+    truyVan.ketQua = 'CHUA_CAI';
+    truyVan.isFetching = false;
+    const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="npx" />);
+    expect(truyVan.enabled).toBe(true);
+    expect(html).toContain('Tải Node.js');
+    expect(html).toContain('winget install OpenJS.NodeJS.LTS');
+    expect(html).toContain('Kiểm tra lại');
+  });
+
+  it('hiện đúng cảnh báo cho cargo, conda và go khi thiếu (CHUA_CAI)', () => {
+    truyVan.ketQua = 'CHUA_CAI';
+    truyVan.isFetching = false;
+
+    const cargoHtml = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="cargo" />);
+    expect(truyVan.enabled).toBe(true);
+    expect(cargoHtml).toContain('https://rustup.rs/');
+    expect(cargoHtml).toContain('winget install Rustlang.Rustup');
+    expect(cargoHtml).toContain('Kiểm tra lại');
+
+    const condaHtml = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="conda" />);
+    expect(truyVan.enabled).toBe(true);
+    expect(condaHtml).toContain('https://docs.conda.io/en/latest/miniconda.html');
+    expect(condaHtml).toContain('winget install Anaconda.Miniconda3');
+    expect(condaHtml).toContain('Kiểm tra lại');
+
+    const goHtml = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="go" />);
+    expect(truyVan.enabled).toBe(true);
+    expect(goHtml).toContain('https://go.dev/dl/');
+    expect(goHtml).toContain('winget install GoLang.Go');
+    expect(goHtml).toContain('Kiểm tra lại');
   });
 
   it('hiện cảnh báo CHUA_CAI cho Docker với nhắc mở Docker Desktop + WSL và link tải', () => {
@@ -91,7 +144,7 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45)', () => {
 
   it('không truy vấn với trình quản lý không hỗ trợ hoặc rỗng', () => {
     truyVan.ketQua = undefined;
-    renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="cargo" />);
+    renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="ruby" />);
     expect(truyVan.enabled).toBe(false);
 
     renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="" />);

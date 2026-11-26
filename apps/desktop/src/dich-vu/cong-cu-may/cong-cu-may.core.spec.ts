@@ -2,15 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   BANG_CONG_CU,
   canhBaoThieuCongCu,
+  chuanHoaMaCongCuKiemTra,
   coLenhDockerCompose,
+  layCongCuKiemTraCachCai,
   layTrinhQuanLyCachCai,
 } from './cong-cu-may.core';
 
-describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
+describe('cong-cu-may.core (P3B-31, P3B-45, P3B-45.3d)', () => {
   describe('Bảng công cụ cố định (BANG_CONG_CU)', () => {
-    it('định nghĩa đủ 5 công cụ hỗ trợ: npm, pip, docker, winget, scoop', () => {
+    it('định nghĩa đủ 8 công cụ hỗ trợ: npm, pip, docker, winget, scoop, cargo, conda, go', () => {
       const danhSach = Object.keys(BANG_CONG_CU);
-      expect(danhSach).toEqual(['npm', 'pip', 'docker', 'winget', 'scoop']);
+      expect(danhSach).toEqual(['npm', 'pip', 'docker', 'winget', 'scoop', 'cargo', 'conda', 'go']);
     });
 
     it('tất cả liên kết chính thức phải bắt đầu bằng https://', () => {
@@ -22,15 +24,34 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
       }
     });
 
-    it('winget và scoop không có lệnh gợi ý cài đặt', () => {
+    it('winget không có lệnh gợi ý cài đặt, scoop có lệnh PowerShell chính thức và nhãn riêng', () => {
       expect(BANG_CONG_CU.winget.lenhGoiY).toBeUndefined();
-      expect(BANG_CONG_CU.scoop.lenhGoiY).toBeUndefined();
+      expect(BANG_CONG_CU.scoop.lenhGoiY).toBe(
+        'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression',
+      );
+      expect(BANG_CONG_CU.scoop.nhanLenhGoiY).toBe('Hoặc cài nhanh (PowerShell):');
     });
 
-    it('npm, pip, docker có lệnh gợi ý cài đặt qua winget', () => {
+    it('npm, pip, docker, cargo, conda, go có đúng lệnh gợi ý cài đặt qua winget', () => {
       expect(BANG_CONG_CU.npm.lenhGoiY).toBe('winget install OpenJS.NodeJS.LTS');
       expect(BANG_CONG_CU.pip.lenhGoiY).toBe('winget install Python.Python.3.12');
       expect(BANG_CONG_CU.docker.lenhGoiY).toBe('winget install Docker.DockerDesktop');
+      expect(BANG_CONG_CU.cargo.lenhGoiY).toBe('winget install Rustlang.Rustup');
+      expect(BANG_CONG_CU.conda.lenhGoiY).toBe('winget install Anaconda.Miniconda3');
+      expect(BANG_CONG_CU.go.lenhGoiY).toBe('winget install GoLang.Go');
+    });
+  });
+
+  describe('chuanHoaMaCongCuKiemTra', () => {
+    it('gộp npx sang npm và chỉ giữ các mã nằm trong BANG_CONG_CU', () => {
+      expect(chuanHoaMaCongCuKiemTra('npx')).toBe('npm');
+      expect(chuanHoaMaCongCuKiemTra('  NPX  ')).toBe('npm');
+      expect(chuanHoaMaCongCuKiemTra('CARGO')).toBe('cargo');
+      expect(chuanHoaMaCongCuKiemTra('conda')).toBe('conda');
+      expect(chuanHoaMaCongCuKiemTra('go')).toBe('go');
+      expect(chuanHoaMaCongCuKiemTra('ruby')).toBeUndefined();
+      expect(chuanHoaMaCongCuKiemTra('')).toBeUndefined();
+      expect(chuanHoaMaCongCuKiemTra(null)).toBeUndefined();
     });
   });
 
@@ -52,9 +73,17 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
     it('trả về null khi trinhQuanLy trống hoặc không có trong bảng', () => {
       expect(canhBaoThieuCongCu('', 'CHUA_CAI')).toBeNull();
       expect(canhBaoThieuCongCu(null, 'CHUA_CAI')).toBeNull();
-      expect(canhBaoThieuCongCu('cargo', 'CHUA_CAI')).toBeNull();
-      expect(canhBaoThieuCongCu('go', 'CHUA_CHAY')).toBeNull();
+      expect(canhBaoThieuCongCu('ruby', 'CHUA_CAI')).toBeNull();
+      expect(canhBaoThieuCongCu('brew', 'CHUA_CHAY')).toBeNull();
       expect(canhBaoThieuCongCu('la_hoan_toan', false)).toBeNull();
+    });
+
+    it('trả về cảnh báo Node.js khi npx thiếu (CHUA_CAI)', () => {
+      const cb = canhBaoThieuCongCu('npx', 'CHUA_CAI');
+      expect(cb).not.toBeNull();
+      expect(cb?.trinhQuanLy).toBe('npm');
+      expect(cb?.tenHienThi).toBe('Node.js');
+      expect(cb?.lenhGoiY).toBe('winget install OpenJS.NodeJS.LTS');
     });
 
     it('trả về cảnh báo chính xác cho npm khi thiếu (CHUA_CAI và false)', () => {
@@ -133,13 +162,31 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
       expect(cb?.lenhGoiY).toBeUndefined();
     });
 
-    it('khi scoop bị thiếu: không có lệnh gợi ý', () => {
+    it('khi scoop bị thiếu: có lệnh PowerShell chính thức và nhãn riêng', () => {
       const cb = canhBaoThieuCongCu('scoop', 'CHUA_CAI');
       expect(cb).not.toBeNull();
       expect(cb?.trangThai).toBe('CHUA_CAI');
       expect(cb?.tenHienThi).toBe('Scoop');
       expect(cb?.lienKetChinhThuc).toBe('https://scoop.sh');
-      expect(cb?.lenhGoiY).toBeUndefined();
+      expect(cb?.lenhGoiY).toContain('get.scoop.sh');
+      expect(cb?.nhanLenhGoiY).toBe('Hoặc cài nhanh (PowerShell):');
+    });
+
+    it('trả về cảnh báo chính xác cho cargo, conda, go khi thiếu (CHUA_CAI)', () => {
+      const cargo = canhBaoThieuCongCu('cargo', 'CHUA_CAI');
+      expect(cargo?.tenHienThi).toBe('Rust (Cargo)');
+      expect(cargo?.lienKetChinhThuc).toBe('https://rustup.rs/');
+      expect(cargo?.lenhGoiY).toBe('winget install Rustlang.Rustup');
+
+      const conda = canhBaoThieuCongCu('conda', 'CHUA_CAI');
+      expect(conda?.tenHienThi).toBe('Miniconda (Conda)');
+      expect(conda?.lienKetChinhThuc).toBe('https://docs.conda.io/en/latest/miniconda.html');
+      expect(conda?.lenhGoiY).toBe('winget install Anaconda.Miniconda3');
+
+      const go = canhBaoThieuCongCu('go', 'CHUA_CAI');
+      expect(go?.tenHienThi).toBe('Go');
+      expect(go?.lienKetChinhThuc).toBe('https://go.dev/dl/');
+      expect(go?.lenhGoiY).toBe('winget install GoLang.Go');
     });
 
     it('chấp nhận mã trình viết hoa hoặc có khoảng trắng thừa', () => {
@@ -196,10 +243,31 @@ describe('cong-cu-may.core (P3B-31, P3B-45)', () => {
       ).toBe('pip');
     });
 
-    it('trả về undefined nếu không có thông tin hoặc đối tượng rỗng', () => {
+    it('trả về undefined nếu không có thông tin hoặc đối tượng rỗng và không trả cargo/conda/go', () => {
       expect(layTrinhQuanLyCachCai(undefined)).toBeUndefined();
       expect(layTrinhQuanLyCachCai({})).toBeUndefined();
       expect(layTrinhQuanLyCachCai({ nhom: 'KHAC' })).toBeUndefined();
+      expect(layTrinhQuanLyCachCai({ nhom: 'CARGO' })).toBeUndefined();
+      expect(layTrinhQuanLyCachCai({ nhom: 'CONDA' })).toBeUndefined();
+      expect(layTrinhQuanLyCachCai({ nhom: 'GO' })).toBeUndefined();
+    });
+  });
+
+  describe('layCongCuKiemTraCachCai', () => {
+    it('ánh xạ npx sang npm và nhận diện cargo, conda, go từ trường nhom', () => {
+      expect(layCongCuKiemTraCachCai({ trinhQuanLy: 'npx' })).toBe('npm');
+      expect(layCongCuKiemTraCachCai({ nhom: 'CARGO' })).toBe('cargo');
+      expect(layCongCuKiemTraCachCai({ nhom: 'CONDA' })).toBe('conda');
+      expect(layCongCuKiemTraCachCai({ nhom: 'GO' })).toBe('go');
+      expect(layCongCuKiemTraCachCai({ nhom: 'go-install' })).toBe('go');
+      expect(layCongCuKiemTraCachCai({ nhom: 'go_cli' })).toBe('go');
+    });
+
+    it('không bắt nhầm chuỗi chứa go như google hoặc nhóm không hỗ trợ', () => {
+      expect(layCongCuKiemTraCachCai({ nhom: 'google' })).toBeUndefined();
+      expect(layCongCuKiemTraCachCai({ nhom: 'NGUON' })).toBeUndefined();
+      expect(layCongCuKiemTraCachCai({ nhom: 'KHAC' })).toBeUndefined();
+      expect(layCongCuKiemTraCachCai(undefined)).toBeUndefined();
     });
   });
 });

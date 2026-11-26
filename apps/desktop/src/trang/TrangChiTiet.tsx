@@ -48,6 +48,7 @@ import { layNhanHeDieuHanh, layNhanNhomCachCai, layTenCachCai } from './hien-thi
 import { laHoanNgan, layThongBaoBanDichHoan } from './thong-bao-dich-hoan.core';
 import {
   coLenhDockerCompose,
+  layCongCuKiemTraCachCai,
   layTrinhQuanLyCachCai,
 } from '../dich-vu/cong-cu-may/cong-cu-may.core';
 import {
@@ -1630,8 +1631,8 @@ export const TrangChiTiet: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Cảnh báo thiếu công cụ quản lý gói trước khi chạy lệnh (P3B-31, P3B-45) */}
-                    <CanhBaoThieuCongCu trinhQuanLy={layTrinhQuanLyCachCai(currentMethod)} />
+                    {/* Cảnh báo thiếu công cụ quản lý gói trước khi chạy lệnh (P3B-31, P3B-45, P3B-45.3d) */}
+                    <CanhBaoThieuCongCu trinhQuanLy={layCongCuKiemTraCachCai(currentMethod)} />
 
                     {/* Ghi chú nhẹ khi lệnh cần tệp cấu hình docker-compose.yml của dự án (P3B-45) */}
                     {coLenhDockerCompose(currentMethod.buoc) && (

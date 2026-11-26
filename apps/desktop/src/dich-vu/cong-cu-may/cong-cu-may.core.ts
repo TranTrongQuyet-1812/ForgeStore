@@ -1,6 +1,6 @@
 /**
- * Logic thuần kiểm tra và cảnh báo công cụ dòng lệnh trên máy (P3B-31, P3B-45).
- * Cố định thông tin cho npm, pip, docker, winget, scoop.
+ * Logic thuần kiểm tra và cảnh báo công cụ dòng lệnh trên máy (P3B-31, P3B-45, P3B-45.3d).
+ * Cố định thông tin cho npm, pip, docker, winget, scoop, cargo, conda, go (và npx ánh xạ sang npm).
  * Không tự cài, không sửa PATH, chỉ đưa ra cảnh báo nhẹ kèm liên kết chính thức hoặc nhắc mở phần mềm.
  */
 
@@ -10,7 +10,7 @@ import { trichTenGoiTuLenhTho } from '@forgestore/types';
 export type TrangThaiCongCuMay = 'SAN_SANG' | 'CHUA_CAI' | 'CHUA_CHAY' | 'THIEU_WSL';
 
 /**
- * Thông tin định nghĩa công cụ quản lý gói trên máy trạm (P3B-31).
+ * Thông tin định nghĩa công cụ quản lý gói trên máy trạm (P3B-31, P3B-45.3d).
  */
 export interface ThongTinCongCu {
   /** Mã trình quản lý gói */
@@ -19,8 +19,10 @@ export interface ThongTinCongCu {
   readonly tenHienThi: string;
   /** Liên kết tải trang chính thức (luôn bắt đầu bằng https://) */
   readonly lienKetChinhThuc: string;
-  /** Lệnh gợi ý cài đặt qua winget (nếu có) */
+  /** Lệnh gợi ý cài đặt nhanh (winget hoặc PowerShell chính thức, nếu có) */
   readonly lenhGoiY?: string;
+  /** Nhãn đứng trước lệnh gợi ý (mặc định: "Hoặc cài nhanh:") */
+  readonly nhanLenhGoiY?: string;
 }
 
 /**
@@ -33,10 +35,11 @@ export interface ThongTinCanhBaoThieuCongCu {
   readonly lienKetChinhThuc?: string;
   readonly thongDiep: string;
   readonly lenhGoiY?: string;
+  readonly nhanLenhGoiY?: string;
 }
 
 /**
- * Bảng thông tin cố định các công cụ quản lý gói được hỗ trợ (P3B-31).
+ * Bảng thông tin cố định các công cụ dòng lệnh được hỗ trợ kiểm tra (P3B-31, P3B-45.3d).
  */
 export const BANG_CONG_CU: Record<string, ThongTinCongCu> = {
   npm: {
@@ -66,8 +69,40 @@ export const BANG_CONG_CU: Record<string, ThongTinCongCu> = {
     trinhQuanLy: 'scoop',
     tenHienThi: 'Scoop',
     lienKetChinhThuc: 'https://scoop.sh',
+    lenhGoiY:
+      'Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser; Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression',
+    nhanLenhGoiY: 'Hoặc cài nhanh (PowerShell):',
+  },
+  cargo: {
+    trinhQuanLy: 'cargo',
+    tenHienThi: 'Rust (Cargo)',
+    lienKetChinhThuc: 'https://rustup.rs/',
+    lenhGoiY: 'winget install Rustlang.Rustup',
+  },
+  conda: {
+    trinhQuanLy: 'conda',
+    tenHienThi: 'Miniconda (Conda)',
+    lienKetChinhThuc: 'https://docs.conda.io/en/latest/miniconda.html',
+    lenhGoiY: 'winget install Anaconda.Miniconda3',
+  },
+  go: {
+    trinhQuanLy: 'go',
+    tenHienThi: 'Go',
+    lienKetChinhThuc: 'https://go.dev/dl/',
+    lenhGoiY: 'winget install GoLang.Go',
   },
 };
+
+/**
+ * Chuẩn hóa mã công cụ kiểm tra máy: gộp `npx` về `npm` (cùng thuộc Node.js) và chỉ giữ mã hợp lệ (P3B-45.3d).
+ */
+export function chuanHoaMaCongCuKiemTra(trinhQuanLy?: string | null): string | undefined {
+  if (!trinhQuanLy) return undefined;
+  const ma = trinhQuanLy.trim().toLowerCase();
+  if (!ma) return undefined;
+  const maChuan = ma === 'npx' ? 'npm' : ma;
+  return BANG_CONG_CU[maChuan] ? maChuan : undefined;
+}
 
 /**
  * Trích xuất mã trình quản lý gói từ phương thức cài đặt CLI (P3B-31).
@@ -104,6 +139,29 @@ export function layTrinhQuanLyCachCai(
 }
 
 /**
+ * Xác định công cụ cần kiểm tra máy cho khung cảnh báo (P3B-45.3d).
+ * Tách riêng khỏi `layTrinhQuanLyCachCai` để mở rộng cargo/conda/go mà không làm lệch enum gửi backend.
+ */
+export function layCongCuKiemTraCachCai(
+  phuongThuc?: {
+    nhom?: string;
+    trinhQuanLy?: string;
+    buoc?: Array<{ lenh?: string }>;
+  } | null,
+): string | undefined {
+  const tuTrinhCoSan = chuanHoaMaCongCuKiemTra(layTrinhQuanLyCachCai(phuongThuc));
+  if (tuTrinhCoSan) return tuTrinhCoSan;
+
+  const nhomLow = (phuongThuc?.nhom || '').trim().toLowerCase();
+  if (nhomLow.includes('cargo')) return 'cargo';
+  if (nhomLow.includes('conda')) return 'conda';
+  // So khớp ranh giới cho Go để không bắt nhầm chuỗi chứa "go" như "google".
+  if (nhomLow === 'go' || nhomLow.startsWith('go-') || nhomLow.startsWith('go_')) return 'go';
+
+  return undefined;
+}
+
+/**
  * Chuẩn hóa kết quả kiểm tra (hỗ trợ cả kiểu chuỗi mới P3B-45 lẫn boolean cũ P3B-31).
  */
 function chuanHoaTrangThaiCongCu(
@@ -133,11 +191,11 @@ export function canhBaoThieuCongCu(
     return null;
   }
 
-  const maTrinh = trinhQuanLy.trim().toLowerCase();
-  const thongTin = BANG_CONG_CU[maTrinh];
-  if (!thongTin) {
+  const maTrinh = chuanHoaMaCongCuKiemTra(trinhQuanLy);
+  if (!maTrinh) {
     return null;
   }
+  const thongTin = BANG_CONG_CU[maTrinh];
 
   if (trangThai === 'THIEU_WSL') {
     // Trạng thái THIEU_WSL chỉ áp dụng cho Docker Desktop; trình khác bỏ qua để tránh báo sai.
@@ -181,6 +239,7 @@ export function canhBaoThieuCongCu(
     lienKetChinhThuc: thongTin.lienKetChinhThuc,
     thongDiep,
     lenhGoiY,
+    nhanLenhGoiY: thongTin.nhanLenhGoiY,
   };
 }
 

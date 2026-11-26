@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ExternalLink, Copy, Check, RefreshCw } from 'lucide-react';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
 import {
-  BANG_CONG_CU,
   canhBaoThieuCongCu,
+  chuanHoaMaCongCuKiemTra,
   type TrangThaiCongCuMay,
 } from '../../dich-vu/cong-cu-may/cong-cu-may.core';
 
@@ -13,12 +13,12 @@ interface CanhBaoThieuCongCuProps {
 }
 
 /**
- * Dòng cảnh báo nhẹ khi máy chưa có công cụ dòng lệnh hoặc Docker Desktop chưa chạy (P3B-31, P3B-45).
+ * Dòng cảnh báo nhẹ khi máy chưa có công cụ dòng lệnh hoặc Docker Desktop chưa chạy (P3B-31, P3B-45, P3B-45.3d).
  * Không chặn nút sao chép hay mở Terminal. Kiểm lại khi cửa sổ lấy lại tiêu điểm.
  */
 export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQuanLy }) => {
-  const maTrinh = trinhQuanLy?.trim().toLowerCase();
-  const coTheKiem = Boolean(maTrinh && BANG_CONG_CU[maTrinh] && isTauri());
+  const maTrinh = chuanHoaMaCongCuKiemTra(trinhQuanLy);
+  const coTheKiem = Boolean(maTrinh && isTauri());
 
   const [daChepGoiY, setDaChepGoiY] = useState(false);
   const boDemChepRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +61,18 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
     }
   };
 
+  const nutKiemTraLai = (
+    <button
+      type="button"
+      onClick={() => void refetch()}
+      disabled={isFetching}
+      className="btn-tactile px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated border border-warning/40 text-warning font-semibold text-xs font-mono inline-flex items-center gap-1.5 transition-all disabled:opacity-60 disabled:cursor-wait"
+    >
+      <RefreshCw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
+      <span>{isFetching ? 'Đang kiểm tra...' : 'Kiểm tra lại'}</span>
+    </button>
+  );
+
   return (
     <div
       role="status"
@@ -88,14 +100,14 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
           )}
 
           {canhBao.lenhGoiY && (
-            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
-              <span className="text-muted">Hoặc cài nhanh:</span>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary">
-                <code>{canhBao.lenhGoiY}</code>
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono max-w-full">
+              <span className="text-muted">{canhBao.nhanLenhGoiY ?? 'Hoặc cài nhanh:'}</span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary max-w-full">
+                <code className="break-all">{canhBao.lenhGoiY}</code>
                 <button
                   type="button"
                   onClick={() => xuLySaoChepLenhGoiY(canhBao.lenhGoiY!)}
-                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center"
+                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center shrink-0"
                   title="Sao chép lệnh gợi ý"
                 >
                   {daChepGoiY ? (
@@ -107,18 +119,20 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
               </div>
             </div>
           )}
+
+          {nutKiemTraLai}
         </div>
       ) : canhBao.trangThai === 'THIEU_WSL' ? (
         <div className="flex items-center gap-3 flex-wrap pl-6">
           {canhBao.lenhGoiY && (
-            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono max-w-full">
               <span className="text-muted">Chạy bằng PowerShell (Quản trị viên):</span>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary">
-                <code>{canhBao.lenhGoiY}</code>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface border border-border text-primary max-w-full">
+                <code className="break-all">{canhBao.lenhGoiY}</code>
                 <button
                   type="button"
                   onClick={() => xuLySaoChepLenhGoiY(canhBao.lenhGoiY!)}
-                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center"
+                  className="p-0.5 text-muted hover:text-primary transition-colors inline-flex items-center shrink-0"
                   title="Sao chép lệnh cài WSL"
                 >
                   {daChepGoiY ? (
@@ -131,28 +145,10 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="btn-tactile px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated border border-warning/40 text-warning font-semibold text-xs font-mono inline-flex items-center gap-1.5 transition-all disabled:opacity-60 disabled:cursor-wait"
-          >
-            <RefreshCw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
-            <span>{isFetching ? 'Đang kiểm tra...' : 'Kiểm tra lại'}</span>
-          </button>
+          {nutKiemTraLai}
         </div>
       ) : (
-        <div className="flex items-center gap-3 flex-wrap pl-6">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="btn-tactile px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated border border-warning/40 text-warning font-semibold text-xs font-mono inline-flex items-center gap-1.5 transition-all disabled:opacity-60 disabled:cursor-wait"
-          >
-            <RefreshCw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />
-            <span>{isFetching ? 'Đang kiểm tra...' : 'Kiểm tra lại'}</span>
-          </button>
-        </div>
+        <div className="flex items-center gap-3 flex-wrap pl-6">{nutKiemTraLai}</div>
       )}
     </div>
   );
