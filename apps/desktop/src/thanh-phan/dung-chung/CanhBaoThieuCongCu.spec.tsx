@@ -42,6 +42,8 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
     expect(html).toContain('https://nodejs.org/en/download');
     expect(html).toContain('winget install OpenJS.NodeJS.LTS');
     expect(html).toContain('Kiểm tra lại');
+    expect(html).toContain('Xem hướng dẫn');
+    expect(html).toContain('https://forgestore.lhutech.click/huong-dan-cli#npm');
     expect(truyVan.enabled).toBe(true);
   });
 
@@ -84,18 +86,21 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
     expect(cargoHtml).toContain('https://rustup.rs/');
     expect(cargoHtml).toContain('winget install Rustlang.Rustup');
     expect(cargoHtml).toContain('Kiểm tra lại');
+    expect(cargoHtml).toContain('https://forgestore.lhutech.click/huong-dan-cli#cargo');
 
     const condaHtml = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="conda" />);
     expect(truyVan.enabled).toBe(true);
     expect(condaHtml).toContain('https://docs.conda.io/en/latest/miniconda.html');
     expect(condaHtml).toContain('winget install Anaconda.Miniconda3');
     expect(condaHtml).toContain('Kiểm tra lại');
+    expect(condaHtml).toContain('https://forgestore.lhutech.click/huong-dan-cli#conda');
 
     const goHtml = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="go" />);
     expect(truyVan.enabled).toBe(true);
     expect(goHtml).toContain('https://go.dev/dl/');
     expect(goHtml).toContain('winget install GoLang.Go');
     expect(goHtml).toContain('Kiểm tra lại');
+    expect(goHtml).toContain('https://forgestore.lhutech.click/huong-dan-cli#go');
   });
 
   it('hiện cảnh báo CHUA_CAI cho Docker với nhắc mở Docker Desktop + WSL và link tải', () => {
@@ -106,6 +111,8 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
     expect(html).toContain('WSL');
     expect(html).toContain('Tải Docker Desktop');
     expect(html).toContain('winget install Docker.DockerDesktop');
+    expect(html).toContain('Xem hướng dẫn');
+    expect(html).toContain('https://forgestore.lhutech.click/huong-dan-cli#docker');
   });
 
   it('hiện cảnh báo CHUA_CHAY cho Docker: nhắc mở Docker Desktop + nút Kiểm tra lại, ẩn link tải và winget', () => {
@@ -114,6 +121,8 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
     const html = renderToStaticMarkup(<CanhBaoThieuCongCu trinhQuanLy="docker" />);
     expect(html).toContain('Máy bạn đã có Docker Desktop nhưng phần mềm chưa chạy');
     expect(html).toContain('Kiểm tra lại');
+    expect(html).toContain('Xem hướng dẫn Docker');
+    expect(html).toContain('https://forgestore.lhutech.click/huong-dan-cli#docker');
     expect(html).not.toContain('winget install');
     expect(html).not.toContain('Tải Docker Desktop');
     expect(html).not.toContain('Hoặc cài nhanh:');
@@ -167,6 +176,8 @@ describe('CanhBaoThieuCongCu (P3B-31, P3B-45, P3B-45.3d)', () => {
     expect(html).toContain('Chạy bằng PowerShell (Quản trị viên):');
     expect(html).toContain('wsl --install --no-distribution');
     expect(html).toContain('Kiểm tra lại');
+    expect(html).toContain('Xem hướng dẫn Docker &amp; WSL');
+    expect(html).toContain('https://forgestore.lhutech.click/huong-dan-cli#docker');
     expect(html).not.toContain('winget install');
     expect(html).not.toContain('Tải Docker Desktop');
     expect(html).not.toContain('Hoặc cài nhanh:');

@@ -12,6 +12,7 @@ import { TrangKetQuaTimKiem } from '../../trang/TrangKetQuaTimKiem';
 import { HopThoaiXacThuc } from '../xac-thuc/HopThoaiXacThuc';
 import { HopThoaiXacNhan } from '../dung-chung/HopThoaiXacNhan';
 import { KhungThongBao } from '../dung-chung/KhungThongBao';
+import { HuongDanLanDau } from '../dung-chung/HuongDanLanDau';
 
 export const BoCucUngDung: React.FC = () => {
   const { currentTab } = useDieuHuongStore();
@@ -64,6 +65,9 @@ export const BoCucUngDung: React.FC = () => {
 
       {/* 6. Hệ thống thông báo nhanh toàn cục (Thay thế triệt để window.alert) */}
       <KhungThongBao />
+
+      {/* 7. Hướng dẫn nhanh 2 chặng lần đầu mở ứng dụng (P3B-46) */}
+      <HuongDanLanDau />
     </div>
   );
 };

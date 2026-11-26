@@ -22,6 +22,7 @@
     "@tauri-apps/plugin-updater": "^2.14.1",
     "ascii-reveal": "^0.3.0",
     "clsx": "^2.1.1",
+    "driver.js": "^1.14.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

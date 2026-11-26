@@ -1,4 +1,5 @@
 @import './fonts.css';
+@import 'driver.js/dist/driver.css';
 
 @tailwind base;
 @tailwind components;
@@ -320,4 +321,132 @@ textarea,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ==========================================================================
+   HƯỚNG DẪN NHANH LẦN ĐẦU (driver.js, P3B-46)
+   Đồng bộ cả giao diện Sáng & Tối bằng biến màu hệ thống ForgeStore.
+   ========================================================================== */
+.driver-popover.forgestore-tour-popover {
+  background-color: var(--color-bg-surface-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-active);
+  border-radius: 16px;
+  padding: 18px 20px;
+  min-width: 300px;
+  max-width: 380px;
+  box-shadow:
+    inset 0 1px 0 0 var(--card-specular),
+    0 20px 44px -10px rgba(0, 0, 0, 0.45);
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+  user-select: text;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  padding-right: 24px;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-description {
+  margin-top: 8px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-close-btn {
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-close-btn:hover,
+.driver-popover.forgestore-tour-popover .driver-popover-close-btn:focus-visible {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-surface-hover);
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-subtle);
+  gap: 10px;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-progress-text {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-navigation-btns {
+  gap: 8px;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-navigation-btns button + button {
+  margin-inline-start: 0;
+}
+
+.driver-popover.forgestore-tour-popover .forgestore-tour-skip-btn {
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-active);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-shadow: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.driver-popover.forgestore-tour-popover .forgestore-tour-skip-btn:hover,
+.driver-popover.forgestore-tour-popover .forgestore-tour-skip-btn:focus-visible {
+  background-color: var(--color-bg-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-next-btn {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-color: #ff9e20;
+  color: var(--color-text-on-accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-shadow: none;
+  transition:
+    background-color 140ms ease,
+    transform 120ms ease;
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-next-btn:hover,
+.driver-popover.forgestore-tour-popover .driver-popover-next-btn:focus-visible {
+  background-color: #f5900c;
+  color: var(--color-text-on-accent);
+}
+
+.driver-popover.forgestore-tour-popover .driver-popover-arrow-side-left {
+  border-left-color: var(--color-bg-surface-elevated);
+}
+.driver-popover.forgestore-tour-popover .driver-popover-arrow-side-right {
+  border-right-color: var(--color-bg-surface-elevated);
+}
+.driver-popover.forgestore-tour-popover .driver-popover-arrow-side-top {
+  border-top-color: var(--color-bg-surface-elevated);
+}
+.driver-popover.forgestore-tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--color-bg-surface-elevated);
 }

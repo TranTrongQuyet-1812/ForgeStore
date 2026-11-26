@@ -13,14 +13,21 @@ import {
   FileText,
   Copy,
   RefreshCw,
+  HelpCircle,
+  BookOpen,
+  ExternalLink,
+  Compass,
 } from 'lucide-react';
 import { useGiaoDienStore } from '../kho-trang-thai/useGiaoDienStore';
 import { useCaiDatStore } from '../kho-trang-thai/useCaiDatStore';
 import { useXacThucStore } from '../kho-trang-thai/useXacThucStore';
+import { useDieuHuongStore } from '../kho-trang-thai/useDieuHuongStore';
+import { useHuongDanStore } from '../kho-trang-thai/useHuongDanStore';
 import { toast } from '../kho-trang-thai/useThongBaoStore';
 import { thietBiService, type DeviceInfo } from '../dich-vu/thiet-bi/thiet-bi.service';
 import { desktopLogger } from '../dich-vu/logger/desktop-logger';
 import { kiemTraThuCong, layPhienBanHienTai } from '../dich-vu/tu-cap-nhat/tu-cap-nhat.service';
+import { URL_HUONG_DAN_CLI_GOC, URL_HUONG_DAN_GITHUB } from '../dich-vu/huong-dan/huong-dan.core';
 
 export const TrangCaiDat: React.FC = () => {
   const { theme, setTheme } = useGiaoDienStore();
@@ -35,6 +42,8 @@ export const TrangCaiDat: React.FC = () => {
     chonThuMucTerminalQuaDialog,
   } = useCaiDatStore();
   const { maThietBi } = useXacThucStore();
+  const { navigateTo } = useDieuHuongStore();
+  const { kichHoatXemLaiHuongDan } = useHuongDanStore();
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
   const [downloadSize, setDownloadSize] = useState<number | null>(null);
   const [isCleaning, setIsCleaning] = useState(false);
@@ -482,6 +491,56 @@ export const TrangCaiDat: React.FC = () => {
               <span>Mở thư mục nhật ký</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Hướng dẫn & Tài liệu (P3B-46) */}
+      <div className="p-5 rounded-2xl bg-surface border border-border flex flex-col gap-4">
+        <div>
+          <h3 className="text-sm font-semibold font-display text-primary flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-accent-forge-text" />
+            <span>Hướng dẫn &amp; Tài liệu</span>
+          </h3>
+          <p className="text-xs text-secondary mt-1">
+            Xem lại hướng dẫn sử dụng nhanh hoặc mở tài liệu giải thích GitHub, kho mã nguồn và cách
+            cài ứng dụng dòng lệnh trên Windows.
+          </p>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              navigateTo('explore');
+              kichHoatXemLaiHuongDan();
+            }}
+            className="btn-tactile px-3.5 py-2 rounded-xl bg-accent-forge hover:bg-accent-forge-hover text-on-accent text-xs font-semibold inline-flex items-center gap-1.5 shadow-sm"
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Xem lại hướng dẫn nhanh</span>
+          </button>
+
+          <a
+            href={URL_HUONG_DAN_GITHUB}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tactile px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-primary text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-accent-forge-text" />
+            <span>GitHub &amp; Repo là gì?</span>
+            <ExternalLink className="w-3 h-3 text-muted" />
+          </a>
+
+          <a
+            href={URL_HUONG_DAN_CLI_GOC}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tactile px-3.5 py-2 rounded-xl bg-surface-elevated hover:bg-surface-hover border border-border text-primary text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs"
+          >
+            <Terminal className="w-3.5 h-3.5 text-accent-forge-text" />
+            <span>Hướng dẫn cài ứng dụng dòng lệnh</span>
+            <ExternalLink className="w-3 h-3 text-muted" />
+          </a>
         </div>
       </div>
 

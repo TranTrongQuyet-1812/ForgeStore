@@ -10,13 +10,23 @@ import {
   Heart,
   Settings,
   ChevronDown,
+  HelpCircle,
+  BookOpen,
+  Terminal,
+  ExternalLink,
+  Compass,
 } from 'lucide-react';
 import { useGiaoDienStore } from '../../kho-trang-thai/useGiaoDienStore';
 import { useDieuHuongStore } from '../../kho-trang-thai/useDieuHuongStore';
 import { useXacThucStore } from '../../kho-trang-thai/useXacThucStore';
+import { useHuongDanStore } from '../../kho-trang-thai/useHuongDanStore';
 import { confirmDialog } from '../../kho-trang-thai/useHopThoaiStore';
 import { xacThucService } from '../../dich-vu/xac-thuc/xac-thuc.service';
 import { isTauri } from '../../dich-vu/xac-thuc/luu-tru-token';
+import {
+  URL_HUONG_DAN_CLI_GOC,
+  URL_HUONG_DAN_GITHUB,
+} from '../../dich-vu/huong-dan/huong-dan.core';
 import { ThanhTimKiemDropdown } from '../tim-kiem/ThanhTimKiemDropdown';
 
 const TAB_LABELS: Record<string, string> = {
@@ -32,30 +42,37 @@ export const ThanhTieuDe: React.FC = () => {
   const { theme, toggleTheme } = useGiaoDienStore();
   const { currentTab, setSearchModalOpen, setAuthModalOpen, navigateTo } = useDieuHuongStore();
   const { user, isAuthenticated, isLoading } = useXacThucStore();
+  const { kichHoatXemLaiHuongDan } = useHuongDanStore();
   const [isMaximized, setIsMaximized] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isHelpMenuOpen, setIsHelpMenuOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const helpMenuRef = useRef<HTMLDivElement>(null);
 
   // Ảnh đại diện lỗi một lần thì đổi tài khoản (ảnh khác) phải thử tải lại, không giữ chữ cái thay thế mãi
   useEffect(() => {
     setAvatarError(false);
   }, [user?.duongDanAvatar]);
 
-  // Đóng user profile menu khi click ra ngoài hoặc nhấn Esc
+  // Đóng menu người dùng và menu trợ giúp khi click ra ngoài hoặc nhấn Esc
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
       }
+      if (helpMenuRef.current && !helpMenuRef.current.contains(e.target as Node)) {
+        setIsHelpMenuOpen(false);
+      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsUserMenuOpen(false);
+        setIsHelpMenuOpen(false);
       }
     };
 
-    if (isUserMenuOpen) {
+    if (isUserMenuOpen || isHelpMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -63,7 +80,7 @@ export const ThanhTieuDe: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, isHelpMenuOpen]);
 
   // Xử lý điều khiển cửa sổ Tauri an toàn
   const handleMinimize = async () => {
@@ -126,13 +143,72 @@ export const ThanhTieuDe: React.FC = () => {
 
       {/* Vùng ở giữa: Thanh tìm kiếm trực tiếp kèm Dropdown thông minh (căn giữa, bề rộng gọn gàng) */}
       <div data-tauri-drag-region className="flex-1 flex justify-center mx-4 min-w-0">
-        <div className="w-full max-w-[480px]">
+        <div data-tour="tim-kiem" className="w-full max-w-[480px]">
           <ThanhTimKiemDropdown />
         </div>
       </div>
 
-      {/* Vùng bên phải: Nút theme, đăng nhập & 3 nút điều khiển frameless */}
+      {/* Vùng bên phải: Nút trợ giúp (?), theme, đăng nhập & 3 nút điều khiển frameless */}
       <div className="flex items-center gap-2">
+        {/* Nút Trợ giúp (?) mở nhanh hướng dẫn và tài liệu Web Landing (P3B-46) */}
+        <div className="relative" ref={helpMenuRef}>
+          <button
+            type="button"
+            data-tour="tro-giup"
+            onClick={() => {
+              setIsUserMenuOpen(false);
+              setIsHelpMenuOpen((prev) => !prev);
+            }}
+            title="Trợ giúp & Hướng dẫn"
+            aria-label="Trợ giúp & Hướng dẫn"
+            aria-expanded={isHelpMenuOpen}
+            className="btn-tactile w-8 h-8 rounded-xl flex items-center justify-center text-muted hover:text-primary hover:bg-surface-hover transition-colors"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+
+          {isHelpMenuOpen && (
+            <div className="absolute right-0 mt-2 w-72 rounded-2xl bg-surface-elevated border border-border shadow-[0_16px_40px_rgba(0,0,0,0.35)] z-50 animate-fade-in select-none overflow-hidden backdrop-blur-xl p-1.5 space-y-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHelpMenuOpen(false);
+                  navigateTo('explore');
+                  kichHoatXemLaiHuongDan();
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
+              >
+                <Compass className="w-3.5 h-3.5 text-accent-forge-text shrink-0" />
+                <span className="flex-1">Xem lại hướng dẫn nhanh</span>
+              </button>
+
+              <a
+                href={URL_HUONG_DAN_GITHUB}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsHelpMenuOpen(false)}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge-text transition-colors shrink-0" />
+                <span className="flex-1">GitHub &amp; Kho mã nguồn (Repo) là gì?</span>
+                <ExternalLink className="w-3 h-3 text-muted shrink-0" />
+              </a>
+
+              <a
+                href={URL_HUONG_DAN_CLI_GOC}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsHelpMenuOpen(false)}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-surface-hover text-secondary hover:text-primary transition-colors cursor-pointer group text-xs font-medium"
+              >
+                <Terminal className="w-3.5 h-3.5 text-muted group-hover:text-accent-forge-text transition-colors shrink-0" />
+                <span className="flex-1">Hướng dẫn cài ứng dụng dòng lệnh</span>
+                <ExternalLink className="w-3 h-3 text-muted shrink-0" />
+              </a>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}

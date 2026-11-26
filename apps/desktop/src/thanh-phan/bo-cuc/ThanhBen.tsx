@@ -67,51 +67,61 @@ export const ThanhBen: React.FC = () => {
 
       {/* 2. Vùng menu điều hướng phân lớp chuyên nghiệp */}
       <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-5">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.groupName} className="flex flex-col gap-1">
-            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted font-mono mb-1">
-              {group.groupName}
+        {NAV_GROUPS.map((group) => {
+          const tourNhom =
+            group.groupName === 'KHÁM PHÁ'
+              ? 'kham-pha'
+              : group.groupName === 'BỘ SƯU TẬP'
+                ? 'bo-suu-tap'
+                : undefined;
+
+          return (
+            <div key={group.groupName} data-tour={tourNhom} className="flex flex-col gap-1">
+              <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted font-mono mb-1">
+                {group.groupName}
+              </div>
+              <nav className="flex flex-col gap-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  const hasUpdateBadge = item.id === 'library' && soLuongBanCapNhat > 0;
+
+                  return (
+                    <button
+                      key={item.id}
+                      data-tour={item.id === 'settings' ? 'cai-dat' : undefined}
+                      onClick={() => navigateTo(item.id)}
+                      className={`btn-tactile group relative overflow-hidden w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all outline-none ${
+                        isActive
+                          ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border'
+                          : 'text-secondary hover:text-primary hover:bg-surface-hover'
+                      }`}
+                    >
+                      {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái */}
+                      {isActive && (
+                        <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-accent-forge rounded-r shadow-xs" />
+                      )}
+
+                      <div className={`flex items-center gap-3 ${isActive ? 'pl-1.5' : ''}`}>
+                        <Icon
+                          className={`w-4 h-4 transition-colors ${isActive ? 'text-accent-forge-text' : 'text-muted group-hover:text-primary'}`}
+                          strokeWidth={isActive ? 2 : 1.75}
+                        />
+                        <span>{item.label}</span>
+                      </div>
+
+                      {hasUpdateBadge && (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-accent-forge/15 text-accent-forge-text border border-accent-forge/30 font-mono font-bold shadow-xs">
+                          {soLuongBanCapNhat}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
-            <nav className="flex flex-col gap-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentTab === item.id;
-                const hasUpdateBadge = item.id === 'library' && soLuongBanCapNhat > 0;
-
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => navigateTo(item.id)}
-                    className={`btn-tactile group relative overflow-hidden w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all outline-none ${
-                      isActive
-                        ? 'bg-surface-elevated text-primary font-semibold shadow-xs border border-border'
-                        : 'text-secondary hover:text-primary hover:bg-surface-hover'
-                    }`}
-                  >
-                    {/* Vạch chỉ thị màu cam mảnh 3px bo tròn mép trái */}
-                    {isActive && (
-                      <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-accent-forge rounded-r shadow-xs" />
-                    )}
-
-                    <div className={`flex items-center gap-3 ${isActive ? 'pl-1.5' : ''}`}>
-                      <Icon
-                        className={`w-4 h-4 transition-colors ${isActive ? 'text-accent-forge-text' : 'text-muted group-hover:text-primary'}`}
-                        strokeWidth={isActive ? 2 : 1.75}
-                      />
-                      <span>{item.label}</span>
-                    </div>
-
-                    {hasUpdateBadge && (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-accent-forge/15 text-accent-forge-text border border-accent-forge/30 font-mono font-bold shadow-xs">
-                        {soLuongBanCapNhat}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* 3. Chân ThanhBen: Widget trạng thái hệ thống mini */}

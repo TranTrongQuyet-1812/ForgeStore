@@ -7,6 +7,7 @@ import {
   chuanHoaMaCongCuKiemTra,
   type TrangThaiCongCuMay,
 } from '../../dich-vu/cong-cu-may/cong-cu-may.core';
+import { layLienKetHuongDanCli } from '../../dich-vu/huong-dan/huong-dan.core';
 
 interface CanhBaoThieuCongCuProps {
   trinhQuanLy?: string;
@@ -50,6 +51,8 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
 
   const canhBao = canhBaoThieuCongCu(maTrinh, ketQuaKiemTra);
   if (!canhBao) return null;
+
+  const lienKetHuongDan = layLienKetHuongDanCli(maTrinh);
 
   const xuLySaoChepLenhGoiY = (lenh: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -121,6 +124,16 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
           )}
 
           {nutKiemTraLai}
+
+          <a
+            href={lienKetHuongDan}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
+          >
+            <span>Xem hướng dẫn</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       ) : canhBao.trangThai === 'THIEU_WSL' ? (
         <div className="flex items-center gap-3 flex-wrap pl-6">
@@ -146,9 +159,31 @@ export const CanhBaoThieuCongCu: React.FC<CanhBaoThieuCongCuProps> = ({ trinhQua
           )}
 
           {nutKiemTraLai}
+
+          <a
+            href={lienKetHuongDan}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
+          >
+            <span>Xem hướng dẫn Docker &amp; WSL</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       ) : (
-        <div className="flex items-center gap-3 flex-wrap pl-6">{nutKiemTraLai}</div>
+        <div className="flex items-center gap-3 flex-wrap pl-6">
+          {nutKiemTraLai}
+
+          <a
+            href={lienKetHuongDan}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tactile text-warning font-semibold underline decoration-warning/60 underline-offset-2 hover:opacity-85 text-xs font-mono inline-flex items-center gap-1"
+          >
+            <span>Xem hướng dẫn Docker</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
       )}
     </div>
   );

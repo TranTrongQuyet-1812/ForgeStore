@@ -1235,7 +1235,10 @@ export const TrangChiTiet: React.FC = () => {
           )}
 
           {/* Tài liệu & Giới thiệu chi tiết (README Song Ngữ - P3B-05.9) */}
-          <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
+          <div
+            data-tour="chi-tiet-readme"
+            className="tactile-card p-6 rounded-2xl flex flex-col gap-4"
+          >
             <div className="flex items-center justify-between border-b border-border/60 pb-3 flex-wrap gap-2">
               <div className="flex items-center gap-2 text-primary font-display font-bold text-sm">
                 <span>Tài liệu & Hướng dẫn (README)</span>
@@ -1416,7 +1419,10 @@ export const TrangChiTiet: React.FC = () => {
 
           {/* Bảng Các Tệp Cài Đặt & Checksum SHA-256 (P3-06.4) - Chỉ hiển thị khi có tệp cài đặt */}
           {coFileCaiDat && (
-            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-4">
+            <div
+              data-tour="chi-tiet-phat-hanh"
+              className="tactile-card p-6 rounded-2xl flex flex-col gap-4"
+            >
               <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
                 <div>
                   <h3 className="text-sm font-bold font-display text-primary flex items-center gap-2">
@@ -1518,6 +1524,7 @@ export const TrangChiTiet: React.FC = () => {
           {coHuongDanCli && huongDanCli && (
             <div
               id="cli-guide-section"
+              data-tour="chi-tiet-cli"
               className="tactile-card p-6 rounded-2xl flex flex-col gap-5"
             >
               <div className="flex items-center justify-between border-b border-border pb-3 flex-wrap gap-2">
@@ -2209,7 +2216,10 @@ export const TrangChiTiet: React.FC = () => {
               </div>
             )
           ) : (
-            <div className="tactile-card p-6 rounded-2xl flex flex-col gap-5 shadow-xl">
+            <div
+              data-tour="chi-tiet-cai-dat"
+              className="tactile-card p-6 rounded-2xl flex flex-col gap-5 shadow-xl"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-muted uppercase">Tùy chọn tải về</span>
                 <button
